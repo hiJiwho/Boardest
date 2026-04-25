@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>시간표 분석기</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header>
+        <h1>시간표 분석기</h1>
+        <p>CSV 업로드 또는 직접 입력으로 주간 시간표를 분석하세요.</p>
+      </header>
+
+      <section class="card">
+        <h2>1) 시간표 입력</h2>
+        <p class="hint">CSV 헤더: <code>과목,요일,시작,종료,강의실</code> (예: 월, 09:00, 10:30)</p>
+        <div class="row">
+          <label for="csvFile" class="button">CSV 파일 선택</label>
+          <input id="csvFile" type="file" accept=".csv,text/csv" />
+          <button id="loadSample" type="button" class="button ghost">샘플 불러오기</button>
+        </div>
+        <textarea id="rawInput" rows="10" placeholder="과목,요일,시작,종료,강의실&#10;자료구조,월,09:00,10:30,공301"></textarea>
+        <div class="row end">
+          <button id="analyzeBtn" type="button" class="button">분석하기</button>
+        </div>
+      </section>
+
+      <section class="card" id="summarySection" hidden>
+        <h2>2) 분석 결과</h2>
+        <div id="summaryCards" class="summary-grid"></div>
+      </section>
+
+      <section class="card" id="issueSection" hidden>
+        <h2>3) 충돌 / 이동 시간 체크</h2>
+        <ul id="issues"></ul>
+      </section>
+
+      <section class="card" id="tableSection" hidden>
+        <h2>4) 주간 시간표</h2>
+        <div class="table-wrap">
+          <table id="timetable"></table>
+        </div>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
