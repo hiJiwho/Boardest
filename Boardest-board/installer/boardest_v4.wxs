@@ -1,0 +1,51 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Boardest"
+           Version="1.0.0.0"
+           Manufacturer="Boardest"
+           UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+           Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="Main">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="Shortcut_Desktop" />
+      <ComponentRef Id="Shortcut_StartMenu" />
+    </Feature>
+
+    <StandardDirectory Id="ProgramFilesFolder">
+      <Directory Id="INSTALLFOLDER" Name="Boardest" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder">
+      <Component Id="Shortcut_Desktop" Guid="B1C2D3E4-F5A6-7890-BCDE-F01234567891">
+        <Shortcut Id="Sc_Desktop" Name="Boardest"
+                  Target="[INSTALLFOLDER]boardest.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="AppIcon" />
+        <RegistryValue Root="HKCU" Key="Software\Boardest"
+                        Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppMenuDir" Name="Boardest">
+        <Component Id="Shortcut_StartMenu" Guid="C2D3E4F5-A6B7-8901-CDEF-012345678902">
+          <Shortcut Id="Sc_StartMenu" Name="Boardest"
+                    Target="[INSTALLFOLDER]boardest.exe"
+                    WorkingDirectory="INSTALLFOLDER"
+                    Icon="AppIcon" />
+          <RemoveFolder Id="RemoveAppMenuDir" Directory="AppMenuDir" On="uninstall" />
+          <RegistryValue Root="HKCU" Key="Software\Boardest"
+                          Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <Icon Id="AppIcon" SourceFile="C:\Users\jiwho\Documents\Boardest\build\outputs\windows\Release\boardest.exe" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+
+  </Package>
+</Wix>

@@ -1,0 +1,101 @@
+======================================================
+[Boardest Crash Log]
+Timestamp: 2026-05-31T10:46:11.818651
+Error: PlatformError: Null check operator used on a null value
+StackTrace:
+#0      State.setState (package:flutter/src/widgets/framework.dart:1219)
+#1      _DashboardViewState._showWithdrawDialog.<anonymous closure>.<anonymous closure>.<anonymous closure> (package:boardest/views/dashboard_view.dart:1840)
+<asynchronous suspension>
+
+======================================================
+
+======================================================
+[Boardest Crash Log]
+Timestamp: 2026-06-01T16:56:50.102557
+Error: PlatformError: FormatException: Unexpected extension byte (at offset 25)
+StackTrace:
+#0      _Utf8Decoder.convertChunked (dart:convert-patch/convert_patch.dart:1964)
+#1      _Utf8ConversionSink.addSlice (dart:convert/string_conversion.dart:310)
+#2      _Utf8ConversionSink.add (dart:convert/string_conversion.dart:306)
+#3      _ConverterStreamEventSink.add (dart:convert/chunked_conversion.dart:70)
+#4      _SinkTransformerStreamSubscription._handleData (dart:async/stream_transformers.dart:115)
+#5      _RootZone.runUnaryGuarded (dart:async/zone.dart:891)
+#6      _BufferingStreamSubscription._sendData (dart:async/stream_impl.dart:381)
+#7      _BufferingStreamSubscription._add (dart:async/stream_impl.dart:312)
+#8      _SyncStreamControllerDispatch._sendData (dart:async/stream_controller.dart:798)
+#9      _StreamController._add (dart:async/stream_controller.dart:663)
+#10     _StreamController.add (dart:async/stream_controller.dart:618)
+#11     _Socket._onData (dart:io-patch/socket_patch.dart:2874)
+#12     _RootZone.runUnaryGuarded (dart:async/zone.dart:891)
+#13     _BufferingStreamSubscription._sendData (dart:async/stream_impl.dart:381)
+#14     _BufferingStreamSubscription._add (dart:async/stream_impl.dart:312)
+#15     _SyncStreamControllerDispatch._sendData (dart:async/stream_controller.dart:798)
+#16     _StreamController._add (dart:async/stream_controller.dart:663)
+#17     _StreamController.add (dart:async/stream_controller.dart:618)
+#18     new _RawSocket.<anonymous closure> (dart:io-patch/socket_patch.dart:2312)
+#19     _NativeSocket.issueReadEvent.issue (dart:io-patch/socket_patch.dart:1647)
+#20     _microtaskLoop (dart:async/schedule_microtask.dart:40)
+#21     _startMicrotaskLoop (dart:async/schedule_microtask.dart:49)
+
+======================================================
+
+======================================================
+[Boardest Crash Log]
+Timestamp: 2026-06-01T16:57:04.285118
+Error: PlatformError: FormatException: Unexpected extension byte (at offset 25)
+StackTrace:
+#0      _Utf8Decoder.convertChunked (dart:convert-patch/convert_patch.dart:1964)
+#1      _Utf8ConversionSink.addSlice (dart:convert/string_conversion.dart:310)
+#2      _Utf8ConversionSink.add (dart:convert/string_conversion.dart:306)
+#3      _ConverterStreamEventSink.add (dart:convert/chunked_conversion.dart:70)
+#4      _SinkTransformerStreamSubscription._handleData (dart:async/stream_transformers.dart:115)
+#5      _RootZone.runUnaryGuarded (dart:async/zone.dart:891)
+#6      _BufferingStreamSubscription._sendData (dart:async/stream_impl.dart:381)
+#7      _BufferingStreamSubscription._add (dart:async/stream_impl.dart:312)
+#8      _SyncStreamControllerDispatch._sendData (dart:async/stream_controller.dart:798)
+#9      _StreamController._add (dart:async/stream_controller.dart:663)
+#10     _StreamController.add (dart:async/stream_controller.dart:618)
+#11     _Socket._onData (dart:io-patch/socket_patch.dart:2874)
+#12     _RootZone.runUnaryGuarded (dart:async/zone.dart:891)
+#13     _BufferingStreamSubscription._sendData (dart:async/stream_impl.dart:381)
+#14     _BufferingStreamSubscription._add (dart:async/stream_impl.dart:312)
+#15     _SyncStreamControllerDispatch._sendData (dart:async/stream_controller.dart:798)
+#16     _StreamController._add (dart:async/stream_controller.dart:663)
+#17     _StreamController.add (dart:async/stream_controller.dart:618)
+#18     new _RawSocket.<anonymous closure> (dart:io-patch/socket_patch.dart:2312)
+#19     _NativeSocket.issueReadEvent.issue (dart:io-patch/socket_patch.dart:1647)
+#20     _microtaskLoop (dart:async/schedule_microtask.dart:40)
+#21     _startMicrotaskLoop (dart:async/schedule_microtask.dart:49)
+
+======================================================
+
+======================================================
+[Boardest Crash Log]
+Timestamp: 2026-06-01T16:57:47.663518
+Error: PlatformError: FormatException: Unexpected extension byte (at offset 25)
+StackTrace:
+#0      _Utf8Decoder.convertChunked (dart:convert-patch/convert_patch.dart:1964)
+#1      _Utf8ConversionSink.addSlice (dart:convert/string_conversion.dart:310)
+#2      _Utf8ConversionSink.add (dart:convert/string_conversion.dart:306)
+#3      _ConverterStreamEventSink.add (dart:convert/chunked_conversion.dart:70)
+#4      _SinkTransformerStreamSubscription._handleData (dart:async/stream_transformers.dart:115)
+#5      _RootZone.runUnaryGuarded (dart:async/zone.dart:891)
+#6      _BufferingStreamSubscription._sendData (dart:async/stream_impl.dart:381)
+#7      _BufferingStreamSubscription._add (dart:async/stream_impl.dart:312)
+#8      _SyncStreamControllerDispatch._sendData (dart:async/stream_controller.dart:798)
+#9      _StreamController._add (dart:async/stream_controller.dart:663)
+#10     _StreamController.add (dart:async/stream_controller.dart:618)
+#11     _Socket._onData (dart:io-patch/socket_patch.dart:2874)
+#12     _RootZone.runUnaryGuarded (dart:async/zone.dart:891)
+#13     _BufferingStreamSubscription._sendData (dart:async/stream_impl.dart:381)
+#14     _BufferingStreamSubscription._add (dart:async/stream_impl.dart:312)
+#15     _SyncStreamControllerDispatch._sendData (dart:async/stream_controller.dart:798)
+#16     _StreamController._add (dart:async/stream_controller.dart:663)
+#17     _StreamController.add (dart:async/stream_controller.dart:618)
+#18     new _RawSocket.<anonymous closure> (dart:io-patch/socket_patch.dart:2312)
+#19     _NativeSocket.issueReadEvent.issue (dart:io-patch/socket_patch.dart:1647)
+#20     _microtaskLoop (dart:async/schedule_microtask.dart:40)
+#21     _startMicrotaskLoop (dart:async/schedule_microtask.dart:49)
+
+======================================================
+

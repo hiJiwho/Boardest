@@ -1,0 +1,13 @@
+# Flutter artifacts
+Boardest-board/build/
+Boardest-board/.dart_tool/
+Boardest-board/.flutter-plugins
+Boardest-board/.flutter-plugins-dependencies
+Boardest-board/android/.gradle/
+Boardest-board/android/local.properties
+
+# Electron artifacts
+**/node_modules/
+teacher-electron/dist/
+teacher-electron/node_modules/
+*.log

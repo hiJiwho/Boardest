@@ -1,0 +1,4 @@
+C:\Users\jiwho\Documents\Boardest\TempHelper\obj\Release\net9.0\TempHelper.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\jiwho\Documents\Boardest\TempHelper\obj\Release\net9.0\TempHelper.AssemblyInfoInputs.cache
+C:\Users\jiwho\Documents\Boardest\TempHelper\obj\Release\net9.0\TempHelper.AssemblyInfo.cs
+C:\Users\jiwho\Documents\Boardest\TempHelper\obj\Release\net9.0\TempHelper.csproj.CoreCompileInputs.cache

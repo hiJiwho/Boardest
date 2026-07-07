@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Boardest 사이트 판서</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&family=Outfit:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f0e17;
+      --surface: #16161a;
+      --primary: #7f5af0;
+      --accent: #2ec4b6;
+      --pen: #ef4565;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: 'Noto Sans KR', sans-serif; color: #fff; }
+    #toolbar {
+      position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 8px; padding: 8px 14px; border-radius: 999px;
+      background: rgba(22,22,26,0.92); border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(12px); z-index: 10;
+    }
+    .tool-btn {
+      border: none; border-radius: 12px; padding: 8px 14px; cursor: pointer;
+      background: rgba(255,255,255,0.06); color: #fff; font-size: 13px; font-weight: 600;
+    }
+    .tool-btn.active { background: var(--accent); color: #0f0e17; }
+    .color-dot {
+      width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); cursor: pointer;
+    }
+    .color-dot.active { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+    #canvas {
+      position: fixed; inset: 0; touch-action: none; cursor: crosshair;
+    }
+    #hint {
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      font-size: 12px; color: rgba(255,255,255,0.45); pointer-events: none;
+    }
+    #brand {
+      position: fixed; top: 14px; left: 16px; font-family: Outfit, sans-serif;
+      font-weight: 700; font-size: 14px; color: var(--accent); z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="brand">Boardest · 사이트 판서</div>
+  <div id="toolbar">
+    <button class="tool-btn active" data-tool="pen">펜</button>
+    <button class="tool-btn" data-tool="eraser">지우개</button>
+    <div class="color-dot active" data-color="#ef4565" style="background:#ef4565"></div>
+    <div class="color-dot" data-color="#ffe600" style="background:#ffe600"></div>
+    <div class="color-dot" data-color="#2ec4b6" style="background:#2ec4b6"></div>
+    <div class="color-dot" data-color="#ffffff" style="background:#ffffff"></div>
+    <button class="tool-btn" id="clearBtn">전체 지우기</button>
+  </div>
+  <canvas id="canvas"></canvas>
+  <div id="hint">Boardest 앱에서 「사이트 판서」 모드로 열면 이 화면 위에 판서가 겹쳐집니다.</div>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let drawing = false;
+    let tool = 'pen';
+    let color = '#ef4565';
+    let lineWidth = 4;
+    const strokes = [];
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      canvas.style.width = window.innerWidth + 'px';
+      canvas.style.height = window.innerHeight + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      redraw();
+    }
+
+    function redraw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (const s of strokes) {
+        if (s.points.length < 2) continue;
+        ctx.strokeStyle = s.tool === 'eraser' ? '#0f0e17' : s.color;
+        ctx.lineWidth = s.tool === 'eraser' ? 28 : s.width;
+        ctx.globalCompositeOperation = s.tool === 'eraser' ? 'destination-out' : 'source-over';
+        ctx.beginPath();
+        ctx.moveTo(s.points[0].x, s.points[0].y);
+        for (let i = 1; i < s.points.length; i++) ctx.lineTo(s.points[i].x, s.points[i].y);
+        ctx.stroke();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
+    function pos(e) {
+      const r = canvas.getBoundingClientRect();
+      const t = e.touches ? e.touches[0] : e;
+      return { x: t.clientX - r.left, y: t.clientY - r.top };
+    }
+
+    let current = null;
+    function start(e) {
+      e.preventDefault();
+      drawing = true;
+      current = { tool, color, width: lineWidth, points: [pos(e)] };
+      strokes.push(current);
+    }
+    function move(e) {
+      if (!drawing || !current) return;
+      e.preventDefault();
+      current.points.push(pos(e));
+      redraw();
+    }
+    function end() { drawing = false; current = null; }
+
+    canvas.addEventListener('mousedown', start);
+    canvas.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    canvas.addEventListener('touchstart', start, { passive: false });
+    canvas.addEventListener('touchmove', move, { passive: false });
+    canvas.addEventListener('touchend', end);
+
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        tool = btn.dataset.tool;
+        document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+    document.querySelectorAll('.color-dot').forEach(dot => {
+      dot.addEventListener('click', () => {
+        color = dot.dataset.color;
+        document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+        dot.classList.add('active');
+        tool = 'pen';
+        document.querySelectorAll('.tool-btn[data-tool]').forEach(b => b.classList.remove('active'));
+        document.querySelector('[data-tool="pen"]').classList.add('active');
+      });
+    });
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      strokes.length = 0;
+      redraw();
+    });
+
+    window.addEventListener('resize', resize);
+    resize();
+  </script>
+</body>
+</html>
