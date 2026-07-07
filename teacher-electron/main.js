@@ -98,6 +98,15 @@ function toCp949Hex(str) {
   return Array.from(buf).map(b => '%' + b.toString(16).toUpperCase().padStart(2, '0')).join('');
 }
 
+// Decodes response body attempting UTF-8 first, then falling back to CP949
+function decodeBody(buffer) {
+  const decodedUtf8 = iconv.decode(buffer, 'utf-8');
+  if (decodedUtf8.includes('학교검색') || decodedUtf8.includes('자료') || decodedUtf8.includes('학교명')) {
+    return decodedUtf8;
+  }
+  return iconv.decode(buffer, 'cp949');
+}
+
 // Clean JSON body from Comcigan server
 function cleanJsonBody(rawText) {
   // Comcigan API returns body prepended with random/corrupted characters sometimes.
@@ -117,7 +126,7 @@ ipcMain.handle('search-school', async (event, keyword) => {
     const searchUrl = `${comciganConfig.baseUrl}${comciganConfig.extractCode}${hexQuery}`;
     
     const res = await axios.get(searchUrl, { responseType: 'arraybuffer', timeout: 7000 });
-    const decoded = iconv.decode(res.data, 'cp949');
+    const decoded = decodeBody(res.data);
     const cleaned = cleanJsonBody(decoded);
     const data = JSON.parse(cleaned);
 
@@ -149,7 +158,7 @@ ipcMain.handle('get-timetable', async (event, schoolCode, teacherName) => {
     const fetchUrl = `${comciganConfig.baseUrl}${pathOnly}?${base64Payload}`;
     
     const res = await axios.get(fetchUrl, { responseType: 'arraybuffer', timeout: 7000 });
-    const decoded = iconv.decode(res.data, 'cp949');
+    const decoded = decodeBody(res.data);
     const cleaned = cleanJsonBody(decoded);
     const data = JSON.parse(cleaned);
 

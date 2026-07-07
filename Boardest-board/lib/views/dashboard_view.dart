@@ -2106,19 +2106,15 @@ class _DashboardViewState extends State<DashboardView> {
             orElse: () => _emptyLesson(active.period, displayWeekday),
           );
           
-          _nextLesson = lessons.firstWhere(
-            (l) => l.classTime > active.period && l.subject.isNotEmpty,
-            orElse: () => null,
-          );
+          final nextMatches = lessons.where((l) => l.classTime > active.period && l.subject.isNotEmpty);
+          _nextLesson = nextMatches.isNotEmpty ? nextMatches.first : null;
         } else {
           _currentLesson = null;
           final nextClassRanges = ranges.where((r) => r.isClass && r.start.isAfter(now));
           final nextClassRange = nextClassRanges.isNotEmpty ? nextClassRanges.first : null;
           if (nextClassRange != null) {
-            _nextLesson = lessons.firstWhere(
-              (l) => l.classTime >= nextClassRange.period && l.subject.isNotEmpty,
-              orElse: () => null,
-            );
+            final nextMatches = lessons.where((l) => l.classTime >= nextClassRange.period && l.subject.isNotEmpty);
+            _nextLesson = nextMatches.isNotEmpty ? nextMatches.first : null;
           } else {
             _nextLesson = null;
           }
@@ -2146,18 +2142,14 @@ class _DashboardViewState extends State<DashboardView> {
           _countdownTime = '$hours시간 $mins분';
 
           if (nextR.isClass) {
-            _nextLesson = lessons.firstWhere(
-              (l) => l.classTime >= nextR.period && l.subject.isNotEmpty,
-              orElse: () => null,
-            );
+            final nextMatches = lessons.where((l) => l.classTime >= nextR.period && l.subject.isNotEmpty);
+            _nextLesson = nextMatches.isNotEmpty ? nextMatches.first : null;
           } else {
             final nextClassRanges = ranges.where((r) => r.isClass && r.start.isAfter(now));
             if (nextClassRanges.isNotEmpty) {
               final nextClass = nextClassRanges.first;
-              _nextLesson = lessons.firstWhere(
-                (l) => l.classTime >= nextClass.period && l.subject.isNotEmpty,
-                orElse: () => null,
-              );
+              final nextMatches = lessons.where((l) => l.classTime >= nextClass.period && l.subject.isNotEmpty);
+              _nextLesson = nextMatches.isNotEmpty ? nextMatches.first : null;
             } else {
               _nextLesson = null;
             }
