@@ -412,10 +412,12 @@ class _DashboardViewState extends State<DashboardView> {
       grade: _settings.selectedGrade,
     );
     if (!mounted) return;
+    setState(() {
+      _usbSortedFiles = sortedFiles;
+    });
     if (sortedFiles.isEmpty) {
-      setState(() {
-        _usbSortedFiles = [];
-      });
+      // 파일 없으면 파일탐색기만 띄우기
+      _showUsbNoFilesDialog(usbRoot);
       return;
     }
 
@@ -455,6 +457,44 @@ class _DashboardViewState extends State<DashboardView> {
       _usbHandling = false;
     }
   }
+
+  // ── USB 파일 없을 때 탐색기 안내 다이얼로그 ────────────────────
+  void _showUsbNoFilesDialog(String usbRoot) {
+    final scale = _settings.scaleFactor;
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF16161A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20 * scale),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.08), width: 1.5),
+          ),
+          title: _usbDialogTitle('USB 감지됨', '수업 자료가 없습니다', scale),
+          content: Text(
+            'USB($usbRoot)가 삽입되었지만 지원되는 수업 자료(PDF, PPT, PPTX 등)가 없습니다.\n파일탐색기로 직접 탐색하시겠습니까?',
+            style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13 * scale, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _openUsbExplorer(usbRoot);
+              },
+              child: Text('파일탐색기 열기', style: GoogleFonts.notoSansKr(color: const Color(0xFF2EC4B6))),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('닫기', style: GoogleFonts.notoSansKr(color: Colors.white38)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   // ── 첫 번째 삽입 다이얼로그 ────────────────────
   void _showUsbFirstTimeDialog(String usbId, List<String> sortedFiles) {
@@ -819,10 +859,12 @@ class _DashboardViewState extends State<DashboardView> {
     }
   }
 
-  void _openUsbExplorer(String usbId) {
+  void _openUsbExplorer(String drivePath) {
     if (!Platform.isWindows) return;
-    final root = _usbDriveLetter.isNotEmpty ? _usbDriveLetter : '/';
-    Process.run('explorer.exe', [root]);
+    final root = drivePath.isNotEmpty ? drivePath : (_usbDriveLetter.isNotEmpty ? _usbDriveLetter : 'C:\\');
+    Process.run('explorer.exe', [root]).catchError((e) {
+      debugPrint('[USB] Failed to open explorer: $e');
+    });
   }
 
   // ── UI 헬퍼 ───────────────────────────────────

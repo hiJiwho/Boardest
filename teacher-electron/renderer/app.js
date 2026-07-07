@@ -34,9 +34,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       const school = JSON.parse(savedSchool);
       await loadTimetableAndSwitch(school.code, savedTeacher);
     } catch (e) {
-      console.error('Failed to auto-load timetable:', e);
-      localStorage.clear();
+      // 캐시 로드 실패 → 조용히 설정 화면으로 복귀 (에러 팝업 없음)
+      console.warn('Auto-load failed (stale cache), reverting to setup view:', e);
       switchToSetupView();
+      // 이전 학교/선생님 정보를 인풋에 복원 (switchToSetupView가 비운 후 재설정)
+      try {
+        const school = JSON.parse(savedSchool);
+        selectedSchool = school;
+        selectedSchoolStatus.className = 'selected-status-box active';
+        selectedSchoolStatus.innerText = `[저장됨] ${school.name}`;
+      } catch (_) {
+        localStorage.clear();
+      }
+      teacherNameInput.value = savedTeacher;
     }
   } else {
     switchToSetupView();
