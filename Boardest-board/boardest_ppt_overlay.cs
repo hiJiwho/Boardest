@@ -26,7 +26,6 @@ namespace BoardestPptOverlay
             string pptPath = "";
             int startPage = 1;
 
-            // Parse command line arguments: --path <PPT Path> --page <PPT Page>
             for (int i = 0; i < args.Length; i++)
             {
                 if (args[i] == "--path" && i + 1 < args.Length)
@@ -51,6 +50,8 @@ namespace BoardestPptOverlay
         }
     }
 
+    public enum ShapeMode { None, Line, Arrow, Triangle, Rectangle, Circle, Cube, Cylinder }
+
     public class OverlayWindow : Window
     {
         [DllImport("user32.dll", SetLastError = true)]
@@ -60,11 +61,12 @@ namespace BoardestPptOverlay
         private string _fileName;
         private int _startPage;
 
-        // PowerPoint COM Objects (dynamic)
+        // PowerPoint COM Objects
         private dynamic _pptApp;
         private dynamic _presentation;
         private dynamic _slideShowView;
         private uint _pptPid = 0;
+        private bool _onlyTurnOffOverlay = false;
 
         // Slide change tracking
         private int _lastSlideIndex = -1;
@@ -80,17 +82,28 @@ namespace BoardestPptOverlay
         private WrapPanel _jumpWrapPanel;
         private Border _penDetailsCard;
         private Border _eraserDetailsCard;
+        private Border _shapeDetailsCard;
 
-        // Interactive control buttons
         private Border _btnInteract;
         private Border _btnPen;
         private Border _btnEraser;
+        private Border _btnShape;
         private Border _btnLasso;
         private Border _btnStrokeEraser;
         private Border _btnPointEraser;
-        private bool _isDrawMode = true;
 
-        // Slider thickness
+        private bool _isDrawMode = true;
+        private ShapeMode _activeShapeMode = ShapeMode.None;
+
+        // Shape buttons
+        private Border _btnShapeLine;
+        private Border _btnShapeArrow;
+        private Border _btnShapeTriangle;
+        private Border _btnShapeRectangle;
+        private Border _btnShapeCircle;
+        private Border _btnShapeCube;
+        private Border _btnShapeCylinder;
+
         private Slider _thicknessSlider;
         private TextBlock _txtThicknessVal;
 
@@ -103,14 +116,20 @@ namespace BoardestPptOverlay
         private Color _greenColor = Color.FromRgb(44, 182, 125);
         private Color _orangeColor = Color.FromRgb(255, 140, 0);
         private Color _purpleColor = Color.FromRgb(127, 90, 240);
-        private Color _pinkColor = Color.FromRgb(255, 105, 180);
+
+        // Touch gesture tracking
+        private Dictionary<int, Point> _activeTouchPoints = new Dictionary<int, Point>();
+        private bool _gestureDetected = false;
+
+        // Shape drawing interaction
+        private Point? _shapeStartPoint = null;
+        private Stroke _tempShapeStroke = null;
 
         public OverlayWindow(string pptPath, int startPage)
         {
             _pptPath = Path.GetFullPath(pptPath);
             _fileName = Path.GetFileName(_pptPath);
-            
-            // Try loading from appdata if startPage is 1 or less
+
             if (startPage <= 1)
             {
                 _startPage = LoadStateFromAppData();
@@ -120,27 +139,20 @@ namespace BoardestPptOverlay
                 _startPage = startPage;
             }
 
-            // 1. Transparent Topmost Fullscreen WPF Window Setup
             this.Title = "Boardest PowerPoint Overlay";
             this.WindowStyle = WindowStyle.None;
             this.AllowsTransparency = true;
-            
-            // Start in Drawing Mode (invisible background that captures hits)
             this.Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
-            
             this.Topmost = true;
             this.ShowInTaskbar = false;
 
-            // Fullscreen positioning on active screen
             this.Left = SystemParameters.VirtualScreenLeft;
             this.Top = SystemParameters.VirtualScreenTop;
             this.Width = SystemParameters.VirtualScreenWidth;
             this.Height = SystemParameters.VirtualScreenHeight;
 
-            // 2. Initialize UI layout
             InitUI();
 
-            // 3. Connect to PowerPoint and Run slideshow
             this.Loaded += OverlayWindow_Loaded;
             this.Closed += OverlayWindow_Closed;
         }
@@ -164,15 +176,17 @@ namespace BoardestPptOverlay
                     StylusTip = StylusTip.Ellipse
                 }
             };
-
             _mainGrid.Children.Add(_inkCanvas);
 
-            // Hide floating cards automatically when drawing starts
-            _inkCanvas.PreviewMouseDown += InkCanvas_PreviewDrawingStart;
-            _inkCanvas.PreviewTouchDown += InkCanvas_PreviewDrawingStart;
-            _inkCanvas.PreviewStylusDown += InkCanvas_PreviewDrawingStart;
+            // Shape drawing & floating cards close triggers
+            _inkCanvas.PreviewMouseDown += InkCanvas_PreviewMouseDown;
+            _inkCanvas.PreviewMouseMove += InkCanvas_PreviewMouseMove;
+            _inkCanvas.PreviewMouseUp += InkCanvas_PreviewMouseUp;
 
-            // ───────────────── Floating Bottom Dock (Capsule Premium Style) ─────────────────
+            _inkCanvas.PreviewTouchDown += InkCanvas_PreviewTouchDown;
+            _inkCanvas.TouchUp += InkCanvas_TouchUp;
+
+            // Bottom toolbar border
             Border toolBorder = new Border
             {
                 Background = new SolidColorBrush(Color.FromArgb(240, 19, 23, 31)),
@@ -183,25 +197,22 @@ namespace BoardestPptOverlay
                 VerticalAlignment = VerticalAlignment.Bottom,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 0, 0, 24),
-                Effect = new System.Windows.Media.Effects.DropShadowEffect
-                {
-                    Color = Colors.Black,
-                    BlurRadius = 16,
-                    ShadowDepth = 3,
-                    Opacity = 0.5
-                }
+                Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 16, ShadowDepth = 3, Opacity = 0.5 }
             };
             Grid.SetRow(toolBorder, 1);
 
             _toolbar = new StackPanel { Orientation = Orientation.Horizontal };
 
-            // 1. Red Exit/Close button
+            // Exit/Close (완전종료)
             Border btnClose = CreateDockButton("❌", (s, e) => this.Close());
             ((TextBlock)btnClose.Child).Foreground = new SolidColorBrush(Color.FromRgb(255, 100, 100));
 
+            // Turn Off Overlay (오버레이 끄기)
+            Border btnTurnOff = CreateDockButton("🖥️ 끄기", (s, e) => HandleTurnOffOverlay());
+
             Separator sep1 = CreateSeparator();
 
-            // 2. Navigation
+            // Navigation
             Border btnPrev = CreateDockButton("◀", (s, e) => HandlePrevious());
             _pageLabel = new TextBlock
             {
@@ -218,19 +229,18 @@ namespace BoardestPptOverlay
 
             Separator sep2 = CreateSeparator();
 
-            // 3. Interactive control buttons (Pen, Eraser, Lasso, Pointer)
+            // Controls
             _btnPen = CreateDockButton("✏️", (s, e) => SetDrawMode(true), true);
             _btnEraser = CreateDockButton("🧹", (s, e) => SetEraserMode(), false);
-            _btnLasso = CreateDockButton("✨", (s, e) => SetLassoSelectMode(), false);
+            _btnShape = CreateDockButton("🔷", (s, e) => SetShapeDrawMode(), false);
             _btnInteract = CreateDockButton("🖱️", (s, e) => SetDrawMode(false), false);
 
             Separator sep3 = CreateSeparator();
 
-            // 4. Action button: Undo
             Border btnUndo = CreateDockButton("↩", (s, e) => UndoLastStroke());
 
-            // Assemble main bottom toolbar in capsule layout
             _toolbar.Children.Add(btnClose);
+            _toolbar.Children.Add(btnTurnOff);
             _toolbar.Children.Add(sep1);
             _toolbar.Children.Add(btnPrev);
             _toolbar.Children.Add(_pageLabel);
@@ -238,7 +248,7 @@ namespace BoardestPptOverlay
             _toolbar.Children.Add(sep2);
             _toolbar.Children.Add(_btnPen);
             _toolbar.Children.Add(_btnEraser);
-            _toolbar.Children.Add(_btnLasso);
+            _toolbar.Children.Add(_btnShape);
             _toolbar.Children.Add(_btnInteract);
             _toolbar.Children.Add(sep3);
             _toolbar.Children.Add(btnUndo);
@@ -246,7 +256,7 @@ namespace BoardestPptOverlay
             toolBorder.Child = _toolbar;
             _mainGrid.Children.Add(toolBorder);
 
-            // ───────────────── Floating Details Card (Pen Settings) ─────────────────
+            // Floating Pen settings card
             _penDetailsCard = new Border
             {
                 Background = new SolidColorBrush(Color.FromArgb(245, 19, 23, 31)),
@@ -257,28 +267,13 @@ namespace BoardestPptOverlay
                 Width = 240,
                 VerticalAlignment = VerticalAlignment.Bottom,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(190, 0, 0, 12), // Snug fit closely above the pen button
-                Visibility = Visibility.Visible, // Pen is default active
-                Effect = new System.Windows.Media.Effects.DropShadowEffect
-                {
-                    Color = Colors.Black,
-                    BlurRadius = 15,
-                    ShadowDepth = 2,
-                    Opacity = 0.5
-                }
+                Margin = new Thickness(190, 0, 0, 84),
+                Visibility = Visibility.Visible,
+                Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 15, ShadowDepth = 2, Opacity = 0.5 }
             };
 
             StackPanel penCardStack = new StackPanel();
-
-            TextBlock txtColors = new TextBlock
-            {
-                Text = "펜 색상 설정",
-                Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)),
-                FontWeight = FontWeights.Bold,
-                FontSize = 10,
-                Margin = new Thickness(0, 0, 0, 6)
-            };
-            penCardStack.Children.Add(txtColors);
+            penCardStack.Children.Add(new TextBlock { Text = "펜 색상 설정", Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)), FontWeight = FontWeights.Bold, FontSize = 10, Margin = new Thickness(0, 0, 0, 6) });
 
             WrapPanel colorWrap = new WrapPanel { Orientation = Orientation.Horizontal };
             colorWrap.Children.Add(CreateColorButton(_whiteColor));
@@ -290,39 +285,12 @@ namespace BoardestPptOverlay
             colorWrap.Children.Add(CreateColorButton(_greenColor));
             colorWrap.Children.Add(CreateColorButton(_orangeColor));
             colorWrap.Children.Add(CreateColorButton(_purpleColor));
-            colorWrap.Children.Add(CreateColorButton(_pinkColor));
             penCardStack.Children.Add(colorWrap);
 
-            TextBlock txtThickness = new TextBlock
-            {
-                Text = "펜 굵기 설정",
-                Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)),
-                FontWeight = FontWeights.Bold,
-                FontSize = 10,
-                Margin = new Thickness(0, 8, 0, 6)
-            };
-            penCardStack.Children.Add(txtThickness);
-
+            penCardStack.Children.Add(new TextBlock { Text = "펜 굵기 설정", Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)), FontWeight = FontWeights.Bold, FontSize = 10, Margin = new Thickness(0, 8, 0, 6) });
             StackPanel thicknessStack = new StackPanel { Orientation = Orientation.Horizontal };
-            _txtThicknessVal = new TextBlock
-            {
-                Text = "굵기: 4px",
-                Foreground = Brushes.White,
-                FontSize = 11,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0)
-            };
-            _thicknessSlider = new Slider
-            {
-                Minimum = 1,
-                Maximum = 20,
-                Value = 4,
-                TickFrequency = 1,
-                IsSnapToTickEnabled = true,
-                Width = 140,
-                VerticalAlignment = VerticalAlignment.Center,
-                Cursor = Cursors.Hand
-            };
+            _txtThicknessVal = new TextBlock { Text = "굵기: 4px", Foreground = Brushes.White, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+            _thicknessSlider = new Slider { Minimum = 1, Maximum = 20, Value = 4, TickFrequency = 1, IsSnapToTickEnabled = true, Width = 140, VerticalAlignment = VerticalAlignment.Center, Cursor = Cursors.Hand };
             _thicknessSlider.ValueChanged += (s, e) =>
             {
                 double val = _thicknessSlider.Value;
@@ -332,11 +300,10 @@ namespace BoardestPptOverlay
             thicknessStack.Children.Add(_txtThicknessVal);
             thicknessStack.Children.Add(_thicknessSlider);
             penCardStack.Children.Add(thicknessStack);
-
             _penDetailsCard.Child = penCardStack;
             _mainGrid.Children.Add(_penDetailsCard);
 
-            // ───────────────── Floating Details Card (Eraser Settings) ─────────────────
+            // Floating Eraser settings card
             _eraserDetailsCard = new Border
             {
                 Background = new SolidColorBrush(Color.FromArgb(245, 19, 23, 31)),
@@ -346,149 +313,108 @@ namespace BoardestPptOverlay
                 Padding = new Thickness(8, 6, 8, 6),
                 VerticalAlignment = VerticalAlignment.Bottom,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 12), // Snug fit closely above toolbar
+                Margin = new Thickness(250, 0, 0, 84),
                 Visibility = Visibility.Collapsed,
-                Effect = new System.Windows.Media.Effects.DropShadowEffect
-                {
-                    Color = Colors.Black,
-                    BlurRadius = 15,
-                    ShadowDepth = 2,
-                    Opacity = 0.5
-                }
+                Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 15, ShadowDepth = 2, Opacity = 0.5 }
             };
 
             StackPanel eraserCardStack = new StackPanel { Orientation = Orientation.Horizontal };
-            TextBlock txtEraser = new TextBlock
-            {
-                Text = "🧹 지우개 설정",
-                Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)),
-                FontWeight = FontWeights.Bold,
-                FontSize = 10,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0)
-            };
-            eraserCardStack.Children.Add(txtEraser);
+            eraserCardStack.Children.Add(new TextBlock { Text = "🧹 지우개 설정", Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)), FontWeight = FontWeights.Bold, FontSize = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
             eraserCardStack.Children.Add(CreateSeparator());
-
             _btnStrokeEraser = CreateDockButton("획 지우개", (s, e) => {
                 _inkCanvas.EditingMode = InkCanvasEditingMode.EraseByStroke;
                 UpdateEraserButtonsState(true);
             }, true);
-            
             _btnPointEraser = CreateDockButton("면적 지우개", (s, e) => {
                 _inkCanvas.EditingMode = InkCanvasEditingMode.EraseByPoint;
                 UpdateEraserButtonsState(false);
             }, false);
-
             eraserCardStack.Children.Add(_btnStrokeEraser);
             eraserCardStack.Children.Add(_btnPointEraser);
             eraserCardStack.Children.Add(CreateSeparator());
-
             Border btnClear = CreateDockButton("🗑 전체지움", (s, e) => {
                 ClearCanvas();
                 _eraserDetailsCard.Visibility = Visibility.Collapsed;
             });
             eraserCardStack.Children.Add(btnClear);
-
             _eraserDetailsCard.Child = eraserCardStack;
             _mainGrid.Children.Add(_eraserDetailsCard);
 
-            // ───────────────── Floating Slide Page Picker above the Page Label ─────────────────
+            // Floating Shape settings card
+            _shapeDetailsCard = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(245, 19, 23, 31)),
+                CornerRadius = new CornerRadius(16),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
+                BorderThickness = new Thickness(1.2),
+                Padding = new Thickness(12),
+                Width = 320,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(310, 0, 0, 84),
+                Visibility = Visibility.Collapsed,
+                Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 15, ShadowDepth = 2, Opacity = 0.5 }
+            };
+
+            StackPanel shapeCardStack = new StackPanel();
+            shapeCardStack.Children.Add(new TextBlock { Text = "🔷 삽입할 도형 선택", Foreground = new SolidColorBrush(Color.FromRgb(180, 180, 180)), FontWeight = FontWeights.Bold, FontSize = 10, Margin = new Thickness(0, 0, 0, 6) });
+
+            WrapPanel shapeWrap = new WrapPanel { Orientation = Orientation.Horizontal };
+            _btnShapeLine = CreateShapeSelectorBtn("📏 직선", ShapeMode.Line, true);
+            _btnShapeArrow = CreateShapeSelectorBtn("↗️ 화살표", ShapeMode.Arrow, false);
+            _btnShapeTriangle = CreateShapeSelectorBtn("🔺 삼각형", ShapeMode.Triangle, false);
+            _btnShapeRectangle = CreateShapeSelectorBtn("🟩 사각형", ShapeMode.Rectangle, false);
+            _btnShapeCircle = CreateShapeSelectorBtn("🟡 원", ShapeMode.Circle, false);
+            _btnShapeCube = CreateShapeSelectorBtn("📦 큐브", ShapeMode.Cube, false);
+            _btnShapeCylinder = CreateShapeSelectorBtn("🛢️ 원기둥", ShapeMode.Cylinder, false);
+
+            shapeWrap.Children.Add(_btnShapeLine);
+            shapeWrap.Children.Add(_btnShapeArrow);
+            shapeWrap.Children.Add(_btnShapeTriangle);
+            shapeWrap.Children.Add(_btnShapeRectangle);
+            shapeWrap.Children.Add(_btnShapeCircle);
+            shapeWrap.Children.Add(_btnShapeCube);
+            shapeWrap.Children.Add(_btnShapeCylinder);
+            shapeCardStack.Children.Add(shapeWrap);
+            _shapeDetailsCard.Child = shapeCardStack;
+            _mainGrid.Children.Add(_shapeDetailsCard);
+
+            // Floating Slide Page Picker above the Page Label
             _jumpBorder = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(250, 22, 25, 32)), // Dark premium background
+                Background = new SolidColorBrush(Color.FromArgb(250, 22, 25, 32)),
                 CornerRadius = new CornerRadius(16),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(50, 0, 245, 212)), // Teal border highlight
+                BorderBrush = new SolidColorBrush(Color.FromArgb(50, 0, 245, 212)),
                 BorderThickness = new Thickness(1.5),
                 Width = 320,
                 Height = 260,
                 VerticalAlignment = VerticalAlignment.Bottom,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(-180, 0, 0, 84), // Adjusted offset above page label button
+                Margin = new Thickness(-180, 0, 0, 144),
                 Visibility = Visibility.Collapsed,
-                Effect = new System.Windows.Media.Effects.DropShadowEffect
-                {
-                    Color = Colors.Black,
-                    BlurRadius = 20,
-                    ShadowDepth = 3,
-                    Opacity = 0.6
-                }
+                Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 20, ShadowDepth = 3, Opacity = 0.6 }
             };
 
             Grid jumpGrid = new Grid();
             jumpGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             jumpGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            // Row 0: TextBox + Jump button
             StackPanel topPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 12, 12, 6) };
+            topPanel.Children.Add(new TextBlock { Text = "이동할 쪽수:", Foreground = Brushes.White, FontWeight = FontWeights.Bold, FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
             
-            TextBlock tbLabel = new TextBlock
-            {
-                Text = "이동할 쪽수:",
-                Foreground = Brushes.White,
-                FontWeight = FontWeights.Bold,
-                FontSize = 13,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0)
-            };
-            
-            TextBox jumpInput = new TextBox
-            {
-                Width = 100,
-                Height = 28,
-                Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)),
-                Foreground = Brushes.White,
-                BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)),
-                BorderThickness = new Thickness(1),
-                VerticalContentAlignment = VerticalAlignment.Center,
-                FontWeight = FontWeights.Bold,
-                FontSize = 13,
-                Padding = new Thickness(6, 0, 6, 0),
-                Margin = new Thickness(0, 0, 8, 0)
-            };
-            
-            Button jumpBtn = new Button
-            {
-                Content = "이동",
-                Width = 60,
-                Height = 28,
-                Background = new SolidColorBrush(Color.FromArgb(255, 0, 245, 212)), // Teal accent
-                Foreground = Brushes.Black,
-                FontWeight = FontWeights.Bold,
-                BorderThickness = new Thickness(0)
-            };
+            TextBox jumpInput = new TextBox { Width = 100, Height = 28, Background = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)), Foreground = Brushes.White, BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)), BorderThickness = new Thickness(1), VerticalContentAlignment = VerticalAlignment.Center, FontWeight = FontWeights.Bold, FontSize = 13, Padding = new Thickness(6, 0, 6, 0), Margin = new Thickness(0, 0, 8, 0) };
+            Button jumpBtn = new Button { Content = "이동", Width = 60, Height = 28, Background = new SolidColorBrush(Color.FromArgb(255, 0, 245, 212)), Foreground = Brushes.Black, FontWeight = FontWeights.Bold, BorderThickness = new Thickness(0) };
 
-            jumpInput.KeyDown += (s, e) =>
-            {
-                if (e.Key == System.Windows.Input.Key.Enter)
-                {
-                    ExecuteTextBoxJump(jumpInput.Text);
-                }
-            };
-            jumpBtn.Click += (s, e) =>
-            {
-                ExecuteTextBoxJump(jumpInput.Text);
-            };
+            jumpInput.KeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Enter) { ExecuteTextBoxJump(jumpInput.Text); } };
+            jumpBtn.Click += (s, e) => { ExecuteTextBoxJump(jumpInput.Text); };
 
-            topPanel.Children.Add(tbLabel);
             topPanel.Children.Add(jumpInput);
             topPanel.Children.Add(jumpBtn);
             Grid.SetRow(topPanel, 0);
             jumpGrid.Children.Add(topPanel);
 
-            // Row 1: ScrollViewer + WrapPanel for grid of slide square buttons
-            ScrollViewer scrollViewer = new ScrollViewer
-            {
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                Margin = new Thickness(12, 6, 12, 12)
-            };
-            
-            _jumpWrapPanel = new WrapPanel
-            {
-                Orientation = Orientation.Horizontal
-            };
-
+            ScrollViewer scrollViewer = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Margin = new Thickness(12, 6, 12, 12) };
+            _jumpWrapPanel = new WrapPanel { Orientation = Orientation.Horizontal };
             scrollViewer.Content = _jumpWrapPanel;
             Grid.SetRow(scrollViewer, 1);
             jumpGrid.Children.Add(scrollViewer);
@@ -501,8 +427,8 @@ namespace BoardestPptOverlay
 
         private Border CreateDockButton(string text, MouseButtonEventHandler clickHandler, bool active = false)
         {
-            var activeColor = Color.FromRgb(0, 245, 212); // Premium Teal Highlight
-            var normalColor = Color.FromRgb(220, 220, 220); // Off-white
+            var activeColor = Color.FromRgb(0, 245, 212);
+            var normalColor = Color.FromRgb(220, 220, 220);
 
             Border btn = new Border
             {
@@ -531,7 +457,6 @@ namespace BoardestPptOverlay
 
             btn.MouseEnter += (s, e) =>
             {
-                // Simple check using current active state to prevent overriding highlight style
                 if (btn.BorderBrush == Brushes.Transparent)
                 {
                     btn.Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
@@ -551,6 +476,60 @@ namespace BoardestPptOverlay
             return btn;
         }
 
+        private Border CreateShapeSelectorBtn(string text, ShapeMode mode, bool active = false)
+        {
+            var activeColor = Color.FromRgb(0, 245, 212);
+            var normalColor = Color.FromRgb(220, 220, 220);
+
+            Border btn = new Border
+            {
+                Background = active ? new SolidColorBrush(Color.FromArgb(46, 0, 245, 212)) : Brushes.Transparent,
+                BorderBrush = active ? new SolidColorBrush(activeColor) : Brushes.Transparent,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(8, 4, 8, 4),
+                Margin = new Thickness(4),
+                Cursor = Cursors.Hand
+            };
+
+            TextBlock tb = new TextBlock
+            {
+                Text = text,
+                Foreground = active ? new SolidColorBrush(activeColor) : new SolidColorBrush(normalColor),
+                FontSize = 11,
+                FontWeight = FontWeights.Medium
+            };
+            btn.Child = tb;
+
+            btn.MouseDown += (s, e) =>
+            {
+                SelectShapeMode(mode);
+            };
+
+            return btn;
+        }
+
+        private void SelectShapeMode(ShapeMode mode)
+        {
+            _activeShapeMode = mode;
+            var activeColor = Color.FromRgb(0, 245, 212);
+            var normalColor = Color.FromRgb(220, 220, 220);
+
+            Border[] btns = { _btnShapeLine, _btnShapeArrow, _btnShapeTriangle, _btnShapeRectangle, _btnShapeCircle, _btnShapeCube, _btnShapeCylinder };
+            ShapeMode[] modes = { ShapeMode.Line, ShapeMode.Arrow, ShapeMode.Triangle, ShapeMode.Rectangle, ShapeMode.Circle, ShapeMode.Cube, ShapeMode.Cylinder };
+
+            for (int i = 0; i < btns.Length; i++)
+            {
+                if (btns[i] == null) continue;
+                bool isMe = (modes[i] == mode);
+                btns[i].Background = isMe ? new SolidColorBrush(Color.FromArgb(46, 0, 245, 212)) : Brushes.Transparent;
+                btns[i].BorderBrush = isMe ? new SolidColorBrush(activeColor) : Brushes.Transparent;
+                ((TextBlock)btns[i].Child).Foreground = isMe ? new SolidColorBrush(activeColor) : new SolidColorBrush(normalColor);
+            }
+
+            SetShapeDrawMode();
+        }
+
         private void SetDrawMode(bool isDraw)
         {
             var activeColor = Color.FromRgb(0, 245, 212);
@@ -558,85 +537,41 @@ namespace BoardestPptOverlay
 
             if (isDraw)
             {
-                if (_isDrawMode && _inkCanvas.EditingMode == InkCanvasEditingMode.Ink)
+                if (_isDrawMode && _inkCanvas.EditingMode == InkCanvasEditingMode.Ink && _activeShapeMode == ShapeMode.None)
                 {
-                    // Repeat click Pen button: toggle visibility
                     if (_penDetailsCard != null)
-                    {
                         _penDetailsCard.Visibility = (_penDetailsCard.Visibility == Visibility.Visible) ? Visibility.Collapsed : Visibility.Visible;
-                    }
                     if (_eraserDetailsCard != null) _eraserDetailsCard.Visibility = Visibility.Collapsed;
+                    if (_shapeDetailsCard != null) _shapeDetailsCard.Visibility = Visibility.Collapsed;
                     if (_jumpBorder != null) _jumpBorder.Visibility = Visibility.Collapsed;
                     return;
                 }
 
                 _isDrawMode = true;
+                _activeShapeMode = ShapeMode.None;
                 if (_penDetailsCard != null) _penDetailsCard.Visibility = Visibility.Visible;
                 if (_eraserDetailsCard != null) _eraserDetailsCard.Visibility = Visibility.Collapsed;
+                if (_shapeDetailsCard != null) _shapeDetailsCard.Visibility = Visibility.Collapsed;
                 if (_jumpBorder != null) _jumpBorder.Visibility = Visibility.Collapsed;
 
                 this.Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
                 _inkCanvas.EditingMode = InkCanvasEditingMode.Ink;
-                
-                if (_btnPen != null)
-                {
-                    _btnPen.Background = new SolidColorBrush(Color.FromArgb(46, 0, 245, 212));
-                    _btnPen.BorderBrush = new SolidColorBrush(activeColor);
-                    ((TextBlock)_btnPen.Child).Foreground = new SolidColorBrush(activeColor);
-                }
-                if (_btnInteract != null)
-                {
-                    _btnInteract.Background = Brushes.Transparent;
-                    _btnInteract.BorderBrush = Brushes.Transparent;
-                    ((TextBlock)_btnInteract.Child).Foreground = new SolidColorBrush(normalColor);
-                }
-                if (_btnEraser != null)
-                {
-                    _btnEraser.Background = Brushes.Transparent;
-                    _btnEraser.BorderBrush = Brushes.Transparent;
-                    ((TextBlock)_btnEraser.Child).Foreground = new SolidColorBrush(normalColor);
-                }
-                if (_btnLasso != null)
-                {
-                    _btnLasso.Background = Brushes.Transparent;
-                    _btnLasso.BorderBrush = Brushes.Transparent;
-                    ((TextBlock)_btnLasso.Child).Foreground = new SolidColorBrush(normalColor);
-                }
+
+                UpdateToolButtonsHighlight(_btnPen);
             }
             else
             {
                 _isDrawMode = false;
+                _activeShapeMode = ShapeMode.None;
                 if (_penDetailsCard != null) _penDetailsCard.Visibility = Visibility.Collapsed;
                 if (_eraserDetailsCard != null) _eraserDetailsCard.Visibility = Visibility.Collapsed;
+                if (_shapeDetailsCard != null) _shapeDetailsCard.Visibility = Visibility.Collapsed;
                 if (_jumpBorder != null) _jumpBorder.Visibility = Visibility.Collapsed;
-                
+
                 this.Background = Brushes.Transparent;
                 _inkCanvas.EditingMode = InkCanvasEditingMode.None;
-                
-                if (_btnPen != null)
-                {
-                    _btnPen.Background = Brushes.Transparent;
-                    _btnPen.BorderBrush = Brushes.Transparent;
-                    ((TextBlock)_btnPen.Child).Foreground = new SolidColorBrush(normalColor);
-                }
-                if (_btnInteract != null)
-                {
-                    _btnInteract.Background = new SolidColorBrush(Color.FromArgb(46, 0, 245, 212));
-                    _btnInteract.BorderBrush = new SolidColorBrush(activeColor);
-                    ((TextBlock)_btnInteract.Child).Foreground = new SolidColorBrush(activeColor);
-                }
-                if (_btnEraser != null)
-                {
-                    _btnEraser.Background = Brushes.Transparent;
-                    _btnEraser.BorderBrush = Brushes.Transparent;
-                    ((TextBlock)_btnEraser.Child).Foreground = new SolidColorBrush(normalColor);
-                }
-                if (_btnLasso != null)
-                {
-                    _btnLasso.Background = Brushes.Transparent;
-                    _btnLasso.BorderBrush = Brushes.Transparent;
-                    ((TextBlock)_btnLasso.Child).Foreground = new SolidColorBrush(normalColor);
-                }
+
+                UpdateToolButtonsHighlight(_btnInteract);
             }
         }
 
@@ -645,272 +580,115 @@ namespace BoardestPptOverlay
             var activeColor = Color.FromRgb(0, 245, 212);
             var normalColor = Color.FromRgb(220, 220, 220);
 
-            // Repeat click Eraser button: toggle visibility
-            if (_inkCanvas.EditingMode == InkCanvasEditingMode.EraseByStroke || 
-                _inkCanvas.EditingMode == InkCanvasEditingMode.EraseByPoint)
+            if (_inkCanvas.EditingMode == InkCanvasEditingMode.EraseByStroke || _inkCanvas.EditingMode == InkCanvasEditingMode.EraseByPoint)
             {
                 if (_eraserDetailsCard != null)
-                {
                     _eraserDetailsCard.Visibility = (_eraserDetailsCard.Visibility == Visibility.Visible) ? Visibility.Collapsed : Visibility.Visible;
-                }
                 if (_penDetailsCard != null) _penDetailsCard.Visibility = Visibility.Collapsed;
+                if (_shapeDetailsCard != null) _shapeDetailsCard.Visibility = Visibility.Collapsed;
+                if (_jumpBorder != null) _jumpBorder.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            _isDrawMode = true;
+            _activeShapeMode = ShapeMode.None;
+            this.Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
+
+            bool isPoint = (_btnPointEraser != null && _btnPointEraser.Background != Brushes.Transparent);
+            _inkCanvas.EditingMode = isPoint ? InkCanvasEditingMode.EraseByPoint : InkCanvasEditingMode.EraseByStroke;
+
+            if (_eraserDetailsCard != null) _eraserDetailsCard.Visibility = Visibility.Visible;
+            if (_penDetailsCard != null) _penDetailsCard.Visibility = Visibility.Collapsed;
+            if (_shapeDetailsCard != null) _shapeDetailsCard.Visibility = Visibility.Collapsed;
+            if (_jumpBorder != null) _jumpBorder.Visibility = Visibility.Collapsed;
+
+            UpdateToolButtonsHighlight(_btnEraser);
+        }
+
+        private void SetShapeDrawMode()
+        {
+            if (_activeShapeMode == ShapeMode.None)
+            {
+                _activeShapeMode = ShapeMode.Line;
+            }
+
+            if (_btnShape != null && _btnShape.Background != Brushes.Transparent && _shapeDetailsCard.Visibility == Visibility.Collapsed)
+            {
+                _shapeDetailsCard.Visibility = Visibility.Visible;
+                if (_penDetailsCard != null) _penDetailsCard.Visibility = Visibility.Collapsed;
+                if (_eraserDetailsCard != null) _eraserDetailsCard.Visibility = Visibility.Collapsed;
                 if (_jumpBorder != null) _jumpBorder.Visibility = Visibility.Collapsed;
                 return;
             }
 
             _isDrawMode = true;
             this.Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
-            
-            // Restore previous mode based on PointEraser selection state
-            bool isPoint = (_btnPointEraser != null && _btnPointEraser.Background != Brushes.Transparent);
-            _inkCanvas.EditingMode = isPoint ? InkCanvasEditingMode.EraseByPoint : InkCanvasEditingMode.EraseByStroke;
+            _inkCanvas.EditingMode = InkCanvasEditingMode.None; // Intercept manually!
 
-            if (_eraserDetailsCard != null) _eraserDetailsCard.Visibility = Visibility.Visible;
-            if (_penDetailsCard != null) _penDetailsCard.Visibility = Visibility.Collapsed;
-            if (_jumpBorder != null) _jumpBorder.Visibility = Visibility.Collapsed;
-
-            if (_btnPen != null)
-            {
-                _btnPen.Background = Brushes.Transparent;
-                _btnPen.BorderBrush = Brushes.Transparent;
-                ((TextBlock)_btnPen.Child).Foreground = new SolidColorBrush(normalColor);
-            }
-            if (_btnInteract != null)
-            {
-                _btnInteract.Background = Brushes.Transparent;
-                _btnInteract.BorderBrush = Brushes.Transparent;
-                ((TextBlock)_btnInteract.Child).Foreground = new SolidColorBrush(normalColor);
-            }
-            if (_btnEraser != null)
-            {
-                _btnEraser.Background = new SolidColorBrush(Color.FromArgb(46, 0, 245, 212));
-                _btnEraser.BorderBrush = new SolidColorBrush(activeColor);
-                ((TextBlock)_btnEraser.Child).Foreground = new SolidColorBrush(activeColor);
-            }
-            if (_btnLasso != null)
-            {
-                _btnLasso.Background = Brushes.Transparent;
-                _btnLasso.BorderBrush = Brushes.Transparent;
-                ((TextBlock)_btnLasso.Child).Foreground = new SolidColorBrush(normalColor);
-            }
-        }
-
-        private void SetLassoSelectMode()
-        {
-            _isDrawMode = true;
-            this.Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
-            _inkCanvas.EditingMode = InkCanvasEditingMode.Select;
-
+            if (_shapeDetailsCard != null) _shapeDetailsCard.Visibility = Visibility.Visible;
             if (_penDetailsCard != null) _penDetailsCard.Visibility = Visibility.Collapsed;
             if (_eraserDetailsCard != null) _eraserDetailsCard.Visibility = Visibility.Collapsed;
             if (_jumpBorder != null) _jumpBorder.Visibility = Visibility.Collapsed;
 
+            UpdateToolButtonsHighlight(_btnShape);
+        }
+
+        private void UpdateToolButtonsHighlight(Border activeBtn)
+        {
             var activeColor = Color.FromRgb(0, 245, 212);
             var normalColor = Color.FromRgb(220, 220, 220);
 
-            if (_btnPen != null)
+            Border[] btns = { _btnPen, _btnEraser, _btnShape, _btnInteract };
+            foreach (var btn in btns)
             {
-                _btnPen.Background = Brushes.Transparent;
-                _btnPen.BorderBrush = Brushes.Transparent;
-                ((TextBlock)_btnPen.Child).Foreground = new SolidColorBrush(normalColor);
-            }
-            if (_btnInteract != null)
-            {
-                _btnInteract.Background = Brushes.Transparent;
-                _btnInteract.BorderBrush = Brushes.Transparent;
-                ((TextBlock)_btnInteract.Child).Foreground = new SolidColorBrush(normalColor);
-            }
-            if (_btnEraser != null)
-            {
-                _btnEraser.Background = Brushes.Transparent;
-                _btnEraser.BorderBrush = Brushes.Transparent;
-                ((TextBlock)_btnEraser.Child).Foreground = new SolidColorBrush(normalColor);
-            }
-            if (_btnLasso != null)
-            {
-                _btnLasso.Background = new SolidColorBrush(Color.FromArgb(46, 0, 245, 212));
-                _btnLasso.BorderBrush = new SolidColorBrush(activeColor);
-                ((TextBlock)_btnLasso.Child).Foreground = new SolidColorBrush(activeColor);
+                if (btn == null) continue;
+                bool isMe = (btn == activeBtn);
+                btn.Background = isMe ? new SolidColorBrush(Color.FromArgb(46, 0, 245, 212)) : Brushes.Transparent;
+                btn.BorderBrush = isMe ? new SolidColorBrush(activeColor) : Brushes.Transparent;
+                ((TextBlock)btn.Child).Foreground = isMe ? new SolidColorBrush(activeColor) : new SolidColorBrush(normalColor);
             }
         }
 
         private void SetPenThickness(double w)
         {
-            _isDrawMode = true;
-            SetDrawMode(true);
-            _inkCanvas.EditingMode = InkCanvasEditingMode.Ink;
             _inkCanvas.DefaultDrawingAttributes.Width = w;
             _inkCanvas.DefaultDrawingAttributes.Height = w;
-            
-            if (_thicknessSlider != null && _thicknessSlider.Value != w)
-            {
-                _thicknessSlider.Value = w;
-            }
-            if (_txtThicknessVal != null)
-            {
-                _txtThicknessVal.Text = string.Format("굵기: {0}px", (int)w);
-            }
         }
 
         private Border CreateColorButton(Color color)
         {
-            Border circle = new Border
-            {
-                Width = 20,
-                Height = 20,
-                CornerRadius = new CornerRadius(10),
-                Background = new SolidColorBrush(color),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)),
-                BorderThickness = new Thickness(1.5),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            Border btn = new Border
-            {
-                Background = Brushes.Transparent,
-                CornerRadius = new CornerRadius(14),
-                Width = 28,
-                Height = 28,
-                Margin = new Thickness(4, 2, 4, 2),
-                Cursor = Cursors.Hand,
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Child = circle
-            };
-
+            Border circle = new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = new SolidColorBrush(color), BorderBrush = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)), BorderThickness = new Thickness(1.5) };
+            Border btn = new Border { Background = Brushes.Transparent, CornerRadius = new CornerRadius(14), Width = 28, Height = 28, Margin = new Thickness(4, 2, 4, 2), Cursor = Cursors.Hand, Child = circle };
             btn.MouseDown += (s, e) => SetPenColor(color);
-
-            btn.MouseEnter += (s, e) => {
-                btn.Background = new SolidColorBrush(Color.FromArgb(46, 0, 245, 212)); // Premium Mint highlight on hover
-                circle.BorderBrush = new SolidColorBrush(Color.FromRgb(0, 245, 212));
-            };
-            btn.MouseLeave += (s, e) => {
-                btn.Background = Brushes.Transparent;
-                circle.BorderBrush = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255));
-            };
-
+            btn.MouseEnter += (s, e) => { btn.Background = new SolidColorBrush(Color.FromArgb(46, 0, 245, 212)); circle.BorderBrush = new SolidColorBrush(Color.FromRgb(0, 245, 212)); };
+            btn.MouseLeave += (s, e) => { btn.Background = Brushes.Transparent; circle.BorderBrush = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)); };
             return btn;
-        }
-
-        private Separator CreateSeparator()
-        {
-            return new Separator
-            {
-                Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
-                Width = 1,
-                Height = 20,
-                Margin = new Thickness(6, 0, 6, 0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-        }
-
-        private void PopulateSlideButtons()
-        {
-            if (_jumpWrapPanel == null) return;
-            _jumpWrapPanel.Children.Clear();
-            for (int i = 1; i <= _slideCount; i++)
-            {
-                int slideNum = i;
-                Button btn = new Button
-                {
-                    Content = slideNum.ToString(),
-                    Width = 42,
-                    Height = 42,
-                    Margin = new Thickness(4),
-                    FontWeight = FontWeights.Bold,
-                    FontSize = 13,
-                    BorderThickness = new Thickness(1.2),
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255))
-                };
-
-                if (slideNum == _lastSlideIndex)
-                {
-                    btn.Background = new SolidColorBrush(Color.FromArgb(255, 0, 245, 212)); // Teal active
-                    btn.Foreground = Brushes.Black;
-                    btn.BorderBrush = new SolidColorBrush(Color.FromArgb(255, 0, 245, 212));
-                }
-                else
-                {
-                    btn.Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
-                    btn.Foreground = Brushes.White;
-                }
-
-                btn.Click += (s, e) =>
-                {
-                    _jumpBorder.Visibility = Visibility.Collapsed;
-                    JumpToSlide(slideNum);
-                };
-                _jumpWrapPanel.Children.Add(btn);
-            }
-        }
-
-        private void ExecuteTextBoxJump(string text)
-        {
-            int pageNum;
-            if (int.TryParse(text.Trim(), out pageNum))
-            {
-                if (pageNum >= 1 && pageNum <= _slideCount)
-                {
-                    _jumpBorder.Visibility = Visibility.Collapsed;
-                    JumpToSlide(pageNum);
-                }
-                else
-                {
-                    MessageBox.Show(string.Format("1부터 {0} 사이의 쪽수를 입력하세요.", _slideCount), "알림", MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
-            }
-            else
-            {
-                MessageBox.Show("올바른 숫자를 입력하세요.", "알림", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-        }
-
-        private void PageLabel_MouseDown(object sender, MouseButtonEventArgs e)
-        {
-            _jumpBorder.Visibility = (_jumpBorder.Visibility == Visibility.Visible) ? Visibility.Collapsed : Visibility.Visible;
-            if (_jumpBorder.Visibility == Visibility.Visible)
-            {
-                PopulateSlideButtons();
-            }
         }
 
         private void SetPenColor(Color color)
         {
             _inkCanvas.DefaultDrawingAttributes.Color = color;
-            _inkCanvas.DefaultDrawingAttributes.IsHighlighter = false;
             SetDrawMode(true);
+        }
+
+        private Separator CreateSeparator()
+        {
+            return new Separator { Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)), Width = 1, Height = 20, Margin = new Thickness(6, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         }
 
         private void UpdateEraserButtonsState(bool stroke)
         {
             var activeColor = Color.FromRgb(0, 245, 212);
             var normalColor = Color.FromRgb(220, 220, 220);
-            
-            if (_btnStrokeEraser != null)
-            {
-                _btnStrokeEraser.Background = stroke ? new SolidColorBrush(Color.FromArgb(46, 0, 245, 212)) : Brushes.Transparent;
-                _btnStrokeEraser.BorderBrush = stroke ? new SolidColorBrush(activeColor) : Brushes.Transparent;
-                ((TextBlock)_btnStrokeEraser.Child).Foreground = new SolidColorBrush(stroke ? activeColor : normalColor);
-            }
-            
-            if (_btnPointEraser != null)
-            {
-                _btnPointEraser.Background = !stroke ? new SolidColorBrush(Color.FromArgb(46, 0, 245, 212)) : Brushes.Transparent;
-                _btnPointEraser.BorderBrush = !stroke ? new SolidColorBrush(activeColor) : Brushes.Transparent;
-                ((TextBlock)_btnPointEraser.Child).Foreground = new SolidColorBrush(!stroke ? activeColor : normalColor);
-            }
-        }
-
-        private void InkCanvas_PreviewDrawingStart(object sender, EventArgs e)
-        {
-            HideFloatingCards();
+            if (_btnStrokeEraser != null) { _btnStrokeEraser.Background = stroke ? new SolidColorBrush(Color.FromArgb(46, 0, 245, 212)) : Brushes.Transparent; _btnStrokeEraser.BorderBrush = stroke ? new SolidColorBrush(activeColor) : Brushes.Transparent; ((TextBlock)_btnStrokeEraser.Child).Foreground = new SolidColorBrush(stroke ? activeColor : normalColor); }
+            if (_btnPointEraser != null) { _btnPointEraser.Background = !stroke ? new SolidColorBrush(Color.FromArgb(46, 0, 245, 212)) : Brushes.Transparent; _btnPointEraser.BorderBrush = !stroke ? new SolidColorBrush(activeColor) : Brushes.Transparent; ((TextBlock)_btnPointEraser.Child).Foreground = new SolidColorBrush(!stroke ? activeColor : normalColor); }
         }
 
         private void HideFloatingCards()
         {
             if (_penDetailsCard != null) _penDetailsCard.Visibility = Visibility.Collapsed;
             if (_eraserDetailsCard != null) _eraserDetailsCard.Visibility = Visibility.Collapsed;
+            if (_shapeDetailsCard != null) _shapeDetailsCard.Visibility = Visibility.Collapsed;
             if (_jumpBorder != null) _jumpBorder.Visibility = Visibility.Collapsed;
         }
 
@@ -928,6 +706,300 @@ namespace BoardestPptOverlay
             SaveStrokesToStorage(_lastSlideIndex);
         }
 
+        private void HandleTurnOffOverlay()
+        {
+            _onlyTurnOffOverlay = true;
+            this.Close();
+        }
+
+        private void PageLabel_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            _jumpBorder.Visibility = (_jumpBorder.Visibility == Visibility.Visible) ? Visibility.Collapsed : Visibility.Visible;
+            if (_jumpBorder.Visibility == Visibility.Visible)
+            {
+                PopulateSlideButtons();
+            }
+        }
+
+        private void PopulateSlideButtons()
+        {
+            if (_jumpWrapPanel == null) return;
+            _jumpWrapPanel.Children.Clear();
+            for (int i = 1; i <= _slideCount; i++)
+            {
+                int slideNum = i;
+                Button btn = new Button { Content = slideNum.ToString(), Width = 42, Height = 42, Margin = new Thickness(4), FontWeight = FontWeights.Bold, FontSize = 13, BorderThickness = new Thickness(1.2), BorderBrush = new SolidColorBrush(Color.FromArgb(40, 255, 255, 255)) };
+                if (slideNum == _lastSlideIndex)
+                {
+                    btn.Background = new SolidColorBrush(Color.FromArgb(255, 0, 245, 212));
+                    btn.Foreground = Brushes.Black;
+                    btn.BorderBrush = new SolidColorBrush(Color.FromArgb(255, 0, 245, 212));
+                }
+                else
+                {
+                    btn.Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255));
+                    btn.Foreground = Brushes.White;
+                }
+                btn.Click += (s, e) => { _jumpBorder.Visibility = Visibility.Collapsed; JumpToSlide(slideNum); };
+                _jumpWrapPanel.Children.Add(btn);
+            }
+        }
+
+        private void ExecuteTextBoxJump(string text)
+        {
+            int pageNum;
+            if (int.TryParse(text.Trim(), out pageNum))
+            {
+                if (pageNum >= 1 && pageNum <= _slideCount) { _jumpBorder.Visibility = Visibility.Collapsed; JumpToSlide(pageNum); }
+                else { MessageBox.Show(string.Format("1부터 {0} 사이의 쪽수를 입력하세요.", _slideCount), "알림", MessageBoxButton.OK, MessageBoxImage.Warning); }
+            }
+            else { MessageBox.Show("올바른 숫자를 입력하세요.", "알림", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        }
+
+        // Shape Drawing Mouse Interception
+        private void InkCanvas_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            HideFloatingCards();
+            if (_activeShapeMode != ShapeMode.None)
+            {
+                _shapeStartPoint = e.GetPosition(_inkCanvas);
+                _tempShapeStroke = null;
+                e.Handled = true;
+            }
+        }
+
+        private void InkCanvas_PreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (_shapeStartPoint != null && e.LeftButton == MouseButtonState.Pressed)
+            {
+                Point currentPoint = e.GetPosition(_inkCanvas);
+
+                if (_tempShapeStroke != null)
+                {
+                    _inkCanvas.Strokes.Remove(_tempShapeStroke);
+                }
+
+                StylusPointCollection pts = GenerateShapePoints(_activeShapeMode, _shapeStartPoint.Value, currentPoint);
+                if (pts.Count > 0)
+                {
+                    _tempShapeStroke = new Stroke(pts, _inkCanvas.DefaultDrawingAttributes.Clone());
+                    _inkCanvas.Strokes.Add(_tempShapeStroke);
+                }
+                e.Handled = true;
+            }
+        }
+
+        private void InkCanvas_PreviewMouseUp(object sender, MouseButtonEventArgs e)
+        {
+            if (_shapeStartPoint != null)
+            {
+                Point currentPoint = e.GetPosition(_inkCanvas);
+
+                if (_tempShapeStroke != null)
+                {
+                    _inkCanvas.Strokes.Remove(_tempShapeStroke);
+                }
+
+                StylusPointCollection pts = GenerateShapePoints(_activeShapeMode, _shapeStartPoint.Value, currentPoint);
+                if (pts.Count > 0)
+                {
+                    Stroke finalStroke = new Stroke(pts, _inkCanvas.DefaultDrawingAttributes.Clone());
+                    _inkCanvas.Strokes.Add(finalStroke);
+                }
+
+                _shapeStartPoint = null;
+                _tempShapeStroke = null;
+                e.Handled = true;
+            }
+        }
+
+        // Touch Gesture Handling
+        private void InkCanvas_PreviewTouchDown(object sender, TouchEventArgs e)
+        {
+            HideFloatingCards();
+            var point = e.GetTouchPoint(this).Position;
+            _activeTouchPoints[e.TouchDevice.Id] = point;
+            _gestureDetected = false;
+
+            if (_activeTouchPoints.Count >= 2)
+            {
+                _inkCanvas.EditingMode = InkCanvasEditingMode.None;
+            }
+        }
+
+        private void InkCanvas_TouchUp(object sender, TouchEventArgs e)
+        {
+            _activeTouchPoints.Remove(e.TouchDevice.Id);
+            if (_isDrawMode && _inkCanvas.EditingMode == InkCanvasEditingMode.None)
+            {
+                _inkCanvas.EditingMode = (_activeShapeMode == ShapeMode.None) ? InkCanvasEditingMode.Ink : InkCanvasEditingMode.None;
+            }
+        }
+
+        protected override void OnTouchMove(TouchEventArgs e)
+        {
+            base.OnTouchMove(e);
+            if (_gestureDetected) return;
+
+            if (_activeTouchPoints.ContainsKey(e.TouchDevice.Id))
+            {
+                var startPoint = _activeTouchPoints[e.TouchDevice.Id];
+                var currentPoint = e.GetTouchPoint(this).Position;
+
+                if (_activeTouchPoints.Count == 2)
+                {
+                    double dx = currentPoint.X - startPoint.X;
+                    double dy = currentPoint.Y - startPoint.Y;
+
+                    // Left to Right -> Previous slide
+                    if (dx > 120 && Math.Abs(dy) < 80)
+                    {
+                        _gestureDetected = true;
+                        HandlePrevious();
+                        e.Handled = true;
+                    }
+                    // Right to Left -> Next slide
+                    else if (dx < -120 && Math.Abs(dy) < 80)
+                    {
+                        _gestureDetected = true;
+                        HandleNext();
+                        e.Handled = true;
+                    }
+                    // Top to Bottom -> Close slideshow + overlay
+                    else if (dy > 150 && Math.Abs(dx) < 80)
+                    {
+                        _gestureDetected = true;
+                        this.Close();
+                        e.Handled = true;
+                    }
+                }
+            }
+        }
+
+        // Shape Generation Method
+        private StylusPointCollection GenerateShapePoints(ShapeMode shape, Point start, Point end)
+        {
+            StylusPointCollection pts = new StylusPointCollection();
+            double dx = end.X - start.X;
+            double dy = end.Y - start.Y;
+
+            if (shape == ShapeMode.Line)
+            {
+                pts.Add(new StylusPoint(start.X, start.Y));
+                pts.Add(new StylusPoint(end.X, end.Y));
+            }
+            else if (shape == ShapeMode.Arrow)
+            {
+                pts.Add(new StylusPoint(start.X, start.Y));
+                pts.Add(new StylusPoint(end.X, end.Y));
+
+                double angle = Math.Atan2(dy, dx);
+                double arrowLength = 15;
+                double arrowAngle = Math.PI / 6;
+
+                double x1 = end.X - arrowLength * Math.Cos(angle - arrowAngle);
+                double y1 = end.Y - arrowLength * Math.Sin(angle - arrowAngle);
+                double x2 = end.X - arrowLength * Math.Cos(angle + arrowAngle);
+                double y2 = end.Y - arrowLength * Math.Sin(angle + arrowAngle);
+
+                pts.Add(new StylusPoint(x1, y1));
+                pts.Add(new StylusPoint(end.X, end.Y));
+                pts.Add(new StylusPoint(x2, y2));
+            }
+            else if (shape == ShapeMode.Triangle)
+            {
+                pts.Add(new StylusPoint((start.X + end.X) / 2, start.Y));
+                pts.Add(new StylusPoint(start.X, end.Y));
+                pts.Add(new StylusPoint(end.X, end.Y));
+                pts.Add(new StylusPoint((start.X + end.X) / 2, start.Y));
+            }
+            else if (shape == ShapeMode.Rectangle)
+            {
+                pts.Add(new StylusPoint(start.X, start.Y));
+                pts.Add(new StylusPoint(end.X, start.Y));
+                pts.Add(new StylusPoint(end.X, end.Y));
+                pts.Add(new StylusPoint(start.X, end.Y));
+                pts.Add(new StylusPoint(start.X, start.Y));
+            }
+            else if (shape == ShapeMode.Circle)
+            {
+                double cx = start.X;
+                double cy = start.Y;
+                double r = Math.Sqrt(dx * dx + dy * dy);
+                for (int i = 0; i <= 360; i += 10)
+                {
+                    double rad = i * Math.PI / 180.0;
+                    pts.Add(new StylusPoint(cx + r * Math.Cos(rad), cy + r * Math.Sin(rad)));
+                }
+            }
+            else if (shape == ShapeMode.Cube)
+            {
+                double ox = dx * 0.3;
+                double oy = -dy * 0.3;
+
+                Point p0 = start;
+                Point p1 = new Point(start.X + dx * 0.7, start.Y);
+                Point p2 = new Point(start.X + dx * 0.7, start.Y + dy * 0.7);
+                Point p3 = new Point(start.X, start.Y + dy * 0.7);
+
+                Point q0 = new Point(p0.X + ox, p0.Y + oy);
+                Point q1 = new Point(p1.X + ox, p1.Y + oy);
+                Point q2 = new Point(p2.X + ox, p2.Y + oy);
+                Point q3 = new Point(p3.X + ox, p3.Y + oy);
+
+                pts.Add(new StylusPoint(p0.X, p0.Y));
+                pts.Add(new StylusPoint(p1.X, p1.Y));
+                pts.Add(new StylusPoint(p2.X, p2.Y));
+                pts.Add(new StylusPoint(p3.X, p3.Y));
+                pts.Add(new StylusPoint(p0.X, p0.Y));
+
+                pts.Add(new StylusPoint(q0.X, q0.Y));
+                pts.Add(new StylusPoint(q1.X, q1.Y));
+                pts.Add(new StylusPoint(q2.X, q2.Y));
+                pts.Add(new StylusPoint(q3.X, q3.Y));
+                pts.Add(new StylusPoint(q0.X, q0.Y));
+
+                pts.Add(new StylusPoint(q1.X, q1.Y));
+                pts.Add(new StylusPoint(p1.X, p1.Y));
+                pts.Add(new StylusPoint(p2.X, p2.Y));
+                pts.Add(new StylusPoint(q2.X, q2.Y));
+                pts.Add(new StylusPoint(q3.X, q3.Y));
+                pts.Add(new StylusPoint(p3.X, p3.Y));
+                pts.Add(new StylusPoint(p0.X, p0.Y));
+                pts.Add(new StylusPoint(q0.X, q0.Y));
+            }
+            else if (shape == ShapeMode.Cylinder)
+            {
+                double w = Math.Abs(dx);
+                double h = Math.Abs(dy);
+                double rx = w / 2;
+                double ry = h * 0.15;
+                double cx = (start.X + end.X) / 2;
+
+                Point topCenter = new Point(cx, start.Y + ry);
+                Point bottomCenter = new Point(cx, end.Y - ry);
+
+                for (int i = 0; i <= 360; i += 10)
+                {
+                    double rad = i * Math.PI / 180.0;
+                    pts.Add(new StylusPoint(topCenter.X + rx * Math.Cos(rad), topCenter.Y + ry * Math.Sin(rad)));
+                }
+
+                pts.Add(new StylusPoint(bottomCenter.X + rx, bottomCenter.Y));
+
+                for (int i = 0; i <= 360; i += 10)
+                {
+                    double rad = i * Math.PI / 180.0;
+                    pts.Add(new StylusPoint(bottomCenter.X + rx * Math.Cos(rad), bottomCenter.Y + ry * Math.Sin(rad)));
+                }
+
+                pts.Add(new StylusPoint(topCenter.X - rx, topCenter.Y));
+            }
+
+            return pts;
+        }
+
+        // PowerPoint COM Automation details
         private void OverlayWindow_Loaded(object sender, RoutedEventArgs e)
         {
             try
@@ -947,7 +1019,7 @@ namespace BoardestPptOverlay
                 catch
                 {
                     _pptApp = Activator.CreateInstance(pptType);
-                    _pptApp.Visible = 1; 
+                    _pptApp.Visible = 1;
                 }
 
                 try
@@ -964,7 +1036,7 @@ namespace BoardestPptOverlay
 
                 dynamic presentations = _pptApp.Presentations;
                 bool isLoaded = false;
-                
+
                 if (presentations.Count > 0)
                 {
                     for (int i = 1; i <= presentations.Count; i++)
@@ -1007,9 +1079,7 @@ namespace BoardestPptOverlay
                 _lastSlideIndex = _slideShowView.CurrentShowPosition;
 
                 LoadStrokesFromStorage(_lastSlideIndex);
-
                 PopulateSlideButtons();
-
                 UpdatePageIndicator(_lastSlideIndex, totalSlides);
 
                 _pollTimer = new DispatcherTimer();
@@ -1032,12 +1102,9 @@ namespace BoardestPptOverlay
                 if (currentSlideIdx != _lastSlideIndex)
                 {
                     SaveStrokesToStorage(_lastSlideIndex);
-                    
                     _lastSlideIndex = currentSlideIdx;
-                    
                     _inkCanvas.Strokes.Clear();
                     LoadStrokesFromStorage(_lastSlideIndex);
-                    
                     int totalSlides = _presentation.Slides.Count;
                     UpdatePageIndicator(_lastSlideIndex, totalSlides);
                 }
@@ -1051,12 +1118,9 @@ namespace BoardestPptOverlay
         private void UpdatePageIndicator(int current, int total)
         {
             if (_pageLabel != null)
-                _pageLabel.Text = current + " / " + total + " 쪽 (이동)";
-                
-            // Write slide index (0-based) and total slides to stdout for SharedPreferences dynamic save/restore
+                _pageLabel.Text = current + " / " + total + " 쪽";
+            
             Console.WriteLine("PAGE_UPDATE:" + (current - 1) + "," + total);
-
-            // Save state to AppData JSON
             SaveStateToAppData(current, total);
         }
 
@@ -1071,35 +1135,24 @@ namespace BoardestPptOverlay
                 _slideShowView.Next();
 
                 int pageAfter = _slideShowView.CurrentShowPosition;
-                
+
                 if (pageBefore != pageAfter)
                 {
                     SaveStrokesToStorage(pageBefore);
                     _lastSlideIndex = pageAfter;
                     _inkCanvas.Strokes.Clear();
                     LoadStrokesFromStorage(pageAfter);
-                    
                     int total = _presentation.Slides.Count;
                     UpdatePageIndicator(pageAfter, total);
                 }
                 else
                 {
-                    // pageBefore == pageAfter.
-                    // This can happen because:
-                    // 1) An animation was played (currentClick was < totalClicks before Next() was called)
-                    // 2) We are on the last slide AND all animations on it are completed (currentClick >= totalClicks before Next() was called)
                     int total = _presentation.Slides.Count;
                     if (pageBefore >= total && currentClick >= totalClicks)
                     {
-                        // We are at the last slide and finished all animations! Tell Flutter to autoplay the next file.
                         SaveStrokesToStorage(pageBefore);
                         Console.WriteLine("LAST_SLIDE_NEXT:" + _pptPath);
                         this.Close();
-                    }
-                    else
-                    {
-                        // Just an animation step played on a slide (last or non-last).
-                        // Do not close. Keep the overlay.
                     }
                 }
             }
@@ -1115,16 +1168,14 @@ namespace BoardestPptOverlay
             {
                 int pageBefore = _slideShowView.CurrentShowPosition;
                 _slideShowView.Previous();
-
                 int pageAfter = _slideShowView.CurrentShowPosition;
-                
+
                 if (pageBefore != pageAfter)
                 {
                     SaveStrokesToStorage(pageBefore);
                     _lastSlideIndex = pageAfter;
                     _inkCanvas.Strokes.Clear();
                     LoadStrokesFromStorage(pageAfter);
-                    
                     int total = _presentation.Slides.Count;
                     UpdatePageIndicator(pageAfter, total);
                 }
@@ -1146,7 +1197,6 @@ namespace BoardestPptOverlay
                     _lastSlideIndex = pageAfter;
                     _inkCanvas.Strokes.Clear();
                     LoadStrokesFromStorage(pageAfter);
-                    
                     int total = _presentation.Slides.Count;
                     UpdatePageIndicator(pageAfter, total);
                 }
@@ -1156,84 +1206,72 @@ namespace BoardestPptOverlay
 
         private void OverlayWindow_Closed(object sender, EventArgs e)
         {
-            if (_pollTimer != null)
-            {
-                _pollTimer.Stop();
-            }
+            if (_pollTimer != null) _pollTimer.Stop();
 
-            // Save strokes for current slide on exit
             if (_lastSlideIndex != -1)
             {
                 SaveStrokesToStorage(_lastSlideIndex);
-                // Print last slide index (0-based) to stdout for Dart/Flutter session integration
                 Console.WriteLine("LAST_PAGE:" + (_lastSlideIndex - 1));
             }
 
-            // Close PowerPoint slideshow cleanly
-            try
+            if (_onlyTurnOffOverlay)
             {
-                if (_slideShowView != null)
+                try
                 {
-                    // Exit slide show
-                    _slideShowView.Exit();
-                }
-            }
-            catch {}
-
-            // Save and Close Presentation, Quit PowerPoint application to kill the PPT program
-            try
-            {
-                if (_presentation != null)
-                {
-                    _presentation.Saved = true; // Mark as saved to prevent dialogs
-                    _presentation.Close();
-                }
-            }
-            catch {}
-
-            try
-            {
-                if (_pptApp != null)
-                {
-                    _pptApp.Quit();
-                }
-            }
-            catch {}
-
-            // Force kill PowerPoint process to ensure it is dead
-            try
-            {
-                if (_pptPid != 0)
-                {
-                    System.Diagnostics.Process proc = System.Diagnostics.Process.GetProcessById((int)_pptPid);
-                    if (proc != null && !proc.HasExited)
+                    if (_slideShowView != null)
                     {
-                        proc.Kill();
+                        _slideShowView.Exit(); // Exit slide show to PPT edit screen!
                     }
                 }
+                catch {}
             }
-            catch {}
+            else
+            {
+                try
+                {
+                    if (_slideShowView != null) _slideShowView.Exit();
+                }
+                catch {}
+                try
+                {
+                    if (_presentation != null)
+                    {
+                        _presentation.Saved = true;
+                        _presentation.Close();
+                    }
+                }
+                catch {}
+                try
+                {
+                    if (_pptApp != null) _pptApp.Quit();
+                }
+                catch {}
+                try
+                {
+                    if (_pptPid != 0)
+                    {
+                        System.Diagnostics.Process proc = System.Diagnostics.Process.GetProcessById((int)_pptPid);
+                        if (proc != null && !proc.HasExited) proc.Kill();
+                    }
+                }
+                catch {}
+            }
 
-            // Release COM references
             try { if (_slideShowView != null) Marshal.ReleaseComObject(_slideShowView); } catch {}
             try { if (_presentation != null) Marshal.ReleaseComObject(_presentation); } catch {}
             try { if (_pptApp != null) Marshal.ReleaseComObject(_pptApp); } catch {}
-            
+
             _slideShowView = null;
             _presentation = null;
             _pptApp = null;
         }
 
-        // ──────────────── 파일 기반 판서 데이터 저장 / 불러오기 (Dart AnnotationStorageService 완벽 호환) ────────────────
-
+        // Strokes storage helpers
         private string GetPPTStrokesFilePath()
         {
             string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             string pptDir = Path.Combine(appData, "BstSave", "PPT");
-            if (!Directory.Exists(pptDir))
-            {
-                Directory.CreateDirectory(pptDir);
-            }
+            if (!Directory.Exists(pptDir)) Directory.CreateDirectory(pptDir);
             string sanitized = Regex.Replace(_fileName, @"[\\/:*?""<>| ]", "_");
             return Path.Combine(pptDir, sanitized + ".iwb");
         }
@@ -1242,10 +1280,7 @@ namespace BoardestPptOverlay
         {
             string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             string pptDir = Path.Combine(appData, "BstSave", "PPT");
-            if (!Directory.Exists(pptDir))
-            {
-                Directory.CreateDirectory(pptDir);
-            }
+            if (!Directory.Exists(pptDir)) Directory.CreateDirectory(pptDir);
             string sanitized = Regex.Replace(_fileName, @"[\\/:*?""<>| ]", "_");
             return Path.Combine(pptDir, sanitized + ".json");
         }
@@ -1259,18 +1294,11 @@ namespace BoardestPptOverlay
                 string escapedFileName = _fileName.Replace("\\", "\\\\").Replace("\"", "\\\"");
                 string json = string.Format(
                     "{{\"filePath\":\"{0}\",\"fileName\":\"{1}\",\"type\":\"ppt\",\"lastPage\":{2},\"totalPages\":{3},\"lastOpened\":\"{4}\"}}",
-                    escapedFileName,
-                    escapedFileName,
-                    slide0Based,
-                    _slideCount,
-                    timestamp
+                    escapedFileName, escapedFileName, slide0Based, _slideCount, timestamp
                 );
                 File.WriteAllText(metadataFile, json, Encoding.UTF8);
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine("[SaveMetadataError] " + ex.Message);
-            }
+            catch {}
         }
 
         private void SaveStateToAppData(int current, int total)
@@ -1289,14 +1317,11 @@ namespace BoardestPptOverlay
                     var match = Regex.Match(json, @"""lastPage""\s*:\s*(\d+)");
                     if (match.Success)
                     {
-                        return int.Parse(match.Groups[1].Value) + 1; // Convert 0-based to 1-based
+                        return int.Parse(match.Groups[1].Value) + 1;
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine("[LoadStateError] " + ex.Message);
-            }
+            catch {}
             return 1;
         }
 
@@ -1309,16 +1334,14 @@ namespace BoardestPptOverlay
                 string content = File.ReadAllText(filePath, Encoding.UTF8);
                 int pagesStartIndex = content.IndexOf("\"pages\"");
                 if (pagesStartIndex == -1) return dict;
-                int openBraceIndex = content.IndexOf("{", pagesStartIndex);
-                if (openBraceIndex == -1) return dict;
-                
+
                 var matches = Regex.Matches(content, @"""(\d+)""\s*:\s*\[");
                 foreach (Match m in matches)
                 {
                     string pageKey = m.Groups[1].Value;
                     int startOfArray = content.IndexOf("[", m.Index);
                     if (startOfArray == -1) continue;
-                    
+
                     int bracketDepth = 0;
                     int endOfArray = -1;
                     for (int i = startOfArray; i < content.Length; i++)
@@ -1327,24 +1350,16 @@ namespace BoardestPptOverlay
                         else if (content[i] == ']')
                         {
                             bracketDepth--;
-                            if (bracketDepth == 0)
-                            {
-                                endOfArray = i;
-                                break;
-                            }
+                            if (bracketDepth == 0) { endOfArray = i; break; }
                         }
                     }
                     if (endOfArray != -1)
                     {
-                        string arrayVal = content.Substring(startOfArray, endOfArray - startOfArray + 1);
-                        dict[pageKey] = arrayVal;
+                        dict[pageKey] = content.Substring(startOfArray, endOfArray - startOfArray + 1);
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine("[ParseIwbError] " + ex.Message);
-            }
+            catch {}
             return dict;
         }
 
@@ -1364,10 +1379,7 @@ namespace BoardestPptOverlay
                 sb.Append("}}");
                 File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine("[WriteIwbError] " + ex.Message);
-            }
+            catch {}
         }
 
         private void SaveStrokesToStorage(int slideIndex)
@@ -1411,21 +1423,17 @@ namespace BoardestPptOverlay
                 string slideKey = (slideIndex - 1).ToString();
                 var pagesDict = ParseIwbPages(iwbPath);
                 pagesDict[slideKey] = sb.ToString();
-                
+
                 WriteIwbFile(iwbPath, pagesDict);
                 SavePPTMetadata(slideIndex - 1);
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine("[SaveError] Failed to save strokes: " + ex.Message);
-            }
+            catch {}
         }
 
         private void LoadStrokesFromStorage(int slideIndex)
         {
             if (slideIndex <= 0) return;
             string iwbPath = GetPPTStrokesFilePath();
-
             if (!File.Exists(iwbPath)) return;
 
             try
@@ -1435,7 +1443,6 @@ namespace BoardestPptOverlay
                 if (!pagesDict.ContainsKey(slideKey)) return;
 
                 string json = pagesDict[slideKey];
-                
                 var strokeMatches = Regex.Matches(json, @"\{""points"":\[(.*?)\]\s*,\s*""color"":(\d+)\s*,\s*""strokeWidth"":([\d\.]+)\s*,\s*""isEraser"":(true|false)\}");
                 foreach (Match match in strokeMatches)
                 {
@@ -1470,10 +1477,7 @@ namespace BoardestPptOverlay
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine("[LoadError] Failed to load strokes: " + ex.Message);
-            }
+            catch {}
         }
     }
 }

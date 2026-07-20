@@ -485,17 +485,62 @@ class _SetupWizardViewState extends State<SetupWizardView> {
     }
   }
 
-  // Get unique subject stems from the school timetable
-  List<String> _getUniqueSubjectStems() {
+  // Get unique subject keys from the school timetable (grade-prefixed for special rooms)
+  List<String> _getUniqueSubjectKeys() {
     if (_timetableResult == null) return [];
-    final stems = _timetableResult!.lessons
-        .where((l) => l.grade == _selectedGrade && l.classNum == _selectedClass)
-        .map((l) => AppSettings.getSubjectStem(l.subject))
-        .where((s) => s.isNotEmpty && !s.contains('동아리') && !s.contains('자율'))
-        .toSet()
-        .toList();
-    stems.sort();
-    return stems;
+
+    if (_specialClassroomMode) {
+      final type = _existingSettings?.specialClassroomType ?? 0;
+      if (type == 1) {
+        // 전용 교사실: 이 교사가 가르치는 모든 학년과 과목
+        final teacherName = _existingSettings?.selectedTeacher.replaceAll('*', '').trim() ?? '';
+        if (teacherName.isEmpty) return [];
+
+        final lessons = _timetableResult!.lessons
+            .where((l) => l.teacher.replaceAll('*', '').trim() == teacherName)
+            .toList();
+
+        final keys = lessons
+            .map((l) => '${l.grade}_${AppSettings.getSubjectStem(l.subject)}')
+            .where((s) => !s.endsWith('_') && !s.contains('동아리') && !s.contains('자율'))
+            .toSet()
+            .toList();
+        keys.sort();
+        return keys;
+      } else if (type == 2) {
+        // 과목 특수실: 선택된 학년과 과목
+        final subject = _existingSettings?.selectedSubject ?? '';
+        final grade = _existingSettings?.selectedGrade ?? 1;
+        if (subject.isEmpty) return [];
+        final stem = AppSettings.getSubjectStem(subject);
+        return ['${grade}_$stem'];
+      } else {
+        // 미교수 특수실
+        return [];
+      }
+    } else {
+      // 일반교실: 기존과 동일하지만 key 포맷을 simple subject stem으로 유지 (하위 호환성)
+      final stems = _timetableResult!.lessons
+          .where((l) => l.grade == _selectedGrade && l.classNum == _selectedClass)
+          .map((l) => AppSettings.getSubjectStem(l.subject))
+          .where((s) => s.isNotEmpty && !s.contains('동아리') && !s.contains('자율'))
+          .toSet()
+          .toList();
+      stems.sort();
+      return stems;
+    }
+  }
+
+  String _displaySubjectName(String key) {
+    if (key.contains('_')) {
+      final parts = key.split('_');
+      if (parts.length >= 2) {
+        final grade = parts[0];
+        final subject = parts.sublist(1).join('_');
+        return '$grade학년 $subject';
+      }
+    }
+    return key;
   }
 
   // Pick single image for a subject
@@ -529,7 +574,7 @@ class _SetupWizardViewState extends State<SetupWizardView> {
       );
 
       if (result != null) {
-        final subjectStems = _getUniqueSubjectStems();
+        final subjectStems = _getUniqueSubjectKeys();
         int matchCount = 0;
 
         for (final file in result.files) {
@@ -538,7 +583,12 @@ class _SetupWizardViewState extends State<SetupWizardView> {
           
           // Find matching subject stem
           for (final stem in subjectStems) {
-            if (fileName.contains(stem) || stem.contains(fileName)) {
+            final display = _displaySubjectName(stem);
+            final rawStem = stem.contains('_') ? stem.split('_').sublist(1).join('_') : stem;
+            
+            if (fileName.contains(display) || display.contains(fileName) ||
+                fileName.contains(stem) || stem.contains(fileName) ||
+                fileName.contains(rawStem) || rawStem.contains(fileName)) {
               final savedPath = await _saveImageLocally(file.path!, stem);
               _textbookImages[stem] = savedPath;
               matchCount++;
@@ -1146,7 +1196,7 @@ class _SetupWizardViewState extends State<SetupWizardView> {
             TextButton(
               onPressed: () async {
                 final updated = (_existingSettings ?? AppSettings()).copyWith(
-                  specialClassroomMode: enabled,
+                  specialClassroomType: enabled ? 1 : 0,
                   selectedTeacher: teacherController.text.trim(),
                 );
                 await _storageService.saveSettings(updated);
@@ -1154,7 +1204,7 @@ class _SetupWizardViewState extends State<SetupWizardView> {
                 // Invoke Windows Native method channel to resize immediately!
                 const channel = MethodChannel('com.boardest/launch_args');
                 try {
-                  await channel.invokeMethod('setSpecialClassroomMode', enabled);
+                  await channel.invokeMethod('setSpecialClassroomMode', enabled ? 1 : 0);
                 } catch (e) {
                   debugPrint('MethodChannel setSpecialClassroomMode failed: $e');
                 }
@@ -2644,7 +2694,7 @@ class _SetupWizardViewState extends State<SetupWizardView> {
   // 4단계: 교과서 표지 설정
   Widget _buildStep4Textbooks() {
     final scale = _existingSettings?.scaleFactor ?? 1.4;
-    final subjectStems = _getUniqueSubjectStems();
+    final subjectStems = _getUniqueSubjectKeys();
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 24.0 * scale),
@@ -2764,7 +2814,7 @@ class _SetupWizardViewState extends State<SetupWizardView> {
                                     color: Colors.black.withValues(alpha: 0.6),
                                     alignment: Alignment.center,
                                     child: Text(
-                                      stem,
+                                      _displaySubjectName(stem),
                                       style: GoogleFonts.notoSansKr(
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,
@@ -3129,7 +3179,7 @@ class _SetupWizardViewState extends State<SetupWizardView> {
       autoSleepEnabled: _existingSettings?.autoSleepEnabled ?? false,
       cafeteriaNum: _selectedCafeteria,
       mealCallClassOrder: _existingSettings?.mealCallClassOrder ?? 'asc',
-      specialClassroomMode: _specialClassroomMode,
+      specialClassroomType: _specialClassroomMode ? 1 : 0,
       connectionName: _authSchoolController.text.trim().isNotEmpty 
           ? _authSchoolController.text.trim() 
           : (_connectionNameController.text.trim().isNotEmpty ? _connectionNameController.text.trim() : 'My'),

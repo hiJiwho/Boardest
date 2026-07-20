@@ -81,6 +81,7 @@ class UpdateService {
     VoidCallback onConfirm, {
     required bool isAuto,
   }) {
+    if (!context.mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -124,6 +125,7 @@ class UpdateService {
   }
 
   static void _showDownloadProgressDialog(BuildContext context, ValueNotifier<double> progressNotifier) {
+    if (!context.mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -239,14 +241,14 @@ del "%~f0"
       await File(updaterBatPath).writeAsString(updaterContent);
 
       // Dismiss progress dialog
-      Navigator.of(context).pop();
+      if (context.mounted) Navigator.of(context).pop();
 
       // Launch updater.bat in background
       await Process.start('cmd.exe', ['/c', updaterBatPath], runInShell: true);
       exit(0);
     } catch (e) {
-      Navigator.of(context).pop();
-      _showErrorDialog(context, 'Windows 자동 업데이트 중 오류 발생: $e');
+      if (context.mounted) Navigator.of(context).pop();
+      if (context.mounted) _showErrorDialog(context, 'Windows 자동 업데이트 중 오류 발생: $e');
     }
   }
 
@@ -279,7 +281,7 @@ del "%~f0"
       client.close();
 
       // Dismiss dialog
-      Navigator.of(context).pop();
+      if (context.mounted) Navigator.of(context).pop();
 
       // Open APK installer via open_filex
       final result = await OpenFilex.open(apkPath);
@@ -287,12 +289,13 @@ del "%~f0"
         throw Exception('설치 프로그램 호출 실패: ${result.message}');
       }
     } catch (e) {
-      Navigator.of(context).pop();
-      _showErrorDialog(context, 'Android APK 다운로드 또는 설치 중 오류 발생: $e');
+      if (context.mounted) Navigator.of(context).pop();
+      if (context.mounted) _showErrorDialog(context, 'Android APK 다운로드 또는 설치 중 오류 발생: $e');
     }
   }
 
   static void _showErrorDialog(BuildContext context, String message) {
+    if (!context.mounted) return;
     showDialog(
       context: context,
       builder: (context) {

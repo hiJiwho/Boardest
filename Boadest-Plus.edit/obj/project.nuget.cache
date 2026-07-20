@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "g6MyNGbayac=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\jiwho\\Documents\\Boardest\\Boadest-Plus.edit\\BoadestPlusEdit.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\jiwho\\.nuget\\packages\\microsoft.web.webview2\\1.0.2903.40\\microsoft.web.webview2.1.0.2903.40.nupkg.sha512"
+  ],
+  "logs": []
+}

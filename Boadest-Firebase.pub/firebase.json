@@ -1,0 +1,70 @@
+{
+  "database": {
+    "rules": "database.rules.json"
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "hosting": [
+    {
+      "target": "boardest-main",
+      "public": "firebase_web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        { "source": "/sites", "destination": "/sites/index.html" },
+        { "source": "/sites/**", "destination": "/sites/index.html" },
+        { "source": "/sitespen", "destination": "/sitespen/index.html" },
+        { "source": "/sitespen/**", "destination": "/sitespen/index.html" },
+        { "source": "**", "destination": "/index.html" }
+      ]
+    },
+    {
+      "target": "boardest-default",
+      "public": "firebase_web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        { "source": "/sites", "destination": "/sites/index.html" },
+        { "source": "/sites/**", "destination": "/sites/index.html" },
+        { "source": "/sitespen", "destination": "/sitespen/index.html" },
+        { "source": "/sitespen/**", "destination": "/sitespen/index.html" },
+        { "source": "**", "destination": "/index.html" }
+      ]
+    },
+    {
+      "target": "bst-plusedit",
+      "public": "bst_plusedit_dist",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        { "source": "**", "destination": "/index.html" }
+      ]
+    },
+    {
+      "target": "bst-cloud",
+      "public": "firebase_web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        { "source": "/sites", "destination": "/sites/index.html" },
+        { "source": "/sites/**", "destination": "/sites/index.html" },
+        { "source": "/sitespen", "destination": "/sitespen/index.html" },
+        { "source": "/sitespen/**", "destination": "/sitespen/index.html" },
+        { "source": "**", "destination": "/index.html" }
+      ]
+    }
+  ]
+}

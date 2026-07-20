@@ -106,14 +106,14 @@ class _UsbExplorerState extends State<UsbExplorer> {
       // If parent dashboard passed an onFileOpen callback, route it there (professional teaching session)
       if (widget.onFileOpen != null &&
           (lowerPath.endsWith('.pdf') || lowerPath.endsWith('.pptx') || lowerPath.endsWith('.ppt') ||
-          lowerPath.endsWith('.iwb'))) {
+          lowerPath.endsWith('.hwp') || lowerPath.endsWith('.iwb'))) {
         widget.onFileOpen!(path);
         return;
       }
 
       // Boardest custom formats and common presentation/document formats open in BoardestPenView
       if (lowerPath.endsWith('.pdf') || lowerPath.endsWith('.pptx') || lowerPath.endsWith('.ppt') ||
-          lowerPath.endsWith('.iwb')) {
+          lowerPath.endsWith('.hwp') || lowerPath.endsWith('.iwb')) {
         if (!mounted) return;
         Navigator.of(context).push(
           MaterialPageRoute(

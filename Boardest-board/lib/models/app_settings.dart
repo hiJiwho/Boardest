@@ -179,10 +179,14 @@ class AppSettings {
   final bool autoSleepEnabled; // 자동 절전 모드 여부
   final String cafeteriaNum; // 급식실 번호 (예: "급식실1", "급식실2")
   final String mealCallClassOrder; // 반 정렬 순서 ("asc" 또는 "desc")
-  final bool specialClassroomMode; // 특수교실 전용 모드 여부
+  final int specialClassroomType; // 특별실 타입 (0: 일반, 1: 전용교사실, 2: 과목특수실, 3: 미교수특수실)
+  final String selectedSubject; // 특별실 과목 (과목 특수실에서 사용)
   final String connectionName; // Firebase 연결 이름 (예: "My", "ClassA")
   final String classNickname; // 학급 닉네임 (예: "2학년 1반", "기쁜반")
   final String selectedTeacher; // 특별실 교사명/약칭 (개인정보 보호를 위해 마스킹하여 내부 연동용으로만 사용)
+  final String windowFrameStyle; // "mac", "win7"
+
+  bool get specialClassroomMode => specialClassroomType > 0;
 
 
   AppSettings({
@@ -200,10 +204,12 @@ class AppSettings {
     this.autoSleepEnabled = false,
     this.cafeteriaNum = '급식실1',
     this.mealCallClassOrder = 'asc',
-    this.specialClassroomMode = false,
+    this.specialClassroomType = 0,
+    this.selectedSubject = '',
     this.connectionName = 'My',
     this.classNickname = '',
     this.selectedTeacher = '',
+    this.windowFrameStyle = 'mac',
   })  : timeSettings = timeSettings ?? TimeSettings(),
         textbookImages = textbookImages ?? {},
         ddayEvents = ddayEvents ?? _getDefaultDDayEvents(),
@@ -284,10 +290,18 @@ class AppSettings {
   // getTeacherKey 메서드가 삭제되었습니다.
 
   /// Retrieves a textbook cover path using a highly robust fallback mechanism to prevent cover disappearance
-  String? getTextbookPath(String subject) {
+  String? getTextbookPath(String subject, {int? grade}) {
     if (textbookImages.isEmpty) return null;
     final stem = getSubjectStem(subject);
     if (stem.isEmpty) return null;
+    
+    if (grade != null) {
+      final gradeKey = '${grade}_$stem';
+      if (textbookImages.containsKey(gradeKey)) {
+        return textbookImages[gradeKey];
+      }
+    }
+
     if (textbookImages.containsKey(stem)) {
       return textbookImages[stem];
     }
@@ -310,6 +324,12 @@ class AppSettings {
       final normalizedGroup = group.map((e) => getSubjectStem(e)).toSet();
       if (normalizedGroup.contains(stem)) {
         for (final member in normalizedGroup) {
+          if (grade != null) {
+            final gradeKey = '${grade}_$member';
+            if (textbookImages.containsKey(gradeKey)) {
+              return textbookImages[gradeKey];
+            }
+          }
           if (textbookImages.containsKey(member)) {
             return textbookImages[member];
           }
@@ -319,8 +339,19 @@ class AppSettings {
 
     // Secondary fallback: substring matches
     for (final key in textbookImages.keys) {
-      if (key.contains(stem) || stem.contains(key)) {
-        return textbookImages[key];
+      if (key.contains('_')) {
+        final parts = key.split('_');
+        if (parts.length >= 2) {
+          final keyGrade = int.tryParse(parts[0]);
+          final keyStem = parts.sublist(1).join('_');
+          if (grade == keyGrade && (keyStem.contains(stem) || stem.contains(keyStem))) {
+            return textbookImages[key];
+          }
+        }
+      } else {
+        if (key.contains(stem) || stem.contains(key)) {
+          return textbookImages[key];
+        }
       }
     }
 
@@ -344,10 +375,13 @@ class AppSettings {
       'autoSleepEnabled': autoSleepEnabled,
       'cafeteriaNum': cafeteriaNum,
       'mealCallClassOrder': mealCallClassOrder,
+      'specialClassroomType': specialClassroomType,
       'specialClassroomMode': specialClassroomMode,
+      'selectedSubject': selectedSubject,
       'connectionName': connectionName,
       'classNickname': classNickname,
       'selectedTeacher': selectedTeacher,
+      'windowFrameStyle': windowFrameStyle,
     };
   }
 
@@ -447,10 +481,12 @@ class AppSettings {
       autoSleepEnabled: json['autoSleepEnabled'] as bool? ?? false,
       cafeteriaNum: json['cafeteriaNum'] as String? ?? '급식실1',
       mealCallClassOrder: json['mealCallClassOrder'] as String? ?? 'asc',
-      specialClassroomMode: json['specialClassroomMode'] as bool? ?? false,
+      specialClassroomType: json['specialClassroomType'] as int? ?? (json['specialClassroomMode'] as bool? ?? false ? 3 : 0),
+      selectedSubject: json['selectedSubject'] as String? ?? '',
       connectionName: json['connectionName'] as String? ?? 'My',
       classNickname: json['classNickname'] as String? ?? '',
       selectedTeacher: json['selectedTeacher'] as String? ?? '',
+      windowFrameStyle: json['windowFrameStyle'] as String? ?? 'mac',
     );
   }
 
@@ -471,10 +507,13 @@ class AppSettings {
     bool? autoSleepEnabled,
     String? cafeteriaNum,
     String? mealCallClassOrder,
+    int? specialClassroomType,
     bool? specialClassroomMode,
+    String? selectedSubject,
     String? connectionName,
     String? classNickname,
     String? selectedTeacher,
+    String? windowFrameStyle,
   }) {
     return AppSettings(
       selectedSchool: selectedSchool ?? this.selectedSchool,
@@ -492,10 +531,12 @@ class AppSettings {
       autoSleepEnabled: autoSleepEnabled ?? this.autoSleepEnabled,
       cafeteriaNum: cafeteriaNum ?? this.cafeteriaNum,
       mealCallClassOrder: mealCallClassOrder ?? this.mealCallClassOrder,
-      specialClassroomMode: specialClassroomMode ?? this.specialClassroomMode,
+      specialClassroomType: specialClassroomType ?? (specialClassroomMode != null ? (specialClassroomMode ? 3 : 0) : this.specialClassroomType),
+      selectedSubject: selectedSubject ?? this.selectedSubject,
       connectionName: connectionName ?? this.connectionName,
       classNickname: classNickname ?? this.classNickname,
       selectedTeacher: selectedTeacher ?? this.selectedTeacher,
+      windowFrameStyle: windowFrameStyle ?? this.windowFrameStyle,
     );
   }
 

@@ -136,7 +136,7 @@ void main(List<String> args) async {
   final authService = AuthService();
   var currentUser = await authService.getCurrentUser();
 
-  // 자가 치유 및 백그라운드 자동 로그인: 설정은 완료되었으나 Auth 세션이 만료된 경우 기입된 학교 정보로 백그라운드 자동 로그인 진행
+  // 자가 치유 및 백그라운드 자동 로그인
   if (settings.isSetupComplete && currentUser == null && !settings.specialClassroomMode) {
     if (settings.selectedSchool != null) {
       try {
@@ -175,6 +175,8 @@ void main(List<String> args) async {
       initialTool = 'school_calendar';
     } else if (arg == '-ppt' || arg == '-ppt_board') {
       initialTool = 'ppt_board';
+    } else if (arg == '-hwp' || arg == '-hwp_board') {
+      initialTool = 'hwp_board';
     } else if (arg == '-s') {
       pptFullscreen = true;
       initialTool = 'ppt_board';
@@ -214,7 +216,11 @@ void main(List<String> args) async {
     }
   }
 
-  // Set fullscreen (immersive mode)
+  // Set fullscreen (immersive mode) & lock to landscape for Smartboards
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
   runApp(MyApp(

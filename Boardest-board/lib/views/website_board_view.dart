@@ -36,6 +36,7 @@ class _WebsiteBoardViewState extends State<WebsiteBoardView> {
   Color _penColor = const Color(0xFFEF4565);
   double _strokeWidth = 4.0;
   ToolMode _tool = ToolMode.pen;
+  ShapeType _activeShape = ShapeType.line;
   bool _isPenDetailsOpen = false;
   bool _eraseEntireStroke = false;
   double _eraserSize = 30.0;
@@ -89,6 +90,7 @@ class _WebsiteBoardViewState extends State<WebsiteBoardView> {
     _annotationController.activeWidth = _strokeWidth;
     _annotationController.eraseEntireStroke = _eraseEntireStroke;
     _annotationController.eraserSize = _eraserSize;
+    _annotationController.activeShape = _activeShape;
   }
 
   void _setTool(ToolMode mode) {
@@ -160,8 +162,12 @@ class _WebsiteBoardViewState extends State<WebsiteBoardView> {
   @override
   void dispose() {
     if (Platform.isWindows) {
-      const channel = MethodChannel('com.boardest/launch_args');
-      channel.invokeMethod('setWebviewClickThrough', false);
+      () async {
+        try {
+          const channel = MethodChannel('com.boardest/launch_args');
+          await channel.invokeMethod('setWebviewClickThrough', false);
+        } catch (_) {}
+      }();
     }
     _annotationController.dispose();
     _urlController.dispose();
@@ -206,10 +212,14 @@ class _WebsiteBoardViewState extends State<WebsiteBoardView> {
     );
   }
 
-  void _updateWebviewClickThrough() {
+  void _updateWebviewClickThrough() async {
     if (Platform.isWindows) {
-      const channel = MethodChannel('com.boardest/launch_args');
-      channel.invokeMethod('setWebviewClickThrough', _isDrawMode);
+      try {
+        const channel = MethodChannel('com.boardest/launch_args');
+        await channel.invokeMethod('setWebviewClickThrough', _isDrawMode);
+      } catch (e) {
+        debugPrint('[WebsiteBoardView] Catch clickthrough error: $e');
+      }
     }
   }
 
@@ -229,10 +239,23 @@ class _WebsiteBoardViewState extends State<WebsiteBoardView> {
     }
   }
 
+  void _navigatePage(bool next) {
+    final js = next
+        ? "document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', keyCode: 39, bubbles: true})); window.history.forward();"
+        : "document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowLeft', keyCode: 37, bubbles: true})); window.history.back();";
+    if (Platform.isWindows && _winWebviewController != null) {
+      _winWebviewController!.executeScript(js);
+    } else if (Platform.isAndroid && _androidWebController != null) {
+      _androidWebController!.runJavaScript(js);
+    }
+  }
+
   Widget _buildGoodNotesFloatingToolbar(double scale) {
     return BoardDockToolbar(
       scale: scale,
       tool: _isDrawMode ? _tool : ToolMode.pointer,
+      onPrev: () => _navigatePage(false),
+      onNext: () => _navigatePage(true),
       onToolChanged: (mode) {
         setState(() {
           if (mode == ToolMode.pointer) {
@@ -261,6 +284,15 @@ class _WebsiteBoardViewState extends State<WebsiteBoardView> {
           _penColor = c;
           _isDrawMode = true;
           _tool = ToolMode.pen;
+        });
+        _syncControllerTooling();
+      },
+      activeShape: _activeShape,
+      onShapeChanged: (shape) {
+        setState(() {
+          _activeShape = shape;
+          _isDrawMode = true;
+          _tool = ToolMode.shape;
         });
         _syncControllerTooling();
       },

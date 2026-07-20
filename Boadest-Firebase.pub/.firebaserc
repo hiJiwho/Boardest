@@ -1,0 +1,23 @@
+{
+  "projects": {
+    "default": "jiwhosboardest"
+  },
+  "targets": {
+    "jiwhosboardest": {
+      "hosting": {
+        "bst-plusedit": [
+          "bst-plusedit"
+        ],
+        "bst-cloud": [
+          "bst-cloud"
+        ],
+        "boardest-default": [
+          "jiwhosboardest"
+        ],
+        "boardest-main": [
+          "boardest"
+        ]
+      }
+    }
+  }
+}

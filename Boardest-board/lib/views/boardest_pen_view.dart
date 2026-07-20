@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -44,8 +45,6 @@ class DrawingStroke {
 }
 
 enum StrokeType { pen, marker, pencil, brush, cali, eraser }
-
-enum ShapeType { line, arrow, triangle, rectangle, circle }
 
 enum ElementType { image, table, formula, timer }
 
@@ -137,6 +136,12 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
   String _bgPattern = 'none'; // 'none', 'grid', 'line'
   bool _isMenuOpen = false;
   bool _isPenDetailsOpen = false;
+  bool _isShapeDetailsOpen = false;
+
+  // ── Stylus / Palm Rejection ───────────────────────────
+  PointerDeviceKind? _lastPointerKind;
+  bool _palmRejectionEnabled = false; // 손바닥 터치 오작동 방지
+  bool _hasSeenStylus = false; // 스타일러스 펜 사용 감지 여부
 
   // ── Timers / Keys ──────────────────────────────────────
   final GlobalKey _canvasKey = GlobalKey();
@@ -213,26 +218,51 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
   }
 
   DrawingStroke _strokeFromMap(Map<String, dynamic> strokeData) {
-    final pointsData = strokeData['points'] as List<dynamic>? ?? [];
-    final points = pointsData
-        .map((pt) => Offset(
-              (pt['dx'] as num).toDouble(),
-              (pt['dy'] as num).toDouble(),
-            ))
-        .toList();
+    try {
+      final pointsData = strokeData['points'] as List<dynamic>? ?? [];
+      final points = pointsData
+          .map((pt) {
+            final dx = pt['dx'];
+            final dy = pt['dy'];
+            return Offset(
+              dx is num ? dx.toDouble() : 0.0,
+              dy is num ? dy.toDouble() : 0.0,
+            );
+          })
+          .toList();
 
-    final isEraser = strokeData['isEraser'] as bool? ?? false;
-    final typeIndex = strokeData['type'] as int?;
-    final type = typeIndex != null
-        ? StrokeType.values[typeIndex.clamp(0, StrokeType.values.length - 1)]
-        : (isEraser ? StrokeType.eraser : StrokeType.pen);
+      final isEraser = strokeData['isEraser'] as bool? ?? false;
+      final typeIndex = strokeData['type'] as int?;
+      final type = typeIndex != null
+          ? StrokeType.values[typeIndex.clamp(0, StrokeType.values.length - 1)]
+          : (isEraser ? StrokeType.eraser : StrokeType.pen);
 
-    return DrawingStroke(
-      points: points,
-      color: Color(strokeData['color'] as int),
-      strokeWidth: (strokeData['strokeWidth'] as num).toDouble(),
-      type: type,
-    );
+      final colorVal = strokeData['color'];
+      Color color = Colors.white;
+      if (colorVal is int) {
+        color = Color(colorVal);
+      } else if (colorVal is String) {
+        color = Color(int.tryParse(colorVal) ?? 0xFFFFFFFF);
+      }
+
+      final wVal = strokeData['strokeWidth'];
+      final strokeWidth = wVal is num ? wVal.toDouble() : 4.0;
+
+      return DrawingStroke(
+        points: points,
+        color: color,
+        strokeWidth: strokeWidth,
+        type: type,
+      );
+    } catch (e) {
+      debugPrint('Error parsing stroke: $e');
+      return DrawingStroke(
+        points: [],
+        color: Colors.white,
+        strokeWidth: 4.0,
+        type: StrokeType.pen,
+      );
+    }
   }
 
   Map<String, dynamic> _strokeToMap(DrawingStroke stroke) => {
@@ -382,10 +412,17 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
     }
   }
 
-  List<DrawingStroke> get _strokes => _pageStrokes[_currentPage]!;
-  List<BoardElement> get _elements => _pageElements[_currentPage]!;
+  List<DrawingStroke> get _strokes {
+    _initPage(_currentPage);
+    return _pageStrokes[_currentPage]!;
+  }
+  List<BoardElement> get _elements {
+    _initPage(_currentPage);
+    return _pageElements[_currentPage]!;
+  }
 
   void _saveSnapshot() {
+    _initPage(_currentPage);
     _undoHistory[_currentPage]!.add(List<DrawingStroke>.from(_strokes));
     if (_undoHistory[_currentPage]!.length > 60) {
       _undoHistory[_currentPage]!.removeAt(0);
@@ -394,6 +431,7 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
   }
 
   void _undo() {
+    _initPage(_currentPage);
     final hist = _undoHistory[_currentPage]!;
     if (hist.isEmpty) return;
     _redoStack[_currentPage]!.add(List<DrawingStroke>.from(_strokes));
@@ -405,6 +443,7 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
   }
 
   void _redo() {
+    _initPage(_currentPage);
     final stack = _redoStack[_currentPage]!;
     if (stack.isEmpty) return;
     _undoHistory[_currentPage]!.add(List<DrawingStroke>.from(_strokes));
@@ -470,6 +509,11 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
   }
 
   void _onPanStart(DragStartDetails d) {
+    // Palm Rejection: 스타일러스 사용 중 손바닥 터치 오작동 방지
+    if (_palmRejectionEnabled && _hasSeenStylus && _lastPointerKind == PointerDeviceKind.touch) {
+      return;
+    }
+
     final p = _local(d.globalPosition);
 
     if (_tool == ToolMode.pan) {
@@ -726,6 +770,20 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
     switch (shape) {
       case ShapeType.line:
         return [start, end];
+      case ShapeType.arrow:
+        final dir = end - start;
+        if (dir.distance == 0) return [start, end];
+        final u = dir / dir.distance;
+        final v = Offset(-u.dy, u.dx);
+        final arrowLength = 15.0;
+        final h1 = end - u * arrowLength + v * (arrowLength * 0.5);
+        final h2 = end - u * arrowLength - v * (arrowLength * 0.5);
+        return [start, end, h1, end, h2];
+      case ShapeType.triangle:
+        final top = Offset((start.dx + end.dx) / 2, start.dy);
+        final bottomLeft = Offset(start.dx, end.dy);
+        final bottomRight = end;
+        return [top, bottomLeft, bottomRight, top];
       case ShapeType.rectangle:
         return [
           start,
@@ -741,6 +799,43 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
           final rad = i * pi / 180;
           pts.add(start + Offset(r * cos(rad), r * sin(rad)));
         }
+        return pts;
+      case ShapeType.cube:
+        final dx = end.dx - start.dx;
+        final dy = end.dy - start.dy;
+        final offset = Offset(dx * 0.3, -dy * 0.3);
+        final p0 = start;
+        final p1 = Offset(start.dx + dx * 0.7, start.dy);
+        final p2 = Offset(start.dx + dx * 0.7, start.dy + dy * 0.7);
+        final p3 = Offset(start.dx, start.dy + dy * 0.7);
+        final q0 = p0 + offset;
+        final q1 = p1 + offset;
+        final q2 = p2 + offset;
+        final q3 = p3 + offset;
+        return [
+          p0, p1, p2, p3, p0,
+          q0, q1, q2, q3, q0,
+          q1, p1, p2, q2, q3, p3, p0, q0
+        ];
+      case ShapeType.cylinder:
+        final w = (end.dx - start.dx).abs();
+        final h = (end.dy - start.dy).abs();
+        final rx = w / 2;
+        final ry = h * 0.15;
+        final cx = (start.dx + end.dx) / 2;
+        final topCenter = Offset(cx, start.dy + ry);
+        final bottomCenter = Offset(cx, end.dy - ry);
+        final pts = <Offset>[];
+        for (double i = 0; i <= 360; i += 10) {
+          final rad = i * pi / 180;
+          pts.add(topCenter + Offset(rx * cos(rad), ry * sin(rad)));
+        }
+        pts.add(bottomCenter + Offset(rx, 0));
+        for (double i = 0; i <= 360; i += 10) {
+          final rad = i * pi / 180;
+          pts.add(bottomCenter + Offset(rx * cos(rad), ry * sin(rad)));
+        }
+        pts.add(topCenter + Offset(-rx, 0));
         return pts;
       default:
         return [start, end];
@@ -761,21 +856,36 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
         children: [
           // 1. Drawing Canvas
           Positioned.fill(
-            child: GestureDetector(
-              key: _canvasKey,
-              onPanStart: _onPanStart,
-              onPanUpdate: _onPanUpdate,
-              onPanEnd: _onPanEnd,
-              child: ClipRect(
-                child: CustomPaint(
-                  painter: _InfiniteBoardPainter(
-                    strokes: _strokes,
-                    activePoints: _activePoints,
-                    canvasOffset: _canvasOffset,
-                    bgPattern: _bgPattern,
-                    boardBgColor: _boardBgColor,
-                    lassoPoints: _isLassoActive ? _lassoPolygon : null,
-                    selectedIndices: _selectedStrokeIndices,
+            child: Listener(
+              onPointerDown: (event) {
+                _lastPointerKind = event.kind;
+                if (event.kind == PointerDeviceKind.stylus || event.kind == PointerDeviceKind.invertedStylus) {
+                  _hasSeenStylus = true;
+                }
+                if (event.kind == PointerDeviceKind.invertedStylus) {
+                  if (_tool != ToolMode.eraser) {
+                    setState(() {
+                      _tool = ToolMode.eraser;
+                    });
+                  }
+                }
+              },
+              child: GestureDetector(
+                key: _canvasKey,
+                onPanStart: _onPanStart,
+                onPanUpdate: _onPanUpdate,
+                onPanEnd: _onPanEnd,
+                child: ClipRect(
+                  child: CustomPaint(
+                    painter: _InfiniteBoardPainter(
+                      strokes: _strokes,
+                      activePoints: _activePoints,
+                      canvasOffset: _canvasOffset,
+                      bgPattern: _bgPattern,
+                      boardBgColor: _boardBgColor,
+                      lassoPoints: _isLassoActive ? _lassoPolygon : null,
+                      selectedIndices: _selectedStrokeIndices,
+                    ),
                   ),
                 ),
               ),
@@ -788,6 +898,14 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
               bottom: 84 * scale,
               left: MediaQuery.of(context).size.width / 2 - 120 * scale,
               child: _buildPenDetailsCard(scale),
+            ),
+
+          // 2.7 HSL Shape Details Card
+          if (_isShapeDetailsOpen && _tool == ToolMode.shape)
+            Positioned(
+              bottom: 84 * scale,
+              left: MediaQuery.of(context).size.width / 2 - 160 * scale,
+              child: _buildShapeDetailsCard(scale),
             ),
 
           // 3. Eraser bubble reset menu (GOODNOTES BUBBLE STYLE)
@@ -912,6 +1030,7 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
                 setState(() {
                   _tool = ToolMode.pen;
                   _isPenDetailsOpen = false;
+                  _isShapeDetailsOpen = false;
                   _selectedStrokeIndices.clear(); // Clear lasso selection on switch!
                 });
               }
@@ -927,6 +1046,7 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
             () => setState(() {
               _tool = ToolMode.eraser;
               _isPenDetailsOpen = false;
+              _isShapeDetailsOpen = false;
               _selectedStrokeIndices.clear(); // Clear lasso selection on switch!
             }),
             scale,
@@ -940,7 +1060,31 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
             () => setState(() {
               _tool = ToolMode.select;
               _isPenDetailsOpen = false;
+              _isShapeDetailsOpen = false;
             }),
+            scale,
+          ),
+
+          // 3.5 Shape Tool (도형)
+          _buildToolDockBtn(
+            Icons.crop_square_rounded,
+            '도형 삽입 도구 (클릭 시 세부 선택 팝업)',
+            ToolMode.shape,
+            () {
+              if (_tool == ToolMode.shape) {
+                setState(() {
+                  _isShapeDetailsOpen = !_isShapeDetailsOpen;
+                  _isPenDetailsOpen = false;
+                });
+              } else {
+                setState(() {
+                  _tool = ToolMode.shape;
+                  _isShapeDetailsOpen = true;
+                  _isPenDetailsOpen = false;
+                  _selectedStrokeIndices.clear();
+                });
+              }
+            },
             scale,
           ),
 
@@ -952,6 +1096,7 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
             () => setState(() {
               _tool = ToolMode.pan;
               _isPenDetailsOpen = false;
+              _isShapeDetailsOpen = false;
               _selectedStrokeIndices.clear(); // Clear lasso selection on switch!
             }),
             scale,
@@ -1128,6 +1273,76 @@ class _BoardestPenViewState extends State<BoardestPenView> with TickerProviderSt
               onPressed: () => setState(() => _selectEntireStroke = false),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShapeDetailsCard(double scale) {
+    return Card(
+      color: const Color(0xFF13171F).withOpacity(0.96),
+      elevation: 12,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.white.withOpacity(0.16)),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '🔷 삽입할 도형 선택',
+              style: GoogleFonts.notoSansKr(
+                color: Colors.white70,
+                fontSize: 11 * scale,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildShapeSelectorBtn('📏 직선', ShapeType.line, scale),
+                _buildShapeSelectorBtn('↗️ 화살표', ShapeType.arrow, scale),
+                _buildShapeSelectorBtn('🔺 삼각형', ShapeType.triangle, scale),
+                _buildShapeSelectorBtn('🟩 사각형', ShapeType.rectangle, scale),
+                _buildShapeSelectorBtn('🟡 원', ShapeType.circle, scale),
+                _buildShapeSelectorBtn('📦 큐브', ShapeType.cube, scale),
+                _buildShapeSelectorBtn('🛢️ 원기둥', ShapeType.cylinder, scale),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShapeSelectorBtn(String label, ShapeType type, double scale) {
+    final active = _activeShape == type;
+    final activeColor = const Color(0xFF00F5D4);
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _activeShape = type;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? activeColor.withOpacity(0.18) : Colors.white.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: active ? activeColor : Colors.white.withOpacity(0.1)),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.notoSansKr(
+            color: active ? activeColor : Colors.white70,
+            fontSize: 11 * scale,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );

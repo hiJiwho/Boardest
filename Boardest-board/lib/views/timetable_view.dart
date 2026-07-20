@@ -912,7 +912,7 @@ class _TimetableViewState extends State<TimetableView> with SingleTickerProvider
                   final timeRange = _getCalculatedTimeRange(lesson.classTime);
 
                   // Extract stem to look up textbook image mapping
-                  final imgPath = _appSettings.getTextbookPath(lesson.subject);
+                  final imgPath = _appSettings.getTextbookPath(lesson.subject, grade: lesson.grade);
                   final hasImage = imgPath != null && File(imgPath).existsSync();
 
                   // 교사 이름 표시 제거됨 (개인정보 보호)

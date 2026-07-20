@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "eat_calls": {
+      "$doc_id": {
+        // Read: authenticated users only (either classroom .bst account or teacher google account)
+        ".read": "auth != null && (auth.token.email.endsWith('.bst') || auth.token.firebase.sign_in_provider === 'google' || auth.token.firebase.sign_in_provider === 'google.com')",
+        // Write: same rules
+        ".write": "auth != null && (auth.token.email.endsWith('.bst') || auth.token.firebase.sign_in_provider === 'google' || auth.token.firebase.sign_in_provider === 'google.com')"
+      }
+    }
+  }
+}

@@ -2,7 +2,7 @@
 #Requires -Version 5.0
 
 $ErrorActionPreference = "Stop"
-$projectRoot = "c:\Users\jiwho\Documents\Boardest"
+$projectRoot = $PSScriptRoot
 
 function Write-Header {
     param([string]$Text)
@@ -105,6 +105,15 @@ try {
                 Write-Status "PowerPoint Overlay compiled and copied to build source"
             } else {
                 Write-Error-Custom "PowerPoint Overlay compilation failed."
+            }
+
+            # Compile HWP overlay
+            & $csc /target:winexe /out:boardest_hwp_overlay.exe /lib:C:\Windows\Microsoft.NET\Framework64\v4.0.30319,C:\Windows\Microsoft.NET\Framework64\v4.0.30319\WPF /r:System.dll,System.Core.dll,WindowsBase.dll,PresentationCore.dll,PresentationFramework.dll,System.Xaml.dll boardest_hwp_overlay.cs | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Copy-Item "boardest_hwp_overlay.exe" "$winSrc\boardest_hwp_overlay.exe" -Force
+                Write-Status "HWP Overlay compiled and copied to build source"
+            } else {
+                Write-Error-Custom "HWP Overlay compilation failed."
             }
             
             # Compile PPT helper (COM bridge)

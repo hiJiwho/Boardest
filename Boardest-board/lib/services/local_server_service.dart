@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import '../config/app_config.dart';
 
 /// 교사 노트북(Electron) ↔ 전자칠판 Flutter 간 LAN 통신 서비스
@@ -13,6 +15,7 @@ import '../config/app_config.dart';
 /// - 인증 없음 (Zero-configuration 연결)
 class LocalServerService {
   static final LocalServerService instance = LocalServerService._();
+  String activeTextbookDir = '';
   LocalServerService._();
 
   HttpServer? _server;
@@ -52,6 +55,64 @@ class LocalServerService {
       router.post('/command', (Request req) => _handleCommand(req));
       router.get('/info', (Request req) => _handleInfo(req));
       router.post('/upload', (Request req) => _handleUpload(req));
+      router.get('/textbooks/<filepath|.*>', (Request req, String filepath) async {
+        final decodedPath = Uri.decodeComponent(filepath);
+        if (activeTextbookDir.isEmpty) return Response.notFound('No active textbook directory.');
+        final file = File(p.join(activeTextbookDir, decodedPath));
+        if (!await file.exists()) {
+          return Response.notFound('Textbook asset not found: $decodedPath');
+        }
+        
+        final bytes = await file.readAsBytes();
+        String contentType = 'application/octet-stream';
+        final ext = p.extension(file.path).toLowerCase();
+        if (ext == '.html' || ext == '.htm') contentType = 'text/html; charset=utf-8';
+        else if (ext == '.js') contentType = 'application/javascript; charset=utf-8';
+        else if (ext == '.css') contentType = 'text/css; charset=utf-8';
+        else if (ext == '.png') contentType = 'image/png';
+        else if (ext == '.jpg' || ext == '.jpeg') contentType = 'image/jpeg';
+        else if (ext == '.gif') contentType = 'image/gif';
+        else if (ext == '.svg') contentType = 'image/svg+xml';
+        else if (ext == '.json') contentType = 'application/json';
+        else if (ext == '.mp4') contentType = 'video/mp4';
+        else if (ext == '.webm') contentType = 'video/webm';
+        else if (ext == '.mp3') contentType = 'audio/mpeg';
+        else if (ext == '.wav') contentType = 'audio/wav';
+        else if (ext == '.woff') contentType = 'font/woff';
+        else if (ext == '.woff2') contentType = 'font/woff2';
+        else if (ext == '.ttf') contentType = 'font/ttf';
+        
+        return Response.ok(bytes, headers: {
+          'Content-Type': contentType,
+          'Access-Control-Allow-Origin': '*',
+        });
+      });
+
+      router.get('/plugins/<filepath|.*>', (Request req, String filepath) async {
+        final decodedPath = Uri.decodeComponent(filepath);
+        final appDir = await getApplicationSupportDirectory();
+        final file = File(p.join(appDir.path, 'plugins', decodedPath));
+        if (!await file.exists()) {
+          return Response.notFound('Plugin asset not found: $decodedPath');
+        }
+        
+        final bytes = await file.readAsBytes();
+        String contentType = 'application/octet-stream';
+        final ext = p.extension(file.path).toLowerCase();
+        if (ext == '.html' || ext == '.htm') contentType = 'text/html; charset=utf-8';
+        else if (ext == '.js') contentType = 'application/javascript; charset=utf-8';
+        else if (ext == '.css') contentType = 'text/css; charset=utf-8';
+        else if (ext == '.png') contentType = 'image/png';
+        else if (ext == '.jpg' || ext == '.jpeg') contentType = 'image/jpeg';
+        else if (ext == '.gif') contentType = 'image/gif';
+        else if (ext == '.svg') contentType = 'image/svg+xml';
+        else if (ext == '.json') contentType = 'application/json';
+        
+        return Response.ok(bytes, headers: {
+          'Content-Type': contentType,
+          'Access-Control-Allow-Origin': '*',
+        });
+      });
 
       final handler = Pipeline()
           .addMiddleware(_corsMiddleware())

@@ -30,6 +30,10 @@ class BoardDockToolbar extends StatefulWidget {
   final double? eraserSize;
   final ValueChanged<double>? onEraserSizeChanged;
 
+  // Shapes Options
+  final ShapeType activeShape;
+  final ValueChanged<ShapeType> onShapeChanged;
+
   // URL search options
   final bool showUrlSearch;
   final String urlValue;
@@ -45,6 +49,8 @@ class BoardDockToolbar extends StatefulWidget {
     required this.onStrokeWidthChanged,
     required this.penColor,
     required this.onColorChanged,
+    required this.activeShape,
+    required this.onShapeChanged,
     this.onPrev,
     this.onNext,
     this.pageLabel,
@@ -70,6 +76,7 @@ class BoardDockToolbar extends StatefulWidget {
 class _BoardDockToolbarState extends State<BoardDockToolbar> {
   bool _isPenDetailsOpen = false;
   bool _isEraserDetailsOpen = false;
+  bool _isShapeDetailsOpen = false;
   bool _isUrlSearchOpen = false;
   late TextEditingController _urlInputCtrl;
 
@@ -123,6 +130,12 @@ class _BoardDockToolbarState extends State<BoardDockToolbar> {
           const SizedBox(height: 8),
         ],
 
+        // 2.7 Shape Details Card Pop-up
+        if (_isShapeDetailsOpen && widget.tool == ToolMode.shape) ...[
+          _buildShapeDetailsCard(scale),
+          const SizedBox(height: 8),
+        ],
+
         // 2.5 URL Search Details Card Pop-up
         if (_isUrlSearchOpen && widget.showUrlSearch) ...[
           _buildUrlSearchDetailsCard(scale),
@@ -165,11 +178,26 @@ class _BoardDockToolbarState extends State<BoardDockToolbar> {
                 if (widget.pageLabel != null)
                   GestureDetector(
                     onTap: widget.onPageLabelTap,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        widget.pageLabel!,
+                        style: GoogleFonts.outfit(
+                          color: Colors.white,
+                          fontSize: 13 * scale,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Text(
-                      widget.pageLabel!,
-                      style: GoogleFonts.outfit(
-                        color: Colors.white,
-                        fontSize: 13 * scale,
+                      '페이지',
+                      style: GoogleFonts.notoSansKr(
+                        color: Colors.white70,
+                        fontSize: 11 * scale,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -191,6 +219,7 @@ class _BoardDockToolbarState extends State<BoardDockToolbar> {
                     setState(() {
                       _isPenDetailsOpen = !_isPenDetailsOpen;
                       _isEraserDetailsOpen = false;
+                      _isShapeDetailsOpen = false;
                       _isUrlSearchOpen = false;
                     });
                   } else {
@@ -198,6 +227,7 @@ class _BoardDockToolbarState extends State<BoardDockToolbar> {
                     setState(() {
                       _isPenDetailsOpen = false;
                       _isEraserDetailsOpen = false;
+                      _isShapeDetailsOpen = false;
                       _isUrlSearchOpen = false;
                     });
                   }
@@ -215,6 +245,7 @@ class _BoardDockToolbarState extends State<BoardDockToolbar> {
                     setState(() {
                       _isEraserDetailsOpen = !_isEraserDetailsOpen;
                       _isPenDetailsOpen = false;
+                      _isShapeDetailsOpen = false;
                       _isUrlSearchOpen = false;
                     });
                   } else {
@@ -222,6 +253,7 @@ class _BoardDockToolbarState extends State<BoardDockToolbar> {
                     setState(() {
                       _isPenDetailsOpen = false;
                       _isEraserDetailsOpen = false;
+                      _isShapeDetailsOpen = false;
                       _isUrlSearchOpen = false;
                     });
                   }
@@ -239,8 +271,35 @@ class _BoardDockToolbarState extends State<BoardDockToolbar> {
                   setState(() {
                     _isPenDetailsOpen = false;
                     _isEraserDetailsOpen = false;
+                    _isShapeDetailsOpen = false;
                     _isUrlSearchOpen = false;
                   });
+                },
+                scale,
+              ),
+
+              // 3.5 Shape Tool (도형)
+              _buildToolDockBtn(
+                Icons.crop_square_rounded,
+                '도형 도구',
+                ToolMode.shape,
+                () {
+                  if (widget.tool == ToolMode.shape) {
+                    setState(() {
+                      _isShapeDetailsOpen = !_isShapeDetailsOpen;
+                      _isPenDetailsOpen = false;
+                      _isEraserDetailsOpen = false;
+                      _isUrlSearchOpen = false;
+                    });
+                  } else {
+                    widget.onToolChanged(ToolMode.shape);
+                    setState(() {
+                      _isShapeDetailsOpen = true;
+                      _isPenDetailsOpen = false;
+                      _isEraserDetailsOpen = false;
+                      _isUrlSearchOpen = false;
+                    });
+                  }
                 },
                 scale,
               ),
@@ -576,6 +635,74 @@ class _BoardDockToolbarState extends State<BoardDockToolbar> {
               },
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShapeDetailsCard(double scale) {
+    return Card(
+      color: const Color(0xFF13171F).withOpacity(0.96),
+      elevation: 12,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.white.withOpacity(0.16)),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '🔷 삽입할 도형 선택',
+              style: GoogleFonts.notoSansKr(
+                color: Colors.white70,
+                fontSize: 11 * scale,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildShapeSelectorBtn('📏 직선', ShapeType.line, scale),
+                _buildShapeSelectorBtn('↗️ 화살표', ShapeType.arrow, scale),
+                _buildShapeSelectorBtn('🔺 삼각형', ShapeType.triangle, scale),
+                _buildShapeSelectorBtn('🟩 사각형', ShapeType.rectangle, scale),
+                _buildShapeSelectorBtn('🟡 원', ShapeType.circle, scale),
+                _buildShapeSelectorBtn('📦 큐브', ShapeType.cube, scale),
+                _buildShapeSelectorBtn('🛢️ 원기둥', ShapeType.cylinder, scale),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShapeSelectorBtn(String label, ShapeType type, double scale) {
+    final active = widget.activeShape == type;
+    final activeColor = const Color(0xFF00F5D4);
+    return GestureDetector(
+      onTap: () {
+        widget.onShapeChanged(type);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? activeColor.withOpacity(0.18) : Colors.white.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: active ? activeColor : Colors.white.withOpacity(0.1)),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.notoSansKr(
+            color: active ? activeColor : Colors.white70,
+            fontSize: 11 * scale,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );

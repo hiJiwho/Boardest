@@ -53,6 +53,7 @@ class AnnotationController extends ChangeNotifier {
   double activeWidth = 4.0;
   bool eraseEntireStroke = false;
   double eraserSize = 30.0;
+  ShapeType activeShape = ShapeType.line;
 
   // Lasso (Selection) Tool States
   List<Offset> lassoPolygon = [];
@@ -104,6 +105,10 @@ class AnnotationController extends ChangeNotifier {
     selectedStrokeIndices.clear();
     lastLassoPolygon.clear();
     lassoPolygon.clear();
+    notifyListeners();
+  }
+
+  void notifyLassoChanged() {
     notifyListeners();
   }
 
@@ -279,11 +284,13 @@ class AnnotationController extends ChangeNotifier {
 class AnnotationCanvas extends StatefulWidget {
   final AnnotationController controller;
   final bool enabled;
+  final Function(Offset localPosition)? onRightClick;
 
   const AnnotationCanvas({
     super.key,
     required this.controller,
     this.enabled = true,
+    this.onRightClick,
   });
 
   @override
@@ -294,10 +301,87 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
   final GlobalKey _canvasKey = GlobalKey();
   List<Offset> _activePoints = [];
   bool _isDrawing = false;
+  Offset? _shapeStart;
 
   Offset _local(Offset global) {
     final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
     return box?.globalToLocal(global) ?? global;
+  }
+
+  List<Offset> _genShape(ShapeType shape, Offset start, Offset end) {
+    switch (shape) {
+      case ShapeType.line:
+        return [start, end];
+      case ShapeType.arrow:
+        final dir = end - start;
+        if (dir.distance == 0) return [start, end];
+        final u = dir / dir.distance;
+        final v = Offset(-u.dy, u.dx);
+        final arrowLength = 15.0;
+        final h1 = end - u * arrowLength + v * (arrowLength * 0.5);
+        final h2 = end - u * arrowLength - v * (arrowLength * 0.5);
+        return [start, end, h1, end, h2];
+      case ShapeType.triangle:
+        final top = Offset((start.dx + end.dx) / 2, start.dy);
+        final bottomLeft = Offset(start.dx, end.dy);
+        final bottomRight = end;
+        return [top, bottomLeft, bottomRight, top];
+      case ShapeType.rectangle:
+        return [
+          start,
+          Offset(end.dx, start.dy),
+          end,
+          Offset(start.dx, end.dy),
+          start,
+        ];
+      case ShapeType.circle:
+        final r = (end - start).distance;
+        final pts = <Offset>[];
+        for (double i = 0; i <= 360; i += 10) {
+          final rad = i * pi / 180;
+          pts.add(start + Offset(r * cos(rad), r * sin(rad)));
+        }
+        return pts;
+      case ShapeType.cube:
+        final dx = end.dx - start.dx;
+        final dy = end.dy - start.dy;
+        final offset = Offset(dx * 0.3, -dy * 0.3);
+        final p0 = start;
+        final p1 = Offset(start.dx + dx * 0.7, start.dy);
+        final p2 = Offset(start.dx + dx * 0.7, start.dy + dy * 0.7);
+        final p3 = Offset(start.dx, start.dy + dy * 0.7);
+        final q0 = p0 + offset;
+        final q1 = p1 + offset;
+        final q2 = p2 + offset;
+        final q3 = p3 + offset;
+        return [
+          p0, p1, p2, p3, p0,
+          q0, q1, q2, q3, q0,
+          q1, p1, p2, q2, q3, p3, p0, q0
+        ];
+      case ShapeType.cylinder:
+        final w = (end.dx - start.dx).abs();
+        final h = (end.dy - start.dy).abs();
+        final rx = w / 2;
+        final ry = h * 0.15;
+        final cx = (start.dx + end.dx) / 2;
+        final topCenter = Offset(cx, start.dy + ry);
+        final bottomCenter = Offset(cx, end.dy - ry);
+        final pts = <Offset>[];
+        for (double i = 0; i <= 360; i += 10) {
+          final rad = i * pi / 180;
+          pts.add(topCenter + Offset(rx * cos(rad), ry * sin(rad)));
+        }
+        pts.add(bottomCenter + Offset(rx, 0));
+        for (double i = 0; i <= 360; i += 10) {
+          final rad = i * pi / 180;
+          pts.add(bottomCenter + Offset(rx * cos(rad), ry * sin(rad)));
+        }
+        pts.add(topCenter + Offset(-rx, 0));
+        return pts;
+      default:
+        return [start, end];
+    }
   }
 
   void _onPanStart(DragStartDetails d) {
@@ -324,11 +408,14 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
       setState(() {});
       return;
     }
-    if (ctrl.toolMode != ToolMode.pen) return;
+    if (ctrl.toolMode != ToolMode.pen && ctrl.toolMode != ToolMode.shape) return;
 
     setState(() {
       _isDrawing = true;
       _activePoints = [p];
+      if (ctrl.toolMode == ToolMode.shape) {
+        _shapeStart = p;
+      }
     });
   }
 
@@ -349,14 +436,18 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
         ctrl.lastLassoPolygon = ctrl.lastLassoPolygon.map((pt) => pt + delta).toList();
       } else if (ctrl.isLassoActive) {
         ctrl.lassoPolygon.add(p);
-        ctrl.notifyListeners(); // Force repaint
+        ctrl.notifyLassoChanged(); // Force repaint
       }
       return;
     }
-    if (ctrl.toolMode != ToolMode.pen) return;
+    if (ctrl.toolMode != ToolMode.pen && ctrl.toolMode != ToolMode.shape) return;
 
     setState(() {
-      _activePoints.add(p);
+      if (ctrl.toolMode == ToolMode.shape && _shapeStart != null) {
+        _activePoints = _genShape(ctrl.activeShape, _shapeStart!, p);
+      } else {
+        _activePoints.add(p);
+      }
     });
   }
 
@@ -373,7 +464,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
       return;
     }
     if (_isDrawing) {
-      if (ctrl.toolMode == ToolMode.pen && _activePoints.isNotEmpty) {
+      if ((ctrl.toolMode == ToolMode.pen || ctrl.toolMode == ToolMode.shape) && _activePoints.isNotEmpty) {
         final stroke = AnnotationStroke(
           points: List<Offset>.from(_activePoints),
           color: ctrl.activeColor,
@@ -384,6 +475,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
       setState(() {
         _isDrawing = false;
         _activePoints = [];
+        _shapeStart = null;
       });
     }
   }
@@ -396,6 +488,11 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
       onPanStart: widget.enabled ? _onPanStart : null,
       onPanUpdate: widget.enabled ? _onPanUpdate : null,
       onPanEnd: widget.enabled ? _onPanEnd : null,
+      onSecondaryTapUp: (details) {
+        if (widget.onRightClick != null) {
+          widget.onRightClick!(details.localPosition);
+        }
+      },
       child: RepaintBoundary(
         child: ListenableBuilder(
           listenable: widget.controller,

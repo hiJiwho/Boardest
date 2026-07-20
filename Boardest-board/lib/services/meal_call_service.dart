@@ -37,13 +37,43 @@ class MealCallService {
     await _registerClassroom();
   }
 
+  /// 시간대별 동적 폴링 주기 계산
+  Duration _getDynamicPollInterval() {
+    final now = DateTime.now();
+    
+    // 주말: 5분 주기
+    if (now.weekday == DateTime.saturday || now.weekday == DateTime.sunday) {
+      return const Duration(minutes: 5);
+    }
+    
+    // 급식 시간대 (11:00 ~ 13:30): 3초 주기
+    if (now.hour == 11 || now.hour == 12 || (now.hour == 13 && now.minute <= 30)) {
+      return const Duration(seconds: 3);
+    }
+    
+    // 정규 수업 시간대 (08:30 ~ 11:00 / 13:30 ~ 17:00): 20초 주기
+    if ((now.hour == 8 && now.minute >= 30) || 
+        (now.hour >= 9 && now.hour < 11) ||
+        (now.hour == 13 && now.minute > 30) ||
+        (now.hour >= 14 && now.hour < 17)) {
+      return const Duration(seconds: 20);
+    }
+    
+    // 그 외 시간대 (방과 후, 야간 등): 5분 주기
+    return const Duration(minutes: 5);
+  }
+
   void startListening(
     AppSettings settings, {
     required VoidCallback onCall,
     required void Function(String message, String from) onMessage,
     required void Function(String message, String from) onStudentCall,
   }) {
-    if (settings.connectionName.isEmpty && settings.selectedSchool == null) return;
+    if (settings.connectionName.isEmpty &&
+        settings.selectedSchool == null &&
+        !settings.specialClassroomMode) {
+      return;
+    }
     
     stopListening();
     
@@ -58,14 +88,23 @@ class MealCallService {
     // Register/update active status initially
     _registerClassroom();
 
-    // Poll every 3 seconds for call status
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      _checkCallStatus();
-    });
+    // Start dynamic polling scheduler
+    _scheduleNextPoll();
 
-    // Refresh active status every 15 seconds so the web board reflects presence quickly.
-    _activeTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+    // Refresh active status every 60 seconds (Presence) to save write quota
+    _activeTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
       _registerClassroom();
+    });
+  }
+
+  void _scheduleNextPoll() {
+    _pollTimer?.cancel();
+    if (_currentSettings == null) return;
+    
+    final interval = _getDynamicPollInterval();
+    _pollTimer = Timer(interval, () async {
+      await _checkCallStatus();
+      _scheduleNextPoll();
     });
   }
 
@@ -101,15 +140,15 @@ class MealCallService {
 
   String get _endpointUrl {
     final docId = _documentId;
-    return 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls/$docId';
+    return 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/$docId.json';
   }
 
   Future<void> _registerClassroom() async {
     if (_currentSettings == null) return;
 
     try {
-      final url = '$_endpointUrl?key=$_apiKey';
-      debugPrint('[MealCallService] Registering classroom with doc ID: $_documentId, URL: $url');
+      final url = '$_endpointUrl?auth=$_apiKey';
+      debugPrint('[MealCallService] Registering classroom to RTDB with doc ID: $_documentId, URL: $url');
       var cafeteria = _currentSettings!.cafeteriaNum;
       if (cafeteria.startsWith("급식실")) {
         cafeteria = cafeteria.replaceAll("급식실", "");
@@ -127,18 +166,16 @@ class MealCallService {
           : '${_currentSettings!.selectedGrade}학년 ${_currentSettings!.selectedClass}반';
 
       final payload = {
-        "fields": {
-          "place": {"stringValue": place},
-          "schoolName": {"stringValue": schoolName},
-          "schoolCode": {"stringValue": schoolCode},
-          "cafeteriaNum": {"stringValue": cafeteria},
-          "grade": {"integerValue": _currentSettings!.selectedGrade.toString()},
-          "classNum": {"integerValue": _currentSettings!.selectedClass.toString()},
-          "classNickname": {"stringValue": classNickname},
-          "called": {"booleanValue": _lastCalledState},
-          "lastActive": {"stringValue": DateTime.now().toUtc().toIso8601String()},
-          "classOrder": {"stringValue": _currentSettings!.mealCallClassOrder}
-        }
+        "place": place,
+        "schoolName": schoolName,
+        "schoolCode": schoolCode,
+        "cafeteriaNum": cafeteria,
+        "grade": _currentSettings!.selectedGrade,
+        "classNum": _currentSettings!.selectedClass,
+        "classNickname": classNickname,
+        "called": _lastCalledState,
+        "lastActive": DateTime.now().toUtc().toIso8601String(),
+        "classOrder": _currentSettings!.mealCallClassOrder
       };
 
       await http.patch(
@@ -155,16 +192,15 @@ class MealCallService {
     if (_currentSettings == null || (_currentSettings!.connectionName.isEmpty && _currentSettings!.selectedSchool == null && !_currentSettings!.specialClassroomMode)) return;
 
     try {
-      final url = '$_endpointUrl?key=$_apiKey';
+      final url = '$_endpointUrl?auth=$_apiKey';
       final response = await http.get(Uri.parse(url));
 
-      if (response.statusCode == 200) {
-        final body = json.decode(response.body) as Map<String, dynamic>;
-        final fields = body['fields'] as Map<String, dynamic>?;
+      if (response.statusCode == 200 && response.body != 'null') {
+        final fields = json.decode(response.body) as Map<String, dynamic>?;
         if (fields != null) {
           // 1. Meal Call Check
           if (fields['called'] != null) {
-            final isCalled = fields['called']['booleanValue'] as bool? ?? false;
+            final isCalled = fields['called'] as bool? ?? false;
             if (isCalled && !isPopupShowing) {
               _lastCalledState = true;
               onMealCallReceived?.call();
@@ -175,9 +211,9 @@ class MealCallService {
 
           // 2. Message Check
           if (fields['message'] != null && fields['messageSentAt'] != null) {
-            final message = fields['message']['stringValue'] as String? ?? '';
-            final messageFrom = fields['messageFrom'] != null ? (fields['messageFrom']['stringValue'] as String? ?? '') : '';
-            final messageSentAt = fields['messageSentAt']['stringValue'] as String? ?? '';
+            final message = fields['message'] as String? ?? '';
+            final messageFrom = fields['messageFrom'] as String? ?? '';
+            final messageSentAt = fields['messageSentAt'] as String? ?? '';
             
             if (message.isNotEmpty && messageSentAt.isNotEmpty) {
               if (_lastMessageSentAt != messageSentAt) {
@@ -189,9 +225,9 @@ class MealCallService {
 
           // 3. Student Call Check
           if (fields['callMessage'] != null && fields['callSentAt'] != null) {
-            final callMessage = fields['callMessage']['stringValue'] as String? ?? '';
-            final callerName = fields['callerName'] != null ? (fields['callerName']['stringValue'] as String? ?? '') : '';
-            final callSentAt = fields['callSentAt']['stringValue'] as String? ?? '';
+            final callMessage = fields['callMessage'] as String? ?? '';
+            final callerName = fields['callerName'] as String? ?? '';
+            final callSentAt = fields['callSentAt'] as String? ?? '';
 
             if (callMessage.isNotEmpty && callSentAt.isNotEmpty) {
               if (_lastCallSentAt != callSentAt) {
@@ -201,7 +237,7 @@ class MealCallService {
             }
           }
         }
-      } else if (response.statusCode == 404) {
+      } else if (response.statusCode == 404 || response.body == 'null') {
         // Not created yet, register it
         _registerClassroom();
       }
@@ -217,11 +253,9 @@ class MealCallService {
     isPopupShowing = false;
 
     try {
-      final url = '$_endpointUrl?key=$_apiKey&updateMask.fieldPaths=called';
+      final url = '$_endpointUrl?auth=$_apiKey';
       final payload = {
-        "fields": {
-          "called": {"booleanValue": false}
-        }
+        "called": false
       };
 
       await http.patch(
@@ -240,13 +274,11 @@ class MealCallService {
     isPopupShowing = false;
 
     try {
-      final url = '$_endpointUrl?key=$_apiKey&updateMask.fieldPaths=message&updateMask.fieldPaths=messageFrom&updateMask.fieldPaths=messageSentAt';
+      final url = '$_endpointUrl?auth=$_apiKey';
       final payload = {
-        "fields": {
-          "message": {"stringValue": ""},
-          "messageFrom": {"stringValue": ""},
-          "messageSentAt": {"stringValue": ""}
-        }
+        "message": "",
+        "messageFrom": "",
+        "messageSentAt": ""
       };
 
       await http.patch(
@@ -265,13 +297,11 @@ class MealCallService {
     isPopupShowing = false;
 
     try {
-      final url = '$_endpointUrl?key=$_apiKey&updateMask.fieldPaths=callMessage&updateMask.fieldPaths=callerName&updateMask.fieldPaths=callSentAt';
+      final url = '$_endpointUrl?auth=$_apiKey';
       final payload = {
-        "fields": {
-          "callMessage": {"stringValue": ""},
-          "callerName": {"stringValue": ""},
-          "callSentAt": {"stringValue": ""}
-        }
+        "callMessage": "",
+        "callerName": "",
+        "callSentAt": ""
       };
 
       await http.patch(
@@ -303,7 +333,7 @@ class MealCallService {
     final docId = '${connName}_${cafeteria}_${grade}_$classNum';
 
     try {
-      final url = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls/$docId?key=$_apiKey';
+      final url = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/$docId.json?auth=$_apiKey';
       final res = await http.delete(Uri.parse(url)).timeout(const Duration(seconds: 8));
       if (res.statusCode == 200 || res.statusCode == 204) {
         debugPrint('[MealCallService] eat_calls document $docId deleted successfully.');

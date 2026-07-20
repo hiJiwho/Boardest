@@ -19,8 +19,10 @@ class PdfBoardView extends StatefulWidget {
   final double scaleFactor;
   final String? usbSessionId;
   final int initialPage;
-  final void Function(String filePath, int page0, int total)? onPageChanged;
-  final Future<bool> Function(String filePath)? onLastPageNext;
+  final void Function(String filePath, int page, int total)? onPageChanged;
+  final void Function(String filePath)? onLastPageNext;
+  final bool readOnly;
+  final String? forcedIwbPath;
 
   const PdfBoardView({
     super.key,
@@ -30,6 +32,8 @@ class PdfBoardView extends StatefulWidget {
     this.initialPage = 0,
     this.onPageChanged,
     this.onLastPageNext,
+    this.readOnly = false,
+    this.forcedIwbPath,
   });
 
   @override
@@ -48,6 +52,17 @@ class _PdfBoardViewState extends State<PdfBoardView> with TickerProviderStateMix
   final Map<int, Size> _cachedPageSizes = {};
   bool _isLoading = false;
 
+  String _selectedClassForPen = '전체 반 공용 (통합)';
+  final List<String> _classList = [
+    '전체 반 공용 (통합)',
+    '1학년 1반',
+    '1학년 2반',
+    '2학년 1반',
+    '2학년 2반',
+    '3학년 1반',
+    '3학년 2반',
+  ];
+
   bool _isSidebarOpen = true;
   final Map<int, List<AnnotationStroke>> _pageAnnotations = {};
   final Map<int, AnnotationController> _pageControllers = {};
@@ -55,6 +70,7 @@ class _PdfBoardViewState extends State<PdfBoardView> with TickerProviderStateMix
   Color _penColor = const Color(0xFFEF4565);
   double _strokeWidth = 4.0;
   ToolMode _tool = ToolMode.pen;
+  ShapeType _activeShape = ShapeType.line;
   bool _isPenDetailsOpen = false;
   bool _eraseEntireStroke = false;
   double _eraserSize = 30.0;
@@ -92,6 +108,7 @@ class _PdfBoardViewState extends State<PdfBoardView> with TickerProviderStateMix
     ctrl.activeWidth = _strokeWidth;
     ctrl.eraseEntireStroke = _eraseEntireStroke;
     ctrl.eraserSize = _eraserSize;
+    ctrl.activeShape = _activeShape;
   }
 
   void _syncAllControllers() {
@@ -158,8 +175,14 @@ class _PdfBoardViewState extends State<PdfBoardView> with TickerProviderStateMix
         throw Exception('PDF 페이지가 없습니다.');
       }
 
-      final loadedAnnotations = await AnnotationStorageService.instance.loadDocumentAnnotations('PDF', _fileName);
-      final metadata = await AnnotationStorageService.instance.loadDocumentMetadata('PDF', _fileName);
+      final loadedAnnotations = await AnnotationStorageService.instance.loadDocumentAnnotations(
+        'PDF',
+        _fileName,
+        fullFilePath: filePath,
+        className: _selectedClassForPen,
+        forcedFile: widget.forcedIwbPath != null ? File(widget.forcedIwbPath!) : null,
+      );
+      final metadata = await AnnotationStorageService.instance.loadDocumentMetadata('PDF', _fileName, fullFilePath: filePath);
 
       int startPage = widget.initialPage;
       if (metadata != null && metadata['lastPage'] != null) {
@@ -348,6 +371,8 @@ class _PdfBoardViewState extends State<PdfBoardView> with TickerProviderStateMix
       _fileName,
       metadata,
       _pageAnnotations,
+      fullFilePath: _pdfFilePath,
+      className: _selectedClassForPen,
     );
   }
 
@@ -404,7 +429,7 @@ class _PdfBoardViewState extends State<PdfBoardView> with TickerProviderStateMix
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
             child: Container(
-              width: _isSidebarOpen ? 210 * scale : 0,
+              width: _isSidebarOpen ? 210 * scale : 0.0,
               child: _isSidebarOpen ? _buildSidebar(scale) : const SizedBox.shrink(),
             ),
           ),
@@ -413,6 +438,69 @@ class _PdfBoardViewState extends State<PdfBoardView> with TickerProviderStateMix
             child: Stack(
               children: [
                 Positioned.fill(child: _buildPdfSinglePageView(scale)),
+                
+                // 반 선택 Selector Top Bar
+                Positioned(
+                  top: 12 * scale,
+                  left: 16 * scale,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 4 * scale),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF16161A).withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(12 * scale),
+                      border: Border.all(color: const Color(0xFF2EC4B6).withOpacity(0.5)),
+                      boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 8)],
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.class_rounded, color: Color(0xFF2EC4B6), size: 18),
+                        const SizedBox(width: 8),
+                        DropdownButton<String>(
+                          dropdownColor: const Color(0xFF242629),
+                          value: _selectedClassForPen,
+                          underline: const SizedBox(),
+                          style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          items: _classList.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                          onChanged: (val) async {
+                            if (val != null && val != _selectedClassForPen) {
+                              await _saveAllAnnotations();
+                              setState(() {
+                                _selectedClassForPen = val;
+                                _pageAnnotations.clear();
+                                for (final ctrl in _pageControllers.values) {
+                                  ctrl.clear();
+                                }
+                              });
+                              if (_pdfFilePath != null) {
+                                final loaded = await AnnotationStorageService.instance.loadDocumentAnnotations(
+                                  'PDF',
+                                  _fileName,
+                                  fullFilePath: _pdfFilePath,
+                                  className: val,
+                                );
+                                if (mounted) {
+                                  setState(() {
+                                    _pageAnnotations.addAll(loaded);
+                                    _pageControllers.forEach((pageIdx, ctrl) {
+                                      if (loaded.containsKey(pageIdx)) {
+                                        ctrl.strokes.addAll(loaded[pageIdx]!);
+                                      }
+                                    });
+                                  });
+                                }
+                              }
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('🏫 [$val] 판서 데이터로 전환되었습니다.')),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 
                 // 최하단 툴바 독
                 Positioned(
@@ -508,7 +596,7 @@ class _PdfBoardViewState extends State<PdfBoardView> with TickerProviderStateMix
           finalH = finalW / aspect;
         }
 
-        final isPointerMode = _tool == ToolMode.pointer;
+        final isPointerMode = widget.readOnly || _tool == ToolMode.pointer;
 
         final mainCanvas = Material(
           elevation: 12,
@@ -524,7 +612,7 @@ class _PdfBoardViewState extends State<PdfBoardView> with TickerProviderStateMix
                 Image.memory(bytes, fit: BoxFit.fill),
                 AnnotationCanvas(
                   controller: ctrl,
-                  enabled: _tool == ToolMode.pen || _tool == ToolMode.eraser || _tool == ToolMode.select,
+                  enabled: !widget.readOnly && (_tool == ToolMode.pen || _tool == ToolMode.eraser || _tool == ToolMode.select),
                 ),
               ],
             ),
@@ -656,6 +744,57 @@ class _PdfBoardViewState extends State<PdfBoardView> with TickerProviderStateMix
   }
 
   Widget _buildDock(double scale) {
+    if (widget.readOnly) {
+      return Container(
+        height: 52 * scale,
+        padding: EdgeInsets.symmetric(horizontal: 16 * scale),
+        decoration: BoxDecoration(
+          color: const Color(0xFF16161A).withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(16 * scale),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.3),
+              blurRadius: 10 * scale,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(Icons.arrow_back_ios_new_rounded, color: _currentPage > 0 ? Colors.white : Colors.white24, size: 18 * scale),
+              onPressed: _currentPage > 0 ? () => _changePage(_currentPage - 1) : null,
+            ),
+            SizedBox(width: 8 * scale),
+            Text(
+              '${_currentPage + 1} / $_totalPages 쪽',
+              style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13 * scale, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(width: 8 * scale),
+            IconButton(
+              icon: Icon(Icons.arrow_forward_ios_rounded, color: _currentPage < _totalPages - 1 ? Colors.white : Colors.white24, size: 18 * scale),
+              onPressed: _currentPage < _totalPages - 1 ? () => _changePage(_currentPage + 1) : null,
+            ),
+            SizedBox(width: 12 * scale),
+            Container(width: 1.5, height: 20 * scale, color: Colors.white.withValues(alpha: 0.1)),
+            SizedBox(width: 12 * scale),
+            TextButton.icon(
+              onPressed: () => Navigator.pop(context),
+              icon: Icon(Icons.close_rounded, color: const Color(0xFFEF4565), size: 18 * scale),
+              label: Text('닫기', style: GoogleFonts.notoSansKr(color: const Color(0xFFEF4565), fontSize: 12 * scale, fontWeight: FontWeight.bold)),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.symmetric(horizontal: 12 * scale),
+                backgroundColor: const Color(0xFFEF4565).withValues(alpha: 0.08),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8 * scale)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return BoardDockToolbar(
       scale: scale,
       tool: _tool,
@@ -673,6 +812,14 @@ class _PdfBoardViewState extends State<PdfBoardView> with TickerProviderStateMix
         setState(() {
           _penColor = c;
           _tool = ToolMode.pen;
+        });
+        _syncAllControllers();
+      },
+      activeShape: _activeShape,
+      onShapeChanged: (shape) {
+        setState(() {
+          _activeShape = shape;
+          _tool = ToolMode.shape;
         });
         _syncAllControllers();
       },

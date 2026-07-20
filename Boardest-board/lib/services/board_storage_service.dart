@@ -94,15 +94,17 @@ class BoardStorageService {
     required String fileBaseName,
     required Map<String, dynamic> metadata,
     required Map<int, List<Map<String, dynamic>>> pageStrokes,
+    String? className,
   }) async {
     try {
       final dir = await _getBoardDirectory();
       final sanitized = _sanitizeKey(fileBaseName);
+      final classTag = (className != null && className.isNotEmpty && className != '전체 반 공용 (통합)') ? '[$className]' : '';
 
-      final jsonFile = File(p.join(dir.path, '$sanitized.json'));
+      final jsonFile = File(p.join(dir.path, '$classTag$sanitized.json'));
       await jsonFile.writeAsString(json.encode(metadata), flush: true);
 
-      final iwbFile = File(p.join(dir.path, '$sanitized.iwb'));
+      final iwbFile = File(p.join(dir.path, '$classTag$sanitized.iwb'));
       final iwbData = <String, dynamic>{
         'version': 2,
         'strokesOnly': true,
@@ -115,7 +117,7 @@ class BoardStorageService {
       });
 
       await iwbFile.writeAsString(json.encode(iwbData), flush: true);
-      debugPrint('[BoardStorage] Saved board $sanitized');
+      debugPrint('[BoardStorage] Saved board $classTag$sanitized');
     } catch (e) {
       debugPrint('[BoardStorage] save error: $e');
     }

@@ -77,14 +77,20 @@ class UsbSessionService {
   static const _pptExts = {'.pptx', '.ppt'};
   static const _pdfExts = {'.pdf'};
   static const _iwbExts = {'.iwb'};
+  static const _hwpExts = {'.hwp'};
   static const _videoExts = {'.mp4', '.mkv', '.avi'};
-  static final _allExts = {..._pptExts, ..._pdfExts, ..._iwbExts, ..._videoExts};
+  static final _allExts = {..._pptExts, ..._pdfExts, ..._iwbExts, ..._hwpExts, ..._videoExts};
 
   static Set<String> get _allowedExtensions {
     if (Platform.isAndroid) {
       return _pdfExts;
     }
     return _allExts;
+  }
+
+  static bool _isEligibleForReorder(String path) {
+    final ext = p.extension(path).toLowerCase();
+    return ['.hwp', '.ppt', '.pptx', '.pdf'].contains(ext);
   }
 
   // ── Storage ─────────────────────────────────
@@ -138,40 +144,22 @@ class UsbSessionService {
   static Future<String?> getUsbSerialId(String driveLetter) async {
     if (!Platform.isWindows) return null;
     try {
-      var path = driveLetter;
-      if (!path.endsWith('\\')) {
-        path = '$path\\';
-      }
-      final lpRootPathName = path.toNativeUtf16();
-      final lpVolumeSerialNumber = calloc<DWORD>();
-      try {
-        final result = GetVolumeInformation(
-          lpRootPathName,
-          nullptr,
-          0,
-          lpVolumeSerialNumber,
-          nullptr,
-          nullptr,
-          nullptr,
-          0,
-        );
-        if (result != 0) {
-          final serialNum = lpVolumeSerialNumber.value;
-          final serialStr = serialNum.toRadixString(16).toUpperCase();
-          if (serialStr.isNotEmpty) {
-            return serialStr;
-          }
-        }
-      } finally {
-        calloc.free(lpRootPathName);
-        calloc.free(lpVolumeSerialNumber);
+      final letter = driveLetter.replaceAll(RegExp(r'[:\\\/]'), '').trim();
+      final res = await Process.run('powershell', [
+        '-NoProfile',
+        '-Command',
+        'Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID=\'${letter}:\'" | Select-Object -ExpandProperty VolumeSerialNumber'
+      ]);
+      if (res.exitCode == 0) {
+        final out = res.stdout.toString().trim();
+        if (out.isNotEmpty) return out;
       }
     } catch (e) {
-      debugPrint('[UsbSession] GetVolumeInformation FFI error: $e');
+      debugPrint('[UsbSession] getUsbSerialId error: $e');
     }
     
     // fallback: drive letter itself
-    final letter = driveLetter.replaceAll(RegExp(r'[:\\\/]'), '');
+    final letter = driveLetter.replaceAll(RegExp(r'[:\\\/]'), '').trim();
     return letter;
   }
 
@@ -210,9 +198,72 @@ class UsbSessionService {
     String? schoolName,
     String? year,
     int? grade,
+    String? classNickname,
   }) async {
     final seen = <String>{};
     final allFiles = <String>[];
+
+    // Check BoardestUSB.json config for Boardest-Pro and Boardest-Ultra configurations
+    final jsonFile = File(p.join(usbRoot, 'BoardestUSB.json'));
+    if (jsonFile.existsSync()) {
+      try {
+        final content = jsonFile.readAsStringSync();
+        final config = jsonDecode(content);
+        final String? type = config['type'];
+        
+        if (type == 'Bst' && classNickname != null && classNickname.isNotEmpty) {
+          final classes = config['classes'] as Map<String, dynamic>? ?? {};
+          final classData = classes[classNickname] as Map<String, dynamic>?;
+          final visibleFiles = (classData?['visible_files'] as List?)?.map((e) => e.toString()).toList() ?? [];
+          
+          final list = <String>[];
+          for (final file in visibleFiles) {
+            final ext = p.extension(file).toLowerCase();
+            final subDir = (ext.contains('ppt') || ext.contains('pptx')) ? 'PPT' : 'PDF';
+            final fullPath = p.join(usbRoot, 'bst', subDir, file);
+            if (File(fullPath).existsSync()) {
+              list.add(fullPath);
+            }
+          }
+          return list;
+        } else if (type == 'Lite' && classNickname != null && classNickname.isNotEmpty) {
+          final liteSettings = config['lite_settings'] as Map<String, dynamic>? ?? {};
+          final relativePath = liteSettings[classNickname] as String?;
+          if (relativePath != null && relativePath.isNotEmpty) {
+            final dirPath = p.join(usbRoot, relativePath);
+            final dir = Directory(dirPath);
+            if (dir.existsSync()) {
+              final files = await dir.list().toList();
+              final localAllowedExtensions = {..._pptExts, ..._pdfExts, ..._iwbExts, ..._hwpExts};
+              final list = <String>[];
+              for (final e in files) {
+                if (e is File) {
+                  final ext = p.extension(e.path).toLowerCase();
+                  if (localAllowedExtensions.contains(ext)) {
+                    list.add(e.path);
+                  }
+                }
+              }
+              list.sort((a, b) {
+                final isEligA = _isEligibleForReorder(a);
+                final isEligB = _isEligibleForReorder(b);
+                if (isEligA != isEligB) {
+                  return isEligA ? -1 : 1;
+                }
+                final numA = _leadingNumber(p.basename(a));
+                final numB = _leadingNumber(p.basename(b));
+                if (numA != numB) return numA.compareTo(numB);
+                return p.basename(a).toLowerCase().compareTo(p.basename(b).toLowerCase());
+              });
+              return list;
+            }
+          }
+          return [];
+        }
+      } catch (e) {
+        debugPrint('[UsbSession] BoardestUSB.json parse failed: $e');
+      }
+    }
 
     final yearStr = year ?? DateTime.now().year.toString();
     final tokens = <String>{'bst', ...buildSchoolFolderTokens(schoolName, year: yearStr)};
@@ -283,8 +334,13 @@ class UsbSessionService {
       } catch (_) {}
     }
 
-    // 정렬: 숫자 오름차순, 같은 숫자면 PPT > PDF > video, 이후 파일명 알파벳
+    // 정렬: HWP, PPT, PDF가 최우선 위로 오고, 그 후 숫자 오름차순, 같은 숫자면 PPT > PDF > video, 이후 파일명 알파벳
     allFiles.sort((a, b) {
+      final isEligA = _isEligibleForReorder(a);
+      final isEligB = _isEligibleForReorder(b);
+      if (isEligA != isEligB) {
+        return isEligA ? -1 : 1;
+      }
       final numA = _leadingNumber(p.basename(a));
       final numB = _leadingNumber(p.basename(b));
       if (numA != numB) return numA.compareTo(numB);

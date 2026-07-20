@@ -29,6 +29,11 @@ import 'school_calendar_view.dart';
 import 'ppt_overlay_view.dart';
 import 'pdf_board_view.dart';
 import 'website_board_view.dart';
+import 'youtube_board_view.dart';
+import 'canva_board_view.dart';
+import 'video_collection_board_view.dart';
+import 'boardbook_player.dart';
+import 'video_board_view.dart';
 import '../services/usb_session_service.dart';
 import '../services/app_paths.dart';
 import '../services/board_storage_service.dart';
@@ -36,6 +41,10 @@ import '../services/bst_save_service.dart';
 import '../widgets/calculator_modal.dart';
 import '../widgets/notepad_modal.dart';
 import '../widgets/usb_explorer.dart';
+import '../widgets/bst_cloud_modal.dart';
+import 'plugin_store_view.dart';
+import 'plugin_runner_view.dart';
+import '../services/bst_cloud_service.dart';
 import '../services/auth_service.dart';
 import '../services/local_server_service.dart';
 import '../services/update_service.dart';
@@ -102,6 +111,8 @@ class _DashboardViewState extends State<DashboardView> {
   Timer? _usbTimer;
   bool _initialToolTriggered = false;
   List<String> _usbSortedFiles = [];
+  String? _activePluginId;
+  String? _activePluginName;
   bool _usbAutoOpenEnabled = true;
   bool _usbHandling = false;
   int _timetableCheckCounter = 0;
@@ -775,14 +786,26 @@ class _DashboardViewState extends State<DashboardView> {
         await _openNextUsbFile(usbId, filePath);
       }
       setState(() {});
+    } else if (ext == '.bb') {
+      await _pushBoardRoute(
+        BoardBookPlayer(
+          bbFilePath: filePath,
+          scaleFactor: _settings.scaleFactor,
+        ),
+      );
+      setState(() {});
     } else if (['.mp4', '.mkv', '.avi', '.mov', '.wmv'].contains(ext)) {
-      if (Platform.isWindows) {
-        Process.run('explorer.exe', [filePath]);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('지원하지 않는 플랫폼 또는 파일 형식입니다.')),
-        );
-      }
+      await _pushBoardRoute(
+        VideoBoardView(
+          filePath: filePath,
+          scaleFactor: _settings.scaleFactor,
+        ),
+      );
+      setState(() {});
+    } else if (ext == '.yt') {
+      _openYoutubeBoard(filePath: filePath);
+    } else if (ext == '.canva') {
+      _openCanvaBoard(filePath: filePath);
     }
   }
 
@@ -3692,6 +3715,12 @@ class _DashboardViewState extends State<DashboardView> {
             if (_showMiniWeather) _buildMiniWeatherWindow(scale),
             if (_showMiniCalendar) _buildMiniCalendarWindow(scale),
             if (_showMiniAppDrawer) _buildMiniAppDrawerWindow(scale),
+            if (_activePluginId != null)
+              PluginRunnerView(
+                pluginId: _activePluginId!,
+                pluginName: _activePluginName!,
+                scaleFactor: _settings.scaleFactor,
+              ),
           ],
         ),
       ),
@@ -4645,6 +4674,9 @@ class _DashboardViewState extends State<DashboardView> {
                                       } else if (ext == '.pdf') {
                                         iconData = Icons.picture_as_pdf_rounded;
                                         iconColor = const Color(0xFFEF4565);
+                                      } else if (ext == '.bb') {
+                                        iconData = Icons.auto_stories_rounded;
+                                        iconColor = const Color(0xFF7F5AF0);
                                       } else if (['.mp4', '.mkv', '.avi', '.mov', '.wmv'].contains(ext)) {
                                         iconData = Icons.play_circle_fill_rounded;
                                         iconColor = const Color(0xFF2CB67D);
@@ -5416,12 +5448,16 @@ class _DashboardViewState extends State<DashboardView> {
       case 'whiteboard': return Icons.draw_rounded;
       case 'document_board': return Icons.description_rounded;
       case 'website_board': return Icons.language_rounded;
+      case 'youtube_board': return Icons.play_circle_fill_rounded;
+      case 'canva_board': return Icons.palette_rounded;
       case 'student_connect': return Icons.wifi_tethering_rounded;
       case 'settings': return Icons.tune_rounded;
 
       // 기타/유틸리티
       case 'file_explorer': return Icons.folder_open_rounded;
       case 'timetable': return Icons.calendar_view_week_rounded;
+      case 'bst_cloud': return Icons.cloud_done_rounded;
+      case 'plugin_store': return Icons.extension_rounded;
       case 'app_drawer': return Icons.apps_rounded;
       default: return Icons.apps_rounded;
     }
@@ -5441,6 +5477,8 @@ class _DashboardViewState extends State<DashboardView> {
       case 'whiteboard': return _openWhiteboard;
       case 'document_board': return _openDocumentBoard;
       case 'website_board': return _openWebsiteBoard;
+      case 'youtube_board': return _openYoutubeBoard;
+      case 'canva_board': return _openCanvaBoard;
       case 'ppt_board': return _openPptOverlay;
       case 'pdf_board': return _openPdfBoard;
       case 'student_connect': return _openStudentConnect;
@@ -5449,6 +5487,8 @@ class _DashboardViewState extends State<DashboardView> {
       // 기타/유틸리티
       case 'file_explorer': return _openFileExplorer;
       case 'timetable': return _openWeeklyTimetable;
+      case 'bst_cloud': return _openBstCloud;
+      case 'plugin_store': return _openPluginStore;
       case 'app_drawer': return _openAppDrawer;
       default: return () {};
     }
@@ -6171,6 +6211,28 @@ class _DashboardViewState extends State<DashboardView> {
         ),
         margin: const EdgeInsets.all(20),
         duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _openBstCloud() {
+    showDialog(
+      context: context,
+      builder: (context) => BstCloudModal(scaleFactor: _settings.scaleFactor),
+    );
+  }
+
+  void _openPluginStore() {
+    showDialog(
+      context: context,
+      builder: (context) => PluginStoreView(
+        scaleFactor: _settings.scaleFactor,
+        onLaunchPlugin: (id, name) {
+          setState(() {
+            _activePluginId = id;
+            _activePluginName = name;
+          });
+        },
       ),
     );
   }
@@ -8238,6 +8300,20 @@ class _DashboardViewState extends State<DashboardView> {
   void _openWebsiteBoard() {
     _pushBoardRoute(WebsiteBoardView(
       scaleFactor: _settings.scaleFactor,
+    ));
+  }
+
+  void _openYoutubeBoard({String? url, String? filePath}) {
+    _pushBoardRoute(VideoCollectionBoardView(
+      scaleFactor: _settings.scaleFactor,
+    ));
+  }
+
+  void _openCanvaBoard({String? url, String? filePath}) {
+    _pushBoardRoute(CanvaBoardView(
+      scaleFactor: _settings.scaleFactor,
+      initialUrl: url,
+      filePath: filePath,
     ));
   }
 }

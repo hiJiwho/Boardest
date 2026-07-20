@@ -222,6 +222,16 @@ try {
                 Write-Warning "PowerPoint Overlay compilation failed."
             }
 
+            # Compile HWP overlay
+            Write-Step "Compiling C# HWP Overlay..."
+            & $csc /target:winexe /out:boardest_hwp_overlay.exe /lib:C:\Windows\Microsoft.NET\Framework64\v4.0.30319,C:\Windows\Microsoft.NET\Framework64\v4.0.30319\WPF /r:System.dll,System.Core.dll,WindowsBase.dll,PresentationCore.dll,PresentationFramework.dll,System.Xaml.dll boardest_hwp_overlay.cs | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Copy-Item "boardest_hwp_overlay.exe" "$winSrc\boardest_hwp_overlay.exe" -Force
+                Write-OK "HWP Overlay compiled and copied to build source"
+            } else {
+                Write-Warning "HWP Overlay compilation failed."
+            }
+
             # Compile PPT helper (COM bridge)
             if (Test-Path "boardest_ppt_helper.cs") {
                 Write-Step "Compiling C# PowerPoint COM Helper..."
@@ -244,12 +254,15 @@ try {
     New-Item -Path $winOutDir -ItemType Directory -Force | Out-Null
     Copy-Item "$winSrc\*" $winOutDir -Recurse -Force
 
-    # Double check watchdog.exe and boardest_ppt_overlay.exe in output folder
+    # Double check watchdog.exe, boardest_ppt_overlay.exe, boardest_hwp_overlay.exe in output folder
     if (Test-Path "watchdog.exe") {
         Copy-Item "watchdog.exe" "$winOutDir\watchdog.exe" -Force
     }
     if (Test-Path "boardest_ppt_overlay.exe") {
         Copy-Item "boardest_ppt_overlay.exe" "$winOutDir\boardest_ppt_overlay.exe" -Force
+    }
+    if (Test-Path "boardest_hwp_overlay.exe") {
+        Copy-Item "boardest_hwp_overlay.exe" "$winOutDir\boardest_hwp_overlay.exe" -Force
     }
     if (Test-Path "boardest_ppt_helper.exe") {
         Copy-Item "boardest_ppt_helper.exe" "$winOutDir\boardest_ppt_helper.exe" -Force

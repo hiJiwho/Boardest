@@ -25,7 +25,7 @@ class StorageService {
     try {
       final exeDir = File(Platform.resolvedExecutable).parent.path;
       final file = File(p.join(exeDir, 'special_classroom.txt'));
-      await file.writeAsString(settings.specialClassroomMode ? 'true' : 'false');
+      await file.writeAsString(settings.specialClassroomType.toString());
     } catch (_) {}
 
     // Save school_config.json back to AppData and others to ensure sync is maintained
