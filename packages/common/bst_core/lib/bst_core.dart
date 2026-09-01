@@ -19,3 +19,4 @@ export 'src/plugin/sub_apis/bst_storage_api.dart';
 export 'src/plugin/sub_apis/bst_events_api.dart';
 export 'src/plugin/sub_apis/bst_cloud_api.dart';
 export 'src/plugin/sub_apis/bst_cast_api.dart';
+export 'src/services/panser_plugin_service.dart';

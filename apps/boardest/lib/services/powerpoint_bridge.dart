@@ -5,6 +5,7 @@ import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
+import 'package:bst_core/bst_core.dart';
 
 /// PowerPoint slideshow live state
 class PptLiveState {
@@ -86,26 +87,14 @@ class PowerPointBridge {
     if (_helperProcess != null) return;
 
     try {
-      final exeDir = File(Platform.resolvedExecutable).parent.path;
-      String helperPath = p.join(exeDir, 'boardest_ppt_helper.exe');
-      if (!File(helperPath).existsSync()) {
-        helperPath = p.join(Directory.current.path, 'boardest_ppt_helper.exe');
-      }
-      if (!File(helperPath).existsSync()) {
-        helperPath = p.join(Directory.current.path, 'build', 'windows', 'x64', 'runner', 'Release', 'boardest_ppt_helper.exe');
-      }
-      if (!File(helperPath).existsSync()) {
-        helperPath = p.join(Directory.current.path, 'build', 'windows', 'x64', 'runner', 'Debug', 'boardest_ppt_helper.exe');
-      }
-      if (!File(helperPath).existsSync()) {
-        helperPath = p.join(Directory.current.path, 'build', 'outputs', 'windows', 'Release', 'boardest_ppt_helper.exe');
-      }
-      if (!File(helperPath).existsSync()) {
-        helperPath = 'boardest_ppt_helper.exe';
+      String? helperPath = await PanserPluginService.ensureExecutable('boardest_ppt_helper.exe');
+      if (helperPath == null || !File(helperPath).existsSync()) {
+        final exeDir = File(Platform.resolvedExecutable).parent.path;
+        helperPath = p.join(exeDir, 'boardest_ppt_helper.exe');
       }
 
       if (!File(helperPath).existsSync()) {
-        debugPrint('[PowerPointBridge] boardest_ppt_helper.exe not found.');
+        debugPrint('[PowerPointBridge] boardest_ppt_helper.exe not found even after plugin check.');
         return;
       }
 

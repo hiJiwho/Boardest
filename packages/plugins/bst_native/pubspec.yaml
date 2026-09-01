@@ -11,6 +11,8 @@ dependencies:
   flutter:
     sdk: flutter
   universal_io: ^2.2.2
+  bst_core:
+    path: ../../common/bst_core
 
 dev_dependencies:
   flutter_test:

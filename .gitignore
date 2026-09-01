@@ -15,5 +15,6 @@
 sign/
 *.pem
 *.sig
+*.pfx
 **/app_config.dart
 apps/boardest_teacher_oauth/
