@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boardest BoardBook Engine</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #0f0e17; font-family: 'Pretendard', sans-serif; color: #ffffff; }
+    
+    #viewer-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #textbook-frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #ffffff;
+    }
+
+    /* Hotspot Overlay Layer */
+    #hotspot-layer {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hotspot-btn {
+      position: absolute;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(46, 196, 182, 0.9);
+      border: 3px solid #ffffff;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 22px;
+      cursor: pointer;
+      pointer-events: auto;
+      transform: translate(-50%, -50%);
+      transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .hotspot-btn:hover {
+      transform: translate(-50%, -50%) scale(1.25);
+    }
+
+    /* Right-click Mapping Context Dialog */
+    #mapping-dialog {
+      display: none;
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: #16161a;
+      border: 2px solid #2ec4b6;
+      border-radius: 16px;
+      padding: 24px;
+      z-index: 100;
+      width: 320px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+    }
+    #mapping-dialog h3 { color: #2ec4b6; margin-bottom: 12px; font-size: 18px; }
+    #mapping-dialog input {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background: #242629;
+      color: #fff;
+    }
+    #mapping-dialog .btn-row { display: flex; justify-content: flex-end; gap: 8px; }
+    #mapping-dialog button {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .btn-cancel { background: #333; color: #ccc; }
+    .btn-save { background: #2ec4b6; color: #000; }
+  </style>
+</head>
+<body>
+  <div id="viewer-container">
+    <iframe id="textbook-frame" src="about:blank"></iframe>
+    <div id="hotspot-layer"></div>
+  </div>
+
+  <div id="mapping-dialog">
+    <h3>📍 핫스팟 연결 생성</h3>
+    <input type="text" id="hs-title" placeholder="자료 이름 (예: 영상 자료)">
+    <input type="text" id="hs-url" placeholder="연결 파일 경로 또는 URL">
+    <div class="btn-row">
+      <button class="btn-cancel" onclick="closeMappingDialog()">취소</button>
+      <button class="btn-save" onclick="saveHotspot()">저장</button>
+    </div>
+  </div>
+
+  <!-- Off-screen Canvas for dHash computation -->
+  <canvas id="hash-canvas" width="9" height="8" style="display:none;"></canvas>
+
+  <script>
+    let currentUrl = "";
+    let currentHash = "";
+    let hotspotsData = {}; // hash -> list of hotspots
+    let pendingClickPos = { x: 0.5, y: 0.5 };
+
+    // Communication bridge with Flutter
+    function sendToFlutter(type, payload) {
+      const msg = JSON.stringify({ type: type, payload: payload });
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage(msg);
+      } else if (window.FlutterBridge) {
+        window.FlutterBridge.postMessage(msg);
+      } else {
+        console.log('[BST-WEB] Flutter message:', msg);
+      }
+    }
+
+    // Load textbook URL
+    function loadTextbookUrl(url) {
+      currentUrl = url;
+      const frame = document.getElementById('textbook-frame');
+      frame.src = url;
+      computeSimpleHash(url);
+    }
+
+    // Calculate deterministic hash from URL/Title string for hash-indexed annotation (.iwb)
+    function computeSimpleHash(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash |= 0;
+      }
+      currentHash = 'page_' + Math.abs(hash).toString(16);
+      sendToFlutter('page_hash_changed', { hash: currentHash, url: currentUrl });
+      renderHotspots();
+    }
+
+    // Context menu / Right click to add hotspot
+    window.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      pendingClickPos = {
+        x: e.clientX / window.innerWidth,
+        y: e.clientY / window.innerHeight
+      };
+      document.getElementById('mapping-dialog').style.display = 'block';
+    });
+
+    function closeMappingDialog() {
+      document.getElementById('mapping-dialog').style.display = 'none';
+    }
+
+    function saveHotspot() {
+      const title = document.getElementById('hs-title').value.trim();
+      const url = document.getElementById('hs-url').value.trim();
+      if (!title || !url) return;
+
+      if (!hotspotsData[currentHash]) hotspotsData[currentHash] = [];
+      const newHs = {
+        id: Date.now().toString(),
+        title: title,
+        url: url,
+        x: pendingClickPos.x,
+        y: pendingClickPos.y,
+        icon: '📌'
+      };
+      hotspotsData[currentHash].push(newHs);
+
+      sendToFlutter('save_hotspot', { hash: currentHash, hotspot: newHs });
+      renderHotspots();
+      closeMappingDialog();
+    }
+
+    function renderHotspots() {
+      const layer = document.getElementById('hotspot-layer');
+      layer.innerHTML = '';
+      const list = hotspotsData[currentHash] || [];
+      list.forEach(hs => {
+        const btn = document.createElement('div');
+        btn.className = 'hotspot-btn';
+        btn.style.left = (hs.x * 100) + '%';
+        btn.style.top = (hs.y * 100) + '%';
+        btn.innerHTML = hs.icon || '📌';
+        btn.title = hs.title;
+        btn.onclick = function() {
+          sendToFlutter('open_hotspot_asset', { url: hs.url, title: hs.title });
+        };
+        layer.appendChild(btn);
+      });
+    }
+
+    // Load initial hotspots data from Flutter
+    function loadHotspotsJson(jsonStr) {
+      try {
+        hotspotsData = JSON.parse(jsonStr);
+        renderHotspots();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  </script>
+</body>
+</html>

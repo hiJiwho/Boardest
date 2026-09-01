@@ -1,0 +1,34 @@
+name: bst_tbp
+description: "TextBook Plus (.TBP) engine and viewer for Boardest."
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  image: ^4.3.0
+  archive: ^4.0.9
+  path_provider: ^2.1.5
+  path: ^1.9.1
+  url_launcher: ^6.3.2
+  google_fonts: ^8.2.1
+  file_picker: 11.0.2
+  webview_windows: ^0.4.0
+  webview_flutter: ^4.10.0
+  universal_io: ^2.2.2
+  crypto: ^3.0.3
+  bst_core:
+    path: ../../common/bst_core
+  bst_pen:
+    path: ../bst_pen
+  bst_cloud:
+    path: ../../common/bst_cloud
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0

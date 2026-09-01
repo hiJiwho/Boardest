@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Boardest Teacher — 선생님 전용 통합 웹 PWA 서비스">
+
+  <!-- Mobile & PWA meta tags -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Boardest Teacher">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Boardest Teacher</title>
+  <link rel="manifest" href="manifest.json">
+  <!-- Firebase Compat App & Messaging SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBMoJZHMBN4eYJtiZR2iGePcmIB7bg8wGo",
+      authDomain: "jiwhosboardest.firebaseapp.com",
+      projectId: "jiwhosboardest",
+      storageBucket: "jiwhosboardest.appspot.com",
+      messagingSenderId: "287519871774",
+      appId: "1:287519871774:web:d259c730cb85b001a1c34a"
+    };
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+
+    let fcmMessaging = null;
+    try {
+      if (firebase.messaging.isSupported()) {
+        fcmMessaging = firebase.messaging();
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register('firebase-messaging-sw.js').catch((err) => {
+            console.log('[FCM SW] ServiceWorker registration warning: ', err);
+          });
+        }
+      }
+    } catch(e) {
+      console.log('FCM not supported: ', e);
+    }
+
+    window.bst = {
+      ver: function() { return "Boardest B 2.7.2 (Antigravity Engine)"; }
+    };
+  </script>
+
+  <style>
+    body {
+      background-color: #0F0E17;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+  </style>
+
+  <!-- Flutter Web Bootstrapper JS -->
+  <script src="flutter.js" defer></script>
+</head>
+<body>
+  <script>
+    // PWA Install Prompt Restriction Policy:
+    // Block PWA install prompt on Android & Windows; allow ONLY on iOS, ChromeOS, Linux!
+    window.addEventListener('beforeinstallprompt', (e) => {
+      const ua = navigator.userAgent.toLowerCase();
+      const isAndroid = ua.includes('android');
+      const isWindows = ua.includes('windows');
+      const isIOS = /iphone|ipad|ipod/.test(ua);
+      const isChromeOS = ua.includes('cros');
+      const isLinux = ua.includes('linux') && !isAndroid;
+
+      if (isAndroid || isWindows) {
+        e.preventDefault();
+        console.log('[PWA Guard] PWA install prompt blocked on Android/Windows per policy.');
+      } else if (isIOS || isChromeOS || isLinux) {
+        console.log('[PWA Guard] PWA installation allowed for iOS/ChromeOS/Linux.');
+      }
+    });
+
+    // auth=success 파라미터가 유입되었을 때 Flutter Web 로딩 전 유실 방지를 위해 즉시 localStorage 백업
+    if (window.location.search && window.location.search.includes('auth=success')) {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get('token') || '';
+        const email = params.get('email') || '';
+        const teacherName = params.get('teacherName') || '';
+        const teacherId = params.get('teacherId') || '';
+        const schoolId = params.get('schoolId') || 'ydm';
+        const schoolCode = params.get('schoolCode') || params.get('schoolId') || '44134';
+        const schoolName = params.get('schoolName') || '양동중학교';
+        const grade = params.get('grade') || '1';
+        const classNum = params.get('classNum') || '1';
+        const isHomeroom = params.get('isHomeroom') || 'true';
+        const cafeteria = params.get('cafeteriaNum') || '1';
+        const totpSecret = params.get('totpSecret') || '';
+
+        localStorage.setItem('boardest_auth_callback_search', window.location.search);
+        if (totpSecret) {
+          localStorage.setItem('flutter.bst_totp_secret_key', totpSecret);
+          localStorage.setItem('flutter.bst_totp_secret', totpSecret);
+          localStorage.setItem('boardest_totp_secret', totpSecret);
+        }
+        if (token) {
+          localStorage.setItem('flutter.bst_google_access_token', token);
+          localStorage.setItem('flutter.bst_token', token);
+          localStorage.setItem('boardest_google_access_token', token);
+        }
+        if (email) {
+          localStorage.setItem('flutter.bst_google_user_email', email);
+          localStorage.setItem('flutter.bst_user_email', email);
+          localStorage.setItem('boardest_user_email', email);
+        }
+        if (teacherName) {
+          localStorage.setItem('flutter.bst_google_user_name', teacherName);
+          localStorage.setItem('flutter.bst_user_name', teacherName);
+        }
+        if (schoolName) {
+          localStorage.setItem('flutter.bst_school_name', schoolName);
+        }
+      } catch (e) {
+        console.warn('Backup auth query error:', e);
+      }
+    }
+
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

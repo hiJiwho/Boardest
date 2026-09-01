@@ -1,0 +1,42 @@
+name: boardest
+repository: https://github.com/hiJiwho/Boardest
+
+packages:
+  - packages/common/**
+  - packages/plugins/**
+  - apps/**
+
+scripts:
+  # 프로젝트 전반 패키지 의존성 설치
+  bootstrap:
+    run: melos bootstrap
+
+  # 분석
+  analyze:
+    exec: flutter analyze .
+
+  # 테스트
+  test:
+    exec: flutter test
+
+  # 빌드: boardest (전자칠판)
+  build:board:win:
+    run: melos exec --scope="boardest" -- flutter build windows --release
+  build:board:apk:
+    run: melos exec --scope="boardest" -- flutter build apk --release
+  build:board:web:
+    run: melos exec --scope="boardest" -- flutter build web --release
+
+  # 빌드: boardest_teacher (교사 풀 버전)
+  build:teacher:win:
+    run: melos exec --scope="boardest_teacher" -- flutter build windows --release
+
+  # 빌드: boardest_teacher_lite (교사 라이트 버전)
+  build:lite:apk:
+    run: melos exec --scope="boardest_teacher_lite" -- flutter build apk --release
+  build:lite:web:
+    run: melos exec --scope="boardest_teacher_lite" -- flutter build web --release --pwa-strategy=offline-first
+
+  # 배포 (Firebase)
+  deploy:
+    run: cd firebase && npx -y firebase-tools deploy --only hosting,functions

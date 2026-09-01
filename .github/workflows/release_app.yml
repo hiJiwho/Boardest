@@ -1,0 +1,76 @@
+name: Release Boardest App
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          flutter pub get
+        working-directory: apps/boardest
+
+      - name: Build Windows Release
+        run: |
+          flutter build windows --release
+        working-directory: apps/boardest
+
+      - name: Compress Windows Build
+        run: |
+          Compress-Archive -Path apps/boardest/build/windows/x64/runner/Release/* -DestinationPath apps/boardest/build/boardest_windows.zip -Force
+
+      - name: Upload Windows Asset to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: apps/boardest/build/boardest_windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: apps/boardest
+
+      - name: Build Android APK
+        run: flutter build apk --release
+        working-directory: apps/boardest
+
+      - name: Upload APK to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: apps/boardest/build/app/outputs/flutter-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

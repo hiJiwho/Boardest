@@ -1,0 +1,73 @@
+name: boardest_teacher
+description: "Boardest Teacher PC App"
+publish_to: 'none'
+
+version: 2.9.8+298
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  universal_io: ^2.2.2
+  win32: ^5.15.0
+  ffi: ^2.1.2
+  shared_preferences: ^2.2.0
+  crypto: ^3.0.3
+  google_fonts: ^8.2.1
+  path_provider: ^2.1.5
+  path: ^1.9.1
+  pdfrx: ^2.4.7
+  system_tray: ^2.0.3
+  window_manager: ^0.5.2
+  http: ^1.2.0
+  cp949_codec: ^1.0.1
+  file_picker: 11.0.2
+  url_launcher: ^6.3.2
+  webview_windows: ^0.4.0
+  webview_flutter: ^4.10.0
+  flutter_acrylic: ^1.1.4
+  archive: ^4.0.9
+  macos_ui: ^2.1.6
+  video_player: ^2.11.1
+  video_player_win: ^3.2.2
+  image: ^4.3.0
+  youtube_explode_dart: ^3.1.0
+  firebase_core: ^4.13.0
+  firebase_messaging: ^16.5.0
+  bst_core:
+    path: ../../packages/common/bst_core
+  bst_ui:
+    path: ../../packages/common/bst_ui
+  bst_auth:
+    path: ../../packages/common/bst_auth
+  bst_timetable:
+    path: ../../packages/common/bst_timetable
+  bst_pen:
+    path: ../../packages/plugins/bst_pen
+  bst_tbp:
+    path: ../../packages/plugins/bst_tbp
+  bst_video:
+    path: ../../packages/plugins/bst_video
+  bst_canva:
+    path: ../../packages/plugins/bst_canva
+  bst_pdf:
+    path: ../../packages/plugins/bst_pdf
+  bst_cast:
+    path: ../../packages/common/bst_cast
+  bst_native:
+    path: ../../packages/plugins/bst_native
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/app_icon.ico
+    - assets/bst-web/
