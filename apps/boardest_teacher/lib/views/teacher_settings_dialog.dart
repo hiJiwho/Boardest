@@ -635,22 +635,48 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF7F5AF0),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        icon: const Icon(Icons.cloud_sync_rounded, size: 18),
-                        label: Text(
-                          CloudDriveService.instance.isLoggedIn ? '🔄 Google Cloud 다시 로그인 (ADF 재인증)' : '☁️ Google Cloud 연동 로그인',
-                          style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                        onPressed: () async {
-                          Navigator.of(context).pop();
-                          await CloudDriveService.instance.loginWithBrowserOAuth();
-                        },
+                      Row(
+                        children: [
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF7F5AF0),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            icon: const Icon(Icons.cloud_sync_rounded, size: 18),
+                            label: Text(
+                              CloudDriveService.instance.isLoggedIn ? '🔄 Google 계정 재인증' : '☁️ Google Cloud 연동 로그인',
+                              style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                            onPressed: () async {
+                              Navigator.of(context).pop();
+                              await CloudDriveService.instance.loginWithBrowserOAuth();
+                            },
+                          ),
+                          if (CloudDriveService.instance.isLoggedIn) ...[
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.redAccent,
+                                side: const BorderSide(color: Colors.redAccent),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              icon: const Icon(Icons.logout_rounded, size: 16),
+                              label: Text(
+                                '로그아웃',
+                                style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                              onPressed: () async {
+                                await CloudDriveService.instance.logout();
+                                if (mounted) {
+                                  setState(() {});
+                                }
+                              },
+                            ),
+                          ],
+                        ],
                       ),
                       Row(
                         children: [

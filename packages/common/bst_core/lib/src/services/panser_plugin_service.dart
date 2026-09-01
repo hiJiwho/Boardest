@@ -142,4 +142,31 @@ class PanserPluginService {
     }
     return null;
   }
+
+  static bool _autoInstallStarted = false;
+
+  /// Check if the addon is installed on app startup; if not, automatically download and install it.
+  static Future<void> checkAndAutoInstallOnStartup({void Function(String message)? onStatus}) async {
+    if (!Platform.isWindows) return;
+    if (_autoInstallStarted) return;
+    _autoInstallStarted = true;
+
+    try {
+      final installed = await isInstalled();
+      if (!installed) {
+        debugPrint('[PanserPlugin] Addon not installed on startup. Starting automatic background download & install...');
+        onStatus?.call('BST 판서 오버레이 도구를 설치하고 있습니다...');
+        final success = await installFromGithub();
+        if (success) {
+          debugPrint('[PanserPlugin] Addon installed successfully on startup!');
+          onStatus?.call('BST 판서 오버레이 도구가 설치되었습니다.');
+        } else {
+          debugPrint('[PanserPlugin] Addon auto-install failed.');
+        }
+      }
+    } catch (e) {
+      debugPrint('[PanserPlugin] checkAndAutoInstallOnStartup error: $e');
+    }
+  }
 }
+

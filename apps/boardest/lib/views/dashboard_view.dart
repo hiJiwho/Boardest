@@ -15,6 +15,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
+import 'package:bst_core/bst_core.dart' show PanserPluginService;
 
 import '../models/lesson.dart';
 import '../models/app_settings.dart';
@@ -244,6 +245,25 @@ class _DashboardViewState extends State<DashboardView> {
     if (!kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         UpdateService.checkAndUpdate(context);
+        PanserPluginService.checkAndAutoInstallOnStartup(
+          onStatus: (msg) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const Icon(Icons.extension_rounded, color: Color(0xFF00F5D4)),
+                      const SizedBox(width: 8),
+                      Text(msg),
+                    ],
+                  ),
+                  duration: const Duration(seconds: 4),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          },
+        );
       });
     }
 
@@ -9164,6 +9184,20 @@ class _DashboardViewState extends State<DashboardView> {
               },
             ),
             SizedBox(height: 12 * scale),
+            if (!kIsWeb) ...[
+              _buildPenOptionTile(
+                scale: scale,
+                icon: Icons.description_rounded,
+                color: const Color(0xFFFF8906),
+                title: '문서 열고 판서하기',
+                subtitle: 'PDF, PPT, HWP 등 수업 문서를 선택하여 판서',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _openDocumentBoard();
+                },
+              ),
+              SizedBox(height: 12 * scale),
+            ],
             _buildPenOptionTile(
               scale: scale,
               icon: Icons.language_rounded,

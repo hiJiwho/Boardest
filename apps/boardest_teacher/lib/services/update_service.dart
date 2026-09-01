@@ -27,8 +27,8 @@ class UpdateService {
   static final UpdateService instance = UpdateService._internal();
   UpdateService._internal();
 
-  static const String currentVersion = 'B 2.4.0';
-  static const String githubRepoUrl = 'https://api.github.com/repos/jiwhosboardest/Boardest-Teacher/releases/latest';
+  static const String currentVersion = '2.9.8';
+  static const String githubRepoUrl = 'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String verificationServerUrl = 'https://boardest-update-work.firebaseapp.com';
 
   static const String _githubTokenKey = 'bst_github_token';
@@ -137,13 +137,18 @@ class UpdateService {
 
   bool _isVersionNewer(String latest, String current) {
     try {
-      List<int> l = latest.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-      List<int> c = current.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-      for (int i = 0; i < l.length && i < c.length; i++) {
-        if (l[i] > c[i]) return true;
-        if (l[i] < c[i]) return false;
+      final cleanLatest = latest.replaceAll(RegExp(r'[^0-9.]'), '');
+      final cleanCurrent = current.replaceAll(RegExp(r'[^0-9.]'), '');
+      List<int> l = cleanLatest.split('.').where((e) => e.isNotEmpty).map((e) => int.tryParse(e) ?? 0).toList();
+      List<int> c = cleanCurrent.split('.').where((e) => e.isNotEmpty).map((e) => int.tryParse(e) ?? 0).toList();
+      int maxLen = l.length > c.length ? l.length : c.length;
+      for (int i = 0; i < maxLen; i++) {
+        int partL = i < l.length ? l[i] : 0;
+        int partC = i < c.length ? c[i] : 0;
+        if (partL > partC) return true;
+        if (partL < partC) return false;
       }
-      return l.length > c.length;
+      return false;
     } catch (_) {
       return false;
     }

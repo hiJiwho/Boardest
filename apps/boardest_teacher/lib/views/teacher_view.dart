@@ -11,6 +11,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:crypto/crypto.dart';
+import 'package:bst_core/bst_core.dart' show PanserPluginService;
 
 import '../models/lesson.dart';
 import '../models/app_settings.dart';
@@ -285,6 +286,9 @@ class _TeacherViewState extends State<TeacherView> {
   Future<void> _init() async {
     _startOtpTimer();
     _checkForAppUpdates(silent: true);
+    if (!kIsWeb && Platform.isWindows) {
+      PanserPluginService.checkAndAutoInstallOnStartup();
+    }
     await CloudDriveService.instance.init();
     _refreshDriveFiles();
     CloudDriveService.instance.registerLoginCallback(() async {
@@ -1312,7 +1316,21 @@ class _TeacherViewState extends State<TeacherView> {
     void _openBoardBookEditor() {}
   void _showGithubAuthDialog() {}
   void _checkForAppUpdates({bool silent = false}) {}
-  void _openSettings() {}
+  void _openSettings() async {
+    final updated = await showDialog<bool>(
+      context: context,
+      builder: (context) => TeacherSettingsDialog(scaleFactor: _settings.scaleFactor),
+    );
+    if (updated == true) {
+      final s = await _storageService.getSettings();
+      if (s != null && mounted) {
+        setState(() {
+          _settings = s;
+        });
+        _init();
+      }
+    }
+  }
   void _showCloudRequiredDialog(String type) {}
   void _toggleMiniTimer() {}
   void _pauseMiniTimer() {}
