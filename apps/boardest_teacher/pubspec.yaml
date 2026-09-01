@@ -2,7 +2,7 @@ name: boardest_teacher
 description: "Boardest Teacher PC App"
 publish_to: 'none'
 
-version: 2.9.8+298
+version: 2.9.8+2981
 
 environment:
   sdk: ^3.11.5

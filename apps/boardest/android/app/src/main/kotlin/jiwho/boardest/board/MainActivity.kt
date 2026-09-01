@@ -1,4 +1,4 @@
-package com.boardest.comcigan.boardest
+package jiwho.boardest.board
 
 import android.content.Context
 import android.content.Intent
@@ -20,8 +20,12 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        handleIntent(intent)
-        createDynamicShortcuts()
+        try {
+            handleIntent(intent)
+            createDynamicShortcuts()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -50,18 +54,18 @@ class MainActivity : FlutterActivity() {
 
     private fun createDynamicShortcuts() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
-            val shortcutManager = getSystemService(ShortcutManager::class.java)
-            if (shortcutManager != null) {
+            try {
+                val shortcutManager = getSystemService(ShortcutManager::class.java) ?: return
                 val shortcuts = mutableListOf<ShortcutInfo>()
 
                 val tools = listOf(
-                    Triple("whiteboard", "판서", android.R.drawable.ic_menu_edit),
-                    Triple("timer", "타이머", android.R.drawable.ic_menu_recent_history),
-                    Triple("picker", "발표자", android.R.drawable.ic_menu_search),
-                    Triple("dice", "주사위", android.R.drawable.ic_menu_gallery),
-                    Triple("timetable", "전체시간표", android.R.drawable.ic_menu_today),
-                    Triple("noise", "소음측정", android.R.drawable.ic_menu_compass),
-                    Triple("settings", "환경설정", android.R.drawable.ic_menu_preferences)
+                    Pair("whiteboard", "판서"),
+                    Pair("timer", "타이머"),
+                    Pair("picker", "발표자"),
+                    Pair("dice", "주사위"),
+                    Pair("timetable", "전체시간표"),
+                    Pair("noise", "소음측정"),
+                    Pair("settings", "환경설정")
                 )
 
                 for (tool in tools) {
@@ -71,20 +75,21 @@ class MainActivity : FlutterActivity() {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                     }
 
-                    val shortcut = ShortcutInfo.Builder(this, tool.first)
+                    val builder = ShortcutInfo.Builder(this, tool.first)
                         .setShortLabel(tool.second)
                         .setLongLabel(tool.second)
-                        .setIcon(Icon.createWithResource(this, tool.third))
                         .setIntent(shortcutIntent)
-                        .build()
-                    shortcuts.add(shortcut)
+
+                    try {
+                        builder.setIcon(Icon.createWithResource(this, R.mipmap.ic_launcher))
+                    } catch (_: Exception) {}
+
+                    shortcuts.add(builder.build())
                 }
 
-                try {
-                    shortcutManager.dynamicShortcuts = shortcuts
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                shortcutManager.dynamicShortcuts = shortcuts
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
