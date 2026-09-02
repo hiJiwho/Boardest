@@ -1,12 +1,15 @@
 package jiwho.boardest.board
 
+import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
@@ -99,6 +102,46 @@ class MainActivity : FlutterActivity() {
         methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
         methodChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
+                "isDefaultHomeLauncher" -> {
+                    try {
+                        val intent = Intent(Intent.ACTION_MAIN).apply {
+                            addCategory(Intent.CATEGORY_HOME)
+                        }
+                        val resolveInfo = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                        val currentHomePkg = resolveInfo?.activityInfo?.packageName
+                        result.success(currentHomePkg == packageName)
+                    } catch (e: Exception) {
+                        result.success(false)
+                    }
+                }
+                "openHomeLauncherSettings" -> {
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            val roleManager = getSystemService(RoleManager::class.java)
+                            if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_HOME)) {
+                                val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME)
+                                startActivity(intent)
+                                result.success(true)
+                                return@setMethodCallHandler
+                            }
+                        }
+                        val intent = Intent(Settings.ACTION_HOME_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        try {
+                            val intent = Intent(Settings.ACTION_SETTINGS).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e2: Exception) {
+                            result.error("ERR_HOME_SETTINGS", e2.message, null)
+                        }
+                    }
+                }
                 "getLaunchTool" -> {
                     val tool = launchTool
                     launchTool = null

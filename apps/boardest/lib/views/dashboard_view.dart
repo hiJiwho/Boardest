@@ -248,6 +248,9 @@ class _DashboardViewState extends State<DashboardView> {
     if (!kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         UpdateService.checkAndUpdate(context);
+        if (Platform.isAndroid) {
+          _checkAndPromptHomeLauncher();
+        }
         PanserPluginService.checkAndAutoInstallOnStartup(
           onStatus: (msg) {
             if (mounted) {
@@ -3175,12 +3178,21 @@ class _DashboardViewState extends State<DashboardView> {
               _buildSettingsMenuTile(
                 icon: Icons.home_rounded,
                 color: const Color(0xFF2EC4B6),
-                label: '기본 홈 앱',
-                subtitle: 'Boardest를 기본 런처로 설정',
+                label: '기본 홈 앱 (런처)',
+                subtitle: 'Boardest를 기본 홈 화면으로 설정',
                 scale: scale,
                 onTap: () => Navigator.pop(sheetCtx, 'home_launcher'),
               ),
             ],
+            SizedBox(height: 10 * scale),
+            _buildSettingsMenuTile(
+              icon: Icons.aspect_ratio_rounded,
+              color: const Color(0xFF00F5D4),
+              label: '화면 배율 (DPI) 조정',
+              subtitle: 'UI 크기 조절 (현재: ${(_settings.scaleFactor * 100).round()}%)',
+              scale: scale,
+              onTap: () => Navigator.pop(sheetCtx, 'dpi_scale'),
+            ),
             SizedBox(height: 10 * scale),
             _buildSettingsMenuTile(
               icon: Icons.logout_rounded,
@@ -3411,6 +3423,10 @@ class _DashboardViewState extends State<DashboardView> {
           );
         }
       }
+    } else if (choice == 'home_launcher') {
+      _showHomeLauncherDialog();
+    } else if (choice == 'dpi_scale') {
+      _showDpiScaleDialog();
     } else if (choice == 'withdraw') {
       await _showWithdrawDialog();
     }
@@ -3498,6 +3514,231 @@ class _DashboardViewState extends State<DashboardView> {
         (_) => false,
       );
     }
+  }
+
+  Future<void> _checkAndPromptHomeLauncher() async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final dismissed = prefs.getBool('boardest_home_launcher_dismissed') ?? false;
+      if (dismissed) return;
+
+      const channel = MethodChannel('com.boardest/launch_args');
+      final isHome = await channel.invokeMethod<bool>('isDefaultHomeLauncher') ?? false;
+      if (!isHome && mounted) {
+        _showHomeLauncherDialog();
+      }
+    } catch (e) {
+      debugPrint('[HomeLauncher] Error checking home launcher: $e');
+    }
+  }
+
+  void _showHomeLauncherDialog() {
+    final scale = _settings.scaleFactor;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF16161A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20 * scale),
+            side: const BorderSide(color: Color(0xFF242629)),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8 * scale),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2EC4B6).withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(10 * scale),
+                ),
+                child: Icon(Icons.home_rounded, color: const Color(0xFF2EC4B6), size: 24 * scale),
+              ),
+              SizedBox(width: 12 * scale),
+              Expanded(
+                child: Text(
+                  '기본 홈 앱(런처) 설정',
+                  style: GoogleFonts.notoSansKr(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18 * scale,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '전자칠판과 태블릿에서 홈 버튼을 누르면 언제든지 Boardest 대시보드로 바로 돌아올 수 있도록 기본 홈 앱으로 설정하시겠습니까?',
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white70,
+                  fontSize: 14 * scale,
+                  height: 1.5,
+                ),
+              ),
+              SizedBox(height: 8 * scale),
+              Text(
+                '수업 중 다른 앱을 열었다가도 홈 버튼만 누르면 시간표와 판서 도구로 즉시 복귀할 수 있습니다.',
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white38,
+                  fontSize: 12 * scale,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('boardest_home_launcher_dismissed', true);
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: Text('나중에', style: GoogleFonts.notoSansKr(color: Colors.white54)),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2EC4B6),
+                foregroundColor: const Color(0xFF003831),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * scale)),
+                padding: EdgeInsets.symmetric(horizontal: 16 * scale, vertical: 10 * scale),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                try {
+                  const channel = MethodChannel('com.boardest/launch_args');
+                  await channel.invokeMethod('openHomeLauncherSettings');
+                } catch (e) {
+                  debugPrint('[HomeLauncher] Error opening settings: $e');
+                }
+              },
+              icon: const Icon(Icons.check_rounded, size: 18),
+              label: Text('기본 홈 앱으로 설정', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDpiScaleDialog() {
+    double currentScale = _settings.scaleFactor;
+    final scale = currentScale;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF16161A),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20 * scale),
+              side: const BorderSide(color: Color(0xFF242629)),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(8 * scale),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10 * scale),
+                  ),
+                  child: Icon(Icons.aspect_ratio_rounded, color: const Color(0xFF00F5D4), size: 22 * scale),
+                ),
+                SizedBox(width: 12 * scale),
+                Expanded(
+                  child: Text(
+                    '화면 배율 (DPI) 조정',
+                    style: GoogleFonts.notoSansKr(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18 * scale,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '전자칠판 크기 및 해상도에 맞춰 UI 배율을 자유롭게 조절할 수 있습니다.',
+                  style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13 * scale),
+                ),
+                SizedBox(height: 20 * scale),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('배율: ${(currentScale * 100).round()}%',
+                        style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontWeight: FontWeight.bold, fontSize: 15 * scale)),
+                    Text(
+                      currentScale < 1.0 ? '컴팩트 모드' : (currentScale > 1.0 ? '확대 모드' : '기본 100%'),
+                      style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 12 * scale),
+                    ),
+                  ],
+                ),
+                Slider(
+                  value: currentScale,
+                  min: 0.6,
+                  max: 1.5,
+                  divisions: 18,
+                  activeColor: const Color(0xFF00F5D4),
+                  inactiveColor: Colors.white12,
+                  label: '${(currentScale * 100).round()}%',
+                  onChanged: (val) {
+                    setDialogState(() => currentScale = (val * 10).round() / 10.0);
+                  },
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('60% (작게)', style: TextStyle(color: Colors.white24, fontSize: 10 * scale)),
+                    TextButton(
+                      onPressed: () => setDialogState(() => currentScale = 1.0),
+                      child: Text('기본값(100%) 복원', style: TextStyle(color: const Color(0xFF2EC4B6), fontSize: 11 * scale)),
+                    ),
+                    Text('150% (크게)', style: TextStyle(color: Colors.white24, fontSize: 10 * scale)),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: Text('취소', style: GoogleFonts.notoSansKr(color: Colors.white54)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2EC4B6),
+                  foregroundColor: const Color(0xFF003831),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * scale)),
+                ),
+                onPressed: () async {
+                  final newSettings = _settings.copyWith(scaleFactor: currentScale);
+                  await _storageService.saveSettings(newSettings);
+                  setState(() => _settings = newSettings);
+                  if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('화면 배율이 ${(currentScale * 100).round()}%로 설정되었습니다.'),
+                        backgroundColor: const Color(0xFF2EC4B6),
+                      ),
+                    );
+                  }
+                },
+                child: Text('적용하기', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildNumberAdjuster({
@@ -4257,86 +4498,78 @@ class _DashboardViewState extends State<DashboardView> {
                     // Main Right Dashboard Area (flex: 82)
                     Expanded(
                       flex: 82,
-                      child: Column(
+                      child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // 상단 행: 시계 카드 (flex: 72) + 3x2 도구 그리드 (flex: 28)
+                          // 좌측 영역 (시계 + 수업/광고판): flex: kIsWeb ? 72 : 64
                           Expanded(
-                            flex: 43,
-                            child: Row(
+                            flex: kIsWeb ? 72 : 64,
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
+                                // 상단 행: 시계 카드 (flex: 43)
                                 Expanded(
-                                  flex: 72,
+                                  flex: 43,
                                   child: _buildPptClockCard(dateString),
                                 ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  flex: 28,
-                                  child: _buildTopPpt3x2Tools(),
+                                const SizedBox(height: 14),
+
+                                // 하단 행: 지금 수업 카드 + Cloud/A4 광고판 카드 (flex: 57)
+                                Builder(
+                                  builder: (context) {
+                                    final isCloudActive = BstCloudService.instance.activeToken != null;
+                                    final isClassNow = _currentPeriod != null && _currentPeriod!.isClass;
+                                    final isManualSelected = _currentLesson != null && _currentLesson!.subject.isNotEmpty;
+                                    final bool isLiveLesson = isManualSelected || isClassNow;
+
+                                    final subjectFlex = isCloudActive ? 56 : 64;
+                                    final adCloudFlex = isCloudActive ? 44 : 36;
+
+                                    return Expanded(
+                                      flex: 57,
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                                        children: [
+                                          // 1. 좌측 영역 (flex: subjectFlex):
+                                          // Cloud 연결 시 -> 좌측에 Cloud 드라이브 패널 전면 전개!
+                                          // 그 외(평상시/쉬는시간/USB) -> 기존 _buildPptSubjectCard
+                                          Expanded(
+                                            flex: subjectFlex,
+                                            child: isCloudActive
+                                                ? _buildFullCloudPanel(scale)
+                                                : _buildPptSubjectCard(todayLessons, isExpandedDock: false),
+                                          ),
+                                          const SizedBox(width: 14),
+
+                                          // 2. 우측 영역 (광고판 위치, flex: adCloudFlex):
+                                          // 1) USB 꽂았을 때 -> 좁은 폭의 컴팩트 USB 파일 탐색기 (USB 차등 대우)
+                                          // 2) 수업 시간 중 & Cloud 연결됨 -> 지금 수업이 광고판 폭으로 찌부된 카드 (상단 교과서, 하단 과목명 크게)
+                                          // 3) 수업 시간 중 & Cloud 미연결 -> 광고판 대신 BST-Cloud OTP 입력란 + 키패드
+                                          // 4) 쉬는 시간 / 일과 외 -> 기존 광고판(A4 배너)
+                                          Expanded(
+                                            flex: adCloudFlex,
+                                            child: _isUsbConnected
+                                                ? _buildCompactUsbExplorer(scale)
+                                                : (isLiveLesson
+                                                    ? (isCloudActive
+                                                        ? _buildCompactCurrentLessonCard(_currentLesson, scale)
+                                                        : _buildCloudOtpKeypadPanel(scale))
+                                                    : _buildPptAdBannerCard()),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(width: 14),
 
-                          // 하단 행: 지금 수업 카드 + Cloud/A4 광고판 카드 + 2열 6도구 그리드
-                          Builder(
-                            builder: (context) {
-                              final isCloudActive = BstCloudService.instance.activeToken != null;
-                              final isClassNow = _currentPeriod != null && _currentPeriod!.isClass;
-                              final isManualSelected = _currentLesson != null && _currentLesson!.subject.isNotEmpty;
-                              final bool isLiveLesson = isManualSelected || isClassNow;
-
-                              // Flex 비율:
-                              // 1) Cloud 활성화 시: 좌측 Cloud 전면 전개(52) : 중앙 찌부 수업카드(34) : 우측 도구(14)
-                              // 2) 일반 상태: 좌측 지금 수업(60) : 중앙(광고판 또는 OTP/USB)(26) : 우측 도구(14)
-                              final subjectFlex = isCloudActive ? 52 : 60;
-                              final adCloudFlex = isCloudActive ? 34 : 26;
-                              final toolsFlex = 14;
-
-                              return Expanded(
-                                flex: 57,
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    // 1. 좌측 영역 (flex: subjectFlex):
-                                    // Cloud 연결 시 -> 좌측에 Cloud 드라이브 패널 전면 전개!
-                                    // 그 외(평상시/쉬는시간/USB) -> 기존 _buildPptSubjectCard
-                                    Expanded(
-                                      flex: subjectFlex,
-                                      child: isCloudActive
-                                          ? _buildFullCloudPanel(scale)
-                                          : _buildPptSubjectCard(todayLessons, isExpandedDock: false),
-                                    ),
-                                    const SizedBox(width: 14),
-
-                                    // 2. 중앙 영역 (광고판 위치, flex: adCloudFlex):
-                                    // 1) USB 꽂았을 때 -> 좁은 폭의 컴팩트 USB 파일 탐색기 (USB 차등 대우)
-                                    // 2) 수업 시간 중 & Cloud 연결됨 -> 지금 수업이 광고판 폭으로 찌부된 카드 (상단 교과서, 하단 과목명 크게)
-                                    // 3) 수업 시간 중 & Cloud 미연결 -> 광고판 대신 BST-Cloud OTP 입력란 + 키패드
-                                    // 4) 쉬는 시간 / 일과 외 -> 기존 광고판(A4 배너)
-                                    Expanded(
-                                      flex: adCloudFlex,
-                                      child: _isUsbConnected
-                                          ? _buildCompactUsbExplorer(scale)
-                                          : (isLiveLesson
-                                              ? (isCloudActive
-                                                  ? _buildCompactCurrentLessonCard(_currentLesson, scale)
-                                                  : _buildCloudOtpKeypadPanel(scale))
-                                              : _buildPptAdBannerCard()),
-                                    ),
-                                    const SizedBox(width: 14),
-
-                                    // 3. 우측 도구 패널 (flex: toolsFlex)
-                                    Expanded(
-                                      flex: toolsFlex,
-                                      child: _buildBottomPpt4Tools(),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
+                          // 우측 영역: 전체 높이 BST 도구 패널 (1열 7개, 2열 7개, 3열 시스템 앱 7개)
+                          Expanded(
+                            flex: kIsWeb ? 28 : 36,
+                            child: _buildCategorizedDashboardLauncher(),
                           ),
                         ],
                       ),
@@ -8919,13 +9152,12 @@ class _DashboardViewState extends State<DashboardView> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 1열 (BST 도구 1~4행 + 광고판 5~7행 A4 비율)
+                // 1열 (기본 도구 7개)
                 Expanded(
                   child: Column(
                     children: [
                       // 1행: 날씨
                       Expanded(
-                        flex: 1,
                         child: Padding(
                           padding: EdgeInsets.all(3 * scale),
                           child: _buildGridSlot(
@@ -8937,7 +9169,6 @@ class _DashboardViewState extends State<DashboardView> {
                       ),
                       // 2행: 학사달력
                       Expanded(
-                        flex: 1,
                         child: Padding(
                           padding: EdgeInsets.all(3 * scale),
                           child: _buildGridSlot(
@@ -8949,7 +9180,6 @@ class _DashboardViewState extends State<DashboardView> {
                       ),
                       // 3행: 앱서랍
                       Expanded(
-                        flex: 1,
                         child: Padding(
                           padding: EdgeInsets.all(3 * scale),
                           child: _buildGridSlot(
@@ -8961,7 +9191,6 @@ class _DashboardViewState extends State<DashboardView> {
                       ),
                       // 4행: 타이머
                       Expanded(
-                        flex: 1,
                         child: Padding(
                           padding: EdgeInsets.all(3 * scale),
                           child: _buildGridSlot(
@@ -8971,23 +9200,7 @@ class _DashboardViewState extends State<DashboardView> {
                           ),
                         ),
                       ),
-                      // 5~7행: 광고판 (A4 비율 210:297)
-                      Expanded(
-                        flex: 3,
-                        child: Padding(
-                          padding: EdgeInsets.all(3 * scale),
-                          child: _buildAdBannerPanel(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(width: 8 * scale),
-                // 2열 (BST 도구 1~6행)
-                Expanded(
-                  child: Column(
-                    children: [
-                      // 1행: 제비뽑기
+                      // 5행: 제비뽑기
                       Expanded(
                         child: Padding(
                           padding: EdgeInsets.all(3 * scale),
@@ -8998,62 +9211,70 @@ class _DashboardViewState extends State<DashboardView> {
                           ),
                         ),
                       ),
-                      // 2행: 플러그인
-                      Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.all(3 * scale),
-                          child: _buildGridSlot(
-                            LauncherSlot(id: 'plugin_store', name: '플러그인', type: LauncherSlotType.boardestTool),
-                            scale,
-                            5,
-                          ),
-                        ),
-                      ),
-                      // 3행: 판서하기 (통합)
-                      Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.all(3 * scale),
-                          child: _buildGridSlot(
-                            LauncherSlot(id: 'unified_pen', name: '판서하기', type: LauncherSlotType.boardestTool),
-                            scale,
-                            6,
-                          ),
-                        ),
-                      ),
-                      // 4행: TextbookPro (교과서)
-                      Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.all(3 * scale),
-                          child: _buildGridSlot(
-                            LauncherSlot(id: 'textbookpro', name: 'TextbookPro', type: LauncherSlotType.boardestTool),
-                            scale,
-                            7,
-                          ),
-                        ),
-                      ),
-                      // 5행: 계산기
+                      // 6행: 계산기
                       Expanded(
                         child: Padding(
                           padding: EdgeInsets.all(3 * scale),
                           child: _buildGridSlot(
                             LauncherSlot(id: 'calculator', name: '계산기', type: LauncherSlotType.boardestTool),
                             scale,
-                            8,
+                            5,
                           ),
                         ),
                       ),
-                      // 6행: 메모장
+                      // 7행: 메모장
                       Expanded(
                         child: Padding(
                           padding: EdgeInsets.all(3 * scale),
                           child: _buildGridSlot(
                             LauncherSlot(id: 'notepad', name: '메모장', type: LauncherSlotType.boardestTool),
                             scale,
+                            6,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 6 * scale),
+                // 2열 (판서 & 수업 도구 7개)
+                Expanded(
+                  child: Column(
+                    children: [
+                      // 1행: 판서하기 (통합)
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.all(3 * scale),
+                          child: _buildGridSlot(
+                            LauncherSlot(id: 'unified_pen', name: '판서하기', type: LauncherSlotType.boardestTool),
+                            scale,
+                            7,
+                          ),
+                        ),
+                      ),
+                      // 2행: TextbookPro (교과서)
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.all(3 * scale),
+                          child: _buildGridSlot(
+                            LauncherSlot(id: 'textbookpro', name: '교과서', type: LauncherSlotType.boardestTool),
+                            scale,
+                            8,
+                          ),
+                        ),
+                      ),
+                      // 3행: Canva
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.all(3 * scale),
+                          child: _buildGridSlot(
+                            LauncherSlot(id: 'canva_board', name: 'Canva', type: LauncherSlotType.boardestTool),
+                            scale,
                             9,
                           ),
                         ),
                       ),
-                      // 7행: Cloud
+                      // 4행: Cloud
                       Expanded(
                         child: Padding(
                           padding: EdgeInsets.all(3 * scale),
@@ -9064,16 +9285,49 @@ class _DashboardViewState extends State<DashboardView> {
                           ),
                         ),
                       ),
+                      // 5행: 플러그인
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.all(3 * scale),
+                          child: _buildGridSlot(
+                            LauncherSlot(id: 'plugin_store', name: '플러그인', type: LauncherSlotType.boardestTool),
+                            scale,
+                            11,
+                          ),
+                        ),
+                      ),
+                      // 6행: 학생연결
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.all(3 * scale),
+                          child: _buildGridSlot(
+                            LauncherSlot(id: 'student_connect', name: '학생연결', type: LauncherSlotType.boardestTool),
+                            scale,
+                            12,
+                          ),
+                        ),
+                      ),
+                      // 7행: 설정
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.all(3 * scale),
+                          child: _buildGridSlot(
+                            LauncherSlot(id: 'settings', name: '설정', type: LauncherSlotType.boardestTool),
+                            scale,
+                            13,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 if (!kIsWeb) ...[
-                  SizedBox(width: 8 * scale),
+                  SizedBox(width: 6 * scale),
                   // 3열 (시스템 앱 등록 슬롯 1~7행)
                   Expanded(
                     child: Column(
                       children: List.generate(7, (index) {
-                        final slotIndex = 11 + index;
+                        final slotIndex = 14 + index;
                         final slot = slotIndex < slots.length ? slots[slotIndex] : null;
                         return Expanded(
                           child: Padding(

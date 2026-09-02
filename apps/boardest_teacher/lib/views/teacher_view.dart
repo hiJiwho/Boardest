@@ -1431,28 +1431,51 @@ class _TeacherViewState extends State<TeacherView> {
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     Expanded(
-                                      flex: 5,
-                                      child: isHomeroom
-                                          ? Column(
+                                      flex: 9,
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                                        children: [
+                                          // 상단: 교사 주간 시간표 / 교실 주간시간표 (flex: 5)
+                                          Expanded(
+                                            flex: 5,
+                                            child: isHomeroom
+                                                ? Row(
+                                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                                    children: [
+                                                      Expanded(
+                                                        child: _buildTeacherTimetablePanel(scale),
+                                                      ),
+                                                      SizedBox(width: 12 * scale),
+                                                      Expanded(
+                                                        child: _buildClassroomTimetablePanel(scale),
+                                                      ),
+                                                    ],
+                                                  )
+                                                : _buildTeacherTimetablePanel(scale),
+                                          ),
+                                          SizedBox(height: 12 * scale),
+                                          // 하단: OTP (USB 삽입 시 USB) / Cloud (flex: 5)
+                                          Expanded(
+                                            flex: 5,
+                                            child: Row(
                                               crossAxisAlignment: CrossAxisAlignment.stretch,
                                               children: [
                                                 Expanded(
-                                                  flex: 5,
-                                                  child: _buildTeacherTimetablePanel(scale),
+                                                  flex: 1,
+                                                  child: _isUsbConnected
+                                                      ? _buildUsbPanel(scale)
+                                                      : _buildOtpPanel(scale),
                                                 ),
-                                                SizedBox(height: 12 * scale),
+                                                SizedBox(width: 12 * scale),
                                                 Expanded(
-                                                  flex: 5,
-                                                  child: _buildClassroomTimetablePanel(scale),
+                                                  flex: 1,
+                                                  child: _buildCloudDrivePanel(scale),
                                                 ),
                                               ],
-                                            )
-                                          : _buildTeacherTimetablePanel(scale),
-                                    ),
-                                    SizedBox(width: 12 * scale),
-                                    Expanded(
-                                      flex: 4,
-                                      child: _buildMappingPanel(scale),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                     SizedBox(width: 12 * scale),
                                     Expanded(
