@@ -123,6 +123,9 @@ class _DashboardViewState extends State<DashboardView> {
   bool _isUsbConnected = false;
   bool _showFullUsbExplorer = false;
   String _usbDriveLetter = '';
+  String _enteredOtp = '';
+  bool _isVerifyingOtp = false;
+  String? _otpErrorMsg;
   String _usbSessionId = ''; // USB 고유 세션 ID
   bool _debugUsbOverride = false;
   Timer? _usbTimer;
@@ -4234,7 +4237,7 @@ class _DashboardViewState extends State<DashboardView> {
               ),
             ),
             BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
+              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
               child: Container(color: Colors.transparent),
             ),
 
@@ -4281,11 +4284,15 @@ class _DashboardViewState extends State<DashboardView> {
                           Builder(
                             builder: (context) {
                               final isCloudActive = BstCloudService.instance.activeToken != null;
-                              final isExpandedDock = isCloudActive || _isUsbConnected;
-                              // 미연결 시 3 : 2 (45 : 30), 연결 시 1 : 1 (38 : 38)
-                              // 미연결 시 지금 과목 더 크게 (60 : 26 : 14), 연결 시 지금과목 / Cloud 패널 반반 (43 : 43 : 14)
-                              final subjectFlex = isExpandedDock ? 43 : 60;
-                              final adCloudFlex = isExpandedDock ? 43 : 26;
+                              final isClassNow = _currentPeriod != null && _currentPeriod!.isClass;
+                              final isManualSelected = _currentLesson != null && _currentLesson!.subject.isNotEmpty;
+                              final bool isLiveLesson = isManualSelected || isClassNow;
+
+                              // Flex 비율:
+                              // 1) Cloud 활성화 시: 좌측 Cloud 전면 전개(52) : 중앙 찌부 수업카드(34) : 우측 도구(14)
+                              // 2) 일반 상태: 좌측 지금 수업(60) : 중앙(광고판 또는 OTP/USB)(26) : 우측 도구(14)
+                              final subjectFlex = isCloudActive ? 52 : 60;
+                              final adCloudFlex = isCloudActive ? 34 : 26;
                               final toolsFlex = 14;
 
                               return Expanded(
@@ -4293,18 +4300,35 @@ class _DashboardViewState extends State<DashboardView> {
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
+                                    // 1. 좌측 영역 (flex: subjectFlex):
+                                    // Cloud 연결 시 -> 좌측에 Cloud 드라이브 패널 전면 전개!
+                                    // 그 외(평상시/쉬는시간/USB) -> 기존 _buildPptSubjectCard
                                     Expanded(
                                       flex: subjectFlex,
-                                      child: _isUsbConnected
-                                          ? _buildUsbCard()
-                                          : _buildPptSubjectCard(todayLessons, isExpandedDock: isExpandedDock),
+                                      child: isCloudActive
+                                          ? _buildFullCloudPanel(scale)
+                                          : _buildPptSubjectCard(todayLessons, isExpandedDock: false),
                                     ),
                                     const SizedBox(width: 14),
+
+                                    // 2. 중앙 영역 (광고판 위치, flex: adCloudFlex):
+                                    // 1) USB 꽂았을 때 -> 좁은 폭의 컴팩트 USB 파일 탐색기 (USB 차등 대우)
+                                    // 2) 수업 시간 중 & Cloud 연결됨 -> 지금 수업이 광고판 폭으로 찌부된 카드 (상단 교과서, 하단 과목명 크게)
+                                    // 3) 수업 시간 중 & Cloud 미연결 -> 광고판 대신 BST-Cloud OTP 입력란 + 키패드
+                                    // 4) 쉬는 시간 / 일과 외 -> 기존 광고판(A4 배너)
                                     Expanded(
                                       flex: adCloudFlex,
-                                      child: _buildPptAdBannerCard(),
+                                      child: _isUsbConnected
+                                          ? _buildCompactUsbExplorer(scale)
+                                          : (isLiveLesson
+                                              ? (isCloudActive
+                                                  ? _buildCompactCurrentLessonCard(_currentLesson, scale)
+                                                  : _buildCloudOtpKeypadPanel(scale))
+                                              : _buildPptAdBannerCard()),
                                     ),
                                     const SizedBox(width: 14),
+
+                                    // 3. 우측 도구 패널 (flex: toolsFlex)
                                     Expanded(
                                       flex: toolsFlex,
                                       child: _buildBottomPpt4Tools(),
@@ -5314,6 +5338,454 @@ class _DashboardViewState extends State<DashboardView> {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- [신규] OTP 입력란 및 3x4 터치 키패드 (광고판과 동일한 크기) ---
+  Widget _buildCloudOtpKeypadPanel(double scale) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF081714),
+        borderRadius: BorderRadius.circular(24 * scale),
+        border: Border.all(
+          color: const Color(0xFF00F5D4).withOpacity(0.35),
+          width: 1.5,
+        ),
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF0D231E),
+            const Color(0xFF071411),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00F5D4).withOpacity(0.12),
+            blurRadius: 16 * scale,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      padding: EdgeInsets.all(12 * scale),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 상단 안내
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(6 * scale),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00F5D4).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8 * scale),
+                ),
+                child: Icon(Icons.cloud_circle_rounded, color: const Color(0xFF00F5D4), size: 16 * scale),
+              ),
+              SizedBox(width: 8 * scale),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'BST Cloud 빠른 접속',
+                      style: GoogleFonts.notoSansKr(
+                        color: Colors.white,
+                        fontSize: 13 * scale,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      '교사용 앱 OTP 6자리 입력',
+                      style: GoogleFonts.notoSansKr(
+                        color: Colors.white54,
+                        fontSize: 10 * scale,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 10 * scale),
+
+          // 6자리 PIN 디스플레이 인디케이터
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 8 * scale),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(12 * scale),
+              border: Border.all(
+                color: _otpErrorMsg != null ? Colors.redAccent : const Color(0xFF00F5D4).withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(6, (idx) {
+                final hasChar = idx < _enteredOtp.length;
+                final char = hasChar ? _enteredOtp[idx] : '';
+                return Container(
+                  width: 28 * scale,
+                  height: 32 * scale,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: hasChar ? const Color(0xFF00F5D4).withOpacity(0.15) : Colors.white.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(6 * scale),
+                    border: Border.all(
+                      color: hasChar ? const Color(0xFF00F5D4) : Colors.white24,
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Text(
+                    char.isNotEmpty ? char : '-',
+                    style: GoogleFonts.sourceCodePro(
+                      color: hasChar ? const Color(0xFF00F5D4) : Colors.white30,
+                      fontSize: 16 * scale,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+
+          if (_otpErrorMsg != null) ...[
+            SizedBox(height: 4 * scale),
+            Text(
+              _otpErrorMsg!,
+              style: GoogleFonts.notoSansKr(color: Colors.redAccent, fontSize: 10 * scale, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+          ],
+
+          SizedBox(height: 8 * scale),
+
+          // 3x4 터치 숫자 키패드
+          Expanded(
+            child: _isVerifyingOtp
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)))
+                : Column(
+                    children: [
+                      Expanded(child: _buildKeypadRow(['1', '2', '3'], scale)),
+                      SizedBox(height: 4 * scale),
+                      Expanded(child: _buildKeypadRow(['4', '5', '6'], scale)),
+                      SizedBox(height: 4 * scale),
+                      Expanded(child: _buildKeypadRow(['7', '8', '9'], scale)),
+                      SizedBox(height: 4 * scale),
+                      Expanded(child: _buildKeypadRow(['CLEAR', '0', 'BACK'], scale)),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKeypadRow(List<String> keys, double scale) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: keys.map((key) {
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 2.5 * scale),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _handleKeypadInput(key),
+                borderRadius: BorderRadius.circular(8 * scale),
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: (key == 'CLEAR' || key == 'BACK')
+                        ? Colors.white.withOpacity(0.06)
+                        : const Color(0xFF00F5D4).withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8 * scale),
+                    border: Border.all(
+                      color: (key == 'CLEAR' || key == 'BACK')
+                          ? Colors.white12
+                          : const Color(0xFF00F5D4).withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: key == 'BACK'
+                      ? Icon(Icons.backspace_rounded, size: 14 * scale, color: Colors.white70)
+                      : Text(
+                          key == 'CLEAR' ? 'C' : key,
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 14 * scale,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  void _handleKeypadInput(String key) {
+    setState(() {
+      _otpErrorMsg = null;
+      if (key == 'CLEAR') {
+        _enteredOtp = '';
+      } else if (key == 'BACK') {
+        if (_enteredOtp.isNotEmpty) {
+          _enteredOtp = _enteredOtp.substring(0, _enteredOtp.length - 1);
+        }
+      } else if (_enteredOtp.length < 6) {
+        _enteredOtp += key;
+        if (_enteredOtp.length == 6) {
+          _submitCloudOtp(_enteredOtp);
+        }
+      }
+    });
+  }
+
+  Future<void> _submitCloudOtp(String otp) async {
+    setState(() {
+      _isVerifyingOtp = true;
+      _otpErrorMsg = null;
+    });
+    try {
+      final res = await BstCloudService.instance.verify6DigitSteganoOtp(otp);
+      if (res.success) {
+        if (mounted) {
+          setState(() {
+            _enteredOtp = '';
+            _isVerifyingOtp = false;
+            _otpErrorMsg = null;
+            _refreshCloudFiles();
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('☁️ [${res.teacherName ?? "선생님"}] Cloud 연결이 완료되었습니다!', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold)),
+              backgroundColor: const Color(0xFF2CB67D),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isVerifyingOtp = false;
+            _otpErrorMsg = res.errorMessage ?? 'OTP 불일치';
+            _enteredOtp = '';
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isVerifyingOtp = false;
+          _otpErrorMsg = '인증 실패: $e';
+          _enteredOtp = '';
+        });
+      }
+    }
+  }
+
+  // --- [신규] 지금 수업 찌부 카드 (광고판과 동일한 폭, 상단 교과서 + 하단 과목명 크게) ---
+  Widget _buildCompactCurrentLessonCard(Lesson? lesson, double scale) {
+    final subject = lesson?.subject ?? '지금 수업';
+    final teacher = lesson?.teacher ?? '';
+    final classroom = lesson?.classroom ?? '';
+    final periodStr = lesson != null ? '${lesson.classTime}교시' : '수업 중';
+    final imgPath = lesson != null ? _settings.getTextbookPath(lesson.subject) : null;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF081714),
+        borderRadius: BorderRadius.circular(24 * scale),
+        border: Border.all(
+          color: const Color(0xFF00F5D4).withOpacity(0.3),
+          width: 1.5,
+        ),
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF0E2721),
+            const Color(0xFF071411),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      padding: EdgeInsets.all(12 * scale),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 상단 바: 교시 배지 + Cloud 해제 버튼
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 3 * scale),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00F5D4).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(6 * scale),
+                  border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.5)),
+                ),
+                child: Text(
+                  periodStr,
+                  style: GoogleFonts.notoSansKr(
+                    color: const Color(0xFF00F5D4),
+                    fontSize: 11 * scale,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.close_rounded, color: Colors.white54, size: 16 * scale),
+                tooltip: 'Cloud 패널 닫기',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () {
+                  setState(() {
+                    BstCloudService.instance.activeToken = null;
+                  });
+                },
+              ),
+            ],
+          ),
+          SizedBox(height: 6 * scale),
+
+          // 상단: 교과서 표지 썸네일
+          Expanded(
+            flex: 6,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12 * scale),
+              child: Container(
+                color: Colors.black38,
+                alignment: Alignment.center,
+                child: _buildAdaptiveTextbookImage(
+                  imgPath,
+                  fit: BoxFit.contain,
+                  subjectTitle: subject,
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: 8 * scale),
+
+          // 하단: 대형 과목명 + 교사/교실 정보
+          Expanded(
+            flex: 4,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    subject,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 32 * scale,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                      letterSpacing: -0.5,
+                      shadows: [
+                        Shadow(color: Colors.black.withOpacity(0.8), blurRadius: 8),
+                      ],
+                    ),
+                  ),
+                ),
+                if (classroom.isNotEmpty || teacher.isNotEmpty) ...[
+                  SizedBox(height: 4 * scale),
+                  Text(
+                    classroom.isNotEmpty ? classroom : teacher,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 12 * scale,
+                      color: Colors.white60,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- [신규] 좌측 광활한 전면 Cloud 패널 (OTP 인증 완료 시 전개) ---
+  Widget _buildFullCloudPanel(double scale) {
+    return _buildInlineCloudDockPanel(scale);
+  }
+
+  // --- [신규] 좁은 폭의 컴팩트 USB 파일 탐색기 (USB 차등 대우) ---
+  Widget _buildCompactUsbExplorer(double scale) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF081714),
+        borderRadius: BorderRadius.circular(24 * scale),
+        border: Border.all(
+          color: const Color(0xFF2CB67D).withOpacity(0.4),
+          width: 1.5,
+        ),
+      ),
+      padding: EdgeInsets.all(12 * scale),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.usb_rounded, color: const Color(0xFF2CB67D), size: 18 * scale),
+              SizedBox(width: 8 * scale),
+              Expanded(
+                child: Text(
+                  'USB 드라이브 ($_usbDriveLetter)',
+                  style: GoogleFonts.notoSansKr(
+                    color: Colors.white,
+                    fontSize: 13 * scale,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 10 * scale),
+          Expanded(
+            child: _usbSortedFiles.isEmpty
+                ? Center(
+                    child: Text('수업 파일이 없습니다', style: TextStyle(color: Colors.white38, fontSize: 12 * scale)),
+                  )
+                : ListView.separated(
+                    itemCount: _usbSortedFiles.length,
+                    separatorBuilder: (_, __) => SizedBox(height: 6 * scale),
+                    itemBuilder: (ctx, idx) {
+                      final path = _usbSortedFiles[idx];
+                      final name = p.basename(path);
+                      return InkWell(
+                        onTap: () => _openUsbFileWithSession(_usbSessionId, path, 0),
+                        borderRadius: BorderRadius.circular(8 * scale),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 7 * scale),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(8 * scale),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.insert_drive_file_rounded, color: const Color(0xFF2CB67D), size: 16 * scale),
+                              SizedBox(width: 8 * scale),
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  style: TextStyle(color: Colors.white, fontSize: 11.5 * scale),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -7640,10 +8112,13 @@ class _DashboardViewState extends State<DashboardView> {
   /// 광고 배너 데이터 로드 (Firestore control_configs announcements)
   Future<void> _loadAdBanners() async {
     try {
-      final schoolId = _settings.schoolId.isNotEmpty
+      final rawSchoolId = _settings.schoolId.isNotEmpty
           ? _settings.schoolId
           : (_settings.connectionName.isNotEmpty ? _settings.connectionName : '');
-      if (schoolId.isEmpty) return;
+      String schoolId = rawSchoolId.toLowerCase().trim();
+      if (schoolId.isEmpty || schoolId == '44134' || schoolId.contains('양동')) {
+        schoolId = 'ydm';
+      }
 
       final url = '${AppConfig.firestoreBase}/control_configs/$schoolId?key=${AppConfig.firebaseApiKey}';
       final response = await http.get(Uri.parse(url));
@@ -7664,7 +8139,7 @@ class _DashboardViewState extends State<DashboardView> {
             final startDate = f['startDate']?['stringValue'] ?? '';
             final endDate = f['endDate']?['stringValue'] ?? '';
             if (startDate.isNotEmpty && startDate.compareTo(todayStr) > 0) return false;
-            if (endDate.isNotEmpty && endDate.compareTo(todayStr) < 0) return false;
+            if (endDate.isNotEmpty && endDate.compareTo(todayStr) < 0 && endDate != todayStr) return false;
             return true;
           }).map((v) {
             final f = v['mapValue']['fields'] as Map<String, dynamic>;
@@ -7673,6 +8148,13 @@ class _DashboardViewState extends State<DashboardView> {
               'imageUrl': f['imageUrl']?['stringValue'] ?? '',
             };
           }).toList();
+
+          if (banners.isEmpty) {
+            banners.add({
+              'title': 'Boardest 스마트 전자칠판',
+              'imageUrl': 'https://cdn.phototourl.com/free/2026-08-19-0b235269-dee4-4b46-ab19-1babd033407c.png',
+            });
+          }
 
           if (mounted) {
             setState(() {
@@ -7701,6 +8183,16 @@ class _DashboardViewState extends State<DashboardView> {
       }
     } catch (e) {
       debugPrint('[Boardest] Load ad banners error: $e');
+      if (_adBanners.isEmpty && mounted) {
+        setState(() {
+          _adBanners = [
+            {
+              'title': 'Boardest 스마트 전자칠판',
+              'imageUrl': 'https://cdn.phototourl.com/free/2026-08-19-0b235269-dee4-4b46-ab19-1babd033407c.png',
+            }
+          ];
+        });
+      }
     }
   }
 
@@ -8581,14 +9073,14 @@ class _DashboardViewState extends State<DashboardView> {
                   Expanded(
                     child: Column(
                       children: List.generate(7, (index) {
-                        final slot = index < slots.length ? slots[index] : null;
-                        final globalIndex = index;
+                        final slotIndex = 11 + index;
+                        final slot = slotIndex < slots.length ? slots[slotIndex] : null;
                         return Expanded(
                           child: Padding(
                             padding: EdgeInsets.all(3 * scale),
                             child: (slot == null || slot.type == LauncherSlotType.empty)
-                                ? _buildEmptySlot(scale, globalIndex)
-                                : _buildGridSlot(slot, scale, globalIndex),
+                                ? _buildEmptySlot(scale, slotIndex)
+                                : _buildGridSlot(slot, scale, slotIndex),
                           ),
                         );
                       }),
@@ -9826,6 +10318,9 @@ class _DashboardViewState extends State<DashboardView> {
                                             List<LauncherSlot>.from(
                                               _settings.launcherSlots,
                                             );
+                                        while (updatedSlots.length <= slotIndex) {
+                                          updatedSlots.add(LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''));
+                                        }
                                         updatedSlots[slotIndex] = LauncherSlot(
                                           type: LauncherSlotType.systemApp,
                                           name: app.name,
@@ -9961,6 +10456,9 @@ class _DashboardViewState extends State<DashboardView> {
                             final fileName = p.basenameWithoutExtension(filePath);
                             
                             final updatedSlots = List<LauncherSlot>.from(_settings.launcherSlots);
+                            while (updatedSlots.length <= slotIndex) {
+                              updatedSlots.add(LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''));
+                            }
                             updatedSlots[slotIndex] = LauncherSlot(
                               type: LauncherSlotType.systemApp,
                               name: fileName,
@@ -10058,6 +10556,9 @@ class _DashboardViewState extends State<DashboardView> {
 
     if (confirmed == true) {
       final updatedSlots = List<LauncherSlot>.from(_settings.launcherSlots);
+      while (updatedSlots.length <= slotIndex) {
+        updatedSlots.add(LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''));
+      }
       updatedSlots[slotIndex] = LauncherSlot(
         type: LauncherSlotType.empty,
         name: '',

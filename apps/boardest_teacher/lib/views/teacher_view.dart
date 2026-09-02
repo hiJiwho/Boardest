@@ -1431,7 +1431,7 @@ class _TeacherViewState extends State<TeacherView> {
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     Expanded(
-                                      flex: 9,
+                                      flex: 5,
                                       child: isHomeroom
                                           ? Column(
                                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1448,6 +1448,11 @@ class _TeacherViewState extends State<TeacherView> {
                                               ],
                                             )
                                           : _buildTeacherTimetablePanel(scale),
+                                    ),
+                                    SizedBox(width: 12 * scale),
+                                    Expanded(
+                                      flex: 4,
+                                      child: _buildMappingPanel(scale),
                                     ),
                                     SizedBox(width: 12 * scale),
                                     Expanded(
@@ -1863,7 +1868,7 @@ class _TeacherViewState extends State<TeacherView> {
         final f = item['file'] as CloudDriveFile;
         return {
           'id': f.id,
-          'name': ((f as dynamic)["name"]?.toString() ?? "자료"),
+          'name': f.name,
           'mimeType': f.mimeType,
           'size': f.size,
           'webViewLink': f.webViewLink,
@@ -1896,7 +1901,7 @@ class _TeacherViewState extends State<TeacherView> {
         int successCount = 0;
         for (final f in result.files) {
           if (f.bytes != null) {
-            final ok = await CloudDriveService.instance.uploadBytesToDrive(f.bytes!, ((f as dynamic)["name"]?.toString() ?? "자료"));
+            final ok = await CloudDriveService.instance.uploadBytesToDrive(f.bytes!, f.name);
             if (ok) successCount++;
           } else if (f.path != null) {
             final ok = await CloudDriveService.instance.uploadFileToDrive(File(f.path!));
@@ -3428,7 +3433,7 @@ class _TeacherViewState extends State<TeacherView> {
     final isLoggedIn = CloudDriveService.instance.isLoggedIn;
     final userEmail = CloudDriveService.instance.userEmail ?? '';
     final userName = CloudDriveService.instance.userName ?? '선생님';
-    final otp = CloudDriveService.instance.currentOtp;
+    final otp = CloudDriveService.instance.currentStegano6DigitOtp;
     final remaining = TotpService.getRemainingSeconds();
     final autoPt = CloudDriveService.instance.autoLessonFlowEnabled;
 
@@ -3738,7 +3743,7 @@ class _TeacherViewState extends State<TeacherView> {
                                       return const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF2EC4B6)));
                                     }
                                     final files = (snap.data ?? []).where((f) {
-                                      final n = ((f as dynamic)["name"]?.toString() ?? "자료").toLowerCase();
+                                      final n = f.name.toLowerCase();
                                       return !n.endsWith('.annot.json') && !n.contains('_annot') && !n.endsWith('.sync.json');
                                     }).toList();
 
@@ -3776,8 +3781,8 @@ class _TeacherViewState extends State<TeacherView> {
                                       itemBuilder: (ctx, idx) {
                                         final f = files[idx];
                                         final isFolder = f.mimeType == 'application/vnd.google-apps.folder';
-                                        final isPdf = ((f as dynamic)["name"]?.toString() ?? "자료").toLowerCase().endsWith('.pdf');
-                                        final isPpt = ((f as dynamic)["name"]?.toString() ?? "자료").toLowerCase().endsWith('.ppt') || ((f as dynamic)["name"]?.toString() ?? "자료").toLowerCase().endsWith('.pptx');
+                                        final isPdf = f.name.toLowerCase().endsWith('.pdf');
+                                        final isPpt = f.name.toLowerCase().endsWith('.ppt') || f.name.toLowerCase().endsWith('.pptx');
 
                                         return InkWell(
                                           onTap: () async {
@@ -3795,7 +3800,7 @@ class _TeacherViewState extends State<TeacherView> {
                                             // 일반 파일 직접 열기
                                             ScaffoldMessenger.of(context).showSnackBar(
                                               SnackBar(
-                                                content: Text('${((f as dynamic)["name"]?.toString() ?? "자료")} 여는 중...', style: GoogleFonts.notoSansKr()),
+                                                content: Text('${f.name} 여는 중...', style: GoogleFonts.notoSansKr()),
                                                 duration: const Duration(seconds: 1),
                                                 backgroundColor: const Color(0xFF1E293B),
                                               ),
@@ -3831,7 +3836,7 @@ class _TeacherViewState extends State<TeacherView> {
                                                 SizedBox(width: 6 * s),
                                                 Expanded(
                                                   child: Text(
-                                                    ((f as dynamic)["name"]?.toString() ?? "자료"),
+                                                    f.name,
                                                     style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 10.5 * s, fontWeight: FontWeight.w500),
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
@@ -3859,7 +3864,16 @@ class _TeacherViewState extends State<TeacherView> {
   }
 
   // ── USB 연결 시 반 매핑 패널 (flex 2) ─────────────────
+  // ── 중앙: USB 연결 시 USB 탐색기 / 평상시 및 Web: OTP & Cloud 패널 ───────
   Widget _buildMappingPanel(double s) {
+    if (_isUsbConnected && !kIsWeb) {
+      return _buildUsbPanel(s);
+    }
+    return _buildCloudDrivePanel(s);
+  }
+
+  // ── (레거시) USB 연결 시 반 매핑 패널 ─────────────────
+  Widget _buildLegacyMappingPanel(double s) {
     if (kIsWeb) {
       return _buildCloudDrivePanel(s);
     }
@@ -7248,13 +7262,13 @@ class _BstCloudDialogState extends State<_BstCloudDialog> {
                         Color iconColor = isFolder ? const Color(0xFFFF8E3C) : const Color(0xFF2EC4B6);
 
                         if (!isFolder) {
-                          if (((f as dynamic)["name"]?.toString() ?? "자료").endsWith('.pdf')) {
+                          if (f.name.endsWith('.pdf')) {
                             iconData = Icons.picture_as_pdf_rounded;
                             iconColor = const Color(0xFFFF8906);
-                          } else if (((f as dynamic)["name"]?.toString() ?? "자료").endsWith('.bb')) {
+                          } else if (f.name.endsWith('.bb')) {
                             iconData = Icons.auto_stories_rounded;
                             iconColor = const Color(0xFF7F5AF0);
-                          } else if (((f as dynamic)["name"]?.toString() ?? "자료").endsWith('.pptx') || ((f as dynamic)["name"]?.toString() ?? "자료").endsWith('.ppt')) {
+                          } else if (f.name.endsWith('.pptx') || f.name.endsWith('.ppt')) {
                             iconData = Icons.slideshow_rounded;
                             iconColor = const Color(0xFFEF4565);
                           }
@@ -7268,7 +7282,7 @@ class _BstCloudDialogState extends State<_BstCloudDialog> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           child: ListTile(
                             leading: Icon(iconData, color: iconColor),
-                            title: Text(((f as dynamic)["name"]?.toString() ?? "자료"),
+                            title: Text(f.name,
                                 style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12 * s)),
                             subtitle: Row(
                               children: [
@@ -7295,14 +7309,14 @@ class _BstCloudDialogState extends State<_BstCloudDialog> {
                                         setState(() => _classMappings[f.id] = val);
                                         BstCloudService.instance.saveSyncState('folder_mapping', {
                                           'fileId': f.id,
-                                          'fileName': ((f as dynamic)["name"]?.toString() ?? "자료"),
+                                          'fileName': f.name,
                                           'mappedClass': val,
                                           'isFolder': isFolder,
                                           'mappedAt': DateTime.now().toIso8601String(),
                                         });
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           SnackBar(
-                                            content: Text('🔗 [${((f as dynamic)["name"]?.toString() ?? "자료")}] ▶ [$val] 매핑 설정이 적용되었습니다!'),
+                                            content: Text('🔗 [${f.name}] ▶ [$val] 매핑 설정이 적용되었습니다!'),
                                             backgroundColor: const Color(0xFF2EC4B6),
                                           ),
                                         );
@@ -7325,7 +7339,7 @@ class _BstCloudDialogState extends State<_BstCloudDialog> {
                                     onPressed: () async {
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(
-                                          content: Text('Drive API에서 \'${((f as dynamic)["name"]?.toString() ?? "자료")}\' 다운로드 중...'),
+                                          content: Text('Drive API에서 \'${f.name}\' 다운로드 중...'),
                                           backgroundColor: const Color(0xFF006a60),
                                         ),
                                       );
@@ -7507,7 +7521,7 @@ class _AuthManagementDialogState extends State<_AuthManagementDialog> {
   Widget build(BuildContext context) {
     final s = widget.scaleFactor;
     final cloud = CloudDriveService.instance;
-    final otp = cloud.currentOtp;
+    final otp = cloud.currentStegano6DigitOtp;
     final remaining = cloud.remainingSeconds;
     final formattedOtp = otp.length == 6 ? '${otp.substring(0, 3)} ${otp.substring(3)}' : otp;
 

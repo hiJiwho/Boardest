@@ -99,12 +99,12 @@ $boardestAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.8.1"
+    Version="2.9.8.2"
     Uri="$repoReleaseBase/boardest.appinstaller">
     <MainPackage
         Name="jiwho.boardest.bst"
         Publisher="CN=jiwho"
-        Version="2.9.8.1"
+        Version="2.9.8.2"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/boardest.appx" />
     <UpdateSettings>
@@ -122,12 +122,12 @@ $teacherAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.8.1"
+    Version="2.9.8.2"
     Uri="$repoReleaseBase/bst-teacher.appinstaller">
     <MainPackage
         Name="jiwho.boardest.teacher"
         Publisher="CN=jiwho"
-        Version="2.9.8.1"
+        Version="2.9.8.2"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/bst-teacher.appx" />
     <UpdateSettings>

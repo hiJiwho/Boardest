@@ -9,7 +9,7 @@ import 'package:archive/archive.dart';
 import 'package:open_filex/open_filex.dart';
 
 class UpdateService {
-  static const String currentVersion = '2.9.8.1';
+  static const String currentVersion = '2.9.8.2';
   static const String repoOwner = 'hiJiwho';
   static const String repoName = 'Boardest';
 
