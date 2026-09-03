@@ -4501,25 +4501,25 @@ class _DashboardViewState extends State<DashboardView> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // 좌측/중앙 영역 (시계 + 1열 상단 3행 / 지금수업 + 와이드 광고판)
+                          // 좌측/중앙 영역 (시계 + 1열 상단 3행 / 지금수업 + 광고판)
                           Expanded(
-                            flex: kIsWeb ? 86 : 74,
+                            flex: kIsWeb ? 88 : 86,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                // 상단 행 (flex: 43): 시계 카드 (flex: 74) + 1열 상단 3행 도구 (flex: 26)
+                                // 상단 행 (flex: 43): 시계 카드 (flex: 75) + 1열 상단 3행 도구 (flex: 25) => 3:1 비율!
                                 Expanded(
                                   flex: 43,
                                   child: Row(
                                     crossAxisAlignment: CrossAxisAlignment.stretch,
                                     children: [
                                       Expanded(
-                                        flex: 74,
+                                        flex: 75,
                                         child: _buildPptClockCard(dateString),
                                       ),
                                       SizedBox(width: 12 * scale),
                                       Expanded(
-                                        flex: 26,
+                                        flex: 25,
                                         child: _buildColumn1Top3Launcher(scale),
                                       ),
                                     ],
@@ -4527,7 +4527,7 @@ class _DashboardViewState extends State<DashboardView> {
                                 ),
                                 SizedBox(height: 14 * scale),
 
-                                // 하단 행 (flex: 57): 지금 수업 카드 / Cloud (flex: 46) + 와이드 광고판/컨텍스트 카드 (flex: 54)
+                                // 하단 행 (flex: 57): 지금 수업 카드 / Cloud (flex: 75) + 광고판/컨텍스트 카드 (flex: 25) => 3:1 비율!
                                 Builder(
                                   builder: (context) {
                                     final isCloudActive = BstCloudService.instance.activeToken != null;
@@ -4537,15 +4537,15 @@ class _DashboardViewState extends State<DashboardView> {
                                         crossAxisAlignment: CrossAxisAlignment.stretch,
                                         children: [
                                           Expanded(
-                                            flex: 46,
+                                            flex: 75,
                                             child: isCloudActive
                                                 ? _buildFullCloudPanel(scale)
                                                 : _buildPptSubjectCard(todayLessons, isExpandedDock: false),
                                           ),
                                           SizedBox(width: 12 * scale),
-                                          // 1열 4~7행 높이에서 좌측 수업 영역으로 54 flex만큼 확장 차지하는 와이드 광고판!
+                                          // 광고판 폭을 25 flex로 줄여서 1열 3행 바로 아래에 깔끔하게 정렬! (3:1 비율 완성)
                                           Expanded(
-                                            flex: 54,
+                                            flex: 25,
                                             child: _buildAdBannerOrContextCard(scale),
                                           ),
                                         ],
@@ -4558,9 +4558,9 @@ class _DashboardViewState extends State<DashboardView> {
                           ),
                           SizedBox(width: 14 * scale),
 
-                          // 우측 영역: 런처 패널 (2열 7행 도구 + [Desktop] 3열 7행 시스템 앱)
+                          // 우측 영역: 런처 패널 (exe에서도 폭을 미친 듯 줄여서 web의 2열 폭과 같게 flex 14로 압축!)
                           Expanded(
-                            flex: kIsWeb ? 14 : 26,
+                            flex: kIsWeb ? 12 : 14,
                             child: _buildRightSideLauncherPanel(scale),
                           ),
                         ],
@@ -5515,44 +5515,51 @@ class _DashboardViewState extends State<DashboardView> {
               ),
             ),
           ),
-          SizedBox(width: 20 * scale),
-          // Right: Real-time status badge & Giant Subject Name
+          SizedBox(width: 24 * scale),
+          // Right: Real-time status badge & Giant Subject Name (3:1 와이드 공간)
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 4 * scale),
+                  padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 5 * scale),
                   decoration: BoxDecoration(
                     color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8 * scale),
+                    borderRadius: BorderRadius.circular(10 * scale),
                     border: Border.all(
-                      color: const Color(0xFF00F5D4).withValues(alpha: 0.4),
-                      width: 1,
+                      color: const Color(0xFF00F5D4).withValues(alpha: 0.45),
+                      width: 1.2,
                     ),
                   ),
                   child: Text(
                     statusBadge,
                     style: GoogleFonts.notoSansKr(
-                      color: const Color(0xFF00F5D4),
-                      fontSize: 13 * scale,
+                      color: const Color(0xFF74f8e5),
+                      fontSize: 13.5 * scale,
                       fontWeight: FontWeight.bold,
+                      letterSpacing: -0.3,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                SizedBox(height: 8 * scale),
+                SizedBox(height: 10 * scale),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
                     subjectName,
                     style: GoogleFonts.notoSansKr(
-                      fontSize: 76 * scale,
+                      fontSize: 68 * scale,
                       fontWeight: FontWeight.w900,
                       color: Colors.white,
-                      letterSpacing: -1,
+                      letterSpacing: -1.5,
                       shadows: [
+                        Shadow(
+                          color: const Color(0xFF00F5D4).withOpacity(0.3),
+                          blurRadius: 16 * scale,
+                        ),
                         Shadow(
                           color: Colors.black.withValues(alpha: 0.9),
                           blurRadius: 8,

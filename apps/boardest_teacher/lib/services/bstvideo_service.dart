@@ -153,7 +153,7 @@ class BstVideoService {
     }
 
     final encoder = ZipEncoder();
-    final zipData = encoder.encode(newArchive, level: Deflate.NO_COMPRESSION);
+    final zipData = encoder.encode(newArchive, level: 0);
     if (zipData != null) {
       await file.writeAsBytes(zipData, flush: true);
     }
@@ -197,7 +197,7 @@ class BstVideoService {
     archive.addFile(ArchiveFile('source/source_info.json', sourceInfoBytes.length, sourceInfoBytes));
 
     final encoder = ZipEncoder();
-    final zipData = encoder.encode(archive, level: Deflate.NO_COMPRESSION);
+    final zipData = encoder.encode(archive, level: 0);
     
     if (zipData != null) {
       final saveFile = File(outputPath);

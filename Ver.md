@@ -1,7 +1,34 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v2.9.8.6** (App: v2.9.8.6 / Web: v2.9.8.6)  
+> **현재 시스템 버전**: **v2.9.8.7** (App: v2.9.8.7 / Web: v2.9.8.7)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 B 2.9.8.7 (2026-09-03)
+
+### 1. Boardest 메인 대시보드 기하학적 레이아웃 & 3:1 황금 비율 완성
+- **우측 런처 패널 초슬림화 (`flex: 14`)**:
+  - Windows Desktop(EXE) 환경에서도 우측 런처 폭을 대폭 축소하여 Web의 2열 폭(`flex: 14`)과 동일하게 압축.
+  - 2열(수업 도구 7행)과 3열(시스템 앱 7행)을 컴팩트한 M3 그리드 타일로 재정돈하여 공간 낭비 제거.
+- **지금 수업 카드 vs 광고판 3:1 비율 (`flex: 75 : 25`)**:
+  - 하단 행의 지금 수업 카드가 `flex: 75`, 광고판이 `flex: 25`를 차지하여 **정확한 3:1 비율** 달성.
+  - 기존에 좁아터져 세로 1글자 단위로 깨지던 수업 상태 뱃지(`[방과 후 (다음 수업 준비)]`)와 교과서 표지, 대형 과목명이 시원한 가로 와이드 공간에 여유롭게 렌더링.
+  - 상단 행(시계 75 : 1열 상단 3행 25 = 3:1)과 하단 행이 완벽한 수직 정렬선으로 일치.
+
+### 2. Boardest Teacher Cloud 파일 통합 디스패처 탑재
+- **Boardest 전용 포맷 무조건 Boardest 뷰어로 실행**:
+  - PDF 문서 (`.pdf`) $\rightarrow$ `PdfBoardView` 판서 뷰어
+  - 판서 파일 (`.pen`, `.bstpen`, `.iwb`) $\rightarrow$ `BoardestPenView`
+  - 교과서 (`.tbp`, `.bsttbp`) $\rightarrow$ `TbpViewerRoute`
+  - Canva 디자인 (`.canva`, `.bstcanva`, `.canvaboard`) $\rightarrow$ `CanvaBoardView`
+  - 파워포인트 (`.pptx`, `.ppt`) $\rightarrow$ `PptOverlayView` (웹: `WebHwpPptView`)
+  - 한글 문서 (`.hwpx`, `.hwp`) $\rightarrow$ `HwpOverlayView` (웹: `WebHwpPptView`)
+  - 동영상 (`.mp4`, `.mkv`, `.avi`, `.mov`) $\rightarrow$ `VideoBoardView`
+  - 기타 미지원 파일 $\rightarrow$ OS 기본 연결 프로그램으로 안전 실행
+- **화이트보드 및 PDF 보드 실행 복원**:
+  - 빈 함수 스텁이었던 `_openWhiteboard()` 및 `_openPdfBoard()` 정상 연동.
+- **클라우드 드라이브 파일 탭 시 즉시 다운로드 후 해당 포맷 뷰어로 원스톱 오픈**.
 
 ---
 

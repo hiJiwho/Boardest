@@ -28,7 +28,7 @@ class UpdateService {
   static final UpdateService instance = UpdateService._internal();
   UpdateService._internal();
 
-  static const String currentVersion = '2.9.8.6';
+  static const String currentVersion = '2.9.8.7';
   static const String githubRepoUrl = 'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String verificationServerUrl = 'https://boardest-update-work.firebaseapp.com';
 
@@ -74,7 +74,7 @@ class UpdateService {
     try {
       final token = await getGithubToken();
       final headers = <String, String>{
-        'User-Agent': 'Boardest-Teacher-Client/2.9.8.6',
+        'User-Agent': 'Boardest-Teacher-Client/2.9.8.7',
         'Accept': 'application/vnd.github.v3+json',
         if (token != null && token.isNotEmpty) 'Authorization': 'token $token',
       };

@@ -47,6 +47,8 @@ import '../services/tray_service.dart';
 import '../services/update_service.dart';
 import 'weather_view.dart';
 import 'saved_ink_view.dart';
+import 'video_board_view.dart';
+import 'web_hwp_ppt_view.dart';
 import 'school_calendar_view.dart';
 import 'website_board_view.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1390,11 +1392,160 @@ class _TeacherViewState extends State<TeacherView> {
   void _adjustMiniTimer(int seconds) {}
   void _enterMiniMode() {}
 
-  void _openFile(String path) {}
+  void _openFile(String path) {
+    if (path.isEmpty) return;
+    final lower = path.toLowerCase();
+
+    // 1. PDF 문서: Boardest PDF 판서 뷰어로 열기
+    if (lower.endsWith('.pdf')) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PdfBoardView(
+            initialFilePath: path,
+            scaleFactor: _settings.scaleFactor,
+          ),
+        ),
+      );
+      return;
+    }
+
+    // 2. 판서 파일 (.pen, .bstpen, .iwb): Boardest 전자칠판 판서 뷰어로 열기
+    if (lower.endsWith('.pen') || lower.endsWith('.bstpen') || lower.endsWith('.iwb')) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => BoardestPenView(
+            filePath: path,
+            scaleFactor: _settings.scaleFactor,
+          ),
+        ),
+      );
+      return;
+    }
+
+    // 3. 교과서 (.tbp, .bsttbp): Boardest TBP 뷰어로 열기
+    if (lower.endsWith('.tbp') || lower.endsWith('.bsttbp')) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => TbpViewerRoute(
+            tbpFilePath: path,
+            scaleFactor: _settings.scaleFactor,
+          ),
+        ),
+      );
+      return;
+    }
+
+    // 4. Canva 디자인 (.canva, .bstcanva, .canva.bst, .canvaboard): Boardest Canva 뷰어로 열기
+    if (lower.endsWith('.canva') || lower.endsWith('.bstcanva') || lower.endsWith('.canva.bst') || lower.endsWith('.canvaboard')) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CanvaBoardView(
+            filePath: path,
+            scaleFactor: _settings.scaleFactor,
+          ),
+        ),
+      );
+      return;
+    }
+
+    // 5. 파워포인트 (.pptx, .ppt): Boardest PPT 오버레이 뷰어
+    if (lower.endsWith('.pptx') || lower.endsWith('.ppt')) {
+      if (!kIsWeb) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => PptOverlayView(
+              initialFilePath: path,
+              scaleFactor: _settings.scaleFactor,
+            ),
+          ),
+        );
+      } else {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => WebHwpPptView(
+              filePathOrUrl: path,
+              title: p.basename(path),
+              scaleFactor: _settings.scaleFactor,
+              isPpt: true,
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    // 6. 한글 문서 (.hwpx, .hwp): Boardest HWP 오버레이 뷰어
+    if (lower.endsWith('.hwpx') || lower.endsWith('.hwp')) {
+      if (!kIsWeb) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => HwpOverlayView(
+              initialFilePath: path,
+              scaleFactor: _settings.scaleFactor,
+            ),
+          ),
+        );
+      } else {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => WebHwpPptView(
+              filePathOrUrl: path,
+              title: p.basename(path),
+              scaleFactor: _settings.scaleFactor,
+              isPpt: false,
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    // 7. 동영상 파일 (.mp4, .mkv, .avi, .mov): Boardest 비디오 뷰어
+    if (lower.endsWith('.mp4') || lower.endsWith('.mkv') || lower.endsWith('.avi') || lower.endsWith('.mov')) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => VideoBoardView(
+            initialVidPath: path,
+            scaleFactor: _settings.scaleFactor,
+          ),
+        ),
+      );
+      return;
+    }
+
+    // 8. 미지원 형식: 기본 시스템 앱으로 연결하여 열기
+    try {
+      if (!kIsWeb && Platform.isWindows) {
+        Process.run('explorer.exe', [path]);
+      } else {
+        launchUrl(Uri.file(path));
+      }
+    } catch (e) {
+      debugPrint('[TeacherView] open unsupported file error: $e');
+    }
+  }
   void _openUsbFormat() {}
   void _openRandomPicker() {}
-  void _openWhiteboard() {}
-  void _openPdfBoard() {}
+  void _openWhiteboard() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BoardestPenView(
+          filePath: '',
+          scaleFactor: _settings.scaleFactor,
+        ),
+      ),
+    );
+  }
+  void _openPdfBoard() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PdfBoardView(
+          initialFilePath: '',
+          scaleFactor: _settings.scaleFactor,
+        ),
+      ),
+    );
+  }
 
   List<dynamic> _getCombinedTodayLessons() { return []; }
   Widget _buildMiniWidget(double s) { return Container(); }
@@ -2199,6 +2350,33 @@ class _TeacherViewState extends State<TeacherView> {
     if (fileId.isEmpty) return;
 
     try {
+      if (kIsWeb) {
+        final lower = name.toLowerCase();
+        if (lower.endsWith('.pptx') || lower.endsWith('.ppt') || lower.endsWith('.pdf')) {
+          final previewUrl = 'https://docs.google.com/viewer?srcid=$fileId&pid=explorer&efh=false&a=v&chrome=false&embedded=true';
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => WebHwpPptView(
+                filePathOrUrl: previewUrl,
+                title: name,
+                scaleFactor: _settings.scaleFactor,
+                isPpt: lower.contains('ppt'),
+              ),
+            ),
+          );
+          return;
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$name 다운로드 및 Boardest로 여는 중...'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
       final driveFile = CloudDriveFile(
         id: fileId,
         name: name,
@@ -2209,9 +2387,7 @@ class _TeacherViewState extends State<TeacherView> {
 
       final localF = await CloudDriveService.instance.downloadDriveFileToTemp(driveFile);
       if (localF != null && localF.existsSync()) {
-        if (Platform.isWindows) {
-          await Process.run('explorer.exe', [localF.path]);
-        }
+        _openFile(localF.path);
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('파일 열기 실패: $e')));
