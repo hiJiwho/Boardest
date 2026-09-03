@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -27,9 +28,12 @@ class UpdateService {
   static final UpdateService instance = UpdateService._internal();
   UpdateService._internal();
 
-  static const String currentVersion = '2.9.8.3';
+  static const String currentVersion = '2.9.8.5';
   static const String githubRepoUrl = 'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String verificationServerUrl = 'https://boardest-update-work.firebaseapp.com';
+
+  // 중복 업데이트 체크 방지 플래그 (앱 실행 중 1회만 실행)
+  static bool _isChecking = false;
 
   static const String _githubTokenKey = 'bst_github_token';
   static const String _githubUserKey = 'bst_github_username';
@@ -65,9 +69,12 @@ class UpdateService {
   /// Check for latest update from GitHub Releases (with optional PAT auth)
   Future<UpdateInfo?> checkForUpdate() async {
     if (kIsWeb) return null; // 웹 버전은 Firebase Hosting으로 상시 최신 상태
+    if (_isChecking) return null; // 중복 실행 방지
+    _isChecking = true;
     try {
       final token = await getGithubToken();
       final headers = <String, String>{
+        'User-Agent': 'Boardest-Teacher-Client/2.9.8.5',
         'Accept': 'application/vnd.github.v3+json',
         if (token != null && token.isNotEmpty) 'Authorization': 'token $token',
       };
@@ -97,7 +104,7 @@ class UpdateService {
       if (Platform.isWindows) {
         for (var asset in assets) {
           String name = asset['name'].toString().toLowerCase();
-          if (name.endsWith('.exe') && (name.contains('setup') || name.contains('teacher'))) {
+          if (name.endsWith('.exe') && (name.contains('teacher') || name.contains('bst-teacher'))) {
             downloadUrl = asset['browser_download_url'] ?? '';
             break;
           }
@@ -105,7 +112,7 @@ class UpdateService {
         if (downloadUrl.isEmpty) {
           for (var asset in assets) {
             String name = asset['name'].toString().toLowerCase();
-            if (name.endsWith('.zip')) {
+            if (name.endsWith('.zip') && (name.contains('teacher') || name.contains('bst-teacher'))) {
               downloadUrl = asset['browser_download_url'] ?? '';
               break;
             }
@@ -132,6 +139,9 @@ class UpdateService {
       );
     } catch (_) {
       return null;
+    } finally {
+      // 2분 후 재체크 허용
+      Future.delayed(const Duration(minutes: 2), () => _isChecking = false);
     }
   }
 
@@ -250,5 +260,100 @@ exit
     } catch (e) {
       debugPrint('[UpdateService] Windows update launch error: $e');
     }
+  }
+
+  /// Show standard dialog prompt for teacher app update
+  void showUpdateDialog(BuildContext context, UpdateInfo info) {
+    if (!context.mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF0F0E17),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: Color(0xFF2EC4B6), width: 1.5),
+          ),
+          title: Row(
+            children: const [
+              Icon(Icons.system_update_rounded, color: Color(0xFF2EC4B6), size: 22),
+              SizedBox(width: 10),
+              Text(
+                '교사용 앱 업데이트 알림',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'v${info.latestVersion} 버전이 출시되었습니다!',
+                style: const TextStyle(color: Color(0xFF00F5D4), fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                info.releaseNotes.isNotEmpty ? info.releaseNotes : '새로운 업데이트가 출시되었습니다.',
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                '지금 바로 업데이트하시겠습니까?\n[업데이트 시작] 을 누르면 즉시 다운로드 후 적용됩니다.',
+                style: TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('나중에', style: TextStyle(color: Colors.white30)),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                if (info.downloadUrl.isNotEmpty) {
+                  final progressNotifier = ValueNotifier<double>(0.0);
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (_) => AlertDialog(
+                      backgroundColor: const Color(0xFF0F0E17),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('업데이트 다운로드 중...', style: TextStyle(color: Colors.white)),
+                          const SizedBox(height: 16),
+                          ValueListenableBuilder<double>(
+                            valueListenable: progressNotifier,
+                            builder: (_, p, __) => LinearProgressIndicator(
+                              value: p > 0 ? p : null,
+                              color: const Color(0xFF00F5D4),
+                              backgroundColor: Colors.white12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                  final file = await downloadUpdate(info.downloadUrl, (p) => progressNotifier.value = p);
+                  if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
+                  if (file != null) {
+                    await executeWindowsUpdate(file);
+                  }
+                }
+              },
+              icon: const Icon(Icons.download_rounded, color: Colors.black, size: 18),
+              label: const Text('업데이트 시작', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2EC4B6),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

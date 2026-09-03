@@ -8,16 +8,29 @@ import 'package:path/path.dart' as p;
 import 'package:archive/archive.dart';
 import 'package:open_filex/open_filex.dart';
 
+
 class UpdateService {
-  static const String currentVersion = '2.9.8.3';
+  static const String currentVersion = '2.9.8.5';
   static const String repoOwner = 'hiJiwho';
   static const String repoName = 'Boardest';
 
+  // 중복 업데이트 체크 방지 플래그 (앱 실행 중 1회만 실행)
+  static bool _isChecking = false;
+
   /// GitHub의 최신 릴리즈를 체크하고 업데이트가 필요하면 다운로드 및 설치 프로세스를 시작합니다.
   static Future<void> checkAndUpdate(BuildContext context) async {
+    // 중복 실행 방지: 이미 체크 중이면 즉시 리턴
+    if (_isChecking) return;
+    _isChecking = true;
     try {
       final url = Uri.parse('https://api.github.com/repos/$repoOwner/$repoName/releases/latest');
-      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      final response = await http.get(
+        url,
+        headers: {
+          'User-Agent': 'Boardest-Client/2.9.8.5',
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      ).timeout(const Duration(seconds: 10));
       
       if (response.statusCode != 200) {
         debugPrint('Update check returned status code: ${response.statusCode}');
@@ -39,7 +52,7 @@ class UpdateService {
           final exeAsset = assets.firstWhere(
             (asset) {
               final n = (asset['name'] as String).toLowerCase();
-              return n.endsWith('.exe') && (n.contains('setup') || n.contains('boardest'));
+              return n.endsWith('.exe') && !n.contains('teacher') && (n.contains('setup') || n.contains('boardest'));
             },
             orElse: () => null,
           );
@@ -52,12 +65,12 @@ class UpdateService {
             final downloadUrl = exeAsset['browser_download_url'] as String;
             _showUpdateDialog(context, serverVersion, () {
               _performWindowsInstallerUpdate(context, downloadUrl);
-            }, isAuto: true);
+            });
           } else if (zipAsset != null) {
             final downloadUrl = zipAsset['browser_download_url'] as String;
             _showUpdateDialog(context, serverVersion, () {
               _performWindowsUpdate(context, downloadUrl);
-            }, isAuto: true);
+            });
           }
         } else if (Platform.isAndroid) {
           final apkAsset = assets.firstWhere(
@@ -68,12 +81,15 @@ class UpdateService {
             final downloadUrl = apkAsset['browser_download_url'] as String;
             _showUpdateDialog(context, serverVersion, () {
               _performAndroidUpdate(context, downloadUrl);
-            }, isAuto: false);
+            });
           }
         }
       }
     } catch (e) {
       debugPrint('Error during update check: $e');
+    } finally {
+      // 2분 후 재체크 허용 (앱 재실행 후 업데이트 안 됐을 경우 대비)
+      Future.delayed(const Duration(minutes: 2), () => _isChecking = false);
     }
   }
 
@@ -93,9 +109,8 @@ class UpdateService {
   static void _showUpdateDialog(
     BuildContext context,
     String newVersion,
-    VoidCallback onConfirm, {
-    required bool isAuto,
-  }) {
+    VoidCallback onConfirm,
+  ) {
     if (!context.mounted) return;
     showDialog(
       context: context,
@@ -107,31 +122,47 @@ class UpdateService {
             borderRadius: BorderRadius.circular(20),
             side: const BorderSide(color: Color(0xFF2EC4B6), width: 1.5),
           ),
-          title: const Text(
-            '시스템 업데이트 알림',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          title: Row(
+            children: [
+              const Icon(Icons.system_update_rounded, color: Color(0xFF2EC4B6), size: 22),
+              const SizedBox(width: 10),
+              const Text(
+                '업데이트 알림',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ],
           ),
-          content: Text(
-            isAuto
-                ? '새로운 버전(v$newVersion)이 발견되었습니다.\n확인을 누르면 백그라운드로 자동 업데이트를 다운로드하고 앱을 다시 시작합니다.'
-                : '새로운 버전(v$newVersion)이 발견되었습니다.\n확인을 누르면 최신 설치 파일을 다운로드합니다.',
-            style: const TextStyle(color: Colors.white70),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'v$newVersion 버전이 출시되었습니다!',
+                style: const TextStyle(color: Color(0xFF00F5D4), fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '지금 바로 업데이트하시겠습니까?\n[업데이트 시작] 을 누르면 즉시 다운로드 후 재시작합니다.',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('나중에', style: TextStyle(color: Colors.white30)),
             ),
-            ElevatedButton(
+            ElevatedButton.icon(
               onPressed: () {
                 Navigator.of(context).pop();
                 onConfirm();
               },
+              icon: const Icon(Icons.download_rounded, color: Colors.black, size: 18),
+              label: const Text('업데이트 시작', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2EC4B6),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              child: const Text('업데이트 시작', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
             ),
           ],
         );
