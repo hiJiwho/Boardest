@@ -5,12 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:archive/archive.dart';
 import 'package:open_filex/open_filex.dart';
 
 
 class UpdateService {
-  static const String currentVersion = '2.9.8.5';
+  static const String currentVersion = '2.9.8.6';
   static const String repoOwner = 'hiJiwho';
   static const String repoName = 'Boardest';
 
@@ -27,7 +26,7 @@ class UpdateService {
       final response = await http.get(
         url,
         headers: {
-          'User-Agent': 'Boardest-Client/2.9.8.5',
+          'User-Agent': 'Boardest-Client/2.9.8.6',
           'Accept': 'application/vnd.github.v3+json',
         },
       ).timeout(const Duration(seconds: 10));
@@ -47,31 +46,20 @@ class UpdateService {
         final assets = data['assets'] as List<dynamic>? ?? [];
         
         if (Platform.isWindows) {
-          // 1순위: Boardest_Setup.exe 설치 프로그램 에셋
-          // 2순위: .zip 무설치 압축 에셋
-          final exeAsset = assets.firstWhere(
-            (asset) {
-              final n = (asset['name'] as String).toLowerCase();
-              return n.endsWith('.exe') && !n.contains('teacher') && (n.contains('setup') || n.contains('boardest'));
-            },
-            orElse: () => null,
-          );
-          final zipAsset = assets.firstWhere(
-            (asset) => (asset['name'] as String).endsWith('.zip'),
+          // Windows: AppX / AppInstaller 전용 자동 업데이트 (Setup.exe 완전 배제)
+          // ms-appinstaller 프로토콜 차단 이슈 우회: PowerShell Add-AppxPackage로 안전 갱신
+          final appinstallerAsset = assets.firstWhere(
+            (asset) => (asset['name'] as String).toLowerCase() == 'boardest.appinstaller',
             orElse: () => null,
           );
 
-          if (exeAsset != null) {
-            final downloadUrl = exeAsset['browser_download_url'] as String;
-            _showUpdateDialog(context, serverVersion, () {
-              _performWindowsInstallerUpdate(context, downloadUrl);
-            });
-          } else if (zipAsset != null) {
-            final downloadUrl = zipAsset['browser_download_url'] as String;
-            _showUpdateDialog(context, serverVersion, () {
-              _performWindowsUpdate(context, downloadUrl);
-            });
-          }
+          final installerUrl = appinstallerAsset != null
+              ? (appinstallerAsset['browser_download_url'] as String)
+              : 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appinstaller';
+
+          _showUpdateDialog(context, serverVersion, () {
+            _performWindowsAppInstallerUpdate(context, installerUrl);
+          });
         } else if (Platform.isAndroid) {
           final apkAsset = assets.firstWhere(
             (asset) => (asset['name'] as String).endsWith('.apk'),
@@ -212,129 +200,43 @@ class UpdateService {
     );
   }
 
-  /// Inno Setup 설치형 자동 업데이트 (무인 설치 및 자동 재실행)
-  static Future<void> _performWindowsInstallerUpdate(BuildContext context, String url) async {
-    final progressNotifier = ValueNotifier<double>(0.0);
-    _showDownloadProgressDialog(context, progressNotifier);
-
+  /// Windows AppInstaller / AppX 전용 자동 업데이트 (Setup.exe 완전 배제)
+  /// 앱을 즉시 닫고(exit) 백그라운드 PowerShell Add-AppxPackage를 통해
+  /// 최신 boardest.appx를 다운로드 및 샌드박스 안전 갱신 후 재실행
+  static Future<void> _performWindowsAppInstallerUpdate(BuildContext context, String appInstallerUrl) async {
     try {
-      final tempDir = await getTemporaryDirectory();
-      final setupPath = p.join(tempDir.path, 'Boardest_Setup_Update.exe');
-
-      final client = http.Client();
-      final request = http.Request('GET', Uri.parse(url));
-      final response = await client.send(request);
-      final totalLength = response.contentLength ?? 0;
-      int received = 0;
-
-      final file = File(setupPath);
-      final sink = file.openWrite();
-
-      await response.stream.map((chunk) {
-        received += chunk.length;
-        if (totalLength > 0) {
-          progressNotifier.value = received / totalLength;
-        }
-        return chunk;
-      }).pipe(sink);
-
-      await sink.close();
-      client.close();
-
-      if (context.mounted) Navigator.of(context).pop();
-
-      // Execute Inno Setup installer silently and restart application
-      await Process.start(
-        setupPath,
-        ['/SILENT', '/CLOSEAPPLICATIONS', '/RESTARTAPPLICATIONS'],
-        mode: ProcessStartMode.detached,
-      );
-      exit(0);
-    } catch (e) {
-      if (context.mounted) Navigator.of(context).pop();
-      if (context.mounted) _showErrorDialog(context, 'Windows 설치형 자동 업데이트 중 오류 발생: $e');
-    }
-  }
-
-  /// 무설치 ZIP 압축 해제 및 덮어쓰기 업데이트
-  static Future<void> _performWindowsUpdate(BuildContext context, String url) async {
-    final progressNotifier = ValueNotifier<double>(0.0);
-    _showDownloadProgressDialog(context, progressNotifier);
-
-    try {
-      final tempDir = await getTemporaryDirectory();
-      final zipPath = p.join(tempDir.path, 'boardest_update.zip');
-      final extractDir = p.join(tempDir.path, 'boardest_extracted');
-
-      // Download file
-      final client = http.Client();
-      final request = http.Request('GET', Uri.parse(url));
-      final response = await client.send(request);
-      final totalLength = response.contentLength ?? 0;
-      int received = 0;
-
-      final file = File(zipPath);
-      final sink = file.openWrite();
-
-      await response.stream.map((chunk) {
-        received += chunk.length;
-        if (totalLength > 0) {
-          progressNotifier.value = received / totalLength;
-        }
-        return chunk;
-      }).pipe(sink);
-
-      await sink.close();
-      client.close();
-
-      // Extract ZIP
-      final bytes = await File(zipPath).readAsBytes();
-      final archive = ZipDecoder().decodeBytes(bytes);
-      final extractFolder = Directory(extractDir);
-      if (extractFolder.existsSync()) {
-        extractFolder.deleteSync(recursive: true);
-      }
-      extractFolder.createSync(recursive: true);
-
-      for (final file in archive) {
-        final filename = file.name;
-        if (file.isFile) {
-          final data = file.content as List<int>;
-          final outFile = File(p.join(extractDir, filename));
-          outFile.createSync(recursive: true);
-          await outFile.writeAsBytes(data);
-        } else {
-          final outDir = Directory(p.join(extractDir, filename));
-          outDir.createSync(recursive: true);
-        }
-      }
-
-      final currentExePath = Platform.resolvedExecutable;
-      final currentAppDir = p.dirname(currentExePath);
-
-      final updaterBatPath = p.join(tempDir.path, 'boardest_updater.bat');
-      final updaterContent = '''
-@echo off
-title Boardest Updater
-echo Waiting for Boardest to close...
-timeout /t 2 /nobreak > nul
-echo Copying new files to: "$currentAppDir"
-xcopy /y /e /q "$extractDir\\*" "$currentAppDir\\"
-echo Restarting Boardest...
-start "" "$currentExePath"
-echo Done. Cleaning up...
-del "%~f0"
+      final script = '''
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "   Boardest AppX 자동 업데이트 진행 중...   " -ForegroundColor Yellow
+Write-Host "============================================" -ForegroundColor Cyan
+Start-Sleep -Milliseconds 800
+try {
+  Write-Host "AppInstaller를 통해 최신 AppX 패키지를 배포합니다..." -ForegroundColor Gray
+  Add-AppxPackage -AppInstallerFile '$appInstallerUrl' -ErrorAction Stop
+  Write-Host "업데이트 완료! 앱을 실행합니다..." -ForegroundColor Green
+  Start-Sleep -Milliseconds 800
+  Start-Process 'explorer.exe' 'shell:AppsFolder\\jiwho.boardest.bst_nmkn64tehfz7a!App'
+} catch {
+  Write-Host "AppInstaller URL 실패, 백업 AppX 다운로드 설치를 시도합니다..." -ForegroundColor Yellow
+  \$tempAppx = Join-Path \$env:TEMP 'boardest_update.appx'
+  Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx' -OutFile \$tempAppx
+  Add-AppxPackage -Path \$tempAppx -ForceUpdateFromAnyVersion
+  Remove-Item \$tempAppx -Force -ErrorAction SilentlyContinue
+  Start-Process 'explorer.exe' 'shell:AppsFolder\\jiwho.boardest.bst_nmkn64tehfz7a!App'
+}
 ''';
 
-      await File(updaterBatPath).writeAsString(updaterContent);
+      await Process.start(
+        'powershell.exe',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
+        mode: ProcessStartMode.detached,
+      );
 
-      if (context.mounted) Navigator.of(context).pop();
-
-      await Process.start('cmd.exe', ['/c', updaterBatPath], runInShell: true);
+      // 파일 잠금 해제를 위해 현재 앱 즉시 종료
       exit(0);
     } catch (e) {
-      if (context.mounted) Navigator.of(context).pop();
-      if (context.mounted) _showErrorDialog(context, 'Windows 자동 업데이트 중 오류 발생: $e');
+      debugPrint('[UpdateService] AppInstaller error: $e');
+      if (context.mounted) _showErrorDialog(context, 'AppInstaller 실행 중 오류 발생: $e');
     }
   }
 

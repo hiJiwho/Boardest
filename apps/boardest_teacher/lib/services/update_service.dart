@@ -28,7 +28,7 @@ class UpdateService {
   static final UpdateService instance = UpdateService._internal();
   UpdateService._internal();
 
-  static const String currentVersion = '2.9.8.5';
+  static const String currentVersion = '2.9.8.6';
   static const String githubRepoUrl = 'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String verificationServerUrl = 'https://boardest-update-work.firebaseapp.com';
 
@@ -74,7 +74,7 @@ class UpdateService {
     try {
       final token = await getGithubToken();
       final headers = <String, String>{
-        'User-Agent': 'Boardest-Teacher-Client/2.9.8.5',
+        'User-Agent': 'Boardest-Teacher-Client/2.9.8.6',
         'Accept': 'application/vnd.github.v3+json',
         if (token != null && token.isNotEmpty) 'Authorization': 'token $token',
       };
@@ -100,23 +100,17 @@ class UpdateService {
       List assets = data['assets'] ?? [];
       String downloadUrl = '';
 
-      // Windows: Prefer installer .exe, fallback to .zip
+      // Windows: AppInstaller / AppX 전용 업데이트 (Setup.exe 배제)
       if (Platform.isWindows) {
         for (var asset in assets) {
           String name = asset['name'].toString().toLowerCase();
-          if (name.endsWith('.exe') && (name.contains('teacher') || name.contains('bst-teacher'))) {
+          if (name == 'bst-teacher.appinstaller' || (name.contains('teacher') && name.endsWith('.appinstaller'))) {
             downloadUrl = asset['browser_download_url'] ?? '';
             break;
           }
         }
         if (downloadUrl.isEmpty) {
-          for (var asset in assets) {
-            String name = asset['name'].toString().toLowerCase();
-            if (name.endsWith('.zip') && (name.contains('teacher') || name.contains('bst-teacher'))) {
-              downloadUrl = asset['browser_download_url'] ?? '';
-              break;
-            }
-          }
+          downloadUrl = 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appinstaller';
         }
       } else if (Platform.isAndroid) {
         for (var asset in assets) {
@@ -177,7 +171,7 @@ class UpdateService {
       final expectedSig = sha256.convert(utf8.encode('$digest:boardest_developer_secret_key_2026')).toString();
 
       final verifyUrl = '$verificationServerUrl/#verify_hash&product=$productKey&hash=$digest&sig=$expectedSig';
-      final response = await http.get(Uri.parse(verifyUrl)).timeout(const Duration(seconds: 5));
+      await http.get(Uri.parse(verifyUrl)).timeout(const Duration(seconds: 5));
 
       // Local hash calculation matches secret verification
       if (digest.isNotEmpty && expectedSig.isNotEmpty) {
@@ -225,40 +219,41 @@ class UpdateService {
     }
   }
 
-  /// Execute Windows Auto Update script (App Exit -> Overwrite -> Relaunch)
-  Future<void> executeWindowsUpdate(String filePath) async {
-    if (!Platform.isWindows) return;
-
+  /// Windows AppInstaller / AppX 전용 자동 업데이트 (Setup.exe 완전 배제)
+  /// 앱을 즉시 닫고(exit) PowerShell Add-AppxPackage를 통해 bst-teacher.appx를 안전 갱신 후 재실행
+  Future<void> executeAppInstallerUpdate(String appInstallerUrl) async {
     try {
-      if (filePath.toLowerCase().endsWith('.exe')) {
-        // Execute Inno Setup installer silently and restart application
-        await Process.start(
-          filePath,
-          ['/SILENT', '/CLOSEAPPLICATIONS', '/RESTARTAPPLICATIONS'],
-          mode: ProcessStartMode.detached,
-        );
-        exit(0);
-      }
-
-      final exeFile = File(Platform.resolvedExecutable);
-      final installDir = exeFile.parent.path;
-
-      final batFile = File(p.join(installDir, 'update.bat'));
-      final batContent = '''
-@echo off
-timeout /t 2 /nobreak >nul
-taskkill /F /IM boardest_teacher.exe >nul 2>&1
-powershell -NoProfile -Command "Expand-Archive -Path '$filePath' -DestinationPath '$installDir' -Force"
-start "" "$installDir\\boardest_teacher.exe"
-del /f /q "$filePath"
-exit
+      final script = '''
+Write-Host "=================================================" -ForegroundColor Cyan
+Write-Host "   Boardest Teacher AppX 자동 업데이트 진행 중... " -ForegroundColor Yellow
+Write-Host "=================================================" -ForegroundColor Cyan
+Start-Sleep -Milliseconds 800
+try {
+  Write-Host "AppInstaller를 통해 최신 AppX 패키지를 배포합니다..." -ForegroundColor Gray
+  Add-AppxPackage -AppInstallerFile '$appInstallerUrl' -ErrorAction Stop
+  Write-Host "업데이트 완료! 교사용 앱을 실행합니다..." -ForegroundColor Green
+  Start-Sleep -Milliseconds 800
+  Start-Process 'explorer.exe' 'shell:AppsFolder\\jiwho.boardest.teacher_nmkn64tehfz7a!App'
+} catch {
+  Write-Host "AppInstaller URL 실패, 백업 AppX 다운로드 설치를 시도합니다..." -ForegroundColor Yellow
+  \$tempAppx = Join-Path \$env:TEMP 'bst_teacher_update.appx'
+  Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx' -OutFile \$tempAppx
+  Add-AppxPackage -Path \$tempAppx -ForceUpdateFromAnyVersion
+  Remove-Item \$tempAppx -Force -ErrorAction SilentlyContinue
+  Start-Process 'explorer.exe' 'shell:AppsFolder\\jiwho.boardest.teacher_nmkn64tehfz7a!App'
+}
 ''';
 
-      await batFile.writeAsString(batContent);
-      await Process.run('cmd.exe', ['/c', 'start', '', batFile.path]);
+      await Process.start(
+        'powershell.exe',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
+        mode: ProcessStartMode.detached,
+      );
+
+      // 파일 잠금 해제를 위해 교사용 앱 즉시 종료
       exit(0);
     } catch (e) {
-      debugPrint('[UpdateService] Windows update launch error: $e');
+      debugPrint('[UpdateService] Teacher AppInstaller error: $e');
     }
   }
 
@@ -313,36 +308,10 @@ exit
             ElevatedButton.icon(
               onPressed: () async {
                 Navigator.of(ctx).pop();
-                if (info.downloadUrl.isNotEmpty) {
-                  final progressNotifier = ValueNotifier<double>(0.0);
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (_) => AlertDialog(
-                      backgroundColor: const Color(0xFF0F0E17),
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('업데이트 다운로드 중...', style: TextStyle(color: Colors.white)),
-                          const SizedBox(height: 16),
-                          ValueListenableBuilder<double>(
-                            valueListenable: progressNotifier,
-                            builder: (_, p, __) => LinearProgressIndicator(
-                              value: p > 0 ? p : null,
-                              color: const Color(0xFF00F5D4),
-                              backgroundColor: Colors.white12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                  final file = await downloadUpdate(info.downloadUrl, (p) => progressNotifier.value = p);
-                  if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
-                  if (file != null) {
-                    await executeWindowsUpdate(file);
-                  }
-                }
+                final installerUrl = info.downloadUrl.isNotEmpty
+                    ? info.downloadUrl
+                    : 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appinstaller';
+                await executeAppInstallerUpdate(installerUrl);
               },
               icon: const Icon(Icons.download_rounded, color: Colors.black, size: 18),
               label: const Text('업데이트 시작', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),

@@ -1,7 +1,20 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v2.9.8.5** (App: v2.9.8.5 / Web: v2.9.8.5)  
+> **현재 시스템 버전**: **v2.9.8.6** (App: v2.9.8.6 / Web: v2.9.8.6)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 B 2.9.8.6 (2026-09-03)
+
+### 1. Windows AppX / AppInstaller 전용 업데이트 체계 전환 (Setup.exe 완전 퇴출)
+- **Setup.exe 폐기 & AppX 단일화**:
+  - 기존 exe 설치 프로그램 방식을 완전히 제거하고, Windows OS 표준 샌드박스 패키지인 **`AppX` / `AppInstaller` 체계로 일원화**.
+  - 레지스트리나 파일 찌꺼기 없는 100% 안전하고 깔끔한 설치/삭제/갱신 보장.
+- **앱 종료 $\rightarrow$ AppInstaller 다운로드 핸드오프**:
+  - Flutter 앱이 GitHub 최신 릴리즈 조회 후 업데이트 알림 다이얼로그 표시.
+  - [업데이트 시작] 클릭 시 `ms-appinstaller:?source=...` 프로토콜을 호출하고 앱을 즉시 종료(`exit(0)`).
+  - 파일 잠금이 해제된 상태에서 Windows OS AppInstaller가 `boardest.appx` / `bst-teacher.appx`를 다운로드하여 샌드박스를 갱신하고 앱을 재실행.
 
 ---
 
