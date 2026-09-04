@@ -18,6 +18,13 @@ class UpdateService {
 
   /// GitHub의 최신 릴리즈를 체크하고 업데이트가 필요하면 다운로드 및 설치 프로세스를 시작합니다.
   static Future<void> checkAndUpdate(BuildContext context) async {
+    // Windows: Windows OS 자체의 AppX / .appinstaller 시스템이 무인 자동 갱신을 전담하므로 Flutter 내에서는 실행하지 않음
+    // Web: Firebase Hosting에 의해 상시 최신 상태 유지
+    if (kIsWeb || Platform.isWindows) return;
+
+    // Android: APK 전용 인앱 자동 업데이트
+    if (!Platform.isAndroid) return;
+
     // 중복 실행 방지: 이미 체크 중이면 즉시 리턴
     if (_isChecking) return;
     _isChecking = true;
@@ -33,7 +40,7 @@ class UpdateService {
       
       if (response.statusCode != 200) {
         debugPrint('Update check returned status code: ${response.statusCode}');
-        return; // 리포지토리가 비어있거나 릴리즈가 아직 없을 경우 무시
+        return;
       }
 
       final data = json.decode(response.body) as Map<String, dynamic>;
@@ -45,38 +52,21 @@ class UpdateService {
         debugPrint('New version available: $serverVersion (Current: $currentVersion)');
         final assets = data['assets'] as List<dynamic>? ?? [];
         
-        if (Platform.isWindows) {
-          // Windows: AppX / AppInstaller 전용 자동 업데이트 (Setup.exe 완전 배제)
-          // ms-appinstaller 프로토콜 차단 이슈 우회: PowerShell Add-AppxPackage로 안전 갱신
-          final appinstallerAsset = assets.firstWhere(
-            (asset) => (asset['name'] as String).toLowerCase() == 'boardest.appinstaller',
-            orElse: () => null,
-          );
-
-          final installerUrl = appinstallerAsset != null
-              ? (appinstallerAsset['browser_download_url'] as String)
-              : 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appinstaller';
-
+        final apkAsset = assets.firstWhere(
+          (asset) => (asset['name'] as String).endsWith('.apk'),
+          orElse: () => null,
+        );
+        if (apkAsset != null && context.mounted) {
+          final downloadUrl = apkAsset['browser_download_url'] as String;
           _showUpdateDialog(context, serverVersion, () {
-            _performWindowsAppInstallerUpdate(context, installerUrl);
+            _performAndroidUpdate(context, downloadUrl);
           });
-        } else if (Platform.isAndroid) {
-          final apkAsset = assets.firstWhere(
-            (asset) => (asset['name'] as String).endsWith('.apk'),
-            orElse: () => null,
-          );
-          if (apkAsset != null) {
-            final downloadUrl = apkAsset['browser_download_url'] as String;
-            _showUpdateDialog(context, serverVersion, () {
-              _performAndroidUpdate(context, downloadUrl);
-            });
-          }
         }
       }
     } catch (e) {
       debugPrint('Error during update check: $e');
     } finally {
-      // 2분 후 재체크 허용 (앱 재실행 후 업데이트 안 됐을 경우 대비)
+      // 2분 후 재체크 허용
       Future.delayed(const Duration(minutes: 2), () => _isChecking = false);
     }
   }
@@ -200,45 +190,6 @@ class UpdateService {
     );
   }
 
-  /// Windows AppInstaller / AppX 전용 자동 업데이트 (Setup.exe 완전 배제)
-  /// 앱을 즉시 닫고(exit) 백그라운드 PowerShell Add-AppxPackage를 통해
-  /// 최신 boardest.appx를 다운로드 및 샌드박스 안전 갱신 후 재실행
-  static Future<void> _performWindowsAppInstallerUpdate(BuildContext context, String appInstallerUrl) async {
-    try {
-      final script = '''
-Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "   Boardest AppX 자동 업데이트 진행 중...   " -ForegroundColor Yellow
-Write-Host "============================================" -ForegroundColor Cyan
-Start-Sleep -Milliseconds 800
-try {
-  Write-Host "AppInstaller를 통해 최신 AppX 패키지를 배포합니다..." -ForegroundColor Gray
-  Add-AppxPackage -AppInstallerFile '$appInstallerUrl' -ErrorAction Stop
-  Write-Host "업데이트 완료! 앱을 실행합니다..." -ForegroundColor Green
-  Start-Sleep -Milliseconds 800
-  Start-Process 'explorer.exe' 'shell:AppsFolder\\jiwho.boardest.bst_nmkn64tehfz7a!App'
-} catch {
-  Write-Host "AppInstaller URL 실패, 백업 AppX 다운로드 설치를 시도합니다..." -ForegroundColor Yellow
-  \$tempAppx = Join-Path \$env:TEMP 'boardest_update.appx'
-  Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx' -OutFile \$tempAppx
-  Add-AppxPackage -Path \$tempAppx -ForceUpdateFromAnyVersion
-  Remove-Item \$tempAppx -Force -ErrorAction SilentlyContinue
-  Start-Process 'explorer.exe' 'shell:AppsFolder\\jiwho.boardest.bst_nmkn64tehfz7a!App'
-}
-''';
-
-      await Process.start(
-        'powershell.exe',
-        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
-        mode: ProcessStartMode.detached,
-      );
-
-      // 파일 잠금 해제를 위해 현재 앱 즉시 종료
-      exit(0);
-    } catch (e) {
-      debugPrint('[UpdateService] AppInstaller error: $e');
-      if (context.mounted) _showErrorDialog(context, 'AppInstaller 실행 중 오류 발생: $e');
-    }
-  }
 
   static Future<void> _performAndroidUpdate(BuildContext context, String url) async {
     final progressNotifier = ValueNotifier<double>(0.0);

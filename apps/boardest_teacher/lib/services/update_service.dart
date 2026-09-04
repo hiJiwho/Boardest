@@ -68,7 +68,10 @@ class UpdateService {
 
   /// Check for latest update from GitHub Releases (with optional PAT auth)
   Future<UpdateInfo?> checkForUpdate() async {
-    if (kIsWeb) return null; // 웹 버전은 Firebase Hosting으로 상시 최신 상태
+    // Windows: Windows OS 자체의 AppX / .appinstaller 시스템이 무인 자동 갱신을 전담하므로 Flutter 내에서는 실행하지 않음
+    // Web: Firebase Hosting에 의해 상시 최신 상태 유지
+    if (kIsWeb || Platform.isWindows) return null;
+    if (!Platform.isAndroid) return null;
     if (_isChecking) return null; // 중복 실행 방지
     _isChecking = true;
     try {
