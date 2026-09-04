@@ -9,7 +9,7 @@ import 'package:open_filex/open_filex.dart';
 
 
 class UpdateService {
-  static const String currentVersion = '2.9.8.9';
+  static const String currentVersion = '2.9.9.0';
   static const String repoOwner = 'hiJiwho';
   static const String repoName = 'Boardest';
 
@@ -33,7 +33,7 @@ class UpdateService {
       final response = await http.get(
         url,
         headers: {
-          'User-Agent': 'Boardest-Client/2.9.8.9',
+          'User-Agent': 'Boardest-Client/2.9.9.0',
           'Accept': 'application/vnd.github.v3+json',
         },
       ).timeout(const Duration(seconds: 10));

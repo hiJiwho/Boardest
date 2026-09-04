@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/apps/boardest/melos_boardest.iml" filepath="$PROJECT_DIR$/apps/boardest/melos_boardest.iml" />
+      <module fileurl="file://$PROJECT_DIR$/apps/boardest_teacher/melos_boardest_teacher.iml" filepath="$PROJECT_DIR$/apps/boardest_teacher/melos_boardest_teacher.iml" />
+      <module fileurl="file://$PROJECT_DIR$/apps/boardest_teacher_lite/melos_boardest_teacher_lite.iml" filepath="$PROJECT_DIR$/apps/boardest_teacher_lite/melos_boardest_teacher_lite.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/common/bst_ad/melos_bst_ad.iml" filepath="$PROJECT_DIR$/packages/common/bst_ad/melos_bst_ad.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/common/bst_auth/melos_bst_auth.iml" filepath="$PROJECT_DIR$/packages/common/bst_auth/melos_bst_auth.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/plugins/bst_canva/melos_bst_canva.iml" filepath="$PROJECT_DIR$/packages/plugins/bst_canva/melos_bst_canva.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/common/bst_cast/melos_bst_cast.iml" filepath="$PROJECT_DIR$/packages/common/bst_cast/melos_bst_cast.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/common/bst_cloud/melos_bst_cloud.iml" filepath="$PROJECT_DIR$/packages/common/bst_cloud/melos_bst_cloud.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/common/bst_control/melos_bst_control.iml" filepath="$PROJECT_DIR$/packages/common/bst_control/melos_bst_control.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/common/bst_core/melos_bst_core.iml" filepath="$PROJECT_DIR$/packages/common/bst_core/melos_bst_core.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/common/bst_messaging/melos_bst_messaging.iml" filepath="$PROJECT_DIR$/packages/common/bst_messaging/melos_bst_messaging.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/plugins/bst_native/melos_bst_native.iml" filepath="$PROJECT_DIR$/packages/plugins/bst_native/melos_bst_native.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/plugins/bst_pdf/melos_bst_pdf.iml" filepath="$PROJECT_DIR$/packages/plugins/bst_pdf/melos_bst_pdf.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/plugins/bst_pen/melos_bst_pen.iml" filepath="$PROJECT_DIR$/packages/plugins/bst_pen/melos_bst_pen.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/plugins/bst_tbp/melos_bst_tbp.iml" filepath="$PROJECT_DIR$/packages/plugins/bst_tbp/melos_bst_tbp.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/common/bst_timetable/melos_bst_timetable.iml" filepath="$PROJECT_DIR$/packages/common/bst_timetable/melos_bst_timetable.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/common/bst_ui/melos_bst_ui.iml" filepath="$PROJECT_DIR$/packages/common/bst_ui/melos_bst_ui.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/plugins/bst_video/melos_bst_video.iml" filepath="$PROJECT_DIR$/packages/plugins/bst_video/melos_bst_video.iml" />
+      <module fileurl="file://$PROJECT_DIR$/melos_boardest.iml" filepath="$PROJECT_DIR$/melos_boardest.iml" />
+    </modules>
+  </component>
+</project>

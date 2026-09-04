@@ -99,6 +99,20 @@ class BstCloudFile {
   }
 }
 
+class ReversePairSession {
+  final String secret;
+  final String mangled;
+  final String qrUrl;
+  final DateTime createdAt;
+
+  ReversePairSession({
+    required this.secret,
+    required this.mangled,
+    required this.qrUrl,
+    required this.createdAt,
+  });
+}
+
 class BstCloudService {
   static final BstCloudService instance = BstCloudService._();
   BstCloudService._();
@@ -1114,6 +1128,143 @@ class BstCloudService {
 
   static const String _boardPairedSecretKey = 'bst_board_paired_secret';
   static const String _boardPairedKeyIdKey = 'bst_board_paired_key_id';
+
+  /// 의도적으로 회손/난독화된 페어링 규격: BSTx! + Base64Url( "BRK#" + reversed(secret) + "#END" )
+  static String manglePairSecret(String secret) {
+    final reversedStr = secret.split('').reversed.join('');
+    final payload = 'BRK#$reversedStr#END';
+    final encoded = base64Url.encode(utf8.encode(payload));
+    return 'BSTx!$encoded';
+  }
+
+  static String? unmanglePairSecret(String mangled) {
+    try {
+      if (!mangled.startsWith('BSTx!')) return null;
+      var b64 = mangled.substring(5);
+      b64 = b64.replaceAll('-', '+').replaceAll('_', '/');
+      while (b64.length % 4 != 0) {
+        b64 += '=';
+      }
+      final decoded = utf8.decode(base64.decode(b64));
+      if (!decoded.startsWith('BRK#') || !decoded.endsWith('#END')) return null;
+      final inner = decoded.substring(4, decoded.length - 4);
+      return inner.split('').reversed.join('');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 1회용 역방향 스마트폰 페어링 세션 생성 (스마트폰 카메라로 QR 스캔 시 바로 OAuth 로그인 및 전자칠판 연동)
+  Future<ReversePairSession> createReversePairSession({
+    String? schoolCode,
+    int? grade,
+    int? classNum,
+  }) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final rand = (DateTime.now().microsecondsSinceEpoch % 1000000).toString().padLeft(6, '0');
+    final secret = 'sec_${nowMs}_$rand';
+    final mangled = manglePairSecret(secret);
+    final qrUrl = 'https://boardest-teacher-oauth.web.app/?bst_pair=${Uri.encodeComponent(mangled)}';
+
+    try {
+      final docUrl = '$_firestoreBase/cloud_pair_sessions/$secret?key=$_apiKey';
+      await http.patch(
+        Uri.parse(docUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'fields': {
+            'status': {'stringValue': 'pending'},
+            'secret': {'stringValue': secret},
+            'mangled': {'stringValue': mangled},
+            'createdAt': {'timestampValue': DateTime.now().toUtc().toIso8601String()},
+            'expiresAt': {'timestampValue': DateTime.now().add(const Duration(minutes: 10)).toUtc().toIso8601String()},
+            if (schoolCode != null && schoolCode.isNotEmpty) 'schoolCode': {'stringValue': schoolCode},
+            if (grade != null) 'grade': {'integerValue': grade.toString()},
+            if (classNum != null) 'classNum': {'integerValue': classNum.toString()},
+          }
+        }),
+      ).timeout(const Duration(seconds: 4));
+    } catch (e) {
+      debugPrint('[BstCloudService] createReversePairSession doc error: $e');
+    }
+
+    return ReversePairSession(
+      secret: secret,
+      mangled: mangled,
+      qrUrl: qrUrl,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  /// 스마트폰에서 Google 로그인 및 연동 완료될 때까지 Firestore REST polling
+  Future<({bool success, String? teacherName, String? email, String? errorMessage})>
+      waitForReversePairAuth(String secret, {Duration timeout = const Duration(minutes: 5), bool Function()? isCancelled}) async {
+    final startTime = DateTime.now();
+    while (DateTime.now().difference(startTime) < timeout) {
+      if (isCancelled?.call() == true) {
+        return (success: false, teacherName: null, email: null, errorMessage: '취소되었습니다.');
+      }
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (isCancelled?.call() == true) {
+        return (success: false, teacherName: null, email: null, errorMessage: '취소되었습니다.');
+      }
+
+      try {
+        final docUrl = '$_firestoreBase/cloud_pair_sessions/$secret?key=$_apiKey';
+        final res = await http.get(Uri.parse(docUrl)).timeout(const Duration(seconds: 3));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body) as Map<String, dynamic>;
+          final fields = data['fields'] as Map<String, dynamic>?;
+          if (fields != null) {
+            final status = (fields['status'] as Map?)?['stringValue'] as String? ?? '';
+            if (status == 'authenticated') {
+              final token = (fields['accessToken'] as Map?)?['stringValue'] as String?;
+              final tName = (fields['teacherName'] as Map?)?['stringValue'] as String? ?? '선생님';
+              final ownerEmail = (fields['email'] as Map?)?['stringValue'] as String? ?? '';
+              final totpSec = (fields['totpSecret'] as Map?)?['stringValue'] as String?;
+              final folderId = (fields['folderId'] as Map?)?['stringValue'] as String? ?? '';
+              final bstCloudFolderId = (fields['bstCloudFolderId'] as Map?)?['stringValue'] as String? ?? folderId;
+
+              if (token != null && token.isNotEmpty) {
+                activeToken = token;
+                activeTeacherName = tName;
+                activeOwnerEmail = ownerEmail;
+                activeTotpSecret = totpSec;
+                activeFolderId = bstCloudFolderId.isNotEmpty ? bstCloudFolderId : folderId;
+
+                // Mark session consumed
+                try {
+                  await http.patch(
+                    Uri.parse('$docUrl&updateMask.fieldPaths=status'),
+                    headers: {'Content-Type': 'application/json'},
+                    body: jsonEncode({
+                      'fields': {'status': {'stringValue': 'consumed'}}
+                    }),
+                  );
+                } catch (_) {}
+
+                return (
+                  success: true,
+                  teacherName: tName,
+                  email: ownerEmail,
+                  errorMessage: null,
+                );
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[BstCloudService] waitForReversePairAuth check error: $e');
+      }
+    }
+
+    return (
+      success: false,
+      teacherName: null,
+      email: null,
+      errorMessage: '인증 시간이 초과되었습니다 (5분). 다시 시도해주세요.',
+    );
+  }
 
   /// 1. 6자리 동적 자릿수 셔플 (Steganography) OTP 검증 (Cloudflare Worker 1차 + Firestore 직접 Fallback 2차)
   Future<({bool success, String? accessToken, String? teacherName, String? email, String? errorMessage})> verify6DigitSteganoOtp(String fullCode) async {

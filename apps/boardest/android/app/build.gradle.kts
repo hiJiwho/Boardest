@@ -33,10 +33,18 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            keyAlias = "boardest"
+            keyPassword = "Boardest2026!"
+            storeFile = file("boardest_release.keystore")
+            storePassword = "Boardest2026!"
+        }
+    }
+
     buildTypes {
         release {
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

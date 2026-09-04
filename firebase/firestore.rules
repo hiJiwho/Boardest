@@ -1,0 +1,122 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // ─── /users — 계정 데이터 ─────────────────────────────────────
+    match /users/{userId} {
+      allow read, get: if true;
+      allow create, update, delete: if true;
+    }
+
+    // ─── /registrationKeys — 가입 인증키 (교사/교실/관리자) ─────────
+    match /registrationKeys/{key} {
+      allow read: if true; // 가입 시 유효성 검증 허용
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    // ─── /personalAuthKeys — 개인 인증키 (귀속 & 실시간 검증) ───────
+    match /personalAuthKeys/{tokenId} {
+      allow read: if true; // 매 앱/웹 접속 시 실시간 활성화(active) 검증 허용
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    // ─── /control_configs — 학교별 중앙 설정 ──────────────────
+    match /control_configs/{schoolId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    match /control_configs/{schoolId}/{document=**} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // ─── /admins — 관리자 목록 ─────────────────────────────────
+    match /admins/{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // ─── /devices — 기기 등록 ──────────────────────────────────
+    match /devices/{document=**} {
+      allow read, write: if true;
+    }
+
+    // ─── /ad_banners — 광고 배너 ───────────────────────────────
+    match /ad_banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // ─── /releases — exe, apk 동시 배포 바이너리 ────────────────
+    match /releases/{releaseId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // ─── /homeroom_notices — 조·종례 공지 ──────────────────────
+    match /homeroom_notices/{noticeId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // ─── /teachers_cloud — 교사 수업자료·드라이브 ──────────────
+    match /teachers_cloud/{document=**} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // ─── /cloud_connections — bst-cld 연동 요청 ────────────────
+    match /cloud_connections/{document=**} {
+      allow read, write: if true;
+    }
+
+    // ─── /eat_calls — 급식 지도 호출 ───────────────────────────
+    match /eat_calls/{callId} {
+      allow read, write: if true;
+    }
+
+    // ─── /teacher_profiles — 교사 프로필 ───────────────────────
+    match /teacher_profiles/{profileId} {
+      allow read, write: if true;
+    }
+
+    // ─── /teacher_cloud_tokens — 교사 Cloud Drive 토큰 ─────────
+    match /teacher_cloud_tokens/{teacherUid} {
+      allow read, write: if true;
+    }
+
+    // ─── /token_requests — 전자칠판-교사 Cloud 푸시 연동 요청 ───
+    match /token_requests/{reqId} {
+      allow read, write: if true;
+    }
+
+    // ─── /schools — 학교 정보 및 특별실 ─────────────────────────
+    match /schools/{schoolId} {
+      allow read, write: if true;
+    }
+
+    match /schools/{schoolId}/special_rooms/{specialId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    match /schools/{schoolId}/special_rooms/{specialId}/reservations/{resId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    // ─── /audit_logs — 클라우드 접근 감사 로그 ───────────────────
+    match /audit_logs/{logId} {
+      allow read, write: if true;
+    }
+
+    // ─── /cloud_pair_sessions — 전자칠판 스마트폰 역방향 QR 연동 ─────────
+    match /cloud_pair_sessions/{sessionId} {
+      allow read, write: if true;
+    }
+  }
+}

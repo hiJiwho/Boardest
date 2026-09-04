@@ -157,9 +157,9 @@ class _BoardestPenViewState extends State<BoardestPenView>
     super.initState();
     _activeFilePath = widget.filePath;
     _initPage(1);
-    _loadPersistentSettings();
-    if (_activeFilePath.toLowerCase().endsWith('.iwb')) {
-      _loadIwb(_activeFilePath);
+    final ext = p.extension(_activeFilePath).toLowerCase();
+    if (ext == '.iwb' || ext == '.pen' || ext == '.bstpen' || ext == '.json' || ext.isEmpty) {
+      _loadBoardData(_activeFilePath);
     }
   }
 
@@ -168,7 +168,7 @@ class _BoardestPenViewState extends State<BoardestPenView>
   bool get _isBstSaveBoard =>
       _activeFilePath.contains(p.join('BstSave', 'Board'));
 
-  Future<void> _loadIwb(String path) async {
+  Future<void> _loadBoardData(String path) async {
     try {
       if (kIsWeb) {
         final prefs = await SharedPreferences.getInstance();
@@ -344,15 +344,16 @@ class _BoardestPenViewState extends State<BoardestPenView>
         return;
       }
 
+      // Save directly to the opened active file path (preserving .pen, .bstpen, or .iwb)
+      final file = File(_activeFilePath);
+      final parent = file.parent;
+      if (!await parent.exists()) {
+        await parent.create(recursive: true);
+      }
+      await file.writeAsString(payload);
+
       if (_isBstSaveBoard ||
           (widget.teacher != null && widget.subject != null)) {
-        final dir = await BstSaveService.instance.directoryFor(
-          BstSaveService.subBoard,
-        );
-        if (!_activeFilePath.startsWith(dir.path)) {
-          _activeFilePath = p.join(dir.path, '$_boardFileBaseName.iwb');
-        }
-
         final metadata = <String, dynamic>{
           'teacher': widget.teacher ?? '',
           'subject': widget.subject ?? '',
@@ -376,13 +377,6 @@ class _BoardestPenViewState extends State<BoardestPenView>
         if (widget.teacher != null && widget.subject != null) {
           await _saveBoardMapping(_activeFilePath);
         }
-      } else {
-        final file = File(_activeFilePath);
-        final parent = file.parent;
-        if (!await parent.exists()) {
-          await parent.create(recursive: true);
-        }
-        await file.writeAsString(payload);
       }
 
       debugPrint('[BoardestPenView] Auto-saved whiteboard to $_activeFilePath');
@@ -451,6 +445,7 @@ class _BoardestPenViewState extends State<BoardestPenView>
       _initPage(_totalPages);
       _currentPage = _totalPages;
     });
+    _autoSaveBoard();
   }
 
   void _goTo(int p) {
@@ -937,7 +932,16 @@ class _BoardestPenViewState extends State<BoardestPenView>
   Widget build(BuildContext context) {
     final scale = widget.scaleFactor;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        await _autoSaveBoard();
+        if (context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: _boardBgColor,
       body: Stack(
         children: [
@@ -1028,20 +1032,53 @@ class _BoardestPenViewState extends State<BoardestPenView>
             child: Center(child: _buildGoodNotesFloatingToolbar(scale)),
           ),
 
-          // Top Header back button
+          // Top Header back button & formatted board title badge
           Positioned(
             top: 20 * scale,
             left: 20 * scale,
-            child: FloatingActionButton.small(
-              backgroundColor: const Color(0xFF13171F),
-              foregroundColor: Colors.white,
-              child: const Icon(Icons.arrow_back_rounded),
-              onPressed: () => Navigator.of(context).pop(),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'whiteboard_back_btn',
+                  backgroundColor: const Color(0xFF13171F),
+                  foregroundColor: Colors.white,
+                  child: const Icon(Icons.arrow_back_rounded),
+                  onPressed: () async {
+                    await _autoSaveBoard();
+                    if (context.mounted) Navigator.of(context).pop();
+                  },
+                ),
+                SizedBox(width: 12 * scale),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 14 * scale, vertical: 8 * scale),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF13171F).withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(16 * scale),
+                    border: Border.all(color: const Color(0xFF00F5D4).withValues(alpha: 0.3)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 8 * scale,
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    BoardStorageService.formatBoardDisplayName(_boardFileBaseName),
+                    style: GoogleFonts.notoSansKr(
+                      color: Colors.white,
+                      fontSize: 12 * scale,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1706,13 +1743,13 @@ class _BoardestPenViewState extends State<BoardestPenView>
             _buildMenuItem(Icons.file_open_rounded, 'IWB 파일 가져오기', () async {
               setState(() => _isMenuOpen = false);
               final result = await fp.FilePicker.pickFiles(
-                dialogTitle: 'IWB 파일 가져오기',
+                dialogTitle: '판서 파일 가져오기 (.pen, .iwb)',
                 type: fp.FileType.custom,
-                allowedExtensions: ['iwb'],
+                allowedExtensions: ['pen', 'iwb', 'bstpen'],
               );
               if (result != null && result.files.single.path != null) {
                 final path = result.files.single.path!;
-                await _loadIwb(path);
+                await _loadBoardData(path);
                 setState(() {
                   _activeFilePath = path;
                 });

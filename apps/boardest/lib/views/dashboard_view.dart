@@ -48,6 +48,7 @@ import '../widgets/notepad_modal.dart';
 import '../widgets/usb_explorer.dart';
 import '../widgets/bst_cloud_modal.dart';
 import '../services/bst_cloud_service.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'web_hwp_ppt_view.dart';
 import 'plugin_store_view.dart';
 import 'canva_overlay_view.dart';
@@ -126,6 +127,10 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   String _enteredOtp = '';
   bool _isVerifyingOtp = false;
   String? _otpErrorMsg;
+  bool _isCloudQrMode = true; // 스마트폰 QR 모드 기본 활성화
+  ReversePairSession? _reversePairSession;
+  bool _isLoadingQrSession = false;
+  bool _qrSessionCancelled = false;
   String _usbSessionId = ''; // USB 고유 세션 ID
   bool _debugUsbOverride = false;
   Timer? _usbTimer;
@@ -4556,7 +4561,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                 );
                               }
 
-                              // 3. 일반 모드 (기본): 왼쪽 지금수업(flex: 4) / 오른쪽 [급식(3) : 광고판(4)] (flex: 3)
+                              // 3. 일반 모드 (기본): 지금수업(flex: 4) : 급식(flex: 3) : A4 광고판(AspectRatio 1 / 1.414)
                               return Expanded(
                                 flex: 2,
                                 child: Row(
@@ -4569,13 +4574,12 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                     SizedBox(width: 12 * scale),
                                     Expanded(
                                       flex: 3,
-                                      child: Column(
-                                        children: [
-                                          Expanded(flex: 3, child: _buildNeisMealCard(scale)),
-                                          SizedBox(height: 10 * scale),
-                                          Expanded(flex: 4, child: _buildPptAdBannerCard()),
-                                        ],
-                                      ),
+                                      child: _buildNeisMealCard(scale),
+                                    ),
+                                    SizedBox(width: 12 * scale),
+                                    AspectRatio(
+                                      aspectRatio: 1 / 1.414,
+                                      child: _buildPptAdBannerCard(),
                                     ),
                                   ],
                                 ),
@@ -5820,7 +5824,162 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
-  // --- [신규] OTP 입력란 및 3x4 터치 키패드 (광고판과 동일한 크기) ---
+  void _initReverseQrSession() async {
+    if (_reversePairSession != null || _isLoadingQrSession) return;
+    if (!mounted) return;
+    setState(() {
+      _isLoadingQrSession = true;
+      _qrSessionCancelled = false;
+    });
+
+    try {
+      final user = _currentUser;
+      final session = await BstCloudService.instance.createReversePairSession(
+        schoolCode: _settings.schoolId.isNotEmpty ? _settings.schoolId : _settings.selectedSchool?.code?.toString(),
+        grade: user?.grade,
+        classNum: user?.classNum,
+      );
+      if (!mounted) return;
+      setState(() {
+        _reversePairSession = session;
+        _isLoadingQrSession = false;
+      });
+
+      final res = await BstCloudService.instance.waitForReversePairAuth(
+        session.secret,
+        isCancelled: () => !mounted || _qrSessionCancelled || BstCloudService.instance.activeToken != null,
+      );
+
+      if (!mounted) return;
+      if (res.success) {
+        setState(() {
+          _refreshCloudFiles();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '🎉 [${res.teacherName ?? "선생님"}] 전자칠판 연동 성공! 수업자료가 연결되었습니다.',
+              style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: const Color(0xFF2CB67D),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingQrSession = false);
+      }
+    }
+  }
+
+  void _refreshReverseQrSession() {
+    setState(() {
+      _qrSessionCancelled = true;
+      _reversePairSession = null;
+      _isLoadingQrSession = false;
+    });
+    _initReverseQrSession();
+  }
+
+  Widget _buildCloudQrScannerView(double scale) {
+    if (_reversePairSession == null && !_isLoadingQrSession) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _initReverseQrSession();
+      });
+    }
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (_isLoadingQrSession)
+          Padding(
+            padding: EdgeInsets.all(24 * scale),
+            child: const Center(
+              child: CircularProgressIndicator(color: Color(0xFF00F5D4)),
+            ),
+          )
+        else if (_reversePairSession != null) ...[
+          Container(
+            padding: EdgeInsets.all(10 * scale),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16 * scale),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF00F5D4).withOpacity(0.25),
+                  blurRadius: 14 * scale,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: QrImageView(
+              data: _reversePairSession!.qrUrl,
+              version: QrVersions.auto,
+              size: 130 * scale,
+              backgroundColor: Colors.white,
+              padding: EdgeInsets.zero,
+            ),
+          ),
+          SizedBox(height: 8 * scale),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 6 * scale,
+                height: 6 * scale,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF00F5D4),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              SizedBox(width: 6 * scale),
+              Text(
+                '스마트폰 기본 카메라로 스캔',
+                style: GoogleFonts.notoSansKr(
+                  color: const Color(0xFF00F5D4),
+                  fontSize: 11 * scale,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 2 * scale),
+          Text(
+            '로그인 즉시 전자칠판에 자동 연결',
+            style: GoogleFonts.notoSansKr(
+              color: Colors.white54,
+              fontSize: 9.5 * scale,
+            ),
+          ),
+          SizedBox(height: 4 * scale),
+          InkWell(
+            onTap: _refreshReverseQrSession,
+            borderRadius: BorderRadius.circular(8 * scale),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 3 * scale),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.refresh_rounded, color: Colors.white38, size: 12 * scale),
+                  SizedBox(width: 4 * scale),
+                  Text('새 QR 생성', style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 9.5 * scale)),
+                ],
+              ),
+            ),
+          ),
+        ] else ...[
+          IconButton(
+            icon: Icon(Icons.refresh_rounded, color: const Color(0xFF00F5D4), size: 28 * scale),
+            onPressed: _refreshReverseQrSession,
+          ),
+          Text('QR 생성 실패 (터치하여 재시도)', style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 11 * scale)),
+        ],
+      ],
+    );
+  }
+
+  // --- [신규] 스마트폰 QR 스캔 & 3x4 터치 키패드 통합 패널 (광고판과 동일한 크기) ---
   Widget _buildCloudOtpKeypadPanel(double scale) {
     return Container(
       decoration: BoxDecoration(
@@ -5830,10 +5989,10 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           color: const Color(0xFF00F5D4).withOpacity(0.35),
           width: 1.5,
         ),
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           colors: [
-            const Color(0xFF0D231E),
-            const Color(0xFF071411),
+            Color(0xFF0D231E),
+            Color(0xFF071411),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -5846,113 +6005,170 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           ),
         ],
       ),
-      padding: EdgeInsets.all(12 * scale),
+      padding: EdgeInsets.all(10 * scale),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 상단 안내
-          Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(6 * scale),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00F5D4).withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8 * scale),
-                ),
-                child: Icon(Icons.cloud_circle_rounded, color: const Color(0xFF00F5D4), size: 16 * scale),
-              ),
-              SizedBox(width: 8 * scale),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'BST Cloud 빠른 접속',
-                      style: GoogleFonts.notoSansKr(
-                        color: Colors.white,
-                        fontSize: 13 * scale,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      '교사용 앱 OTP 6자리 입력',
-                      style: GoogleFonts.notoSansKr(
-                        color: Colors.white54,
-                        fontSize: 10 * scale,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 10 * scale),
-
-          // 6자리 PIN 디스플레이 인디케이터
+          // 상단 모드 전환 탭 (📷 스마트폰 QR vs 🔢 번호 입력)
           Container(
-            padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 8 * scale),
+            padding: EdgeInsets.all(3 * scale),
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.4),
               borderRadius: BorderRadius.circular(12 * scale),
-              border: Border.all(
-                color: _otpErrorMsg != null ? Colors.redAccent : const Color(0xFF00F5D4).withOpacity(0.3),
-                width: 1,
-              ),
+              border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.2)),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: List.generate(6, (idx) {
-                final hasChar = idx < _enteredOtp.length;
-                final char = hasChar ? _enteredOtp[idx] : '';
-                return Container(
-                  width: 28 * scale,
-                  height: 32 * scale,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: hasChar ? const Color(0xFF00F5D4).withOpacity(0.15) : Colors.white.withOpacity(0.04),
-                    borderRadius: BorderRadius.circular(6 * scale),
-                    border: Border.all(
-                      color: hasChar ? const Color(0xFF00F5D4) : Colors.white24,
-                      width: 1.2,
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      if (!_isCloudQrMode) {
+                        setState(() => _isCloudQrMode = true);
+                        _initReverseQrSession();
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(9 * scale),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: 5 * scale),
+                      decoration: BoxDecoration(
+                        color: _isCloudQrMode ? const Color(0xFF00F5D4) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(9 * scale),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.qr_code_scanner_rounded,
+                            size: 13 * scale,
+                            color: _isCloudQrMode ? const Color(0xFF081714) : Colors.white60,
+                          ),
+                          SizedBox(width: 4 * scale),
+                          Text(
+                            '스마트폰 QR',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 11 * scale,
+                              fontWeight: FontWeight.bold,
+                              color: _isCloudQrMode ? const Color(0xFF081714) : Colors.white60,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  child: Text(
-                    char.isNotEmpty ? char : '-',
-                    style: GoogleFonts.sourceCodePro(
-                      color: hasChar ? const Color(0xFF00F5D4) : Colors.white30,
-                      fontSize: 16 * scale,
-                      fontWeight: FontWeight.bold,
+                ),
+                SizedBox(width: 4 * scale),
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      if (_isCloudQrMode) {
+                        setState(() => _isCloudQrMode = false);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(9 * scale),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: 5 * scale),
+                      decoration: BoxDecoration(
+                        color: !_isCloudQrMode ? const Color(0xFF00F5D4) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(9 * scale),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.dialpad_rounded,
+                            size: 13 * scale,
+                            color: !_isCloudQrMode ? const Color(0xFF081714) : Colors.white60,
+                          ),
+                          SizedBox(width: 4 * scale),
+                          Text(
+                            '번호 입력',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 11 * scale,
+                              fontWeight: FontWeight.bold,
+                              color: !_isCloudQrMode ? const Color(0xFF081714) : Colors.white60,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                );
-              }),
+                ),
+              ],
             ),
           ),
+          SizedBox(height: 6 * scale),
 
-          if (_otpErrorMsg != null) ...[
-            SizedBox(height: 4 * scale),
-            Text(
-              _otpErrorMsg!,
-              style: GoogleFonts.notoSansKr(color: Colors.redAccent, fontSize: 10 * scale, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-          ],
-
-          SizedBox(height: 8 * scale),
-
-          // 3x4 터치 숫자 키패드
+          // 메인 영역: QR 뷰 vs 숫자 키패드 뷰
           Expanded(
-            child: _isVerifyingOtp
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)))
+            child: _isCloudQrMode
+                ? _buildCloudQrScannerView(scale)
                 : Column(
                     children: [
-                      Expanded(child: _buildKeypadRow(['1', '2', '3'], scale)),
-                      SizedBox(height: 4 * scale),
-                      Expanded(child: _buildKeypadRow(['4', '5', '6'], scale)),
-                      SizedBox(height: 4 * scale),
-                      Expanded(child: _buildKeypadRow(['7', '8', '9'], scale)),
-                      SizedBox(height: 4 * scale),
-                      Expanded(child: _buildKeypadRow(['CLEAR', '0', 'BACK'], scale)),
+                      // 6자리 PIN 디스플레이 인디케이터
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 6 * scale),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(10 * scale),
+                          border: Border.all(
+                            color: _otpErrorMsg != null ? Colors.redAccent : const Color(0xFF00F5D4).withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: List.generate(6, (idx) {
+                            final hasChar = idx < _enteredOtp.length;
+                            final char = hasChar ? _enteredOtp[idx] : '';
+                            return Container(
+                              width: 24 * scale,
+                              height: 28 * scale,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: hasChar ? const Color(0xFF00F5D4).withOpacity(0.15) : Colors.white.withOpacity(0.04),
+                                borderRadius: BorderRadius.circular(5 * scale),
+                                border: Border.all(
+                                  color: hasChar ? const Color(0xFF00F5D4) : Colors.white24,
+                                  width: 1.1,
+                                ),
+                              ),
+                              child: Text(
+                                char.isNotEmpty ? char : '-',
+                                style: GoogleFonts.sourceCodePro(
+                                  color: hasChar ? const Color(0xFF00F5D4) : Colors.white30,
+                                  fontSize: 14 * scale,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+                      if (_otpErrorMsg != null) ...[
+                        SizedBox(height: 3 * scale),
+                        Text(
+                          _otpErrorMsg!,
+                          style: GoogleFonts.notoSansKr(color: Colors.redAccent, fontSize: 9.5 * scale, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                      SizedBox(height: 6 * scale),
+                      // 3x4 터치 키패드
+                      Expanded(
+                        child: _isVerifyingOtp
+                            ? const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)))
+                            : Column(
+                                children: [
+                                  Expanded(child: _buildKeypadRow(['1', '2', '3'], scale)),
+                                  SizedBox(height: 3 * scale),
+                                  Expanded(child: _buildKeypadRow(['4', '5', '6'], scale)),
+                                  SizedBox(height: 3 * scale),
+                                  Expanded(child: _buildKeypadRow(['7', '8', '9'], scale)),
+                                  SizedBox(height: 3 * scale),
+                                  Expanded(child: _buildKeypadRow(['CLEAR', '0', 'BACK'], scale)),
+                                ],
+                              ),
+                      ),
                     ],
                   ),
           ),
@@ -7842,13 +8058,13 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         borderRadius: BorderRadius.circular(24),
                         child: Image.network(
                           _getCorsSafeImageUrl(_adBanners[_currentBannerIndex]['imageUrl'] as String),
-                          fit: BoxFit.contain,
+                          fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Image.network(
                             'https://images.weserv.nl/?url=${Uri.encodeComponent(_adBanners[_currentBannerIndex]['imageUrl'] as String)}',
-                            fit: BoxFit.contain,
+                            fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Image.network(
                               _adBanners[_currentBannerIndex]['imageUrl'] as String,
-                              fit: BoxFit.contain,
+                              fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => const SizedBox(),
                             ),
                           ),

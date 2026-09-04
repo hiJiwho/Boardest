@@ -17,6 +17,70 @@ class BoardStorageService {
 
   static const _mappingFileName = 'board_mappings.json';
 
+  /// 판서 파일명 한국어 친절 포맷팅
+  /// 예: "[2-8] 2026-09-04_194842.pen" -> "2학년 8반에서 26년 09월 04일에 시작한 판서"
+  static String formatBoardDisplayName(String rawName) {
+    if (rawName.isEmpty) return '판서';
+    final baseName = p.basenameWithoutExtension(rawName);
+
+    // 1. 학년 / 반 파싱
+    String? gradeText;
+    String? classText;
+
+    // 패턴 1: [2-8], [208], [2학년 8반]
+    final bracketMatch = RegExp(r'\[([0-9]+)[-_ ]?([0-9]*)\]').firstMatch(baseName);
+    if (bracketMatch != null) {
+      final p1 = bracketMatch.group(1) ?? '';
+      final p2 = bracketMatch.group(2) ?? '';
+      if (p2.isNotEmpty) {
+        gradeText = '${p1}학년';
+        classText = '${int.tryParse(p2) ?? p2}반';
+      } else if (p1.length == 3) {
+        gradeText = '${p1[0]}학년';
+        classText = '${int.tryParse(p1.substring(1)) ?? p1.substring(1)}반';
+      } else if (p1.length == 2) {
+        gradeText = '${p1[0]}학년';
+        classText = '${int.tryParse(p1.substring(1)) ?? p1.substring(1)}반';
+      }
+    }
+
+    if (gradeText == null) {
+      final prefixMatch = RegExp(r'^([1-6])[-_]([0-9]{1,2})').firstMatch(baseName);
+      if (prefixMatch != null) {
+        gradeText = '${prefixMatch.group(1)}학년';
+        classText = '${int.tryParse(prefixMatch.group(2)!) ?? prefixMatch.group(2)}반';
+      }
+    }
+
+    // 2. 날짜 파싱 (2026-09-04 or 20260904 or 260904)
+    String? dateText;
+    final dateMatch1 = RegExp(r'(20[2-3][0-9])[-_.](0[1-9]|1[0-2])[-_.]([0-3][0-9])').firstMatch(baseName);
+    if (dateMatch1 != null) {
+      final y = dateMatch1.group(1)!.substring(2);
+      final m = dateMatch1.group(2)!;
+      final d = dateMatch1.group(3)!;
+      dateText = '${y}년 ${m}월 ${d}일';
+    } else {
+      final dateMatch2 = RegExp(r'(2[0-9])(0[1-9]|1[0-2])([0-3][0-9])').firstMatch(baseName);
+      if (dateMatch2 != null) {
+        final y = dateMatch2.group(1)!;
+        final m = dateMatch2.group(2)!;
+        final d = dateMatch2.group(3)!;
+        dateText = '${y}년 ${m}월 ${d}일';
+      }
+    }
+
+    if (gradeText != null && classText != null && dateText != null) {
+      return '$gradeText $classText에서 $dateText에 시작한 판서';
+    } else if (gradeText != null && classText != null) {
+      return '$gradeText $classText 판서';
+    } else if (dateText != null) {
+      return '$dateText에 시작한 판서';
+    }
+
+    return baseName;
+  }
+
   Future<Directory> _getBoardDirectory() =>
       BstSaveService.instance.directoryFor(BstSaveService.subBoard);
 

@@ -11,6 +11,7 @@ import '../services/bst_cloud_service.dart';
 import '../views/canva_overlay_view.dart';
 import '../views/pdf_board_view.dart';
 import '../views/ppt_overlay_view.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 /// 전자칠판용 클라우드 파일 탐색기 & 터치 키패드 모달 (BstCloudModal)
 class BstCloudModal extends StatefulWidget {
@@ -32,9 +33,12 @@ class _BstCloudModalState extends State<BstCloudModal> {
   String _status = 'none';
   String? _errorMessage;
 
-  // 0: 6자리 1회용 OTP 모드, 1: 2자리 Cloud ID 자동로그인 모드
-  int _loginMode = 0;
+  // 0: 6자리 1회용 OTP 모드, 1: 2자리 Cloud ID 자동로그인 모드, 2: 스마트폰 QR 모드
+  int _loginMode = 2; // 스마트폰 QR 모드 기본 활성화
   String _enteredPin = '';
+  ReversePairSession? _modalQrSession;
+  bool _isLoadingModalQr = false;
+  bool _modalQrCancelled = false;
 
   // 파일 탐색기 상태
   bool _loadingFiles = false;
@@ -64,13 +68,67 @@ class _BstCloudModalState extends State<BstCloudModal> {
       _teacherName = BstCloudService.instance.activeTeacherName ?? '선생님';
       _status = 'approved';
       _loadFiles();
+    } else {
+      _initModalQrSession();
     }
   }
 
   @override
   void dispose() {
+    _modalQrCancelled = true;
     _pairingTimer?.cancel();
     super.dispose();
+  }
+
+  void _initModalQrSession() async {
+    if (_modalQrSession != null || _isLoadingModalQr) return;
+    if (!mounted) return;
+    setState(() {
+      _isLoadingModalQr = true;
+      _modalQrCancelled = false;
+    });
+
+    try {
+      final user = await AuthService().getCurrentUser();
+      final session = await BstCloudService.instance.createReversePairSession(
+        grade: user?.grade,
+        classNum: user?.classNum,
+      );
+      if (!mounted) return;
+      setState(() {
+        _modalQrSession = session;
+        _isLoadingModalQr = false;
+      });
+
+      final res = await BstCloudService.instance.waitForReversePairAuth(
+        session.secret,
+        isCancelled: () => !mounted || _modalQrCancelled || BstCloudService.instance.activeToken != null,
+      );
+
+      if (!mounted) return;
+      if (res.success && BstCloudService.instance.activeToken != null) {
+        _driveToken = BstCloudService.instance.activeToken;
+        _teacherName = res.teacherName ?? '선생님';
+        setState(() {
+          _status = 'approved';
+          _enteredPin = '';
+        });
+        _loadFiles();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingModalQr = false);
+      }
+    }
+  }
+
+  void _refreshModalQrSession() {
+    setState(() {
+      _modalQrCancelled = true;
+      _modalQrSession = null;
+      _isLoadingModalQr = false;
+    });
+    _initModalQrSession();
   }
 
   void _loadClassroomName() async {
@@ -404,10 +462,268 @@ class _BstCloudModalState extends State<BstCloudModal> {
     );
   }
 
-  // ─── 1. 터치 키패드 로그인 화면 (상단 토글 + PIN 디스플레이 + 숫자 키패드) ───
+  Widget _buildModeToggle(double s) {
+    return Container(
+      padding: EdgeInsets.all(4 * s),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(14 * s),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: () => setState(() {
+                _loginMode = 2;
+                _errorMessage = null;
+                _initModalQrSession();
+              }),
+              borderRadius: BorderRadius.circular(10 * s),
+              child: Container(
+                padding: EdgeInsets.symmetric(vertical: 10 * s),
+                decoration: BoxDecoration(
+                  color: _loginMode == 2 ? const Color(0xFF00F5D4) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10 * s),
+                ),
+                child: Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.qr_code_scanner_rounded, size: 14 * s, color: _loginMode == 2 ? const Color(0xFF0B0F19) : Colors.white70),
+                      SizedBox(width: 5 * s),
+                      Text(
+                        '📷 스마트폰 QR',
+                        style: GoogleFonts.notoSansKr(
+                          color: _loginMode == 2 ? const Color(0xFF0B0F19) : Colors.white70,
+                          fontSize: 12 * s,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: () => setState(() {
+                _loginMode = 0;
+                _enteredPin = '';
+                _errorMessage = null;
+              }),
+              borderRadius: BorderRadius.circular(10 * s),
+              child: Container(
+                padding: EdgeInsets.symmetric(vertical: 10 * s),
+                decoration: BoxDecoration(
+                  color: _loginMode == 0 ? const Color(0xFF6366F1) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10 * s),
+                ),
+                child: Center(
+                  child: Text(
+                    '🔑 6자리 코드',
+                    style: GoogleFonts.notoSansKr(
+                      color: _loginMode == 0 ? Colors.white : Colors.white60,
+                      fontSize: 12 * s,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: () => setState(() {
+                _loginMode = 1;
+                _enteredPin = '';
+                _errorMessage = null;
+              }),
+              borderRadius: BorderRadius.circular(10 * s),
+              child: Container(
+                padding: EdgeInsets.symmetric(vertical: 10 * s),
+                decoration: BoxDecoration(
+                  color: _loginMode == 1 ? const Color(0xFF10B981) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10 * s),
+                ),
+                child: Center(
+                  child: Text(
+                    '⚡ Cloud ID',
+                    style: GoogleFonts.notoSansKr(
+                      color: _loginMode == 1 ? Colors.white : Colors.white60,
+                      fontSize: 12 * s,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQrStepRow(String step, String text, double s) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 20 * s,
+          height: 20 * s,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFF6366F1).withOpacity(0.3),
+            shape: BoxShape.circle,
+            border: Border.all(color: const Color(0xFF818CF8), width: 1.2),
+          ),
+          child: Text(
+            step,
+            style: GoogleFonts.outfit(color: const Color(0xFF818CF8), fontSize: 11 * s, fontWeight: FontWeight.bold),
+          ),
+        ),
+        SizedBox(width: 8 * s),
+        Expanded(
+          child: Text(
+            text,
+            style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12.5 * s, height: 1.4),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── 1. 터치 키패드 & QR 로그인 화면 (상단 토글 + PIN 디스플레이/QR + 숫자 키패드) ───
   Widget _buildKeypadLoginView(double s) {
     if (_isPairingOpen && _pairingCode != null) {
       return _buildPairingUI(s);
+    }
+
+    if (_loginMode == 2) {
+      return SingleChildScrollView(
+        padding: EdgeInsets.all(20 * s),
+        child: Column(
+          children: [
+            _buildModeToggle(s),
+            SizedBox(height: 24 * s),
+            Row(
+              children: [
+                // 좌측: QR 코드 카드
+                Expanded(
+                  flex: 4,
+                  child: Center(
+                    child: _isLoadingModalQr
+                        ? const CircularProgressIndicator(color: Color(0xFF6366F1))
+                        : _modalQrSession != null
+                            ? Container(
+                                padding: EdgeInsets.all(16 * s),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20 * s),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF6366F1).withOpacity(0.3),
+                                      blurRadius: 20 * s,
+                                      spreadRadius: 4,
+                                    ),
+                                  ],
+                                ),
+                                child: QrImageView(
+                                  data: _modalQrSession!.qrUrl,
+                                  version: QrVersions.auto,
+                                  size: 190 * s,
+                                  backgroundColor: Colors.white,
+                                  padding: EdgeInsets.zero,
+                                ),
+                              )
+                            : Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  IconButton(
+                                    icon: Icon(Icons.refresh_rounded, size: 36 * s, color: const Color(0xFF818CF8)),
+                                    onPressed: _refreshModalQrSession,
+                                  ),
+                                  Text('QR 생성 실패 (다시 시도)', style: GoogleFonts.notoSansKr(color: Colors.white60, fontSize: 13 * s)),
+                                ],
+                              ),
+                  ),
+                ),
+                SizedBox(width: 24 * s),
+                // 우측: 설명 및 진행 상태
+                Expanded(
+                  flex: 5,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 4 * s),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00F5D4).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8 * s),
+                        ),
+                        child: Text(
+                          '⚡ 앱 설치 불필요 · 스마트폰 카메라 스캔',
+                          style: GoogleFonts.notoSansKr(
+                            color: const Color(0xFF00F5D4),
+                            fontSize: 12 * s,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 12 * s),
+                      Text(
+                        '스마트폰으로 비추면\n수업자료가 바로 열립니다',
+                        style: GoogleFonts.notoSansKr(
+                          color: Colors.white,
+                          fontSize: 20 * s,
+                          fontWeight: FontWeight.w900,
+                          height: 1.3,
+                        ),
+                      ),
+                      SizedBox(height: 12 * s),
+                      _buildQrStepRow('1', '스마트폰 기본 카메라를 켜고 왼쪽 QR을 스캔하세요.', s),
+                      SizedBox(height: 8 * s),
+                      _buildQrStepRow('2', '화면에 나타난 링크를 눌러 Google 계정으로 로그인하세요.', s),
+                      SizedBox(height: 8 * s),
+                      _buildQrStepRow('3', '로그인 즉시 이 전자칠판에 수업자료 클라우드가 열립니다!', s),
+                      SizedBox(height: 16 * s),
+                      Row(
+                        children: [
+                          Container(
+                            width: 8 * s,
+                            height: 8 * s,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF00F5D4),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          SizedBox(width: 8 * s),
+                          Text(
+                            '스마트폰 연동 대기 중...',
+                            style: GoogleFonts.notoSansKr(
+                              color: const Color(0xFF00F5D4),
+                              fontSize: 13 * s,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Spacer(),
+                          TextButton.icon(
+                            icon: Icon(Icons.refresh_rounded, size: 16 * s, color: Colors.white54),
+                            label: Text('새 QR 생성', style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 12 * s)),
+                            onPressed: _refreshModalQrSession,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
     }
 
     final maxLen = _loginMode == 0 ? 6 : 2;
@@ -423,73 +739,7 @@ class _BstCloudModalState extends State<BstCloudModal> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 1. 모드 토글 (6자리 OTP vs 2자리 Cloud ID)
-                Container(
-                  padding: EdgeInsets.all(4 * s),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(14 * s),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => setState(() {
-                            _loginMode = 0;
-                            _enteredPin = '';
-                            _errorMessage = null;
-                          }),
-                          borderRadius: BorderRadius.circular(10 * s),
-                          child: Container(
-                            padding: EdgeInsets.symmetric(vertical: 10 * s),
-                            decoration: BoxDecoration(
-                              color: _loginMode == 0 ? const Color(0xFF6366F1) : Colors.transparent,
-                              borderRadius: BorderRadius.circular(10 * s),
-                            ),
-                            child: Center(
-                              child: Text(
-                                '🔑 1회용 접속 코드 (6자리)',
-                                style: GoogleFonts.notoSansKr(
-                                  color: _loginMode == 0 ? Colors.white : Colors.white60,
-                                  fontSize: 12 * s,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => setState(() {
-                            _loginMode = 1;
-                            _enteredPin = '';
-                            _errorMessage = null;
-                          }),
-                          borderRadius: BorderRadius.circular(10 * s),
-                          child: Container(
-                            padding: EdgeInsets.symmetric(vertical: 10 * s),
-                            decoration: BoxDecoration(
-                              color: _loginMode == 1 ? const Color(0xFF10B981) : Colors.transparent,
-                              borderRadius: BorderRadius.circular(10 * s),
-                            ),
-                            child: Center(
-                              child: Text(
-                                '⚡ 자동 로그인 (Cloud ID)',
-                                style: GoogleFonts.notoSansKr(
-                                  color: _loginMode == 1 ? Colors.white : Colors.white60,
-                                  fontSize: 12 * s,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                _buildModeToggle(s),
 
                 SizedBox(height: 18 * s),
 

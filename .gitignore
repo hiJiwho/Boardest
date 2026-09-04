@@ -16,6 +16,9 @@ sign/
 *.pem
 *.sig
 *.pfx
+*.keystore
+scratch/
+Boadest-Firebase.pub/
 **/app_config.dart
 apps/boardest_teacher_oauth/
 infra/

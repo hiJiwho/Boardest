@@ -1,0 +1,52 @@
+{
+  "projects": {
+    "default": "jiwhosboardest"
+  },
+  "targets": {
+    "jiwhosboardest": {
+      "hosting": {
+        "boardest-main": [
+          "boardest"
+        ],
+        "bst-cld": [
+          "bst-cld"
+        ],
+        "boardest-teacher": [
+          "boardest-teacher"
+        ],
+        "boardest-teacher-lite": [
+          "boardest-teacher-lite"
+        ],
+        "update-work": [
+          "boardest-update-work"
+        ],
+        "boardest-control": [
+          "boardest-control"
+        ],
+        "what-is-boardest": [
+          "jiwhosboardest"
+        ],
+        "boardest-teacher-oauth": [
+          "boardest-teacher-oauth"
+        ],
+        "boardest-eat": [
+          "boardest-eat"
+        ]
+      }
+    },
+    "boardest-cloud": {
+      "hosting": {
+        "bst-cld": [
+          "bst-cld"
+        ],
+        "oauth-helper": [
+          "boadest-teacher-desktop-app-oauth-login-helper-with-boadest-cld"
+        ],
+        "what-is-boardest": [
+          "what-is-boardest"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

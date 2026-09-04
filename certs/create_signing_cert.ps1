@@ -25,7 +25,7 @@ $cert = New-SelfSignedCertificate `
     -KeyLength 2048 `
     -FriendlyName "Boardest MSIX Signing Certificate" `
     -CertStoreLocation "Cert:\CurrentUser\My" `
-    -NotAfter (Get-Date).AddYears(5)
+    -NotAfter ([DateTime]::Parse("2999-12-31 23:59:59"))
 
 $securePassword = ConvertTo-SecureString -String $Password -Force -AsPlainText
 
