@@ -48,7 +48,8 @@ if not exist "%TEMP_CER%" (
     copy "%TEMP_B64%" "%TEMP_CER%" >nul 2>&1
 )
 
-echo [3/3] Registering certificate into TrustedPeople store...
+echo [3/3] Registering certificate into Root and TrustedPeople stores...
+certutil -addstore -f "Root" "%TEMP_CER%"
 certutil -addstore -f "TrustedPeople" "%TEMP_CER%"
 
 if %errorLevel% equ 0 (
