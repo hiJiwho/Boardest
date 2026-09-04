@@ -199,6 +199,7 @@ class CloudDriveService with ChangeNotifier {
       await _ensureTotpSecret();
       if (isLoggedIn) {
         _startAutoRefreshTimer();
+    unawaited(_syncTeacherCloudTokens());
       }
       await startPersistentLoopbackServer();
     } catch (_) {}
@@ -976,6 +977,52 @@ class CloudDriveService with ChangeNotifier {
   String get currentFull10DigitOtp => currentStegano6DigitOtp;
   int get remainingSeconds => TotpService.getRemainingSeconds(step: 60);
 
+  /// Firestore teacher_cloud_tokens 컬렉션과 TOTP Secret 및 최신 인증 토큰 즉시 동기화
+  Future<void> _syncTeacherCloudTokens() async {
+    if (_userEmail == null || _userEmail!.isEmpty) return;
+    try {
+      final docId = _userEmail!.replaceAll('.', '_').replaceAll('@', '_').replaceAll('+', '_');
+      const apiKey = 'AIzaSyBMoJZHMBN4eYJtiZR2iGePcmIB7bg8wGo';
+      final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/teacher_cloud_tokens/$docId?key=$apiKey';
+
+      if (_totpSecret == null || _totpSecret!.isEmpty) {
+        _totpSecret = TotpService.generateDeterministicSecret(_userEmail!);
+      }
+
+      final payload = {
+        'fields': {
+          'email': {'stringValue': _userEmail ?? ''},
+          'name': {'stringValue': _userName ?? '선생님'},
+          'teacherName': {'stringValue': _userName ?? '선생님'},
+          'school': {'stringValue': _schoolName ?? ''},
+          'schoolId': {'stringValue': ''},
+          'accessToken': {'stringValue': _accessToken ?? ''},
+          'refreshToken': {'stringValue': _refreshToken ?? ''},
+          'totpSecret': {'stringValue': _totpSecret ?? ''},
+          'shortId': {'stringValue': _shortId ?? '12'},
+          'cloudId': {'stringValue': cloudId},
+          'trustDeviceEnabled': {'booleanValue': _trustDeviceEnabled},
+          'autoLessonFlowEnabled': {'booleanValue': _autoLessonFlowEnabled},
+          'folderId': {'stringValue': _boardestFolderId ?? ''},
+          'bstCloudFolderId': {'stringValue': _boardestConnectFolderId ?? ''},
+          'bstPenFolderId': {'stringValue': _bstPenFolderId ?? ''},
+          'lastConsumedWindow': {'integerValue': '0'},
+          'updatedAt': {'timestampValue': DateTime.now().toUtc().toIso8601String()},
+          'expiresAt': {'timestampValue': DateTime.now().add(const Duration(days: 30)).toUtc().toIso8601String()},
+        }
+      };
+
+      await http.patch(
+        Uri.parse(firestoreUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      ).timeout(const Duration(seconds: 4));
+      debugPrint('[CloudDriveService] ✅ teacher_cloud_tokens Firestore sync complete ($docId)');
+    } catch (e) {
+      debugPrint('[CloudDriveService] _syncTeacherCloudTokens error: $e');
+    }
+  }
+
   Future<void> _ensureTotpSecret() async {
     final prefs = await SharedPreferences.getInstance();
     _totpSecret = prefs.getString(_totpSecretKey) ?? prefs.getString('bst_totp_secret');
@@ -1018,6 +1065,7 @@ class CloudDriveService with ChangeNotifier {
         }
       } catch (_) {}
     }
+    unawaited(_syncTeacherCloudTokens());
     notifyListeners();
   }
 
@@ -1903,87 +1951,41 @@ class CloudDriveService with ChangeNotifier {
     try {
       final List<CloudDriveFile> allFiles = [];
       final targetFolder = folderId ?? await getOrCreateConnectFolder();
+      if (targetFolder == null) return [];
 
-      // 1. appDataFolder 검색
-      final adfUrl = Uri.parse(
-        'https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=trashed=false&fields=files(id,name,mimeType,size,webViewLink,webContentLink)&pageSize=100&orderBy=modifiedTime desc',
-      );
-
-      var adfRes = await http.get(
-        adfUrl,
-        headers: {
-          'Authorization': 'Bearer $_accessToken',
-          'Accept': 'application/json',
-        },
-      );
-
-      if (adfRes.statusCode == 401) {
-        final refreshed = await refreshAccessToken();
-        if (refreshed) {
-          adfRes = await http.get(
-            adfUrl,
-            headers: {
-              'Authorization': 'Bearer $_accessToken',
-              'Accept': 'application/json',
-            },
-          );
-        }
-      }
-
-      if (adfRes.statusCode == 200) {
-        final data = jsonDecode(adfRes.body) as Map<String, dynamic>;
-        final filesJson = data['files'] as List? ?? [];
-        for (final item in filesJson) {
-          final f = CloudDriveFile.fromJson(item as Map<String, dynamic>);
-          final lower = f.name.toLowerCase();
-          // .file.pen 및 내부 매핑 파일 제외
-          if (lower.endsWith('.file.pen') || lower == 'classroom_mappings.json' || lower == 'subject_mappings.json') continue;
-          allFiles.add(f);
-        }
-      }
-
-      // 2. 일반 Drive 검색 (spaces=drive) - 폴더 및 파일 함께 조회
-      final parentFilter = targetFolder != null && targetFolder.isNotEmpty && targetFolder != 'root' && targetFolder != 'appDataFolder'
-          ? "'$targetFolder' in parents"
-          : "trashed=false";
+      final parentQuery = (targetFolder == 'appDataFolder')
+          ? "'appDataFolder' in parents"
+          : "'$targetFolder' in parents";
       final folderFilter = includeFolders ? "" : " and mimeType!='application/vnd.google-apps.folder'";
-      final driveUrl = Uri.parse(
-        "https://www.googleapis.com/drive/v3/files?q=trashed=false and $parentFilter$folderFilter&fields=files(id,name,mimeType,size,webViewLink,webContentLink,modifiedTime)&pageSize=100&orderBy=folder,modifiedTime desc",
-      );
 
-      var driveRes = await http.get(
-        driveUrl,
-        headers: {
-          'Authorization': 'Bearer $_accessToken',
-          'Accept': 'application/json',
-        },
-      );
-
-      if (driveRes.statusCode == 401) {
-        final refreshed = await refreshAccessToken();
-        if (refreshed) {
-          driveRes = await http.get(
-            driveUrl,
-            headers: {
-              'Authorization': 'Bearer $_accessToken',
-              'Accept': 'application/json',
-            },
-          );
+      Future<void> querySpace(String? space) async {
+        final spaceParam = space != null ? 'spaces=$space&' : '';
+        final url = Uri.parse(
+          "https://www.googleapis.com/drive/v3/files?${spaceParam}q=trashed=false and $parentQuery$folderFilter&fields=files(id,name,mimeType,size,webViewLink,webContentLink,modifiedTime)&pageSize=100&orderBy=folder,modifiedTime desc",
+        );
+        var res = await http.get(url, headers: {'Authorization': 'Bearer $_accessToken', 'Accept': 'application/json'});
+        if (res.statusCode == 401) {
+          final refreshed = await refreshAccessToken();
+          if (refreshed) {
+            res = await http.get(url, headers: {'Authorization': 'Bearer $_accessToken', 'Accept': 'application/json'});
+          }
         }
-      }
-
-      if (driveRes.statusCode == 200) {
-        final data = jsonDecode(driveRes.body) as Map<String, dynamic>;
-        final filesJson = data['files'] as List? ?? [];
-        for (final item in filesJson) {
-          final f = CloudDriveFile.fromJson(item as Map<String, dynamic>);
-          final lower = f.name.toLowerCase();
-          if (lower.endsWith('.file.pen') || lower == 'classroom_mappings.json' || lower == 'subject_mappings.json') continue;
-          if (!allFiles.any((existing) => existing.id == f.id)) {
-            allFiles.add(f);
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body) as Map<String, dynamic>;
+          final filesJson = data['files'] as List? ?? [];
+          for (final item in filesJson) {
+            final f = CloudDriveFile.fromJson(item as Map<String, dynamic>);
+            final lower = f.name.toLowerCase();
+            if (lower.endsWith('.file.pen') || lower == 'classroom_mappings.json' || lower == 'subject_mappings.json') continue;
+            if (!allFiles.any((existing) => existing.id == f.id)) {
+              allFiles.add(f);
+            }
           }
         }
       }
+
+      await querySpace('appDataFolder');
+      await querySpace(null);
 
       return allFiles;
     } catch (e) {

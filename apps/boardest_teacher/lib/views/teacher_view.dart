@@ -281,15 +281,13 @@ class _TeacherViewState extends State<TeacherView> {
   void _startOtpTimer() {
     _updateOtp();
     _otpTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      final now = DateTime.now();
-      final sec = now.second;
-      final rem = 60 - sec;
+      final rem = TotpService.getRemainingSeconds(step: 60);
       if (rem != _remainingSeconds && mounted) {
         setState(() {
           _remainingSeconds = rem;
         });
       }
-      if (sec == 0) {
+      if (rem == 60 || rem == 1) {
         _updateOtp();
       }
     });
@@ -298,10 +296,7 @@ class _TeacherViewState extends State<TeacherView> {
   void _updateOtp() {
     try {
       final cloud = CloudDriveService.instance;
-      final secret = cloud.totpSecret;
-      final otp = (secret != null && secret.isNotEmpty)
-          ? TotpService.generateCurrentOtp(secret, step: 60)
-          : cloud.currentOtp;
+      final otp = cloud.currentStegano6DigitOtp;
       if (mounted) {
         setState(() {
           _currentOtp = otp.isNotEmpty ? otp : '------';
@@ -310,7 +305,7 @@ class _TeacherViewState extends State<TeacherView> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _currentOtp = '741289';
+          _currentOtp = '------';
         });
       }
     }
@@ -333,8 +328,10 @@ class _TeacherViewState extends State<TeacherView> {
       PanserPluginService.checkAndAutoInstallOnStartup();
     }
     await CloudDriveService.instance.init();
+    _updateOtp();
     _refreshDriveFiles();
     CloudDriveService.instance.registerLoginCallback(() async {
+      _updateOtp();
       final s = await _storageService.loadConfigAndSync();
       if (mounted) {
         setState(() {
@@ -2357,28 +2354,26 @@ class _TeacherViewState extends State<TeacherView> {
     if (fileId.isEmpty) return;
 
     try {
-      if (kIsWeb) {
-        final lower = name.toLowerCase();
-        if (lower.endsWith('.pptx') || lower.endsWith('.ppt') || lower.endsWith('.pdf')) {
-          final previewUrl = 'https://docs.google.com/viewer?srcid=$fileId&pid=explorer&efh=false&a=v&chrome=false&embedded=true';
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => WebHwpPptView(
-                filePathOrUrl: previewUrl,
-                title: name,
-                scaleFactor: _settings.scaleFactor,
-                isPpt: lower.contains('ppt'),
-              ),
-            ),
-          );
-          return;
-        }
-      }
+      final lower = name.toLowerCase();
+
+      // Boardest 지원 포맷 확인:
+      // PDF, 판서(.pen, .bstpen, .iwb), 교과서(.tbp, .bsttbp), Canva(.canva, .canva.bst)
+      final isBoardestNativeFormat = lower.endsWith('.pdf') ||
+          lower.endsWith('.pen') ||
+          lower.endsWith('.bstpen') ||
+          lower.endsWith('.iwb') ||
+          lower.endsWith('.tbp') ||
+          lower.endsWith('.bsttbp') ||
+          lower.endsWith('.canva') ||
+          lower.endsWith('.canva.bst');
+
+      final isWindowsOffice = (lower.endsWith('.pptx') || lower.endsWith('.ppt') || lower.endsWith('.hwpx') || lower.endsWith('.hwp')) &&
+          (!kIsWeb && Platform.isWindows);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$name 다운로드 및 Boardest로 여는 중...'),
+            content: Text('$name 준비 중...'),
             duration: const Duration(seconds: 2),
           ),
         );
@@ -2390,11 +2385,24 @@ class _TeacherViewState extends State<TeacherView> {
         mimeType: file['mimeType']?.toString() ?? '',
         modifiedTime: DateTime.tryParse(file['modifiedTime']?.toString() ?? '') ?? DateTime.now(),
         size: int.tryParse(file['size']?.toString() ?? '0') ?? 0,
+        webViewLink: file['webViewLink']?.toString(),
+        webContentLink: file['webContentLink']?.toString(),
       );
 
       final localF = await CloudDriveService.instance.downloadDriveFileToTemp(driveFile);
-      if (localF != null && localF.existsSync()) {
-        _openFile(localF.path);
+
+      if (isBoardestNativeFormat || isWindowsOffice) {
+        if (localF != null && localF.existsSync()) {
+          _openFile(localF.path);
+        }
+      } else {
+        // 미지원 외부 파일 (안드로이드 / Web 등): 다운로드 또는 기본 앱 실행
+        if (kIsWeb) {
+          final url = driveFile.webContentLink ?? 'https://www.googleapis.com/drive/v3/files/$fileId?alt=media';
+          launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        } else if (localF != null && localF.existsSync()) {
+          launchUrl(Uri.file(localF.path));
+        }
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('파일 열기 실패: $e')));
@@ -2886,6 +2894,14 @@ class _TeacherViewState extends State<TeacherView> {
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                       onPressed: _openAuthAndDeviceManager,
+                    ),
+                    SizedBox(width: 6 * s),
+                    IconButton(
+                      icon: Icon(Icons.create_new_folder_rounded, size: 16 * s, color: const Color(0xFFFFB703)),
+                      tooltip: '새 폴더 만들기',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: _showCreateFolderDialog,
                     ),
                     SizedBox(width: 6 * s),
                     IconButton(
@@ -6919,7 +6935,7 @@ class _TeacherViewState extends State<TeacherView> {
                 // 6자리 Stegano OTP 대형 카드
                 InkWell(
                   onTap: () {
-                    final full6 = cloud.currentStegano6DigitOtp;
+                    final full6 = _currentOtp;
                     Clipboard.setData(ClipboardData(text: full6));
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -6941,7 +6957,7 @@ class _TeacherViewState extends State<TeacherView> {
                       children: [
                         Builder(
                           builder: (context) {
-                            final full6 = cloud.currentStegano6DigitOtp;
+                            final full6 = _currentOtp;
                             final display6 = full6.length == 6
                                 ? (full6.substring(0, 3) + ' ' + full6.substring(3, 6))
                                 : full6;

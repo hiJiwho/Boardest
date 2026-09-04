@@ -4535,7 +4535,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                 );
                               }
 
-                              // 2. USB 연결 시: 왼쪽 지금수업(flex: 3) / 오른쪽 [급식(2) : USB(3)] (flex: 1)
+                              // 2. USB 연결 시: 좌측 지금수업(flex: 1 세로형) / 우측 USB 탐색기(flex: 3 와이드 전면)
                               if (_isUsbConnected) {
                                 return Expanded(
                                   flex: 2,
@@ -4543,43 +4543,37 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                     crossAxisAlignment: CrossAxisAlignment.stretch,
                                     children: [
                                       Expanded(
-                                        flex: 3,
-                                        child: _buildPptSubjectCard(todayLessons, isExpandedDock: false),
+                                        flex: 1,
+                                        child: _buildVerticalPptSubjectCard(todayLessons, scale),
                                       ),
                                       SizedBox(width: 12 * scale),
                                       Expanded(
-                                        flex: 1,
-                                        child: Column(
-                                          children: [
-                                            Expanded(flex: 2, child: _buildNeisMealCard(scale)),
-                                            SizedBox(height: 8 * scale),
-                                            Expanded(flex: 3, child: _buildCompactUsbExplorer(scale)),
-                                          ],
-                                        ),
+                                        flex: 3,
+                                        child: _buildFullUsbPanel(scale),
                                       ),
                                     ],
                                   ),
                                 );
                               }
 
-                              // 3. 일반 모드 (기본): 왼쪽 지금수업(flex: 3) / 오른쪽 [급식(2) : 광고판(3)] (flex: 1)
+                              // 3. 일반 모드 (기본): 왼쪽 지금수업(flex: 4) / 오른쪽 [급식(3) : 광고판(4)] (flex: 3)
                               return Expanded(
                                 flex: 2,
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     Expanded(
-                                      flex: 3,
+                                      flex: 4,
                                       child: _buildPptSubjectCard(todayLessons, isExpandedDock: false),
                                     ),
                                     SizedBox(width: 12 * scale),
                                     Expanded(
-                                      flex: 1,
+                                      flex: 3,
                                       child: Column(
                                         children: [
-                                          Expanded(flex: 2, child: _buildNeisMealCard(scale)),
-                                          SizedBox(height: 8 * scale),
-                                          Expanded(flex: 3, child: _buildPptAdBannerCard()),
+                                          Expanded(flex: 3, child: _buildNeisMealCard(scale)),
+                                          SizedBox(height: 10 * scale),
+                                          Expanded(flex: 4, child: _buildPptAdBannerCard()),
                                         ],
                                       ),
                                     ),
@@ -5706,60 +5700,120 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             ),
           ),
           SizedBox(width: 24 * scale),
-          // Right: Real-time status badge & Giant Subject Name (3:1 와이드 공간)
+          // Right: Real-time status badge & Giant Subject Name / 수업 중 OTP 바로가기
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 5 * scale),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10 * scale),
-                    border: Border.all(
-                      color: const Color(0xFF00F5D4).withValues(alpha: 0.45),
-                      width: 1.2,
-                    ),
-                  ),
-                  child: Text(
-                    statusBadge,
-                    style: GoogleFonts.notoSansKr(
-                      color: const Color(0xFF74f8e5),
-                      fontSize: 13.5 * scale,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.3,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                SizedBox(height: 10 * scale),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    subjectName,
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 68 * scale,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
-                      letterSpacing: -1.5,
-                      shadows: [
-                        Shadow(
-                          color: const Color(0xFF00F5D4).withOpacity(0.3),
-                          blurRadius: 16 * scale,
+            child: (_currentPeriod != null && _currentPeriod!.isClass && BstCloudService.instance.activeToken == null)
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 1. 상단: 상태 뱃지 & 과목명 (위로 배치)
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 4 * scale),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8 * scale),
+                              border: Border.all(
+                                color: const Color(0xFF00F5D4).withValues(alpha: 0.45),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Text(
+                              statusBadge,
+                              style: GoogleFonts.notoSansKr(
+                                color: const Color(0xFF74f8e5),
+                                fontSize: 12 * scale,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: -0.3,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          SizedBox(width: 10 * scale),
+                          Expanded(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                subjectName,
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 34 * scale,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  letterSpacing: -1,
+                                  shadows: [
+                                    Shadow(
+                                      color: const Color(0xFF00F5D4).withOpacity(0.3),
+                                      blurRadius: 10 * scale,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8 * scale),
+                      // 2. 하단: 광고판 크기만큼 OTP Cloud 바로가기 컨테이너!
+                      Expanded(
+                        child: _buildCloudOtpKeypadPanel(scale),
+                      ),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 5 * scale),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10 * scale),
+                          border: Border.all(
+                            color: const Color(0xFF00F5D4).withValues(alpha: 0.45),
+                            width: 1.2,
+                          ),
                         ),
-                        Shadow(
-                          color: Colors.black.withValues(alpha: 0.9),
-                          blurRadius: 8,
+                        child: Text(
+                          statusBadge,
+                          style: GoogleFonts.notoSansKr(
+                            color: const Color(0xFF74f8e5),
+                            fontSize: 13.5 * scale,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.3,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
+                      ),
+                      SizedBox(height: 10 * scale),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          subjectName,
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 68 * scale,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: -1.5,
+                            shadows: [
+                              Shadow(
+                                color: const Color(0xFF00F5D4).withOpacity(0.3),
+                                blurRadius: 16 * scale,
+                              ),
+                              Shadow(
+                                color: Colors.black.withValues(alpha: 0.9),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
@@ -6137,6 +6191,91 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   // --- [신규] 좌측 광활한 전면 Cloud 패널 (OTP 인증 완료 시 전개) ---
   Widget _buildFullCloudPanel(double scale) {
     return _buildInlineCloudDockPanel(scale);
+  }
+
+  // --- [신규] 좌측 광활한 전면 USB 패널 (USB 연결 시 전개 - Cloud처럼 크게 표시) ---
+  Widget _buildFullUsbPanel(double scale) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF081714),
+        borderRadius: BorderRadius.circular(24 * scale),
+        border: Border.all(
+          color: const Color(0xFF2CB67D).withOpacity(0.4),
+          width: 1.5,
+        ),
+      ),
+      padding: EdgeInsets.all(16 * scale),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(6 * scale),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2CB67D).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8 * scale),
+                ),
+                child: Icon(Icons.usb_rounded, color: const Color(0xFF2CB67D), size: 18 * scale),
+              ),
+              SizedBox(width: 10 * scale),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'USB 드라이브 ($_usbDriveLetter)',
+                      style: GoogleFonts.notoSansKr(
+                        color: Colors.white,
+                        fontSize: 15 * scale,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      '수업 자료 즉시 열기 및 판서 지원',
+                      style: GoogleFonts.notoSansKr(
+                        color: Colors.white54,
+                        fontSize: 10.5 * scale,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
+                onPressed: _checkUsbConnection,
+                tooltip: '새로고침',
+              ),
+              IconButton(
+                icon: const Icon(Icons.eject_rounded, color: Colors.orangeAccent),
+                onPressed: _ejectUsbDrive,
+                tooltip: 'USB 안전하게 분리',
+              ),
+            ],
+          ),
+          SizedBox(height: 10 * scale),
+          Expanded(
+            child: UsbExplorer(
+              drivePath: _usbDriveLetter,
+              scaleFactor: scale,
+              onFileOpen: (filePath) async {
+                int startPage = 0;
+                if (_usbSessionId.isNotEmpty) {
+                  final state = await UsbSessionService.instance
+                      .getFileState(_usbSessionId, filePath);
+                  startPage = state?.lastPage ?? 0;
+                }
+                _openUsbFileWithSession(
+                  _usbSessionId,
+                  filePath,
+                  startPage,
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // --- [신규] 좁은 폭의 컴팩트 USB 파일 탐색기 (USB 차등 대우) ---

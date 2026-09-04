@@ -54,15 +54,15 @@ class TotpService {
     return Uint8List.fromList(bytes);
   }
 
-  /// 현재 시각의 윈도우 인덱스 (기본: 30초 주기)
+  /// 현재 시각의 윈도우 인덱스 (기본: 30초 주기, 시간 디버깅과 무관하게 무조건 실제 현재 시각 DateTime.now() 기준)
   static int getCurrentWindow({DateTime? time, int step = stepSeconds}) {
-    final now = (time ?? NetworkTimeService.instance.now).toUtc().millisecondsSinceEpoch ~/ 1000;
+    final now = (time ?? DateTime.now()).toUtc().millisecondsSinceEpoch ~/ 1000;
     return now ~/ step;
   }
 
   /// 현재 주기에서 남은 시간(초)
   static int getRemainingSeconds({DateTime? time, int step = stepSeconds}) {
-    final now = (time ?? NetworkTimeService.instance.now).toUtc().millisecondsSinceEpoch ~/ 1000;
+    final now = (time ?? DateTime.now()).toUtc().millisecondsSinceEpoch ~/ 1000;
     return step - (now % step);
   }
 
@@ -207,9 +207,9 @@ class TotpService {
     }
   }
 
-  /// 6자리 동적 자릿수 셔플 (Steganography) 생성
+  /// 6자리 동적 자릿수 셔플 (Steganography) 생성 (무조건 실제 현재 시각 DateTime.now() 기준)
   static String encodeSteganography6(String cloudId2, String otp4, {DateTime? time}) {
-    final now = time ?? NetworkTimeService.instance.now;
+    final now = time ?? DateTime.now();
     final m = now.minute % 5;
     final cfg = steganoMap[m]!;
     final y = cloudId2.padLeft(2, '0').substring(0, 2);
@@ -224,9 +224,9 @@ class TotpService {
     return arr.join('');
   }
 
-  /// 6자리 동적 자릿수 셔플 (Steganography) 파싱
+  /// 6자리 동적 자릿수 셔플 (Steganography) 파싱 (무조건 실제 현재 시각 DateTime.now() 기준)
   static ({String cloudId, String otp}) parseSteganography6(String code, {DateTime? time}) {
-    final now = time ?? NetworkTimeService.instance.now;
+    final now = time ?? DateTime.now();
     final m = now.minute % 5;
     final cfg = steganoMap[m]!;
     final clean = code.trim().padLeft(6, '0');

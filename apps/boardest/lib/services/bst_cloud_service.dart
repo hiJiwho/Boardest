@@ -1105,7 +1105,6 @@ class BstCloudService {
       classroomName: classroomName,
       details: '[$classroomName] 6자리 OTP 인증 성공! 1회용 단기 Access Token 발급 및 소각 완료 (Window: ${verification.matchedWindow})',
     );
-
     return (
       success: true,
       accessToken: accessToken,
@@ -1116,39 +1115,110 @@ class BstCloudService {
   static const String _boardPairedSecretKey = 'bst_board_paired_secret';
   static const String _boardPairedKeyIdKey = 'bst_board_paired_key_id';
 
-  /// 1. 6자리 동적 자릿수 셔플 (Steganography) OTP 검증
+  /// 1. 6자리 동적 자릿수 셔플 (Steganography) OTP 검증 (Cloudflare Worker 1차 + Firestore 직접 Fallback 2차)
   Future<({bool success, String? accessToken, String? teacherName, String? email, String? errorMessage})> verify6DigitSteganoOtp(String fullCode) async {
     try {
       final cleanCode = fullCode.replaceAll(RegExp(r'\s+'), '');
       if (cleanCode.length != 6 && cleanCode.length != 10) {
         return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '6자리 접속 코드를 입력해주세요.');
       }
-      final res = await http.post(
-        Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/verify-otp'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'code': cleanCode}),
-      ).timeout(const Duration(seconds: 5));
 
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        activeToken = data['accessToken']?.toString();
-        activeTeacherName = data['teacherName']?.toString() ?? '선생님';
-        activeOwnerEmail = data['email']?.toString();
-        activeTotpSecret = data['totpSecret']?.toString() ?? data['secret']?.toString();
+      // 1차: Cloudflare Worker 시도
+      try {
+        final res = await http.post(
+          Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/verify-otp'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'code': cleanCode}),
+        ).timeout(const Duration(seconds: 4));
 
-        return (
-          success: true,
-          accessToken: activeToken,
-          teacherName: activeTeacherName,
-          email: activeOwnerEmail,
-          errorMessage: null,
-        );
-      } else {
-        final err = jsonDecode(res.body);
-        return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: err['error']?.toString() ?? '인증 실패');
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          activeToken = data['accessToken']?.toString();
+          activeTeacherName = data['teacherName']?.toString() ?? '선생님';
+          activeOwnerEmail = data['email']?.toString();
+          activeTotpSecret = data['totpSecret']?.toString() ?? data['secret']?.toString();
+
+          return (
+            success: true,
+            accessToken: activeToken,
+            teacherName: activeTeacherName,
+            email: activeOwnerEmail,
+            errorMessage: null,
+          );
+        }
+      } catch (_) {}
+
+      // 2차: Firestore 직접 Fallback 검증 (시간 디버깅과 무관하게 무조건 실제 현재 시각 DateTime.now() 기준)
+      try {
+        final teachers = await getCloudTeachers();
+        final nowTime = DateTime.now();
+        final candidateTimes = [
+          nowTime,
+          nowTime.subtract(const Duration(minutes: 1)),
+          nowTime.add(const Duration(minutes: 1)),
+        ];
+
+        for (final teacher in teachers) {
+          final sec = (teacher.totpSecret != null && teacher.totpSecret!.isNotEmpty)
+              ? teacher.totpSecret!
+              : TotpService.generateDeterministicSecret(teacher.ownerEmail);
+
+          bool isMatched = false;
+
+          for (final t in candidateTimes) {
+            if (cleanCode.length == 6) {
+              final parsed = TotpService.parseSteganography6(cleanCode, time: t);
+              final v4 = TotpService.verify4DigitOtp(
+                secret: sec,
+                inputOtp4: parsed.otp,
+                lastConsumedWindow: 0,
+                time: t,
+              );
+              if (v4.isValid) {
+                isMatched = true;
+                break;
+              }
+            }
+            final vStd = TotpService.verifyComprehensiveOtp(
+              secret: sec,
+              inputOtp: cleanCode,
+              lastConsumedWindow: 0,
+              time: t,
+            );
+            if (vStd.isValid) {
+              isMatched = true;
+              break;
+            }
+          }
+
+          if (isMatched) {
+            String? tok = teacher.directAccessToken;
+            if (teacher.refreshToken != null && teacher.refreshToken!.isNotEmpty) {
+              tok = await exchangeRefreshTokenForAccessToken(teacher.refreshToken!);
+            }
+            if (tok != null && tok.isNotEmpty) {
+              activeToken = tok;
+              activeTeacherName = teacher.teacherName;
+              activeOwnerEmail = teacher.ownerEmail;
+              activeTotpSecret = teacher.totpSecret;
+              activeFolderId = teacher.bstCloudFolderId.isNotEmpty ? teacher.bstCloudFolderId : teacher.folderId;
+              return (
+                success: true,
+                accessToken: activeToken,
+                teacherName: activeTeacherName,
+                email: activeOwnerEmail,
+                errorMessage: null,
+              );
+            }
+          }
+        }
+      } catch (fbErr) {
+        debugPrint('[BstCloudService] Firestore OTP fallback error: ' + fbErr.toString());
       }
+
+      return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '일회용 접속 코드가 일치하지 않거나 만료되었습니다.');
     } catch (e) {
-      return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '네트워크 연결 오류: $e');
+      return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '네트워크 연결 오류: ' + e.toString());
     }
   }
 
