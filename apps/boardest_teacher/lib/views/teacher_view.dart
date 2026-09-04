@@ -1448,9 +1448,9 @@ class _TeacherViewState extends State<TeacherView> {
       return;
     }
 
-    // 5. 파워포인트 (.pptx, .ppt): Boardest PPT 오버레이 뷰어
+    // 5. 파워포인트 (.pptx, .ppt): Windows만 직접 오버레이 지원, Web/Android는 다운로드 또는 기본앱 실행
     if (lower.endsWith('.pptx') || lower.endsWith('.ppt')) {
-      if (!kIsWeb) {
+      if (!kIsWeb && Platform.isWindows) {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => PptOverlayView(
@@ -1460,23 +1460,22 @@ class _TeacherViewState extends State<TeacherView> {
           ),
         );
       } else {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => WebHwpPptView(
-              filePathOrUrl: path,
-              title: p.basename(path),
-              scaleFactor: _settings.scaleFactor,
-              isPpt: true,
-            ),
-          ),
-        );
+        try {
+          if (kIsWeb) {
+            launchUrl(Uri.parse(path), mode: LaunchMode.externalApplication);
+          } else {
+            launchUrl(Uri.file(path));
+          }
+        } catch (e) {
+          debugPrint('[TeacherView] open external PPT error: $e');
+        }
       }
       return;
     }
 
-    // 6. 한글 문서 (.hwpx, .hwp): Boardest HWP 오버레이 뷰어
+    // 6. 한글 문서 (.hwpx, .hwp): Windows만 직접 오버레이 지원, Web/Android는 다운로드 또는 기본앱 실행
     if (lower.endsWith('.hwpx') || lower.endsWith('.hwp')) {
-      if (!kIsWeb) {
+      if (!kIsWeb && Platform.isWindows) {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => HwpOverlayView(
@@ -1486,16 +1485,15 @@ class _TeacherViewState extends State<TeacherView> {
           ),
         );
       } else {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => WebHwpPptView(
-              filePathOrUrl: path,
-              title: p.basename(path),
-              scaleFactor: _settings.scaleFactor,
-              isPpt: false,
-            ),
-          ),
-        );
+        try {
+          if (kIsWeb) {
+            launchUrl(Uri.parse(path), mode: LaunchMode.externalApplication);
+          } else {
+            launchUrl(Uri.file(path));
+          }
+        } catch (e) {
+          debugPrint('[TeacherView] open external HWP error: $e');
+        }
       }
       return;
     }
@@ -2088,6 +2086,9 @@ class _TeacherViewState extends State<TeacherView> {
   // ── Drive Files State ────────────────────────────────
   List<Map<String, dynamic>> _driveFiles = [];
   bool _isLoadingDriveFiles = false;
+  String? _currentDriveFolderId;
+  String _currentDriveFolderName = 'bst-save';
+  final List<Map<String, String>> _driveFolderNavStack = [];
   String _cloudCategoryFilter = '전체';
   String _cloudSearchQuery = '';
 
@@ -2105,11 +2106,17 @@ class _TeacherViewState extends State<TeacherView> {
     }).toList();
   }
 
-  Future<void> _refreshDriveFiles() async {
+  Future<void> _refreshDriveFiles({String? folderId, String? folderName}) async {
     if (!CloudDriveService.instance.isLoggedIn) return;
-    if (mounted) setState(() => _isLoadingDriveFiles = true);
+    if (mounted) {
+      setState(() {
+        _isLoadingDriveFiles = true;
+        if (folderId != null) _currentDriveFolderId = folderId;
+        if (folderName != null) _currentDriveFolderName = folderName;
+      });
+    }
     try {
-      final mergedList = await CloudDriveService.instance.fetchMergedMaterials();
+      final mergedList = await CloudDriveService.instance.fetchMergedMaterials(targetFolderId: _currentDriveFolderId);
       final list = mergedList.map((item) {
         final f = item['file'] as CloudDriveFile;
         return {
@@ -2837,14 +2844,40 @@ class _TeacherViewState extends State<TeacherView> {
                       ),
                     ),
                     SizedBox(width: 6 * s),
+                    if (_driveFolderNavStack.isNotEmpty) ...[
+                      InkWell(
+                        onTap: () {
+                          _driveFolderNavStack.removeLast();
+                          final parent = _driveFolderNavStack.isNotEmpty ? _driveFolderNavStack.last : null;
+                          _refreshDriveFiles(
+                            folderId: parent?['id'],
+                            folderName: parent?['name'] ?? 'bst-save',
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(4 * s),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4 * s, vertical: 2 * s),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.arrow_back_rounded, size: 14 * s, color: const Color(0xFF00F5D4)),
+                              SizedBox(width: 2 * s),
+                              Text('상위', style: TextStyle(color: const Color(0xFF00F5D4), fontSize: 9 * s, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 4 * s),
+                    ],
                     Expanded(
                       child: Text(
-                        '내 드라이브 > bst-save',
+                        '내 드라이브 > $_currentDriveFolderName',
                         style: GoogleFonts.sourceCodePro(
                           color: const Color(0xFF00F5D4),
                           fontSize: 11 * s,
                           fontWeight: FontWeight.bold,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     IconButton(
@@ -2986,12 +3019,17 @@ class _TeacherViewState extends State<TeacherView> {
                                     final file = displayFiles[i];
                                     final name = file['name']?.toString() ?? '자료';
                                     final lower = name.toLowerCase();
+                                    final isFolder = file['mimeType'] == 'application/vnd.google-apps.folder';
 
                                     Color iconColor = const Color(0xFF4285F4);
                                     IconData iconData = Icons.insert_drive_file_outlined;
                                     String tag = 'FILE';
 
-                                    if (lower.endsWith('.canva.bst') || lower.endsWith('.canva')) {
+                                    if (isFolder) {
+                                      iconColor = const Color(0xFFFFB703);
+                                      iconData = Icons.folder_rounded;
+                                      tag = '폴더';
+                                    } else if (lower.endsWith('.canva.bst') || lower.endsWith('.canva')) {
                                       iconColor = const Color(0xFF00C4CC);
                                       iconData = Icons.palette_rounded;
                                       tag = 'CANVA';
@@ -3010,7 +3048,14 @@ class _TeacherViewState extends State<TeacherView> {
                                     }
 
                                     return InkWell(
-                                      onTap: () => _openDriveFile(file),
+                                      onTap: () {
+                                        if (isFolder) {
+                                          _driveFolderNavStack.add({'id': file['id']?.toString() ?? '', 'name': name});
+                                          _refreshDriveFiles(folderId: file['id']?.toString(), folderName: name);
+                                        } else {
+                                          _openDriveFile(file);
+                                        }
+                                      },
                                       borderRadius: BorderRadius.circular(8 * s),
                                       child: Container(
                                         margin: EdgeInsets.only(bottom: 4 * s),

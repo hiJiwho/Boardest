@@ -85,7 +85,7 @@ class DashboardView extends StatefulWidget {
   State<DashboardView> createState() => _DashboardViewState();
 }
 
-class _DashboardViewState extends State<DashboardView> {
+class _DashboardViewState extends State<DashboardView> with TickerProviderStateMixin {
   final ComciganService _comciganService = ComciganService();
   final StorageService _storageService = StorageService();
   final NeisService _neisService = NeisService();
@@ -4488,83 +4488,115 @@ class _DashboardViewState extends State<DashboardView> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Col 1: Left - 오늘의 시간표 (1열, flex: 18)
+                    // 1:4:1 황금비 분할: 일과표(1) : 시계 및 메인(4) : 런처(1)
+                    // Col 1: Left - 오늘의 시간표 (flex: 1)
                     Expanded(
-                      flex: 18,
+                      flex: 1,
                       child: _buildTodayTimetablePanel(todayLessons, isWeekend),
                     ),
                     const SizedBox(width: 14),
 
-                    // Main Right Dashboard Area (flex: 82)
+                    // Col 2: Center - 시계 (상단 높이 1) & 수업/급식/광고판 (하단 높이 2) (flex: 4)
                     Expanded(
-                      flex: 82,
-                      child: Row(
+                      flex: 4,
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // 좌측/중앙 영역 (시계 + 1열 상단 3행 / 지금수업 + 광고판)
+                          // 상단 행 (높이 flex: 1): 와이드 초대형 시계 카드 (전체 가로폭 단독 점유!)
                           Expanded(
-                            flex: kIsWeb ? 88 : 86,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                // 상단 행 (flex: 43): 시계 카드 (flex: 75) + 1열 상단 3행 도구 (flex: 25) => 3:1 비율!
-                                Expanded(
-                                  flex: 43,
+                            flex: 1,
+                            child: _buildPptClockCard(dateString),
+                          ),
+                          SizedBox(height: 14 * scale),
+
+                          // 하단 행 (높이 flex: 2): 수업/급식/광고판
+                          Builder(
+                            builder: (context) {
+                              final isCloudActive = BstCloudService.instance.activeToken != null;
+
+                              // 1. Cloud 연결 시: 왼쪽 지금수업(flex: 1 세로형) / 오른쪽 클라우드(flex: 3) (급식 제거)
+                              if (isCloudActive) {
+                                return Expanded(
+                                  flex: 2,
                                   child: Row(
                                     crossAxisAlignment: CrossAxisAlignment.stretch,
                                     children: [
                                       Expanded(
-                                        flex: 75,
-                                        child: _buildPptClockCard(dateString),
+                                        flex: 1,
+                                        child: _buildVerticalPptSubjectCard(todayLessons, scale),
                                       ),
                                       SizedBox(width: 12 * scale),
                                       Expanded(
-                                        flex: 25,
-                                        child: _buildColumn1Top3Launcher(scale),
+                                        flex: 3,
+                                        child: _buildFullCloudPanel(scale),
                                       ),
                                     ],
                                   ),
-                                ),
-                                SizedBox(height: 14 * scale),
+                                );
+                              }
 
-                                // 하단 행 (flex: 57): 지금 수업 카드 / Cloud (flex: 75) + 광고판/컨텍스트 카드 (flex: 25) => 3:1 비율!
-                                Builder(
-                                  builder: (context) {
-                                    final isCloudActive = BstCloudService.instance.activeToken != null;
-                                    return Expanded(
-                                      flex: 57,
-                                      child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                              // 2. USB 연결 시: 왼쪽 지금수업(flex: 3) / 오른쪽 [급식(2) : USB(3)] (flex: 1)
+                              if (_isUsbConnected) {
+                                return Expanded(
+                                  flex: 2,
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      Expanded(
+                                        flex: 3,
+                                        child: _buildPptSubjectCard(todayLessons, isExpandedDock: false),
+                                      ),
+                                      SizedBox(width: 12 * scale),
+                                      Expanded(
+                                        flex: 1,
+                                        child: Column(
+                                          children: [
+                                            Expanded(flex: 2, child: _buildNeisMealCard(scale)),
+                                            SizedBox(height: 8 * scale),
+                                            Expanded(flex: 3, child: _buildCompactUsbExplorer(scale)),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              // 3. 일반 모드 (기본): 왼쪽 지금수업(flex: 3) / 오른쪽 [급식(2) : 광고판(3)] (flex: 1)
+                              return Expanded(
+                                flex: 2,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      flex: 3,
+                                      child: _buildPptSubjectCard(todayLessons, isExpandedDock: false),
+                                    ),
+                                    SizedBox(width: 12 * scale),
+                                    Expanded(
+                                      flex: 1,
+                                      child: Column(
                                         children: [
-                                          Expanded(
-                                            flex: 75,
-                                            child: isCloudActive
-                                                ? _buildFullCloudPanel(scale)
-                                                : _buildPptSubjectCard(todayLessons, isExpandedDock: false),
-                                          ),
-                                          SizedBox(width: 12 * scale),
-                                          // 광고판 폭을 25 flex로 줄여서 1열 3행 바로 아래에 깔끔하게 정렬! (3:1 비율 완성)
-                                          Expanded(
-                                            flex: 25,
-                                            child: _buildAdBannerOrContextCard(scale),
-                                          ),
+                                          Expanded(flex: 2, child: _buildNeisMealCard(scale)),
+                                          SizedBox(height: 8 * scale),
+                                          Expanded(flex: 3, child: _buildPptAdBannerCard()),
                                         ],
                                       ),
-                                    );
-                                  },
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(width: 14 * scale),
-
-                          // 우측 영역: 런처 패널 (exe에서도 폭을 미친 듯 줄여서 web의 2열 폭과 같게 flex 14로 압축!)
-                          Expanded(
-                            flex: kIsWeb ? 12 : 14,
-                            child: _buildRightSideLauncherPanel(scale),
+                              );
+                            },
                           ),
                         ],
                       ),
+                    ),
+                    const SizedBox(width: 14),
+
+                    // Col 3: Right - 런처 패널 (flex: 1)
+                    Expanded(
+                      flex: 1,
+                      child: _buildRightSideLauncherPanel(scale),
                     ),
                   ],
                 ),
@@ -5341,6 +5373,164 @@ class _DashboardViewState extends State<DashboardView> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// [신규] 급식 정보 카드 (Neis API 기반, 2:3 분할 상단용)
+  Widget _buildNeisMealCard(double scale) {
+    final currentCafeteria = _settings.cafeteriaNum.isNotEmpty ? _settings.cafeteriaNum : '급식실1';
+    final lines = _mealInfo
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF081714),
+        borderRadius: BorderRadius.circular(20 * scale),
+        border: Border.all(
+          color: const Color(0xFF2EC4B6).withValues(alpha: 0.25),
+          width: 1.2,
+        ),
+      ),
+      padding: EdgeInsets.all(10 * scale),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.restaurant_rounded, size: 14 * scale, color: const Color(0xFF00F5D4)),
+              SizedBox(width: 6 * scale),
+              Expanded(
+                child: Text(
+                  '오늘의 급식 ($currentCafeteria)',
+                  style: GoogleFonts.notoSansKr(
+                    color: Colors.white,
+                    fontSize: 11 * scale,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 6 * scale),
+          Expanded(
+            child: _isLoadingMeal
+                ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00F5D4)))
+                : lines.isEmpty
+                    ? Center(
+                        child: Text(
+                          '급식 정보가 없습니다',
+                          style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 10.5 * scale),
+                        ),
+                      )
+                    : ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: lines
+                                .map(
+                                  (line) => Padding(
+                                    padding: EdgeInsets.only(bottom: 2.5 * scale),
+                                    child: Text(
+                                      line,
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 10 * scale,
+                                        color: Colors.white.withValues(alpha: 0.85),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// [신규] Cloud 연결 시 1:3 좁은 폭을 위한 세로형 지금 수업 카드 (상단 교과서, 하단 과목명)
+  Widget _buildVerticalPptSubjectCard(List<Lesson> todayLessons, double scale) {
+    Lesson? liveLesson = _currentLesson;
+    if (liveLesson == null || liveLesson.subject.isEmpty) {
+      if (_currentPeriod != null && _currentPeriod!.isClass) {
+        liveLesson = todayLessons.where((l) => l.classTime == _currentPeriod!.period).firstOrNull;
+      }
+    }
+    liveLesson ??= todayLessons.firstOrNull;
+    final subjectName = (liveLesson != null && liveLesson.subject.isNotEmpty) ? liveLesson.subject : '수업 준비';
+    final String? imgPath = _settings.getTextbookPath(subjectName);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF081714),
+        borderRadius: BorderRadius.circular(20 * scale),
+        border: Border.all(
+          color: const Color(0xFF00F5D4).withValues(alpha: 0.2),
+          width: 1.2,
+        ),
+      ),
+      padding: EdgeInsets.all(10 * scale),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 3 * scale),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6 * scale),
+                border: Border.all(color: const Color(0xFF00F5D4).withValues(alpha: 0.4)),
+              ),
+              child: Text(
+                '지금 수업',
+                style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontSize: 10 * scale, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          SizedBox(height: 6 * scale),
+          Expanded(
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: 3 / 4,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10 * scale),
+                    border: Border.all(color: const Color(0xFF00F5D4).withValues(alpha: 0.3), width: 1),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(9 * scale),
+                    child: _buildAdaptiveTextbookImage(imgPath, fit: BoxFit.cover, subjectTitle: subjectName),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: 6 * scale),
+          Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                subjectName,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 22 * scale,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -9187,16 +9377,16 @@ class _DashboardViewState extends State<DashboardView> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 2열 (판서 & 수업 도구 7개, slots 7..13)
+                // 1열 (재배치된 핵심 Bst도구 7개: 판서, Cloud, 날씨, 달력, 앱서랍, 타이머, 설정)
                 Expanded(
                   child: Column(
                     children: [
                       _buildToolSlotItem('unified_pen', '판서하기', 7, scale),
-                      _buildToolSlotItem('textbookpro', '교과서', 8, scale),
-                      _buildToolSlotItem('canva_board', 'Canva', 9, scale),
-                      _buildToolSlotItem('bst_cloud', 'Cloud', 10, scale),
-                      _buildToolSlotItem('plugin_store', '플러그인', 11, scale),
-                      _buildToolSlotItem('student_connect', '학생연결', 12, scale),
+                      _buildToolSlotItem('bst_cloud', 'Cloud', 8, scale),
+                      _buildToolSlotItem('weather', '날씨', 9, scale),
+                      _buildToolSlotItem('school_calendar', '학사달력', 10, scale),
+                      _buildToolSlotItem('app_drawer', '앱서랍', 11, scale),
+                      _buildToolSlotItem('timer', '타이머', 12, scale),
                       _buildToolSlotItem('settings', '설정', 13, scale),
                     ],
                   ),

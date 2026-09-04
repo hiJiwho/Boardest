@@ -73,6 +73,7 @@ String _generatePkceChallenge(String verifier) {
 
 /// Google Drive API File Model
 class CloudDriveFile {
+  bool get isFolder => mimeType == 'application/vnd.google-apps.folder';
   final String id;
   final String name;
   final String mimeType;
@@ -108,6 +109,41 @@ class CloudDriveFile {
 
 /// Boardest Cloud Service — Direct Google OAuth2 & Drive API v3
 class CloudDriveService with ChangeNotifier {
+  Timer? _bgSyncTimer;
+  String? _bgSyncLocalPath;
+
+  void setBackgroundSyncFolder(String? path) {
+    _bgSyncLocalPath = path;
+    if (path != null && path.isNotEmpty) {
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setString('bst_bg_sync_folder', path);
+      });
+      _startBackgroundSyncTimer();
+    } else {
+      _bgSyncTimer?.cancel();
+      _bgSyncTimer = null;
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.remove('bst_bg_sync_folder');
+      });
+    }
+  }
+
+  void _startBackgroundSyncTimer() {
+    if (kIsWeb) return;
+    _bgSyncTimer?.cancel();
+    _bgSyncTimer = Timer.periodic(const Duration(seconds: 60), (_) async {
+      if (!isLoggedIn) return;
+      final path = _bgSyncLocalPath;
+      if (path != null && Directory(path).existsSync()) {
+        try {
+          await syncLocalFolderToDrive(path);
+        } catch (e) {
+          debugPrint('[CloudDriveService] Background sync error: $e');
+        }
+      }
+    });
+  }
+
   static final CloudDriveService instance = CloudDriveService._internal();
   CloudDriveService._internal();
 
@@ -1516,57 +1552,25 @@ class CloudDriveService with ChangeNotifier {
   }
 
   /// bst-save 에 저장된 모든 수업 자료 리스트 조회 (폴더 및 메타데이터 제외)
-  Future<List<Map<String, dynamic>>> fetchMergedMaterials() async {
+  Future<List<Map<String, dynamic>>> fetchMergedMaterials({String? targetFolderId}) async {
     if (!isLoggedIn) return [];
     final List<Map<String, dynamic>> merged = [];
     final Set<String> seenIds = {};
 
     try {
-      // 1. appDataFolder 검색
-      final adfFiles = await fetchDriveFiles(folderId: 'appDataFolder');
-      for (final f in adfFiles) {
-        if (f.mimeType == 'application/vnd.google-apps.folder') continue;
-        if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json') continue;
-        if (seenIds.add(f.id)) {
-          merged.add({
-            'file': f,
-            'source': 'cloud',
-            'sourceLabel': '☁️ Cloud',
-            'folderId': 'appDataFolder',
-          });
-        }
-      }
-
-      // 2. bst-save 폴더 검색
-      final saveFolderId = await getOrCreateConnectFolder();
-      if (saveFolderId != null && saveFolderId != 'appDataFolder') {
-        final saveFiles = await fetchDriveFiles(folderId: saveFolderId);
-        for (final f in saveFiles) {
-          if (f.mimeType == 'application/vnd.google-apps.folder') continue;
+      final folderId = targetFolderId ?? await getOrCreateConnectFolder();
+      if (folderId != null) {
+        final files = await fetchDriveFiles(folderId: folderId, includeFolders: true);
+        for (final f in files) {
           if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json') continue;
           if (seenIds.add(f.id)) {
             merged.add({
               'file': f,
               'source': 'cloud',
               'sourceLabel': '☁️ Cloud',
-              'folderId': saveFolderId,
+              'folderId': folderId,
             });
           }
-        }
-      }
-
-      // 3. Fallback: 최상위 Drive 파일 검색 (폴더 제외)
-      final rootFiles = await fetchDriveFiles(folderId: 'root');
-      for (final f in rootFiles) {
-        if (f.mimeType == 'application/vnd.google-apps.folder') continue;
-        if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json') continue;
-        if (seenIds.add(f.id)) {
-          merged.add({
-            'file': f,
-            'source': 'cloud',
-            'sourceLabel': '☁️ Cloud',
-            'folderId': 'root',
-          });
         }
       }
     } catch (e) {
@@ -1892,12 +1896,13 @@ class CloudDriveService with ChangeNotifier {
     return null;
   }
 
-  /// Google Drive REST API — boardest-cloud-connect 폴더 전용 파일 목록 가져오기
-  Future<List<CloudDriveFile>> fetchDriveFiles({String? folderId}) async {
+  /// Google Drive REST API — 지정 폴더 또는 bst-save 내 파일 및 폴더 목록 가져오기
+  Future<List<CloudDriveFile>> fetchDriveFiles({String? folderId, bool includeFolders = true}) async {
     if (!isLoggedIn) return [];
 
     try {
       final List<CloudDriveFile> allFiles = [];
+      final targetFolder = folderId ?? await getOrCreateConnectFolder();
 
       // 1. appDataFolder 검색
       final adfUrl = Uri.parse(
@@ -1937,9 +1942,13 @@ class CloudDriveService with ChangeNotifier {
         }
       }
 
-      // 2. 일반 Drive 검색 (spaces=drive)
+      // 2. 일반 Drive 검색 (spaces=drive) - 폴더 및 파일 함께 조회
+      final parentFilter = targetFolder != null && targetFolder.isNotEmpty && targetFolder != 'root' && targetFolder != 'appDataFolder'
+          ? "'$targetFolder' in parents"
+          : "trashed=false";
+      final folderFilter = includeFolders ? "" : " and mimeType!='application/vnd.google-apps.folder'";
       final driveUrl = Uri.parse(
-        "https://www.googleapis.com/drive/v3/files?q=trashed=false and mimeType!='application/vnd.google-apps.folder'&fields=files(id,name,mimeType,size,webViewLink,webContentLink)&pageSize=100&orderBy=modifiedTime desc",
+        "https://www.googleapis.com/drive/v3/files?q=trashed=false and $parentFilter$folderFilter&fields=files(id,name,mimeType,size,webViewLink,webContentLink,modifiedTime)&pageSize=100&orderBy=folder,modifiedTime desc",
       );
 
       var driveRes = await http.get(
@@ -2295,9 +2304,13 @@ class CloudDriveService with ChangeNotifier {
         }
       }
 
-      // 2. 각 하위 디렉토리 및 루트 내 파일 업로드
+      // 2. 각 하위 디렉토리 및 루트 내 파일 업로드 (단, 판서 파일 .pen, .bstpen, .iwb 는 동기화 제외!)
       final files = allEntities.whereType<File>().toList();
       for (final file in files) {
+        final lower = file.path.toLowerCase();
+        if (lower.endsWith('.pen') || lower.endsWith('.bstpen') || lower.endsWith('.iwb')) {
+          continue; // 판서 파일 동기화 제외
+        }
         final rel = p.relative(file.path, from: localFolderPath).replaceAll('\\', '/');
         final parentRel = p.dirname(rel);
         final parentKey = (parentRel == '.' || parentRel.isEmpty) ? '' : parentRel;
