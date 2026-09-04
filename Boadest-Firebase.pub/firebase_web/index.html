@@ -9,63 +9,96 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+
+  <!-- Direct App OAuth Style & Interceptor -->
+  <style>
+    body.app-auth-direct .view,
+    body.app-auth-direct #topAppBar,
+    body.app-auth-direct .hero-section,
+    body.app-auth-direct .main-content {
+      display: none !important;
+    }
+    body.app-auth-direct {
+      background: #0F0E17 !important;
+      color: white !important;
+      display: flex !important;
+      justify-content: center !important;
+      align-items: center !important;
+      height: 100vh !important;
+      margin: 0 !important;
+      font-family: 'Noto Sans KR', sans-serif;
+    }
+  </style>
+  <script>
+    if (window.location.search.includes('redirect_uri') || window.location.search.includes('bst-t-app')) {
+      document.documentElement.classList.add('app-auth-direct');
+      document.addEventListener('DOMContentLoaded', () => {
+        document.body.classList.add('app-auth-direct');
+        document.body.innerHTML = `
+          <div style="text-align:center; padding: 20px;">
+            <div style="font-size: 3rem; margin-bottom: 16px;">🔑</div>
+            <div style="font-size: 1.3rem; font-weight: bold; margin-bottom: 8px;">Google 소셜 로그인 화면으로 이동 중...</div>
+            <div style="font-size: 0.95rem; opacity: 0.7;">잠시만 기다려 주세요. 웹사이트 화면은 표시되지 않습니다.</div>
+          </div>
+        `;
+      });
+    }
+  </script>
   <style>
     /* ============================================
        MATERIAL DESIGN 3 TOKEN SYSTEM
     ============================================ */
     :root {
-      /* M3 Color Scheme - Tonal Palette */
-      --md-primary: #006590;
+      /* Boardest Flutter Dark Theme Aesthetics */
+      --md-primary: #7F5AF0;
       --md-on-primary: #ffffff;
-      --md-primary-container: #c6e8ff;
-      --md-on-primary-container: #001e2d;
+      --md-primary-container: rgba(127, 90, 240, 0.25);
+      --md-on-primary-container: #FFFFFE;
 
-      --md-secondary: #4d6272;
-      --md-on-secondary: #ffffff;
-      --md-secondary-container: #d0e6f9;
-      --md-on-secondary-container: #091e2b;
+      --md-secondary: #2EC4B6;
+      --md-on-secondary: #0F0E17;
+      --md-secondary-container: rgba(46, 196, 182, 0.2);
+      --md-on-secondary-container: #2EC4B6;
 
-      --md-tertiary: #5c5891;
+      --md-tertiary: #2CB67D;
       --md-on-tertiary: #ffffff;
-      --md-tertiary-container: #e3dfff;
-      --md-on-tertiary-container: #18134a;
+      --md-tertiary-container: rgba(44, 182, 125, 0.2);
+      --md-on-tertiary-container: #2CB67D;
 
-      --md-error: #ba1a1a;
+      --md-error: #EF4565;
       --md-on-error: #ffffff;
-      --md-error-container: #ffdad6;
-      --md-on-error-container: #410002;
+      --md-error-container: rgba(239, 69, 101, 0.2);
+      --md-on-error-container: #EF4565;
 
-      --md-background: #f5faff;
-      --md-on-background: #171c20;
-      --md-surface: #f5faff;
-      --md-on-surface: #171c20;
-      --md-surface-variant: #dce4ed;
-      --md-on-surface-variant: #40494f;
-      --md-outline: #70797f;
-      --md-outline-variant: #c0c8cf;
+      --md-background: #0F0E17;
+      --md-on-background: #FFFFFE;
+      --md-surface: #16161A;
+      --md-on-surface: #FFFFFE;
+      --md-surface-variant: #242629;
+      --md-on-surface-variant: rgba(255, 255, 255, 0.7);
+      --md-outline: rgba(255, 255, 255, 0.2);
+      --md-outline-variant: rgba(255, 255, 255, 0.08);
 
-      --md-surface-1: #eaf3fb;
-      --md-surface-2: #e2eef9;
-      --md-surface-3: #d9eaf7;
-      --md-surface-4: #d7e9f6;
-      --md-surface-5: #d2e6f5;
+      --md-surface-1: #1C1C21;
+      --md-surface-2: #242629;
+      --md-surface-3: #2A2C30;
 
       /* M3 Shape */
       --shape-xs: 4px;
       --shape-sm: 8px;
       --shape-md: 12px;
       --shape-lg: 16px;
-      --shape-xl: 28px;
+      --shape-xl: 24px;
       --shape-full: 9999px;
 
       /* M3 Elevation */
-      --elevation-1: 0px 1px 2px rgba(0,0,0,.08), 0px 1px 3px 1px rgba(0,0,0,.04);
-      --elevation-2: 0px 1px 2px rgba(0,0,0,.08), 0px 2px 6px 2px rgba(0,0,0,.06);
-      --elevation-3: 0px 4px 8px 3px rgba(0,0,0,.08), 0px 1px 3px rgba(0,0,0,.1);
+      --elevation-1: 0px 4px 20px rgba(0,0,0,.4);
+      --elevation-2: 0px 8px 32px rgba(0,0,0,.5);
+      --elevation-3: 0px 12px 40px rgba(0,0,0,.6);
 
       /* Typography */
-      --font-main: 'Google Sans', 'Noto Sans KR', sans-serif;
-      --font-body: 'Noto Sans KR', sans-serif;
+      --font-main: 'Pretendard', 'Google Sans', 'Noto Sans KR', sans-serif;
+      --font-body: 'Pretendard', 'Noto Sans KR', sans-serif;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -967,8 +1000,7 @@
 <div class="top-app-bar" id="topAppBar">
   <div class="brand">Boardest</div>
   <div style="display:flex; align-items:center; gap:8px;" id="headerAppBtns">
-    <a href="https://bst-cloud.web.app" onclick="openBstCloudPortal(); return false;" style="color:var(--md-primary); text-decoration:none; font-size:0.9rem; font-weight:bold;" id="linkToCloud">☁️ Bst-cloud 로 이동</a>
-    <button onclick="launchAppLogin()" id="btnAppLoginHeader" style="background:var(--md-primary); color:var(--md-on-primary); border:none; padding:6px 12px; border-radius:16px; font-weight:bold; cursor:pointer;">💻 APP으로 연동하기</button>
+    <a href="https://bst-cld.web.app" onclick="openBstCloudPortal(); return false;" style="color:var(--md-primary); text-decoration:none; font-size:0.9rem; font-weight:bold;" id="linkToCloud">☁️ Bst-cld 로 이동</a>
   </div>
   <div id="accountBtn" style="display:none; margin-left:12px;">
     <div class="account-avatar" id="avatarBtn" onclick="openAccountSheet()">?</div>
@@ -1050,19 +1082,29 @@
   </div>
 </div>
 
-<!-- Cloud Connection Approval Modal -->
-<div class="modal-overlay" id="cloudConnectionModal">
-  <div class="m3-dialog">
-    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-      <span class="material-icons-round" style="color:var(--md-primary); font-size:28px;">cloud_sync</span>
-      <h3 style="font-family:var(--font-main); font-weight:700; font-size:1.3rem;">bst-cloud 접속 요청</h3>
+<!-- NEIS School Search Modal -->
+<div class="modal-overlay" id="neisSchoolModal" style="display:none; align-items:center; justify-content:center; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.75); z-index:9999;">
+  <div class="m3-dialog" style="background:#16161A; border:1px solid rgba(255,255,255,0.12); border-radius:20px; padding:24px; max-width:480px; width:90%; box-shadow:0 12px 36px rgba(0,0,0,0.6);">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+      <span class="material-icons-round" style="color:#7F5AF0; font-size:28px;">school</span>
+      <h3 style="color:#FFFFFE; font-family:var(--font-main); font-weight:700; font-size:1.2rem; margin:0;">NEIS 전국 학교 검색 및 연동</h3>
     </div>
-    <p style="font-size:0.88rem; color:var(--md-on-surface-variant); margin-bottom:20px; line-height:1.6;" id="cloudRequestText">
-      교실에서 bst-cloud 접속을 희망합니다. 허용하시겠습니까?
+    <p style="font-size:0.85rem; color:rgba(255,255,255,0.7); margin-bottom:16px; line-height:1.5;">
+      교육부 NEIS 공공 API를 통하여 정식 등록된 학교명을 실시간 검색하고 등록합니다.
     </p>
-    <div style="display:flex; justify-content:flex-end; gap:8px;">
-      <button class="btn-text" onclick="handleCloudApproval(false)" style="color:var(--md-on-surface-variant);">거절</button>
-      <button class="btn-filled" onclick="handleCloudApproval(true)" style="width:auto; padding:10px 24px;">허용</button>
+
+    <div style="display:flex; gap:8px; margin-bottom:12px;">
+      <input type="text" id="neisSearchInput" class="m3-input" placeholder="학교명 검색 (예: 서울초, 경기고...)" style="flex:1; background:#242629; color:#FFFFFE; border:1px solid rgba(255,255,255,0.2); padding:10px 14px; border-radius:10px;" onkeydown="if(event.key==='Enter') performNeisSearch()">
+      <button class="btn-filled" onclick="performNeisSearch()" style="width:auto; padding:10px 18px; background:#7F5AF0; border:none; border-radius:10px; color:#FFFFFE; font-weight:bold; cursor:pointer;">
+        검색
+      </button>
+    </div>
+
+    <div id="neisSearchResults" style="max-height:220px; overflow-y:auto; background:#242629; border-radius:12px; padding:8px; display:none; border:1px solid rgba(255,255,255,0.1);">
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
+      <button class="btn-text" onclick="closeNeisSchoolModal()" style="color:rgba(255,255,255,0.5); background:none; border:none; cursor:pointer; font-size:0.9rem;">취소</button>
     </div>
   </div>
 </div>
@@ -1145,6 +1187,80 @@
   </div>
 
   <!-- ========================
+       VIEW: TEACHER APP LOGIN PORTAL (/teacher-boardest-login)
+  ========================= -->
+  <div class="view" id="viewTeacherAppLogin">
+    <div style="max-width: 580px; margin: 0 auto; padding: 20px 0;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display:inline-flex; align-items:center; gap:8px; background: rgba(127,90,240,0.15); border:1px solid rgba(127,90,240,0.4); padding:6px 16px; border-radius:20px; color:#FFFFFE; font-weight:bold; font-size:0.85rem; margin-bottom:12px;">
+          <span>🛡️</span> Boardest Teacher App OAuth Portal
+        </div>
+        <h2 style="font-size: 1.6rem; font-weight: bold; color: #FFFFFE; margin-bottom: 8px;">PC 교사용 앱 연동 관문</h2>
+        <p style="color: rgba(255,255,255,0.7); max-width: 480px; margin: 0 auto; line-height: 1.6; font-size: 0.9rem;">
+          보안 Google 인증을 통해 PC 교사용 앱에 연결합니다.
+      </div>
+
+      <!-- Port Warning Banner -->
+      <div id="portWarningBanner" style="display:none; background: rgba(239, 69, 101, 0.15); border: 1px solid #EF4565; border-radius: 16px; padding: 14px 18px; margin-bottom: 20px; color: #FF8BA7; font-size: 0.9rem; font-weight: bold; text-align: center; line-height: 1.5; box-shadow: 0 4px 20px rgba(239, 69, 101, 0.25);">
+        ⚠️ 경고! 리다이렉트 포트가 기본 포트와 다릅니다. 이 앱이 boardest-teacher 앱인지 다시 확인해주세요! (현재 포트 : <span id="warnPortNumber"></span>)
+      </div>
+
+      <!-- Single Login Card (Default / bst-cld=false) -->
+      <div id="singleLoginCard" class="m3-card" style="background: #16161A; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 24px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
+        <div style="font-weight:bold; font-size:1.1rem; color:#FFFFFE; margin-bottom:12px;">
+          🔑 Boardest 교사 계정 로그인
+        </div>
+        <p style="font-size:0.85rem; color:rgba(255,255,255,0.65); margin-bottom:20px; line-height:1.5;">
+          구글 계정으로 로그인 시 토큰이 PC 교사용 앱으로 자동 전달됩니다.
+        </p>
+        <button class="btn-filled" onclick="handleGoogleAuthStep1()" style="background: #7F5AF0; color: white; border-radius: 12px; font-weight: bold; width:100%; padding:14px; justify-content:center;">
+          <span class="material-icons-round">login</span>
+          Google 계정으로 로그인하기
+        </button>
+      </div>
+
+      <!-- Dual Login Cards Container (Shown when bst-cld=true) -->
+      <div id="dualLoginContainer" style="display:none;">
+        <!-- Step 1 Card -->
+        <div class="m3-card" style="background: #16161A; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 20px; margin-bottom: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="font-weight:bold; font-size:1.05rem; color:#FFFFFE; display:flex; align-items:center; gap:8px;">
+              <span style="background:#7F5AF0; color:white; border-radius:50%; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; font-size:0.8rem;">1</span>
+              Boardest 교사 계정 인증
+            </div>
+            <div id="step1StatusChip" class="status-chip offline" style="padding:4px 12px; border-radius:12px;">🟡 1단계 인증 필요</div>
+          </div>
+          <p style="font-size:0.85rem; color:rgba(255,255,255,0.65); margin-bottom:16px; line-height:1.5;">
+            학교 정보 및 기본 데이터베이스에 연결하는 Boardest 교사 계정입니다.
+          </p>
+          <button class="btn-filled" id="btnStep1" onclick="handleGoogleAuthStep1()" style="background: #7F5AF0; color: white; border-radius: 12px; font-weight: bold; width:100%; justify-content:center;">
+            <span class="material-icons-round">login</span>
+            1단계: Boardest 계정 로그인하기
+          </button>
+        </div>
+
+        <!-- Step 2 Card -->
+        <div class="m3-card" style="background: #16161A; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="font-weight:bold; font-size:1.05rem; color:#FFFFFE; display:flex; align-items:center; gap:8px;">
+              <span style="background:#2EC4B6; color:#0F0E17; border-radius:50%; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; font-size:0.8rem; font-weight:bold;">2</span>
+              Bst-cld 구글 드라이브 권한 연동
+            </div>
+            <div id="step2StatusChip" class="status-chip offline" style="padding:4px 12px; border-radius:12px;">🟡 2단계 연동 필요</div>
+          </div>
+          <p style="font-size:0.85rem; color:rgba(255,255,255,0.65); margin-bottom:16px; line-height:1.5;">
+            수업 자료 드라이브 자동 보관을 위해 Google Drive(<code>drive.file</code>) 권한을 연동합니다.
+          </p>
+          <button class="btn-filled" id="btnStep2" onclick="handleGoogleAuthStep2()" style="background: #2EC4B6; color: #0F0E17; border-radius: 12px; font-weight: bold; width:100%; justify-content:center;">
+            <span class="material-icons-round">cloud_sync</span>
+            2단계: Bst-cld 구글 드라이브 연동하기
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================
        VIEW: LAUNCHER
   ========================= -->
   <div class="view" id="viewLauncher">
@@ -1175,33 +1291,13 @@
         </div>
       </button>
 
-      <button class="launcher-card lc-time" onclick="goToTime()">
-        <div class="launcher-icon">
-          <span class="material-icons-round">schedule</span>
-        </div>
-        <div>
-          <div class="launcher-card-title">내 시간표</div>
-          <div class="launcher-card-sub">교사용 시간표 조회</div>
-        </div>
-      </button>
-
       <button class="launcher-card" onclick="openBstCloudPortal()" style="background: linear-gradient(135deg, #0077B6 0%, #00B4D8 100%); color: white;">
         <div class="launcher-icon" style="background: rgba(255,255,255,0.25); color: white;">
           <span class="material-icons-round">cloud_queue</span>
         </div>
         <div>
-          <div class="launcher-card-title" style="color: white; font-weight: bold;">Bst-cloud 열기</div>
+          <div class="launcher-card-title" style="color: white; font-weight: bold;">Bst-cld 열기</div>
           <div class="launcher-card-sub" style="color: rgba(255,255,255,0.9);">Google Drive 파일 관문</div>
-        </div>
-      </button>
-
-      <button class="launcher-card" onclick="launchAppLogin()" style="background: linear-gradient(135deg, #7F5AF0 0%, #2EC4B6 100%); color: white;">
-        <div class="launcher-icon" style="background: rgba(255,255,255,0.25); color: white;">
-          <span class="material-icons-round">computer</span>
-        </div>
-        <div>
-          <div class="launcher-card-title" style="color: white; font-weight: bold;">앱에 로그인 시키기</div>
-          <div class="launcher-card-sub" style="color: rgba(255,255,255,0.9);">PC 교사 앱으로 연동</div>
         </div>
       </button>
     </div>
@@ -1230,13 +1326,13 @@
     <div class="m3-card" style="margin-bottom:20px;">
       <h3 style="margin-top:0; margin-bottom:8px; font-size:1.1rem; color:var(--md-primary);">📁 Google Drive 수업 자료 직접 업로드</h3>
       <p style="font-size:0.85rem; color:var(--md-on-surface-variant); margin-bottom:16px;">
-        별도 교사용 앱 설치 없이도 파일(.bb, .pdf, .pptx, .hwp, .mp4)을 올리면 내 Google Drive <code>boardest-cloud-connect</code> 폴더에 자동 업로드됩니다.
+        별도 교사용 앱 설치 없이도 파일(.tbp, .pdf, .pptx, .hwp, .mp4)을 올리면 내 Google Drive <code>boardest-cloud-connect</code> 폴더에 자동 업로드됩니다.
       </p>
       
       <div style="border:2px dashed var(--md-outline); border-radius:12px; padding:24px; text-align:center; background:var(--md-surface-variant); cursor:pointer;" onclick="document.getElementById('cloudFileInput').click()">
         <span class="material-icons-round" style="font-size:42px; color:var(--md-primary); margin-bottom:8px;">cloud_upload</span>
         <div style="font-weight:600; font-size:0.95rem;">수업 파일 선택하기 (클릭 또는 드래그)</div>
-        <div style="font-size:0.8rem; color:var(--md-outline); margin-top:4px;">지원 확장자: .bb, .pdf, .pptx, .hwp, .mp4</div>
+        <div style="font-size:0.8rem; color:var(--md-outline); margin-top:4px;">지원 확장자: .tbp, .pdf, .pptx, .hwp, .mp4</div>
         <input type="file" id="cloudFileInput" style="display:none;" onchange="handleDirectFileUpload(this.files)" multiple>
       </div>
       <div id="uploadProgressContainer" style="display:none; margin-top:16px;">
@@ -1415,7 +1511,7 @@
     get as rtdbGet
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-  // ─── Firebase Init ────────────────────────────
+  // ─── Firebase Init (jiwhosboardest - Boardest Main) ────────────────────────────
   const firebaseConfig = {
     apiKey: "AIzaSyBMoJZHMBN4eYJtiZR2iGePcmIB7bg8wGo",
     authDomain: "jiwhosboardest.firebaseapp.com",
@@ -1430,8 +1526,6 @@
   const db   = getFirestore(app);
   const rtdb = getDatabase(app);
   const googleProvider = new GoogleAuthProvider();
-  googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
-  googleProvider.addScope('https://www.googleapis.com/auth/drive');
 
   // ─── State ────────────────────────────────────
   let currentUser = null;
@@ -1522,8 +1616,8 @@
 
         listenToCloudConnections(userProfile.teacherName);
       }
+      // Auto scheme redirect removed upon site entry as requested; user must click "PC도 로그인 하기" button.
       updateAccountUI();
-      // restore session routing
       handleRoute();
     } else {
       userProfile = null;
@@ -1578,6 +1672,8 @@
           --md-surface: #16161A !important;
           --md-background: #0F0E17 !important;
           --md-on-surface: #FFFFFE !important;
+          --md-outline: rgba(255, 255, 255, 0.7) !important;
+          --md-on-surface-variant: rgba(255, 255, 255, 0.85) !important;
         }
         body {
           background-color: #0F0E17 !important;
@@ -1586,6 +1682,17 @@
           margin: 0 !important;
           padding: 8px 16px !important;
           overflow-x: hidden !important;
+        }
+        label, h1, h2, h3, h4, h5, h6, p, span, div, select, option, input, textarea {
+          color: #FFFFFE !important;
+        }
+        .text-muted, .text-secondary, .subtitle, label, .form-label {
+          color: rgba(255, 255, 255, 0.85) !important;
+        }
+        input, textarea, select {
+          background-color: #242629 !important;
+          color: #FFFFFE !important;
+          border: 1px solid rgba(255, 255, 255, 0.2) !important;
         }
         header, .navbar, .web-header, footer, .back-btn, #appHeader {
           display: none !important;
@@ -1623,13 +1730,23 @@
     let search = window.location.search;
     search = search.replace(/\?/g, '&').replace(/^&/, '?');
     const params = new URLSearchParams(search);
+
+    let hashStr = window.location.hash || '';
+    if (hashStr.startsWith('#')) hashStr = hashStr.substring(1);
+    if (hashStr.startsWith('?')) hashStr = hashStr.substring(1);
+    hashStr = hashStr.replace(/\?/g, '&');
+    const hashParams = new URLSearchParams(hashStr);
+
+    const appColor = params.get('app') || params.get('IsApps') || params.get('isApps') || params.get('isapps') ||
+                     hashParams.get('app') || hashParams.get('IsApps') || hashParams.get('isApps') || hashParams.get('isapps');
+
     return {
-      place: params.get('place'),
-      school: params.get('school'),
-      email: params.get('email'),
-      name: params.get('name'),
-      token: params.get('token') || params.get('otp') || params.get('auth_token'),
-      isApps: params.get('IsApps') || params.get('isApps') || params.get('isapps')
+      place: params.get('place') || hashParams.get('place'),
+      school: params.get('school') || hashParams.get('school'),
+      email: params.get('email') || hashParams.get('email'),
+      name: params.get('name') || hashParams.get('name'),
+      token: params.get('token') || params.get('otp') || params.get('auth_token') || hashParams.get('token'),
+      isApps: appColor
     };
   }
 
@@ -1668,16 +1785,53 @@
       }
     }
 
-    if (!currentUser && !userProfile) {
-      if (window.location.hostname.includes('bst-cloud')) {
-        showView('viewAuth');
-        return;
+    // Teacher App Login route
+    if (path.includes('teacher-boardest-login') || window.location.search.includes('redirect_uri') || window.location.search.includes('bst-t-app')) {
+      showView('viewTeacherAppLogin');
+      const urlParams = new URLSearchParams(window.location.search);
+      const isBstCld = urlParams.get('bst-cld') === 'true';
+      const redirectPort = urlParams.get('redirect_port');
+      const redirectUri = urlParams.get('redirect_uri') || '';
+
+      // Check port warning
+      let nonDefaultPort = redirectPort;
+      if (!nonDefaultPort && redirectUri) {
+        try {
+          const parsed = new URL(redirectUri);
+          if (parsed.port && parsed.port !== '1217') {
+            nonDefaultPort = parsed.port;
+          }
+        } catch (_) {}
       }
-      if (currentSchoolName) {
-        showView('viewAuth');
-        document.getElementById('authSchoolLabel').textContent = `📍 ${currentSchoolLocal} ${currentSchoolName}`;
-      } else {
-        showView('viewSchool');
+
+      const warnBanner = document.getElementById('portWarningBanner');
+      const warnPortSpan = document.getElementById('warnPortNumber');
+      if (nonDefaultPort && warnBanner) {
+        if (warnPortSpan) warnPortSpan.textContent = nonDefaultPort;
+        warnBanner.style.display = 'block';
+      } else if (warnBanner) {
+        warnBanner.style.display = 'none';
+      }
+
+      const singleCard = document.getElementById('singleLoginCard');
+      const dualContainer = document.getElementById('dualLoginContainer');
+      if (singleCard && dualContainer) {
+        if (isBstCld) {
+          singleCard.style.display = 'none';
+          dualContainer.style.display = 'block';
+        } else {
+          singleCard.style.display = 'block';
+          dualContainer.style.display = 'none';
+        }
+      }
+      return;
+    }
+
+    if (!currentUser && !userProfile) {
+      showView('viewAuth');
+      const authLbl = document.getElementById('authSchoolLabel');
+      if (authLbl && currentSchoolName) {
+        authLbl.textContent = `📍 ${currentSchoolLocal} ${currentSchoolName}`;
       }
       return;
     }
@@ -1721,8 +1875,8 @@
 
   // ─── School submit ────────────────────────────
   window.handleSchoolSubmit = function() {
-    const region = document.getElementById('selectRegion').value;
-    const school = document.getElementById('inputSchoolName').value.trim();
+    const region = document.getElementById('selectRegion')?.value || '서울';
+    const school = document.getElementById('inputSchoolName')?.value?.trim() || '';
     if (!school) { showSnack('학교명을 입력해 주세요.'); return; }
     currentSchoolLocal = region;
     currentSchoolName  = school;
@@ -1731,7 +1885,8 @@
     const newUrl = `/?place=${encodeURIComponent(region)}?school=${encodeURIComponent(school)}`;
     history.pushState(null, '', newUrl);
 
-    document.getElementById('authSchoolLabel').textContent = `📍 ${region} ${school}`;
+    const authLbl = document.getElementById('authSchoolLabel');
+    if (authLbl) authLbl.textContent = `📍 ${region} ${school}`;
     showView('viewAuth');
   };
 
@@ -1789,13 +1944,103 @@
   };
 
   // ─── Google Auth ──────────────────────────────
+  window.handleGoogleAuthStep1 = async function() {
+    showLoading(true);
+    try {
+      const step1Provider = new GoogleAuthProvider();
+      step1Provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(auth, step1Provider);
+      const user = result.user;
+      
+      const ref  = doc(db, 'users', user.uid);
+      const snap = await getDoc(ref);
+      if (!snap.exists() || !snap.data().school) {
+        let name = user.displayName ? user.displayName.trim().replace(/\(.*\)/g, '').trim() : (user.email ? user.email.split('@')[0] : '선생님');
+        window._pendingGoogleUser = { user, ref, name };
+        showLoading(false);
+        openNeisSchoolModal();
+        return;
+      } else {
+        userProfile = snap.data();
+        currentSchoolLocal = userProfile.region || '서울';
+        currentSchoolName  = userProfile.school || '학교';
+        updateAccountUI();
+        showSnack('1단계 Boardest 계정 로그인 성공! 🎉');
+        checkAutoAppRedirect();
+      }
+    } catch (e) {
+      showSnack('1단계 로그인 오류: ' + e.message);
+    }
+    showLoading(false);
+  };
+
+  window.handleGoogleAuthStep2 = async function() {
+    showLoading(true);
+    try {
+      const step2Provider = new GoogleAuthProvider();
+      step2Provider.setCustomParameters({ prompt: 'consent', access_type: 'offline' });
+      step2Provider.addScope('https://www.googleapis.com/auth/drive.file');
+      const result = await signInWithPopup(auth, step2Provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const accessToken = credential ? credential.accessToken : null;
+      const user = result.user;
+
+      if (accessToken) {
+        googleAccessToken = accessToken;
+        localStorage.setItem('bst_gtoken_' + user.uid, accessToken);
+        showSnack('2단계 Google Drive 연동 성공! ☁️');
+      }
+      checkAutoAppRedirect();
+    } catch (e) {
+      showSnack('2단계 Google Drive 연동 오류: ' + e.message);
+    }
+    showLoading(false);
+  };
+
+  window.checkAutoAppRedirect = function() {
+    const isAppReq = window.location.search.includes('redirect_uri') || window.location.search.includes('bst-t-app');
+    const isBstCld = window.location.search.includes('bst-cld=true');
+
+    // Update status chips
+    const chip1 = document.getElementById('step1StatusChip');
+    const chip2 = document.getElementById('step2StatusChip');
+
+    if (auth.currentUser || currentUser) {
+      if (chip1) {
+        chip1.textContent = '🟢 1단계 인증 완료';
+        chip1.style.background = 'rgba(44, 182, 125, 0.2)';
+        chip1.style.color = '#2CB67D';
+      }
+    }
+    if (googleAccessToken) {
+      if (chip2) {
+        chip2.textContent = '🟢 2단계 연동 완료';
+        chip2.style.background = 'rgba(46, 196, 182, 0.2)';
+        chip2.style.color = '#2EC4B6';
+      }
+    }
+
+    if (!isAppReq) return;
+
+    if (isBstCld) {
+      // Dual mode: Require both 1단계 and 2단계
+      if ((auth.currentUser || currentUser) && googleAccessToken) {
+        showSnack('🟢 1단계 & 2단계 인증 모두 완료! PC 교사용 앱으로 세션을 전달합니다...');
+        setTimeout(launchAppLogin, 300);
+      }
+    } else {
+      // Single mode: Require 1단계
+      if (auth.currentUser || currentUser) {
+        showSnack('🟢 인증 완료! PC 교사용 앱으로 세션을 전달합니다...');
+        setTimeout(launchAppLogin, 300);
+      }
+    }
+  };
+
   window.handleGoogleAuth = async function() {
     showLoading(true);
     try {
       googleProvider.setCustomParameters({ prompt: 'select_account' });
-      googleProvider.addScope('https://www.googleapis.com/auth/drive');
-      googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
-      googleProvider.addScope('https://www.googleapis.com/auth/drive.readonly');
       const result = await signInWithPopup(auth, googleProvider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       const accessToken = credential ? credential.accessToken : null;
@@ -1808,51 +2053,22 @@
 
       const ref  = doc(db, 'users', user.uid);
       const snap = await getDoc(ref);
-      if (!snap.exists()) {
-        // First time → automatically set teacher name
-        let name = '선생님';
-        if (user.displayName) {
-          name = user.displayName.trim().replace(/\(.*\)/g, '').trim();
-        } else if (user.email) {
-          name = user.email.split('@')[0];
-        }
-        const region = currentSchoolLocal || '서울';
-        const school = currentSchoolName || '기본학교';
-        
-        await setDoc(ref, {
-          teacherName: name,
-          region: region,
-          school: school,
-          email: user.email,
-          createdAt: serverTimestamp()
-        });
-        
-        userProfile = {
-          teacherName: name,
-          region: region,
-          school: school,
-          email: user.email
-        };
-        currentSchoolLocal = region;
-        currentSchoolName  = school;
-        updateAccountUI();
-        
-        showSnack(`${name} 선생님, 환영합니다! 🎉`);
-        if (accessToken) setupGoogleDriveFolder(accessToken, user);
+      if (!snap.exists() || !snap.data().school) {
+        let name = user.displayName ? user.displayName.trim().replace(/\(.*\)/g, '').trim() : (user.email ? user.email.split('@')[0] : '선생님');
+        window._pendingGoogleUser = { user, ref, name, accessToken };
+        showLoading(false);
+        openNeisSchoolModal();
+        return;
       } else {
+        userProfile = snap.data();
+        currentSchoolLocal = userProfile.region || '서울';
+        currentSchoolName  = userProfile.school || '학교';
+        updateAccountUI();
         showSnack('구글 로그인 성공!');
         if (accessToken) setupGoogleDriveFolder(accessToken, user);
       }
 
-      // Check loopback redirect_uri for Boardest-Teacher PC app
-      const urlParams = new URLSearchParams(window.location.search);
-      const redirectUri = urlParams.get('redirect_uri');
-      if (redirectUri && accessToken) {
-        const tName = userProfile?.teacherName || user.displayName || '선생님';
-        const school = userProfile?.school || '';
-        const target = `${redirectUri}?token=${encodeURIComponent(accessToken)}&email=${encodeURIComponent(user.email || '')}&name=${encodeURIComponent(tName)}&school=${encodeURIComponent(school)}`;
-        window.location.href = target;
-      }
+      checkAutoAppRedirect();
     } catch (e) {
       showSnack('구글 로그인 오류: ' + e.message);
     }
@@ -1871,13 +2087,90 @@
     return map[code] || code;
   }
 
-  // ─── Account Sheet ────────────────────────────
   window.openAccountSheet = function() {
     document.getElementById('accountModal').classList.add('open');
   };
   window.closeAccountSheet = function(e) {
     if (!e || e.target === document.getElementById('accountModal')) {
       document.getElementById('accountModal').classList.remove('open');
+    }
+  };
+
+  window.openNeisSchoolModal = function() {
+    document.getElementById('neisSchoolModal').style.display = 'flex';
+  };
+  window.closeNeisSchoolModal = function() {
+    document.getElementById('neisSchoolModal').style.display = 'none';
+  };
+
+  window.performNeisSearch = async function() {
+    const query = document.getElementById('neisSearchInput').value.trim();
+    const resultsEl = document.getElementById('neisSearchResults');
+    if (!query) { showSnack('검색할 학교명을 입력해 주세요.'); return; }
+
+    resultsEl.style.display = 'block';
+    resultsEl.innerHTML = '<div style="padding:12px; text-align:center; color:rgba(255,255,255,0.6);">🔍 NEIS API에서 학교 정보 조회 중...</div>';
+
+    try {
+      const res = await fetch(`https://open.neis.go.kr/hub/schoolInfo?Type=json&pIndex=1&pSize=25&SCHUL_NM=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (data && data.schoolInfo && data.schoolInfo[1] && data.schoolInfo[1].row) {
+        const rows = data.schoolInfo[1].row;
+        resultsEl.innerHTML = rows.map(r => {
+          const regionName = r.LCTN_SC_NM || r.ATPT_OFCDC_SC_NM || '서울';
+          const safeName = r.SCHUL_NM.replace(/'/g, "\\'");
+          const safeRegion = regionName.replace(/'/g, "\\'");
+          return `
+            <div onclick="selectNeisSchoolResult('${safeName}', '${safeRegion}')" 
+                 style="padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.06); cursor:pointer; display:flex; justify-content:space-between; align-items:center; transition:background 0.2s;"
+                 onmouseover="this.style.background='rgba(127,90,240,0.2)'" onmouseout="this.style.background='transparent'">
+              <span style="font-weight:bold; color:#FFFFFE; font-size:0.95rem;">🏫 ${r.SCHUL_NM}</span>
+              <span style="font-size:0.8rem; color:#2EC4B6; background:rgba(46,196,182,0.15); padding:2px 8px; border-radius:6px;">📍 ${regionName}</span>
+            </div>
+          `;
+        }).join('');
+      } else {
+        resultsEl.innerHTML = '<div style="padding:12px; text-align:center; color:rgba(255,255,255,0.5);">검색된 NEIS 정식 학교가 없습니다. 정확한 학교명을 입력해 보세요.</div>';
+      }
+    } catch (e) {
+      resultsEl.innerHTML = `<div style="padding:12px; text-align:center; color:#EF4565;">NEIS API 조회 오류: ${e.message}</div>`;
+    }
+  };
+
+  window.selectNeisSchoolResult = async function(schoolName, regionName) {
+    closeNeisSchoolModal();
+    if (window._pendingGoogleUser) {
+      const { user, ref, name, accessToken } = window._pendingGoogleUser;
+      showLoading(true);
+      await setDoc(ref, {
+        teacherName: name,
+        region: regionName,
+        school: schoolName,
+        email: user.email,
+        createdAt: serverTimestamp()
+      }, { merge: true });
+
+      userProfile = {
+        teacherName: name,
+        region: regionName,
+        school: schoolName,
+        email: user.email
+      };
+      currentSchoolLocal = regionName;
+      currentSchoolName  = schoolName;
+      updateAccountUI();
+
+      showSnack(`${name} 선생님, 환영합니다! 🎉 (${schoolName})`);
+      if (accessToken) setupGoogleDriveFolder(accessToken, user);
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const redirectUri = urlParams.get('redirect_uri');
+      if (redirectUri && accessToken) {
+        const target = `${redirectUri}?token=${encodeURIComponent(accessToken)}&email=${encodeURIComponent(user.email || '')}&name=${encodeURIComponent(name)}&school=${encodeURIComponent(schoolName)}`;
+        window.location.href = target;
+      }
+      showLoading(false);
+      window._pendingGoogleUser = null;
     }
   };
 
@@ -2445,12 +2738,26 @@
   let cachedScData = null;
 
   async function requestGetCp949(url) {
-    const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
-    const res = await fetch(proxyUrl);
-    if (!res.ok) throw new Error('CORS proxy request failed');
-    const buffer = await res.arrayBuffer();
-    const decoder = new TextDecoder('euc-kr');
-    return decoder.decode(buffer);
+    const proxies = [
+      'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+      'https://corsproxy.io/?' + encodeURIComponent(url),
+      'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url)
+    ];
+
+    let lastErr = null;
+    for (const proxyUrl of proxies) {
+      try {
+        const res = await fetch(proxyUrl);
+        if (res.ok) {
+          const buffer = await res.arrayBuffer();
+          const decoder = new TextDecoder('euc-kr');
+          return decoder.decode(buffer);
+        }
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw new Error('CORS proxy request failed: ' + (lastErr ? lastErr.message : 'All proxies unreachable'));
   }
 
   async function initComciganSession() {
@@ -2478,18 +2785,33 @@
   }
 
   async function fetchWebTimetable(schoolCode, teacherName) {
-    await initComciganSession();
-    const da1 = '0';
-    const s7 = `${cachedScData[0]}${schoolCode}`;
-    const payload = `${s7}_${da1}_${cachedScData[2]}`;
-    const base64Payload = btoa(payload);
+    let data = null;
+    try {
+      const res = await fetch(`https://comcigan.jiwho.workers.dev/api/comcigan/lookup?code=${schoolCode}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.status === 'success' && json.data) {
+          data = json.data.rawJson;
+        }
+      }
+    } catch (e) {
+      console.warn('Worker lookup failed, falling back:', e);
+    }
 
-    const path = cachedExtractCode.split('?')[0];
-    const url = `${cachedBaseUrl}${path}?${base64Payload}`;
+    if (!data) {
+      await initComciganSession();
+      const da1 = '0';
+      const s7 = `${cachedScData[0]}${schoolCode}`;
+      const payload = `${s7}_${da1}_${cachedScData[2]}`;
+      const base64Payload = btoa(payload);
 
-    const rawBody = await requestGetCp949(url);
-    const cleanJson = cleanJsonBody(rawBody);
-    const data = JSON.parse(cleanJson);
+      const path = cachedExtractCode.split('?')[0];
+      const url = `${cachedBaseUrl}${path}?${base64Payload}`;
+
+      const rawBody = await requestGetCp949(url);
+      const cleanJson = cleanJsonBody(rawBody);
+      data = JSON.parse(cleanJson);
+    }
 
     const teacherList = data['자료446'] || [];
     const subjectList = data['자료492'] || [];
@@ -2916,7 +3238,7 @@
       if (files.length === 0) {
         container.innerHTML = `
           <div style="text-align:center; padding:24px; color:var(--md-outline);">
-            업로드된 수업 파일이 없습니다. 위 업로드 영역에 교안(.bb, .pdf)을 올려보세요!
+            업로드된 수업 파일이 없습니다. 위 업로드 영역에 교안(.tbp, .pdf)을 올려보세요!
           </div>
         `;
         return;
@@ -2924,8 +3246,8 @@
 
       container.innerHTML = files.map(f => {
         const mappedClass = mappingsMap[f.id] || 'all';
-        const isBb = f.name.endsWith('.bb');
-        const icon = isBb ? 'book' : (f.mimeType.includes('pdf') ? 'picture_as_pdf' : 'insert_drive_file');
+        const isTbp = f.name.toLowerCase().endsWith('.tbp');
+        const icon = isTbp ? 'book' : (f.mimeType.includes('pdf') ? 'picture_as_pdf' : 'insert_drive_file');
         
         return `
           <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid var(--md-outline-variant); flex-wrap:wrap; gap:10px;">
@@ -3001,7 +3323,7 @@
   }
 
   window.openBstCloudPortal = function() {
-    const url = 'https://bst-cloud.web.app';
+    const url = 'https://bst-cld.web.app';
     const isDesktop = !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && window.innerWidth > 600;
     if (isDesktop) {
       const width = 1080;
@@ -3016,26 +3338,6 @@
       }
     } else {
       window.location.href = url;
-    }
-  };
-
-  window.launchAppLogin = window.openBstApp = function() {
-    const user = auth.currentUser || currentUser;
-    if (user && googleAccessToken) {
-      const uName = encodeURIComponent((userProfile && userProfile.teacherName) || user.displayName || '선생님');
-      const email = encodeURIComponent(user.email || '');
-      const school = encodeURIComponent((userProfile && userProfile.school) || currentSchoolName || '');
-      
-      window.location.href = 'bst-t://browser-login';
-      
-      setTimeout(() => {
-        fetch(`http://127.0.0.1:8080/callback?token=${encodeURIComponent(googleAccessToken)}&email=${email}&name=${uName}&school=${school}`)
-          .then(() => showSnack("🎉 교사용 PC 앱으로 성공적으로 로그인되었습니다!"))
-          .catch(() => showSnack("🔌 앱 연결 진행 중... 교사용 앱을 실행해 주세요."));
-      }, 500);
-    } else {
-      showSnack("Google 로그인 진행 후 교사용 앱 연동이 처리됩니다.");
-      handleGoogleAuth();
     }
   };
 

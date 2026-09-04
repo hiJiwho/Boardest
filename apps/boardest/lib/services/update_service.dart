@@ -9,7 +9,7 @@ import 'package:open_filex/open_filex.dart';
 
 
 class UpdateService {
-  static const String currentVersion = '2.9.9.0';
+  static const String currentVersion = '2.9.9.1';
   static const String repoOwner = 'hiJiwho';
   static const String repoName = 'Boardest';
 

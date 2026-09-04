@@ -22,12 +22,21 @@ if (-not (Test-Path $AppxOutDir)) {
 Copy-Item $CerFile (Join-Path $AppxOutDir "BoardestCert.cer") -Force
 Copy-Item (Join-Path $RootDir "certs\install_certificate.bat") (Join-Path $AppxOutDir "install_certificate.bat") -Force
 
-# 2. Package 1: Boardest Main App
+# Helper tools definition
+$helpers = @(
+    (Join-Path $RootDir "apps\boardest_teacher\build\windows\x64\runner\Release\boardest_ppt_helper.exe"),
+    (Join-Path $RootDir "apps\boardest_teacher\build\windows\x64\runner\Release\boardest_ppt_overlay.exe"),
+    (Join-Path $RootDir "apps\boardest_teacher\build\windows\x64\runner\Release\boardest_hwp_overlay.exe"),
+    (Join-Path $RootDir "apps\boardest_teacher\build\windows\x64\runner\Release\watchdog.exe"),
+    (Join-Path $RootDir "installer\driver_installer.exe")
+)
+
+# 2. Package 1: Boardest Main App (Sandboxed)
 Write-Host "`n[1/3] Packaging Boardest Main (jiwho.boardest.bst)..." -ForegroundColor Yellow
 $BoardestPkgDir = Join-Path $DistDir "packages\boardest"
 $BoardestReleaseDir = Join-Path $RootDir "apps\boardest\build\windows\x64\runner\Release"
 
-# Copy release files excluding helper tools
+# Copy release files (exclude helper tools to keep main app in clean sandbox)
 Get-ChildItem -Path $BoardestReleaseDir | Where-Object { 
     $_.Name -notmatch "boardest_ppt.*|boardest_hwp.*|watchdog.*|\.msix$|\.lib$|\.exp$" 
 } | Copy-Item -Destination $BoardestPkgDir -Recurse -Force
@@ -41,12 +50,12 @@ if ($LASTEXITCODE -ne 0) { throw "SignTool failed for Boardest" }
 Write-Host "-> Successfully created and signed boardest.appx" -ForegroundColor Green
 
 
-# 3. Package 2: Boardest Teacher App
+# 3. Package 2: Boardest Teacher App (Sandboxed)
 Write-Host "`n[2/3] Packaging Boardest Teacher (jiwho.boardest.teacher)..." -ForegroundColor Yellow
 $TeacherPkgDir = Join-Path $DistDir "packages\bst-teacher"
 $TeacherReleaseDir = Join-Path $RootDir "apps\boardest_teacher\build\windows\x64\runner\Release"
 
-# Copy release files excluding helper tools
+# Copy release files (exclude helper tools to keep teacher app in clean sandbox)
 Get-ChildItem -Path $TeacherReleaseDir | Where-Object { 
     $_.Name -notmatch "boardest_ppt.*|boardest_hwp.*|watchdog.*|\.lib$|\.exp$" 
 } | Copy-Item -Destination $TeacherPkgDir -Recurse -Force
@@ -60,7 +69,7 @@ if ($LASTEXITCODE -ne 0) { throw "SignTool failed for Boardest Teacher" }
 Write-Host "-> Successfully created and signed bst-teacher.appx" -ForegroundColor Green
 
 
-# 4. Package 3: BST Overlay Panser (Extension Plugin)
+# 4. Package 3: BST Overlay Panser (Un-sandboxed FullTrust Extension Plugin)
 Write-Host "`n[3/3] Packaging BST Overlay Panser (jiwho.boardest.plugin.overlaypanser)..." -ForegroundColor Yellow
 $PanserPkgDir = Join-Path $DistDir "packages\bst-overlay-panser"
 
@@ -94,19 +103,27 @@ Write-Host "`n[4/4] Creating AppInstaller XML files..." -ForegroundColor Yellow
 
 $repoReleaseBase = "https://github.com/hiJiwho/Boardest/releases/latest/download"
 
-# 5.1 boardest.appinstaller
+# 5.1 boardest.appinstaller (Main app + Optional plugin bound together: uninstalls together!)
 $boardestAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.0"
+    Version="2.9.9.1"
     Uri="$repoReleaseBase/boardest.appinstaller">
     <MainPackage
         Name="jiwho.boardest.bst"
         Publisher="CN=jiwho"
-        Version="2.9.9.0"
+        Version="2.9.9.1"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/boardest.appx" />
+    <OptionalPackages>
+        <Package
+            Name="jiwho.boardest.plugin.overlaypanser"
+            Publisher="CN=jiwho"
+            Version="2.9.9.1"
+            ProcessorArchitecture="x64"
+            Uri="$repoReleaseBase/bst-overlay-panser.appx" />
+    </OptionalPackages>
     <UpdateSettings>
         <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false"/>
         <AutomaticBackgroundTask/>
@@ -115,21 +132,29 @@ $boardestAppinstaller = @"
 </AppInstaller>
 "@
 Set-Content -Path (Join-Path $AppxOutDir "boardest.appinstaller") -Value $boardestAppinstaller -Encoding UTF8
-Write-Host "Created: boardest.appinstaller" -ForegroundColor Green
+Write-Host "Created: boardest.appinstaller (with OptionalPackages binding)" -ForegroundColor Green
 
-# 5.2 bst-teacher.appinstaller
+# 5.2 bst-teacher.appinstaller (Main app + Optional plugin bound together: uninstalls together!)
 $teacherAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.0"
+    Version="2.9.9.1"
     Uri="$repoReleaseBase/bst-teacher.appinstaller">
     <MainPackage
         Name="jiwho.boardest.teacher"
         Publisher="CN=jiwho"
-        Version="2.9.9.0"
+        Version="2.9.9.1"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/bst-teacher.appx" />
+    <OptionalPackages>
+        <Package
+            Name="jiwho.boardest.plugin.overlaypanser"
+            Publisher="CN=jiwho"
+            Version="2.9.9.1"
+            ProcessorArchitecture="x64"
+            Uri="$repoReleaseBase/bst-overlay-panser.appx" />
+    </OptionalPackages>
     <UpdateSettings>
         <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false"/>
         <AutomaticBackgroundTask/>
@@ -138,19 +163,19 @@ $teacherAppinstaller = @"
 </AppInstaller>
 "@
 Set-Content -Path (Join-Path $AppxOutDir "bst-teacher.appinstaller") -Value $teacherAppinstaller -Encoding UTF8
-Write-Host "Created: bst-teacher.appinstaller" -ForegroundColor Green
+Write-Host "Created: bst-teacher.appinstaller (with OptionalPackages binding)" -ForegroundColor Green
 
 # 5.3 bst-overlay-panser.appinstaller
 $panserAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.0"
+    Version="2.9.9.1"
     Uri="$repoReleaseBase/bst-overlay-panser.appinstaller">
     <MainPackage
         Name="jiwho.boardest.plugin.overlaypanser"
         Publisher="CN=jiwho"
-        Version="2.9.9.0"
+        Version="2.9.9.1"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/bst-overlay-panser.appx" />
     <UpdateSettings>

@@ -2337,6 +2337,41 @@ class CloudDriveService with ChangeNotifier {
     }
   }
 
+
+  /// 자유판서(.pen / .iwb) 파일 또는 폴더 이름 변경 (Cloud Drive 또는 로컬 디스크 지원)
+  Future<bool> renamePenFile({
+    required String fileOrFolderId,
+    required String newName,
+    bool isCloud = true,
+    String? localPath,
+  }) async {
+    String finalName = newName.trim();
+    if (finalName.isEmpty) return false;
+
+    // .pen 확장자 누락 방지
+    if (!finalName.toLowerCase().endsWith('.pen') && !finalName.toLowerCase().endsWith('.iwb')) {
+      finalName = '$finalName.pen';
+    }
+
+    if (isCloud) {
+      return await renameDriveFile(fileOrFolderId, finalName);
+    } else if (localPath != null && localPath.isNotEmpty && !kIsWeb) {
+      try {
+        final f = File(localPath);
+        if (f.existsSync()) {
+          final parent = f.parent.path;
+          final targetPath = p.join(parent, finalName);
+          f.renameSync(targetPath);
+          debugPrint('[CloudDriveService] renamePenFile local success: $localPath -> $targetPath');
+          return true;
+        }
+      } catch (e) {
+        debugPrint('[CloudDriveService] renamePenFile local error: $e');
+      }
+    }
+    return false;
+  }
+
   /// 로컬 폴더 ↔ Google Drive bst-sync 폴더 재귀 동기화 (Windows EXE / Desktop)
   Future<int> syncLocalFolderToDrive(String localFolderPath, {String? targetDriveFolderId}) async {
     if (!isLoggedIn) return 0;

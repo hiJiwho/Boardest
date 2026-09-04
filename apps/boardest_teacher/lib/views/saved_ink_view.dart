@@ -186,6 +186,97 @@ class _SavedInkViewState extends State<SavedInkView> {
     );
   }
 
+  Future<void> _renameInkFile(Map<String, dynamic> item) async {
+    final oldName = item['name']?.toString() ?? '';
+    final rawName = item['rawFileName']?.toString() ?? oldName;
+    final isCloud = item['isCloud'] == true;
+    final id = item['id']?.toString() ?? '';
+    final localPath = item['localPath']?.toString();
+
+    final controller = TextEditingController(text: rawName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16161A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.draw_rounded, color: Color(0xFF00F5D4), size: 20),
+            const SizedBox(width: 8),
+            Text('자유판서 이름 변경', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('기존: $oldName', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              style: GoogleFonts.notoSansKr(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: '새 판서명을 입력하세요',
+                hintStyle: const TextStyle(color: Colors.white38),
+                filled: true,
+                fillColor: Colors.black26,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00F5D4),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('변경', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty && newName != rawName) {
+      final classCode = item['classCode']?.toString() ?? '';
+      String targetFullName = newName.trim();
+      if (classCode.isNotEmpty && !targetFullName.contains(classCode)) {
+        targetFullName = '$classCode $targetFullName';
+      }
+      if (!targetFullName.toLowerCase().endsWith('.pen')) {
+        targetFullName = '$targetFullName.pen';
+      }
+
+      final ok = await CloudDriveService.instance.renamePenFile(
+        fileOrFolderId: id,
+        newName: targetFullName,
+        isCloud: isCloud,
+        localPath: localPath,
+      );
+
+      if (ok) {
+        await _fetchInkFiles();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('판서명이 "$targetFullName"(으)로 변경되었습니다.'), backgroundColor: const Color(0xFF00F5D4)),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('판서 이름 변경 실패')),
+          );
+        }
+      }
+    }
+  }
+
   String _formatDateTime(DateTime? dt) {
     if (dt == null) return '';
     final y = dt.year;
@@ -426,17 +517,28 @@ class _SavedInkViewState extends State<SavedInkView> {
                                     style: TextStyle(color: const Color(0xFF94A1B2), fontSize: 11 * s),
                                   ),
                                 ),
-                                trailing: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF242629),
-                                    foregroundColor: const Color(0xFF00F5D4),
-                                    elevation: 0,
-                                    padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 8 * s),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8 * s)),
-                                  ),
-                                  onPressed: () => _previewInkFile(item),
-                                  icon: const Icon(Icons.visibility_rounded, size: 14),
-                                  label: const Text('열람'),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(Icons.drive_file_rename_outline_rounded, size: 18 * s, color: const Color(0xFF00F5D4)),
+                                      tooltip: '자유판서 이름 변경',
+                                      onPressed: () => _renameInkFile(item),
+                                    ),
+                                    SizedBox(width: 4 * s),
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF242629),
+                                        foregroundColor: const Color(0xFF00F5D4),
+                                        elevation: 0,
+                                        padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 8 * s),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8 * s)),
+                                      ),
+                                      onPressed: () => _previewInkFile(item),
+                                      icon: const Icon(Icons.visibility_rounded, size: 14),
+                                      label: const Text('열람'),
+                                    ),
+                                  ],
                                 ),
                               ),
                             );

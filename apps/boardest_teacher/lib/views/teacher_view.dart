@@ -2270,20 +2270,55 @@ class _TeacherViewState extends State<TeacherView> {
     final oldName = file['name']?.toString() ?? '';
     if (fileId.isEmpty) return;
 
-    final controller = TextEditingController(text: oldName);
+    final lowerOld = oldName.toLowerCase();
+    final isPen = lowerOld.endsWith('.pen') || lowerOld.endsWith('.iwb');
+    
+    // 확장자 뺀 기본 이름을 기본 텍스트필드 값으로 제공
+    String defaultInput = oldName;
+    if (lowerOld.endsWith('.pen')) {
+      defaultInput = oldName.substring(0, oldName.length - 4);
+    } else if (lowerOld.endsWith('.iwb')) {
+      defaultInput = oldName.substring(0, oldName.length - 4);
+    }
+
+    final controller = TextEditingController(text: defaultInput);
     final newName = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF16161A),
-        title: Text('Drive 파일 이름 변경', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          style: GoogleFonts.notoSansKr(color: Colors.white),
-          decoration: const InputDecoration(
-            hintText: '새 파일명을 입력하세요',
-            hintStyle: TextStyle(color: Colors.white38),
-          ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(isPen ? Icons.draw_rounded : Icons.edit_note_rounded, color: isPen ? const Color(0xFF00F5D4) : const Color(0xFF4285F4), size: 20),
+            const SizedBox(width: 8),
+            Text(isPen ? '자유판서 이름 변경' : 'Drive 파일 이름 변경', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isPen)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '기존: ${CloudDriveService.formatBoardDisplayName(oldName)}',
+                  style: const TextStyle(color: Color(0xFF00F5D4), fontSize: 12),
+                ),
+              ),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              style: GoogleFonts.notoSansKr(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: isPen ? '새 판서명을 입력하세요 (예: 2단원 수학 정리)' : '새 파일명을 입력하세요',
+                hintStyle: const TextStyle(color: Colors.white38),
+                filled: true,
+                fillColor: Colors.black26,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -2291,19 +2326,36 @@ class _TeacherViewState extends State<TeacherView> {
             child: const Text('취소', style: TextStyle(color: Colors.white60)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4285F4)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isPen ? const Color(0xFF00F5D4) : const Color(0xFF4285F4),
+              foregroundColor: isPen ? Colors.black : Colors.white,
+            ),
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('변경', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('변경', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
 
-    if (newName != null && newName.isNotEmpty && newName != oldName) {
-      final ok = await CloudDriveService.instance.renameDriveFile(fileId, newName);
+    if (newName != null && newName.isNotEmpty && newName != defaultInput && newName != oldName) {
+      String finalTargetName = newName.trim();
+      if (lowerOld.endsWith('.pen') && !finalTargetName.toLowerCase().endsWith('.pen')) {
+        finalTargetName = '$finalTargetName.pen';
+      } else if (lowerOld.endsWith('.iwb') && !finalTargetName.toLowerCase().endsWith('.iwb')) {
+        finalTargetName = '$finalTargetName.iwb';
+      }
+
+      final ok = await CloudDriveService.instance.renameDriveFile(fileId, finalTargetName);
       if (ok) {
         await _refreshDriveFiles();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('파일명이 변경되었습니다.')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isPen ? '자유판서 이름이 "$finalTargetName"(으)로 변경되었습니다.' : '파일명이 변경되었습니다.'),
+              backgroundColor: const Color(0xFF00F5D4),
+            ),
+          );
+        }
       } else {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('파일명 변경 실패')));
       }
@@ -3110,7 +3162,9 @@ class _TeacherViewState extends State<TeacherView> {
                                             SizedBox(width: 5 * s),
                                             Expanded(
                                               child: Text(
-                                                name,
+                                                (lower.endsWith('.pen') || lower.endsWith('.iwb'))
+                                                    ? CloudDriveService.formatBoardDisplayName(name)
+                                                    : name,
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
                                                 style: GoogleFonts.notoSansKr(
@@ -3120,6 +3174,16 @@ class _TeacherViewState extends State<TeacherView> {
                                                 ),
                                               ),
                                             ),
+                                            if (lower.endsWith('.pen') || lower.endsWith('.iwb')) ...[
+                                              IconButton(
+                                                icon: Icon(Icons.drive_file_rename_outline_rounded, size: 14 * s, color: const Color(0xFF00F5D4)),
+                                                tooltip: '자유판서 이름 변경',
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(),
+                                                onPressed: () => _renameDriveFile(file),
+                                              ),
+                                              SizedBox(width: 4 * s),
+                                            ],
                                             PopupMenuButton<String>(
                                               icon: Icon(Icons.more_vert_rounded, size: 14 * s, color: _textColor54),
                                               padding: EdgeInsets.zero,
