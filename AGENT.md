@@ -26,25 +26,25 @@
               ┌─────────────────────────────────────────┼─────────────────────────────────────────┐
               ▼                                         ▼                                         ▼
 ┌──────────────────────────┐               ┌──────────────────────────┐               ┌──────────────────────────┐
-│  전자칠판 메인 앱 (Web/Win)│               │    교사용 앱 (Web/Win)    │               │   독립 급식 지도 웹앱     │
-│  (apps/boardest)         │               │  (apps/boardest_teacher) │               │ (infra/boardest_eat_web) │
+│  전자칠판 메인 앱 (Web/Win)│               │    교사용 앱 (Web/Win)    │               │  교사용 라이트 (모바일 PWA)│
+│  (apps/boardest)         │               │  (apps/boardest_teacher) │               │ (apps/boardest_teacher_lite│
 ├──────────────────────────┤               ├──────────────────────────┤               ├──────────────────────────┤
-│ - 3:2 시간표:광고판 레이아웃│              │ - 38:62 통합도구:탐색기 분할│             │ - ?schoolCode=... 쿼리스트링│
-│ - 창 닫아도 세션 유지    │               │ - Web PDF 바이트 직결    │               │ - 1~9 급식실 탭 & 학급 호출│
-│ - PDF, PPT, Canva 판서   │               │ - QR 스캔 & 신뢰 기기 차단│              │ - 학년 일괄 호출/취소 & 쪽지│
-│ - TBP 스마트 교과서      │               │ - 교과/반별 폴더 맵핑     │               │ - Web Audio 신디사이저 차임│
+│ - 3:2 시간표:광고판 레이아웃│              │ - 38:62 통합도구:탐색기 분할│             │ - 급식 호출 원격 제어    │
+│ - 창 닫아도 세션 유지    │               │ - Web PDF 바이트 직결    │               │ - 6자리 OTP & 클라우드   │
+│ - PDF, PPT, Canva 판서   │               │ - QR 스캔 & 신뢰 기기 차단│              │ - 스마트폰 홈 화면 추가 PWA│
+│ - TBP 스마트 교과서      │               │ - 교과/반별 폴더 맵핑     │               │ - 가볍고 즉각적인 모바일 UI│
 └──────────────────────────┘               └──────────────────────────┘               └──────────────────────────┘
               │                                         │                                         │
               └─────────────────────────────────────────┼─────────────────────────────────────────┘
                                                         ▼
-                               ┌──────────────────────────────────────────┐
-                               │   교사 계정 & 시크릿 허브 (Web)          │
-                               │   (apps/boardest_teacher_oauth)          │
-                               ├──────────────────────────────────────────┤
-                               │ - Google OAuth 2.0 PKCE 인증             │
-                               │ - OTP 노출 제거, 보안 시크릿 키 관리/저장│
-                               │ - 전자칠판 QR 연동용 시크릿 허브         │
-                               └──────────────────────────────────────────┘
+                                ┌──────────────────────────────────────────┐
+                                │   교사 계정 & 시크릿 허브 (Web)          │
+                                │   (apps/boardest_teacher_oauth)          │
+                                ├──────────────────────────────────────────┤
+                                │ - Google OAuth 2.0 PKCE 인증             │
+                                │ - OTP 노출 제거, 보안 시크릿 키 관리/저장│
+                                │ - 전자칠판 QR 연동용 시크릿 허브         │
+                                └──────────────────────────────────────────┘
 ```
 
 ### 1) `apps/boardest` (전자칠판 메인 앱)
@@ -58,16 +58,16 @@
 - **Web PDF 에러 원천 해결**: `kIsWeb` 조건에서 `localF.existsSync()`를 우회하고 `CloudDriveService.webMemoryFiles` 바이트를 직접 `PdfBoardView`로 바인딩하여 브라우저에서도 PDF 즉시 로드.
 - **배포 타겟**: `boardest-teacher` (Firebase Hosting) 및 Windows 데스크톱 EXE/AppX.
 
-### 3) `infra/boardest_eat_web` (독립 급식 지도 웹앱 — `boardest-eat.web.app`)
-- **주요 기능**: 전용 실시간 급식 관제 웹앱. 쿼리스트링(`?schoolCode=ydm&cafeteria=1&callerName=지도교사`) 완전 지원.
-- **특징**: 1~9 급식실 탭별 실시간 온라인 학급 카운트, 학년 일괄 호출, 전체 호출 취소, 전자칠판 쪽지 전송, Web Audio 합성 차임벨.
+### 3) `apps/boardest_teacher_lite` (교사용 모바일 라이트 PWA — `boardest-teacher-lite.web.app`)
+- **주요 기능**: 스마트폰 최적화 무설치 모바일 웹앱. 원격 급식 호출 및 취소, 6자리 Stegano OTP 생성 및 연동, Google Drive 수업 자료 전송.
+- **특징**: 스마트폰 브라우저에서 '홈 화면에 추가' 시 전체 화면 PWA 네이티브 경험 제공.
 
 ### 4) `apps/boardest_teacher_oauth` (교사 계정 설정 및 시크릿 관리 허브 — `boardest-teacher-oauth.web.app`)
 - **주요 기능**: Google OAuth 2.0 PKCE 인증, 교사 프로필 등록, **보안 시크릿 키 관리/생성/저장 전용 허브** (보안을 위해 1회용 OTP 번호는 본 사이트에 직접 노출하지 않음).
 
 ### 5) `infra/welcome_web` & `download-boardest` (설치 & 다운로드 허브)
-- **`welcome-to-boardest.web.app`**: 접속 기기(User-Agent) 자동 감지 맞춤형 온보딩 포털.
-- **`download-boardest.web.app`**: 설치 명령어 및 브라우저 다운로드 출처 URL 지원 서버 (`/bst.ps1`, `/bst.apk`, `/bst.appinstaller`, `/bst.appx`, `/bst.cer`, 루트 접속 시 welcome으로 302 리다이렉트).
+- **`welcome-to-boardest.web.app`**: 접속 기기(User-Agent) 자동 감지 맞춤형 온보딩 포털 및 핵심 기능 소개 쇼케이스.
+- **`download-boardest.web.app`**: 설치 명령어 및 브라우저 다운로드 출처 URL 지원 서버 (`/win-cer.ps1`, `/bst.apk`, `/boardest.appinstaller`, `/bst-teacher.appinstaller`, 루트 접속 시 welcome으로 302 리다이렉트).
 
 ### 6) `infra/boardest_auth_worker` (Cloudflare Worker 인증 프록시)
 - **주요 기능**: Zero-Trust Google OAuth 토큰 교환, 6자리 Steganography OTP 검증, 8자리 전자칠판 자동 페어링 관리, 접속 감사 로그(Audit Log) 및 폴더 맵핑 저장.
@@ -78,12 +78,11 @@
 
 | 호스팅 플랫폼 | 타겟 명 / 도메인 | 실제 접속 URL | 설명 및 용도 |
 |---|---|---|---|
-| **Firebase Hosting** | `welcome-to-boardest` | `https://welcome-to-boardest.web.app` | 공식 사용자 안내 및 온보딩 포털 (UA 자동 감지) |
-| **Firebase Hosting** | `download-boardest` | `https://download-boardest.web.app` | 원클릭 스크립트(`bst.ps1`) 및 최신 릴리즈 직접 다운로드 출처 허브 |
-| **Firebase Hosting** | `boardest-eat` | `https://boardest-eat.web.app` | 독립 급식 지도 실시간 웹앱 (쿼리스트링 지원) |
+| **Firebase Hosting** | `welcome-to-boardest` | `https://welcome-to-boardest.web.app` | 공식 사용자 안내 및 온보딩 포털 (UA 자동 감지 & 기능 소개) |
+| **Firebase Hosting** | `download-boardest` | `https://download-boardest.web.app` | 원클릭 스크립트(`win-cer.ps1`) 및 최신 릴리즈 직접 다운로드 출처 허브 |
 | **Firebase Hosting** | `boardest-main` | `https://boardest.web.app` | Boardest 메인 전자칠판 앱 (웹 버전) |
 | **Firebase Hosting** | `boardest-teacher` | `https://boardest-teacher.web.app` | 교사용 데스크톱 & 웹 통합 앱 (38:62 2분할 레이아웃) |
-| **Firebase Hosting** | `boardest-teacher-lite` | `https://boardest-teacher-lite.web.app` | 교사용 라이트 모바일 웹앱 |
+| **Firebase Hosting** | `boardest-teacher-lite` | `https://boardest-teacher-lite.web.app` | 교사용 라이트 모바일 웹앱 (급식 호출 & OTP) |
 | **Firebase Hosting** | `boardest-teacher-oauth` | `https://boardest-teacher-oauth.web.app` | Google OAuth 및 보안 시크릿 키 관리/생성/저장 허브 |
 | **Cloudflare Worker** | `boardest-cloud-token` | `https://boardest-cloud-token.jiwho.workers.dev` | 인증/토큰 교환/OTP 검증/기기 관리 API |
 | **Cloudflare Worker** | `comcigan` | `https://comcigan.jiwho.workers.dev` | 컴시간 시간표 초고속 TCP 프록시 |

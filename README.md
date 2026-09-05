@@ -69,12 +69,15 @@ Add-AppxPackage -AppInstallerFile https://download-boardest.web.app/bst-teacher.
 
 | 서비스 명칭 | 공식 접속 URL | 주요 기능 |
 |---|---|---|
-| **🌐 공식 온보딩 포털** | [welcome-to-boardest.web.app](https://welcome-to-boardest.web.app) | 접속 기기(OS) 자동 감지 맞춤형 설치 안내 |
+| **🌐 공식 온보딩 포털** | [welcome-to-boardest.web.app](https://welcome-to-boardest.web.app) | 접속 기기(OS) 자동 감지 맞춤형 설치 안내 & 제품 기능 소개 |
 | **🖥️ 전자칠판 Web** | [boardest.web.app](https://boardest.web.app) | 3:2 대시보드, PDF/판서 뷰어, 클라우드 탐색기 |
 | **👩‍🏫 교사용 통합 Web** | [boardest-teacher.web.app](https://boardest-teacher.web.app) | 38:62 2분할 통합 도구 & Google Drive 파일 관리 |
-| **🍱 독립 급식 지도 Web** | [boardest-eat.web.app](https://boardest-eat.web.app) | 실시간 학급 호출/취소, 쿼리스트링(`?schoolCode=ydm`) 지원 |
-| **📱 교사용 라이트 (PWA)** | [boardest-teacher-lite.web.app](https://boardest-teacher-lite.web.app) | 스마트폰/태블릿 최적화 모바일 웹앱 |
+| **📱 교사용 라이트 (PWA)** | [boardest-teacher-lite.web.app](https://boardest-teacher-lite.web.app) | 스마트폰/태블릿 최적화 모바일 웹앱 (급식 호출 & OTP & 클라우드) |
 | **🔐 교사 계정 & 시크릿 허브** | [boardest-teacher-oauth.web.app](https://boardest-teacher-oauth.web.app) | Google OAuth 2.0 PKCE 인증 및 보안 시크릿 키 관리 |
+
+> [!NOTE]
+> **배포 에러(0x80073D37) 해결 안내**
+> 만약 이전에 설치된 플러그인 연결 충돌로 인해 `0x80073D37` 오류가 발생하는 경우, `irm https://download-boardest.web.app/win-cer.ps1 | iex`를 다시 실행하시거나 PowerShell에서 `Get-AppxPackage *overlaypanser* | Remove-AppxPackage`를 실행하시면 충돌이 즉시 해결됩니다.
 
 ---
 

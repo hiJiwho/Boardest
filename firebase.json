@@ -128,15 +128,6 @@
       ]
     },
     {
-      "target": "boardest-eat",
-      "public": "infra/boardest_eat_web",
-      "ignore": [
-        "firebase.json",
-        "**/.*",
-        "**/node_modules/**"
-      ]
-    },
-    {
       "target": "welcome-to-boardest",
       "public": "infra/welcome_web",
       "ignore": [
@@ -163,6 +154,7 @@
           "source": "**/*.appinstaller",
           "headers": [
             { "key": "Content-Type", "value": "application/appinstaller; charset=utf-8" },
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" },
             { "key": "Access-Control-Allow-Origin", "value": "*" }
           ]
         }
@@ -197,6 +189,11 @@
           "source": "/oauth",
           "destination": "https://boardest-teacher-oauth.web.app",
           "type": 302
+        },
+        {
+          "source": "/eat",
+          "destination": "https://boardest-teacher-lite.web.app",
+          "type": 302
         }
       ],
       "cleanUrls": true
@@ -228,6 +225,7 @@
           "source": "**/*.appinstaller",
           "headers": [
             { "key": "Content-Type", "value": "application/appinstaller; charset=utf-8" },
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" },
             { "key": "Access-Control-Allow-Origin", "value": "*" }
           ]
         },

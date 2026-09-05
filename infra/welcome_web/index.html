@@ -714,7 +714,7 @@
       color: #D1D5DB;
     }
 
-    /* Features Section */
+    /* Features & Showcase Section */
     .section-heading {
       font-size: 1.45rem;
       font-weight: 800;
@@ -725,18 +725,138 @@
       gap: 10px;
     }
 
+    .showcase-section {
+      margin-top: 60px;
+      margin-bottom: 70px;
+    }
+
+    .showcase-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .showcase-main-title {
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      line-height: 1.35;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #FFFFFF 30%, #93C5FD 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .showcase-subtitle {
+      font-size: 1rem;
+      color: var(--text-muted);
+      max-width: 650px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    .product-feature-block {
+      background: rgba(18, 24, 38, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      padding: 30px 26px;
+      margin-bottom: 32px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .product-feature-block.boardest-block {
+      border-left: 5px solid var(--primary);
+    }
+
+    .product-feature-block.teacher-block {
+      border-left: 5px solid var(--teal);
+    }
+
+    .feature-block-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 22px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .feature-block-icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      flex-shrink: 0;
+    }
+
+    .feature-block-icon.boardest {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60A5FA;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .feature-block-icon.teacher {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34D399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .feature-block-tag {
+      display: inline-block;
+      font-size: 0.74rem;
+      font-weight: 700;
+      padding: 2px 10px;
+      border-radius: 6px;
+      background: rgba(59, 130, 246, 0.12);
+      color: #93C5FD;
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      margin-bottom: 4px;
+      letter-spacing: 0.03em;
+    }
+
+    .feature-block-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .feature-block-desc {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .feature-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .feature-tag {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #D1D5DB;
+    }
+
     .features-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 18px;
-      margin-bottom: 56px;
     }
 
     .feature-item {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 16px;
-      padding: 22px;
+      padding: 20px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -744,12 +864,13 @@
     }
 
     .feature-item:hover {
-      border-color: rgba(255, 255, 255, 0.18);
+      border-color: rgba(255, 255, 255, 0.2);
       transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
     }
 
     .feature-item-icon {
-      font-size: 1.8rem;
+      font-size: 1.7rem;
       color: #60A5FA;
     }
 
@@ -761,7 +882,7 @@
     .feature-item-desc {
       font-size: 0.85rem;
       color: var(--text-muted);
-      line-height: 1.5;
+      line-height: 1.55;
     }
 
     /* Footer */
@@ -833,9 +954,13 @@
           <span class="material-icons-round" style="font-size: 1.1rem;">vpn_key</span>
           <span>교사 포털 (OAuth)</span>
         </a>
-        <a href="https://boardest-eat.web.app" target="_blank" class="nav-link">
+        <a href="#features" class="nav-link">
+          <span class="material-icons-round" style="font-size: 1.1rem;">auto_awesome</span>
+          <span>주요 기능 소개</span>
+        </a>
+        <a href="https://boardest-teacher-lite.web.app" target="_blank" class="nav-link">
           <span class="material-icons-round" style="font-size: 1.1rem;">restaurant</span>
-          <span>급식실 지도</span>
+          <span>급식 호출 (Lite)</span>
         </a>
         <a href="https://github.com/hiJiwho/Boardest" target="_blank" class="nav-link">
           <span>GitHub</span>
@@ -913,15 +1038,15 @@
         <div class="platform-tabs">
           <button id="tab-windows" class="platform-tab active" onclick="selectPlatform('windows')">
             <span class="material-icons-round" style="font-size: 1.05rem;">desktop_windows</span>
-            <span>Windows</span>
+            <span id="tab-windows-text">Windows</span>
           </button>
           <button id="tab-android" class="platform-tab" onclick="selectPlatform('android')">
             <span class="material-icons-round" style="font-size: 1.05rem;">android</span>
-            <span>Android</span>
+            <span id="tab-android-text">Android (APK)</span>
           </button>
           <button id="tab-web" class="platform-tab" onclick="selectPlatform('web')">
             <span class="material-icons-round" style="font-size: 1.05rem;">language</span>
-            <span>Web &amp; PWA</span>
+            <span id="tab-web-text">Web &amp; PWA</span>
           </button>
           <button id="tab-cert" class="platform-tab" onclick="selectPlatform('cert')">
             <span class="material-icons-round" style="font-size: 1.05rem;">verified_user</span>
@@ -1118,50 +1243,80 @@
       <!-- VIEW C: WEB & PWA 가이드 (모든 브라우저, Mac, iOS, iPad) -->
       <!-- ============================================================= -->
       <div id="view-web" style="display: none;">
-        <div class="step-box highlight">
-          <div class="step-header">
-            <div class="step-title-row">
-              <span class="step-number">1</span>
-              <h3 class="step-title">웹 브라우저 즉시 접속 &amp; 바로가기</h3>
-            </div>
-            <span class="step-badge recommended">설치 불필요</span>
-          </div>
-          <p class="step-desc">
-            Chrome, Safari, Edge 등 모든 모던 웹 브라우저에서 별도 설치 없이 즉시 실행할 수 있습니다.
-          </p>
-
-          <div class="button-row">
-            <a id="pwa-link-1" href="https://boardest.web.app" target="_blank" class="btn-action-primary">
-              <span class="material-icons-round">open_in_new</span>
-              <span id="pwa-link-text-1">전자칠판 웹 바로가기 (boardest.web.app)</span>
-            </a>
-            <a id="pwa-link-2" href="https://boardest-teacher-lite.web.app" target="_blank" class="btn-action-secondary">
-              <span class="material-icons-round">smartphone</span>
-              <span id="pwa-link-text-2">교사용 Lite 웹앱 바로가기</span>
-            </a>
-          </div>
-
-          <div class="callout-box info" style="margin-top: 20px; flex-direction: column;">
-            <div style="font-weight: 800; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
-              <span class="material-icons-round">touch_app</span>
-              <span>iOS(아이폰/아이패드) 및 Mac에서 앱처럼 설치하기 (PWA):</span>
-            </div>
-            <div class="pwa-steps-list">
-              <div class="pwa-step-item">
-                <span class="pwa-step-idx">1</span>
-                <span><strong>Safari(사파리)</strong> 브라우저에서 해당 사이트로 접속합니다.</span>
+        
+        <!-- Case 1: 전자칠판 웹 버전 -->
+        <div id="web-boardest-box">
+          <div class="step-box highlight">
+            <div class="step-header">
+              <div class="step-title-row">
+                <span class="step-number">1</span>
+                <h3 class="step-title">전자칠판 웹 브라우저 즉시 실행</h3>
               </div>
-              <div class="pwa-step-item">
-                <span class="pwa-step-idx">2</span>
-                <span>하단 중앙의 <strong>[공유]</strong> 버튼 (네모에 위쪽 화살표 모양)을 탭합니다.</span>
+              <span class="step-badge recommended">설치 불필요</span>
+            </div>
+            <p class="step-desc">
+              별도의 프로그램 설치 없이 Chrome, Edge 등 웹 브라우저에서 전자칠판 화면을 즉시 실행할 수 있습니다.
+            </p>
+            <div class="button-row">
+              <a href="https://boardest.web.app" target="_blank" class="btn-action-primary">
+                <span class="material-icons-round">open_in_new</span>
+                <span>전자칠판 웹 버전 열기 (boardest.web.app)</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Case 2: 교사용 모바일 (Android/iOS) & 웹 통합 가이드 -->
+        <div id="web-teacher-box" style="display: none;">
+          <div class="step-box highlight">
+            <div class="step-header">
+              <div class="step-title-row">
+                <span class="step-number">1</span>
+                <h3 class="step-title">스마트폰 최적화: 교사용 Lite 웹앱 (적극 권장 ⭐)</h3>
               </div>
-              <div class="pwa-step-item">
-                <span class="pwa-step-idx">3</span>
-                <span>스크롤을 내려 <strong>[홈 화면에 추가]</strong>를 누르면 홈 화면에 전용 앱으로 등록됩니다!</span>
+              <span class="step-badge recommended">Android / iPhone 최적화</span>
+            </div>
+            <p class="step-desc">
+              <strong>선생님 스마트폰 화면에 완벽히 최적화된 Teacher Lite 웹앱</strong>입니다.<br>
+              별도 무거운 APK 설치 없이 <strong>급식 호출, 전자칠판 6자리 OTP 로그인, 구글 드라이브(bst-cld) 수업자료 연동</strong>을 가장 빠르고 안전하게 이용할 수 있습니다.
+            </p>
+
+            <div class="button-row">
+              <a href="https://boardest-teacher-lite.web.app" target="_blank" class="btn-action-primary" style="background: linear-gradient(135deg, #059669, #10B981);">
+                <span class="material-icons-round">smartphone</span>
+                <span>교사용 Lite 웹앱 열기 (boardest-teacher-lite.web.app)</span>
+              </a>
+              <a href="https://boardest-teacher.web.app" target="_blank" class="btn-action-secondary">
+                <span class="material-icons-round">laptop_mac</span>
+                <span>태블릿/PC용 전체 웹 열기 (boardest-teacher.web.app)</span>
+              </a>
+            </div>
+
+            <!-- 스마트폰 홈 화면 추가 PWA 가이드 -->
+            <div class="callout-box success" style="margin-top: 20px; flex-direction: column;">
+              <div style="font-weight: 800; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+                <span class="material-icons-round">add_to_home_screen</span>
+                <span>스마트폰(Android &amp; iPhone) 홈 화면에 앱처럼 1초 설치하기 (PWA):</span>
+              </div>
+              <div class="pwa-steps-list">
+                <div class="pwa-step-item">
+                  <span class="pwa-step-idx">1</span>
+                  <span>스마트폰 브라우저(Chrome, 삼성 인터넷 또는 Safari)로 <strong>boardest-teacher-lite.web.app</strong>에 접속합니다.</span>
+                </div>
+                <div class="pwa-step-item">
+                  <span class="pwa-step-idx">2</span>
+                  <span><strong>안드로이드 (Galaxy):</strong> 브라우저 우측 상단/하단 메뉴(<strong>⋮</strong> 또는 <strong>≡</strong>) ➔ <strong>[홈 화면에 추가]</strong> 또는 <strong>[현재 페이지 추가]</strong> 터치<br>
+                  <strong>아이폰/아이패드 (Apple):</strong> Safari 브라우저 하단 <strong>[공유]</strong> 버튼(네모 화살표) ➔ <strong>[홈 화면에 추가]</strong> 터치</span>
+                </div>
+                <div class="pwa-step-item">
+                  <span class="pwa-step-idx">3</span>
+                  <span>스마트폰 바탕화면에 Boardest 아이콘이 생성되며, 터치 시 주소창 없이 전체 화면 네이티브 앱으로 시원하게 실행됩니다!</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
+
       </div>
 
       <!-- ============================================================= -->
@@ -1221,34 +1376,181 @@
       </a>
     </section>
 
-    <!-- 4. Boardest 핵심 기능 소개 -->
-    <div class="section-heading">
-      <span class="material-icons-round" style="color: #8B5CF6;">auto_awesome</span>
-      <span>Boardest의 핵심 기능 소개</span>
-    </div>
+    <!-- 4. Boardest 플랫폼 & 핵심 기능 상세 소개 -->
+    <section id="features" class="showcase-section">
+      <div class="showcase-header">
+        <div class="badge-pill" style="margin: 0 auto 12px; display: inline-flex;">
+          <span class="material-icons-round" style="font-size: 1rem; color: #8B5CF6;">stars</span>
+          <span>스마트 교실의 완성, Boardest 생태계</span>
+        </div>
+        <h2 class="showcase-main-title">선생님의 수업을 더 편리하게,<br>학생들의 교실을 더 스마트하게</h2>
+        <p class="showcase-subtitle">교실 대형 전자칠판과 교사의 스마트 기기가 실시간으로 소통하는 차세대 교육 플랫폼의 주요 기능을 소개합니다.</p>
+      </div>
 
-    <div class="features-grid">
-      <div class="feature-item">
-        <span class="material-icons-round feature-item-icon">schedule</span>
-        <h4 class="feature-item-title">실시간 교시 &amp; 시간표 연동</h4>
-        <p class="feature-item-desc">컴시간 시간표 서버와 실시간으로 연동되어 교시 잔여 시간, 다음 교시 과목, 쉬는 시간 타이머를 자동 안내합니다.</p>
+      <!-- 전자칠판 (Boardest) 기능 소개 블록 -->
+      <div id="showcase-boardest" class="product-feature-block boardest-block">
+        <div class="feature-block-header">
+          <div class="feature-block-icon boardest">
+            <span class="material-icons-round">desktop_windows</span>
+          </div>
+          <div>
+            <div class="feature-block-tag">교실 대형 스크린 &amp; 칠판 전용 런처</div>
+            <h3 class="feature-block-title">🖥️ 전자칠판 (Boardest)</h3>
+            <p class="feature-block-desc">아침 조회부터 하교까지, 교실의 중심에서 실시간 시간표와 수업 밀착형 판서를 지원합니다.</p>
+          </div>
+        </div>
+
+        <div class="features-grid">
+          <div class="feature-item">
+            <div class="feature-header-row">
+              <span class="material-icons-round feature-item-icon" style="color: #38BDF8;">schedule</span>
+              <span class="feature-tag">실시간 자동 연동</span>
+            </div>
+            <h4 class="feature-item-title">실시간 교시 시계 &amp; 컴시간 시간표</h4>
+            <p class="feature-item-desc">
+              컴시간 시간표 서버와 연동되어 현재 교시 남은 시간, 쉬는 시간 타이머, 오늘 시간표를 오차 없이 실시간으로 계산해 화면에 띄웁니다.
+            </p>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-header-row">
+              <span class="material-icons-round feature-item-icon" style="color: #10B981;">draw</span>
+              <span class="feature-tag">특허급 오버레이</span>
+            </div>
+            <h4 class="feature-item-title">수업용 PPT &amp; HWP 투명 판서</h4>
+            <p class="feature-item-desc">
+              별도 캡처 없이 수업 중인 파워포인트 슬라이드와 한글 문서 위에 0초 딜레이로 즉시 판서할 수 있는 투명 오버레이 펜 도구를 제공합니다.
+            </p>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-header-row">
+              <span class="material-icons-round feature-item-icon" style="color: #F59E0B;">cloud_download</span>
+              <span class="feature-tag">Google Drive 연동</span>
+            </div>
+            <h4 class="feature-item-title">클라우드 수업 자료 즉시 열기</h4>
+            <p class="feature-item-desc">
+              선생님이 올린 PDF, PPT, Canva 자료가 칠판 탐색기에 실시간 동기화되어 USB 연결 없이 클릭 한 번으로 다운로드 후 즉시 실행됩니다.
+            </p>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-header-row">
+              <span class="material-icons-round feature-item-icon" style="color: #EC4899;">restaurant</span>
+              <span class="feature-tag">자동 팝업 &amp; 음성</span>
+            </div>
+            <h4 class="feature-item-title">학급별 실시간 급식 호출 팝업</h4>
+            <p class="feature-item-desc">
+              급식실 상황에 맞추어 우리 반 식사 순번이 되면 전자칠판 화면에 시각적 대형 배너와 알림 효과음이 울려 질서 있는 이동을 안내합니다.
+            </p>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-header-row">
+              <span class="material-icons-round feature-item-icon" style="color: #A855F7;">widgets</span>
+              <span class="feature-tag">교실 필수 도구</span>
+            </div>
+            <h4 class="feature-item-title">수업 유틸리티 스마트 도구함</h4>
+            <p class="feature-item-desc">
+              발표자 랜덤 번호 뽑기, 집중 스톱워치, 수업 타이머, 화면 블라인드 등 실제 수업 현장에서 가장 많이 쓰이는 도구들을 기본 탑재하고 있습니다.
+            </p>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-header-row">
+              <span class="material-icons-round feature-item-icon" style="color: #6366F1;">qr_code_scanner</span>
+              <span class="feature-tag">보안 0초 인증</span>
+            </div>
+            <h4 class="feature-item-title">6자리 Stegano OTP &amp; QR 로그인</h4>
+            <p class="feature-item-desc">
+              아이디/비밀번호를 공용 칠판에서 입력할 필요 없이 6자리 보안 OTP 코드나 스마트폰 카메라 QR 인식으로 선생님 권한을 즉시 승인받습니다.
+            </p>
+          </div>
+        </div>
       </div>
-      <div class="feature-item">
-        <span class="material-icons-round feature-item-icon" style="color: #10B981;">draw</span>
-        <h4 class="feature-item-title">스마트 교과서 &amp; 판서 엔진</h4>
-        <p class="feature-item-desc">디지털 교과서(.bsttbp)와 PDF 위에 지연 없이 필기하며, 판서 데이터는 과목별로 클라우드에 자동 동기화됩니다.</p>
+
+      <!-- 교사용 (Boardest Teacher) 기능 소개 블록 -->
+      <div id="showcase-teacher" class="product-feature-block teacher-block" style="margin-top: 36px;">
+        <div class="feature-block-header">
+          <div class="feature-block-icon teacher">
+            <span class="material-icons-round">co_present</span>
+          </div>
+          <div>
+            <div class="feature-block-tag" style="color: #34D399; background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.25);">선생님 기기 (모바일/태블릿/PC)</div>
+            <h3 class="feature-block-title">👩‍🏫 교사용 (Boardest Teacher &amp; Lite)</h3>
+            <p class="feature-block-desc">수업 준비부터 교실 원격 제어까지, 선생님의 손안에서 모든 것이 안전하고 빠르게 이루어집니다.</p>
+          </div>
+        </div>
+
+        <div class="features-grid">
+          <div class="feature-item">
+            <div class="feature-header-row">
+              <span class="material-icons-round feature-item-icon" style="color: #10B981;">smartphone</span>
+              <span class="feature-tag" style="background: rgba(16, 185, 129, 0.15); color: #6EE7B7;">무설치 PWA</span>
+            </div>
+            <h4 class="feature-item-title">스마트폰 최적화 Teacher Lite (PWA)</h4>
+            <p class="feature-item-desc">
+              별도의 앱 설치 없이 스마트폰 브라우저에서 '홈 화면에 추가'만 하면 전체 화면 네이티브 앱처럼 동작하여 가볍고 즉각적입니다.
+            </p>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-header-row">
+              <span class="material-icons-round feature-item-icon" style="color: #38BDF8;">cloud_upload</span>
+              <span class="feature-tag">Google Drive</span>
+            </div>
+            <h4 class="feature-item-title">구글 드라이브(bst-cld) 수업자료 연동</h4>
+            <p class="feature-item-desc">
+              내 구글 드라이브의 전용 폴더(bst-save, bst-pen)에 수업 자료를 넣어두면 담당 교실 전자칠판으로 실시간 전송 및 공유됩니다.
+            </p>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-header-row">
+              <span class="material-icons-round feature-item-icon" style="color: #F59E0B;">notification_important</span>
+              <span class="feature-tag">원격 즉시 호출</span>
+            </div>
+            <h4 class="feature-item-title">스마트폰 원격 급식 호출 제어</h4>
+            <p class="feature-item-desc">
+              급식실 앞이나 복도에서 스마트폰 버튼 한 번으로 해당 학급의 전자칠판에 식사 이동 신호를 즉각 보낼 수 있습니다.
+            </p>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-header-row">
+              <span class="material-icons-round feature-item-icon" style="color: #A855F7;">calendar_month</span>
+              <span class="feature-tag">개인 맞춤형</span>
+            </div>
+            <h4 class="feature-item-title">교사 개인 시간표 &amp; 학급 맵핑</h4>
+            <p class="feature-item-desc">
+              나의 담당 학급 및 교시별 시간표를 언제 어디서나 확인하고, 교실 이동 수업 시에도 해당 반 칠판과 손쉽게 1:1 매핑할 수 있습니다.
+            </p>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-header-row">
+              <span class="material-icons-round feature-item-icon" style="color: #EC4899;">vpn_key</span>
+              <span class="feature-tag">Google OAuth</span>
+            </div>
+            <h4 class="feature-item-title">교사 포털 통합 계정 관리</h4>
+            <p class="feature-item-desc">
+              선생님 구글 계정으로 로그인하여 학교 코드, 교사 코드, 클라우드 권한을 안전하게 관리하고 칠판 접속 시크릿을 발급합니다.
+            </p>
+          </div>
+
+          <div class="feature-item">
+            <div class="feature-header-row">
+              <span class="material-icons-round feature-item-icon" style="color: #6366F1;">wifi_tethering</span>
+              <span class="feature-tag">실시간 하트비트</span>
+            </div>
+            <h4 class="feature-item-title">교실 전자칠판 온라인 상태 감지</h4>
+            <p class="feature-item-desc">
+              수업에 들어가기 전, 해당 교실 전자칠판이 현재 켜져 있는지 온라인 연결 상태(하트비트)를 교사용 앱에서 사전에 확인합니다.
+            </p>
+          </div>
+        </div>
       </div>
-      <div class="feature-item">
-        <span class="material-icons-round feature-item-icon" style="color: #F59E0B;">cloud_sync</span>
-        <h4 class="feature-item-title">구글 드라이브(bst-cld) 원격 전송</h4>
-        <p class="feature-item-desc">선생님 휴대폰이나 노트북에서 판서 이름을 실시간으로 변경하고 수업 자료를 교실 칠판으로 즉시 전파합니다.</p>
-      </div>
-      <div class="feature-item">
-        <span class="material-icons-round feature-item-icon" style="color: #EC4899;">restaurant</span>
-        <h4 class="feature-item-title">급식실 이동 실시간 호출</h4>
-        <p class="feature-item-desc">급식실 수용 현황에 따라 학급별 식사 순번을 전자칠판 화면에 시각적·청각적으로 전파하여 질서 있는 이동을 돕습니다.</p>
-      </div>
-    </div>
+    </section>
 
     <!-- Footer -->
     <footer>
@@ -1308,6 +1610,10 @@
 
     // 3. 플랫폼 선택 (Windows vs Android vs Web vs Cert)
     function selectPlatform(platform) {
+      // 교사용 선택 시 Android 탭은 Web(모바일 & 웹)으로 자동 대체
+      if (currentProduct === 'teacher' && platform === 'android') {
+        platform = 'web';
+      }
       currentPlatform = platform;
 
       // Update Tabs Visuals
@@ -1337,6 +1643,33 @@
     function updateUI() {
       const isBoardest = (currentProduct === 'boardest');
 
+      // Tabs Dynamic Visibility & Text
+      const tabAndroid = document.getElementById('tab-android');
+      const tabAndroidText = document.getElementById('tab-android-text');
+      const tabWebText = document.getElementById('tab-web-text');
+      const tabWindowsText = document.getElementById('tab-windows-text');
+
+      if (isBoardest) {
+        if (tabAndroid) tabAndroid.style.display = 'inline-flex';
+        if (tabAndroidText) tabAndroidText.innerText = "Android (APK)";
+        if (tabWebText) tabWebText.innerText = "Web 브라우저";
+        if (tabWindowsText) tabWindowsText.innerText = "Windows";
+      } else {
+        // 교사용은 APK가 없으므로 Android 탭을 숨기고 Web과 통합!
+        if (tabAndroid) tabAndroid.style.display = 'none';
+        if (tabWebText) tabWebText.innerText = "📱 모바일 & 웹 (PWA)";
+        if (tabWindowsText) tabWindowsText.innerText = "Windows (노트북/PC)";
+        if (currentPlatform === 'android') {
+          currentPlatform = 'web';
+          ['windows', 'android', 'web', 'cert'].forEach(p => {
+            const tab = document.getElementById('tab-' + p);
+            if (tab) tab.classList.toggle('active', p === 'web');
+            const view = document.getElementById('view-' + p);
+            if (view) view.style.display = (p === 'web') ? 'block' : 'none';
+          });
+        }
+      }
+
       // Windows View Updates
       const winAppinstallerBtn = document.getElementById('win-appinstaller-btn');
       const winAppinstallerText = document.getElementById('win-appinstaller-text');
@@ -1361,30 +1694,40 @@
       // Android View Updates
       const androidBBox = document.getElementById('android-boardest-box');
       const androidTBox = document.getElementById('android-teacher-box');
-      if (isBoardest) {
-        androidBBox.style.display = 'block';
-        androidTBox.style.display = 'none';
-      } else {
-        androidBBox.style.display = 'none';
-        androidTBox.style.display = 'block';
+      if (androidBBox && androidTBox) {
+        if (isBoardest) {
+          androidBBox.style.display = 'block';
+          androidTBox.style.display = 'none';
+        } else {
+          androidBBox.style.display = 'none';
+          androidTBox.style.display = 'block';
+        }
       }
 
-      // Web & PWA View Updates
-      const pwa1 = document.getElementById('pwa-link-1');
-      const pwaText1 = document.getElementById('pwa-link-text-1');
-      const pwa2 = document.getElementById('pwa-link-2');
-      const pwaText2 = document.getElementById('pwa-link-text-2');
+      // Web & PWA View Updates (Unified for Teacher)
+      const webBBox = document.getElementById('web-boardest-box');
+      const webTBox = document.getElementById('web-teacher-box');
+      if (webBBox && webTBox) {
+        if (isBoardest) {
+          webBBox.style.display = 'block';
+          webTBox.style.display = 'none';
+        } else {
+          webBBox.style.display = 'none';
+          webTBox.style.display = 'block';
+        }
+      }
 
-      if (isBoardest) {
-        pwa1.href = "https://boardest.web.app";
-        pwaText1.innerText = "전자칠판 웹 바로가기 (boardest.web.app)";
-        pwa2.style.display = 'none';
-      } else {
-        pwa1.href = "https://boardest-teacher-lite.web.app";
-        pwaText1.innerText = "교사용 Lite 웹앱 바로가기 (스마트폰 최적화)";
-        pwa2.style.display = 'inline-flex';
-        pwa2.href = "https://boardest-teacher.web.app";
-        pwaText2.innerText = "교사용 전체 웹 바로가기 (PC/태블릿)";
+      // Showcase block visual highlight
+      const scBoardest = document.getElementById('showcase-boardest');
+      const scTeacher = document.getElementById('showcase-teacher');
+      if (scBoardest && scTeacher) {
+        if (isBoardest) {
+          scBoardest.style.borderColor = 'rgba(59, 130, 246, 0.6)';
+          scTeacher.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+        } else {
+          scTeacher.style.borderColor = 'rgba(16, 185, 129, 0.6)';
+          scBoardest.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+        }
       }
     }
 
@@ -1405,7 +1748,7 @@
 
     // 초기화 및 UA 자동 감지 실행
     window.addEventListener('DOMContentLoaded', () => {
-      const detectedPlatform = detectUserPlatform();
+      let detectedPlatform = detectUserPlatform();
       const uaText = document.getElementById('ua-text');
 
       if (detectedPlatform === 'windows') {
@@ -1423,6 +1766,11 @@
       }
 
       selectProduct(currentProduct);
+
+      // 교사용인 경우 Android 감지 시 바로 Web(모바일 & 웹)으로 라우팅
+      if (currentProduct === 'teacher' && detectedPlatform === 'android') {
+        detectedPlatform = 'web';
+      }
       selectPlatform(detectedPlatform);
     });
   </script>

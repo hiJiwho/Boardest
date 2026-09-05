@@ -1,22 +1,14 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
     Version="2.9.9.1"
-    Uri="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appinstaller">
+    Uri="https://download-boardest.web.app/boardest.appinstaller">
     <MainPackage
         Name="jiwho.boardest.bst"
         Publisher="CN=jiwho"
         Version="2.9.9.1"
         ProcessorArchitecture="x64"
         Uri="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx" />
-    <OptionalPackages>
-        <Package
-            Name="jiwho.boardest.plugin.overlaypanser"
-            Publisher="CN=jiwho"
-            Version="2.9.9.1"
-            ProcessorArchitecture="x64"
-            Uri="https://github.com/hiJiwho/Boardest/releases/latest/download/bst-overlay-panser.appx" />
-    </OptionalPackages>
     <UpdateSettings>
         <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false"/>
         <AutomaticBackgroundTask/>

@@ -85,6 +85,18 @@ try {
     Write-Host "  [!] 인증서 등록 오류: $_" -ForegroundColor Red
 }
 
+# 3. 레거시 패키지 충돌 자동 정리 (0x80073D37 배포 에러 방지)
+try {
+    $conflict = Get-AppxPackage *overlaypanser* -ErrorAction SilentlyContinue
+    if ($conflict) {
+        Write-Host "  [*] 레거시 플러그인 패키지 연결 정리 중 (0x80073D37 충돌 방지)..." -ForegroundColor Yellow
+        $conflict | Remove-AppxPackage -ErrorAction SilentlyContinue
+        Write-Host "  [OK] 레거시 패키지 정리 완료!" -ForegroundColor Green
+    }
+} catch {
+    # 무시
+}
+
 # 임시 파일 정리
 if (Test-Path $tempCerPath) {
     Remove-Item -Path $tempCerPath -Force -ErrorAction SilentlyContinue

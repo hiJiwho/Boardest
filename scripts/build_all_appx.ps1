@@ -103,27 +103,19 @@ Write-Host "`n[4/4] Creating AppInstaller XML files..." -ForegroundColor Yellow
 
 $repoReleaseBase = "https://github.com/hiJiwho/Boardest/releases/latest/download"
 
-# 5.1 boardest.appinstaller (Main app + Optional plugin bound together: uninstalls together!)
+# 5.1 boardest.appinstaller
 $boardestAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
     Version="2.9.9.1"
-    Uri="$repoReleaseBase/boardest.appinstaller">
+    Uri="https://download-boardest.web.app/boardest.appinstaller">
     <MainPackage
         Name="jiwho.boardest.bst"
         Publisher="CN=jiwho"
         Version="2.9.9.1"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/boardest.appx" />
-    <OptionalPackages>
-        <Package
-            Name="jiwho.boardest.plugin.overlaypanser"
-            Publisher="CN=jiwho"
-            Version="2.9.9.1"
-            ProcessorArchitecture="x64"
-            Uri="$repoReleaseBase/bst-overlay-panser.appx" />
-    </OptionalPackages>
     <UpdateSettings>
         <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false"/>
         <AutomaticBackgroundTask/>
@@ -132,29 +124,21 @@ $boardestAppinstaller = @"
 </AppInstaller>
 "@
 Set-Content -Path (Join-Path $AppxOutDir "boardest.appinstaller") -Value $boardestAppinstaller -Encoding UTF8
-Write-Host "Created: boardest.appinstaller (with OptionalPackages binding)" -ForegroundColor Green
+Write-Host "Created: boardest.appinstaller" -ForegroundColor Green
 
-# 5.2 bst-teacher.appinstaller (Main app + Optional plugin bound together: uninstalls together!)
+# 5.2 bst-teacher.appinstaller
 $teacherAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
     Version="2.9.9.1"
-    Uri="$repoReleaseBase/bst-teacher.appinstaller">
+    Uri="https://download-boardest.web.app/bst-teacher.appinstaller">
     <MainPackage
         Name="jiwho.boardest.teacher"
         Publisher="CN=jiwho"
         Version="2.9.9.1"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/bst-teacher.appx" />
-    <OptionalPackages>
-        <Package
-            Name="jiwho.boardest.plugin.overlaypanser"
-            Publisher="CN=jiwho"
-            Version="2.9.9.1"
-            ProcessorArchitecture="x64"
-            Uri="$repoReleaseBase/bst-overlay-panser.appx" />
-    </OptionalPackages>
     <UpdateSettings>
         <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false"/>
         <AutomaticBackgroundTask/>
