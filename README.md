@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/License-Proprietary-FACC15)](#)
 
 > **초·중·고 교실 전자칠판(교탁 PC)과 교사용 디바이스를 잇는 차세대 올인원 스마트 교육 플랫폼**  
-> **현재 시스템 버전**: `v2.9.9.2`
+> **현재 시스템 버전**: `v2.9.9.4`
 
 ---
 

@@ -9,7 +9,7 @@ import 'package:open_filex/open_filex.dart';
 
 
 class UpdateService {
-  static const String defaultVersion = '2.9.9.3';
+  static const String defaultVersion = '2.9.9.4';
 
   /// Dynamically detect installed MSIX/AppX version from WindowsApps folder, or fallback to defaultVersion
   static String get currentVersion {
@@ -23,6 +23,22 @@ class UpdateService {
       } catch (_) {}
     }
     return defaultVersion;
+  }
+
+  /// Windows 앱 설치 관리자(AppInstaller)가 매번 실행 시 GitHub/서버에 업데이트가 있는지 확인하도록 OS 설정 보장
+  static Future<void> ensureNativeAppInstallerSettings() async {
+    if (!Platform.isWindows) return;
+    try {
+      final exePath = Platform.resolvedExecutable;
+      if (exePath.contains('WindowsApps')) {
+        final psCommand =
+            'Set-AppxPackageAutoUpdateSettings -PackageFamilyName "jiwho.boardest.bst_nmkn64tehfz7a" '
+            '-AppInstallerUri "https://download-boardest.web.app/boardest.appinstaller" '
+            '-CheckOnLaunch \$true -ShowPrompt \$true -UpdateBlocksActivation \$true '
+            '-ForceUpdateFromAnyVersion \$true -HoursBetweenUpdateChecks 0 -ErrorAction SilentlyContinue';
+        await Process.run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psCommand]);
+      }
+    } catch (_) {}
   }
 
   static const String repoOwner = 'hiJiwho';

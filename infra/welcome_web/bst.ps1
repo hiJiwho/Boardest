@@ -1,6 +1,6 @@
 # ==============================================================================
 # Boardest 영구 인증서(2999년 만료) 원클릭 자동 설치 스크립트
-# 실행: irm https://download-boardest.web.app/bst.ps1 | iex
+# 실행: irm https://welcome-to-boardest.web.app/cer.ps1 | iex
 # ==============================================================================
 
 $ErrorActionPreference = "Continue"
@@ -13,7 +13,7 @@ if (-not $isAdmin) {
     Write-Host "[Boardest Installer] 관리자 권한이 필요합니다." -ForegroundColor Yellow
     Write-Host "UAC 관리자 승격 창이 뜨면 '예'를 눌러주세요..." -ForegroundColor Cyan
     Write-Host ""
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"irm https://download-boardest.web.app/bst.ps1 | iex`"" -Verb RunAs
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"irm https://welcome-to-boardest.web.app/cer.ps1 | iex`"" -Verb RunAs
     exit 0
 }
 
@@ -25,14 +25,13 @@ Write-Host "   인증서 만료일: 2999-12-31 (무제한 영구 서명)" -Foreg
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 2. 최신 cer 다운로드
+# 2. 최신 cer 다운로드 (1차: welcome-to-boardest, 2차: GitHub latest, 3차: 내장 Base64)
 $tempCerPath = Join-Path $env:TEMP "BoardestCert.cer"
 $downloadSuccess = $false
 
 Write-Host "[1/3] 최신 Boardest 영구 인증서 다운로드 중..." -ForegroundColor Yellow
 
 $sources = @(
-    "https://download-boardest.web.app/BoardestCert.cer",
     "https://welcome-to-boardest.web.app/BoardestCert.cer",
     "https://github.com/hiJiwho/Boardest/releases/latest/download/BoardestCert.cer"
 )
@@ -104,6 +103,7 @@ if ($choice -eq "1") {
         Write-Host "AppInstaller 프로토콜 실행 실패, Add-AppxPackage로 시도합니다..." -ForegroundColor Yellow
         Add-AppxPackage -AppInstallerFile $appUrl
     }
+    Set-AppxPackageAutoUpdateSettings -PackageFamilyName "jiwho.boardest.bst_nmkn64tehfz7a" -AppInstallerUri $appUrl -CheckOnLaunch $true -ShowPrompt $true -UpdateBlocksActivation $true -ForceUpdateFromAnyVersion $true -HoursBetweenUpdateChecks 0 -ErrorAction SilentlyContinue
 } elseif ($choice -eq "2") {
     Write-Host ""
     Write-Host "교사용(Boardest Teacher) AppInstaller 실행 중..." -ForegroundColor Cyan
@@ -115,6 +115,7 @@ if ($choice -eq "1") {
         Write-Host "AppInstaller 프로토콜 실행 실패, Add-AppxPackage로 시도합니다..." -ForegroundColor Yellow
         Add-AppxPackage -AppInstallerFile $appUrl
     }
+    Set-AppxPackageAutoUpdateSettings -PackageFamilyName "jiwho.boardest.teacher_nmkn64tehfz7a" -AppInstallerUri $appUrl -CheckOnLaunch $true -ShowPrompt $true -UpdateBlocksActivation $true -ForceUpdateFromAnyVersion $true -HoursBetweenUpdateChecks 0 -ErrorAction SilentlyContinue
 } else {
     Write-Host ""
     Write-Host "인증서 설치가 완료되었습니다. 웹사이트에서 원하는 앱을 다운로드하세요!" -ForegroundColor Cyan

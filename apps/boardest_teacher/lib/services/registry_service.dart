@@ -51,9 +51,30 @@ class RegistryService {
       // 4. 기존 레거시 반/교안 매핑 탐색기 컨텍스트 메뉴 잔재 제거
       await cleanupLegacyContextMenu();
 
-      debugPrint('[RegistryService] Successfully registered Windows file associations!');
+      // 5. Windows 앱 설치 관리자(AppInstaller)가 매번 실행 시 GitHub/서버 업데이트를 확인하도록 OS 설정 보장
+      await ensureAppInstallerAutoUpdateSettings();
+
+      debugPrint('[RegistryService] Successfully registered Windows file associations and AppInstaller auto-update settings!');
     } catch (e) {
       debugPrint('[RegistryService] Registry registration error: $e');
+    }
+  }
+
+  /// Windows 앱 설치 관리자(AppInstaller)가 매번 실행 시 GitHub/서버에 업데이트가 있는지 확인하도록 OS 설정 보장
+  Future<void> ensureAppInstallerAutoUpdateSettings() async {
+    if (!Platform.isWindows) return;
+    try {
+      final exePath = Platform.resolvedExecutable;
+      if (exePath.contains('WindowsApps')) {
+        final psCommand =
+            'Set-AppxPackageAutoUpdateSettings -PackageFamilyName "jiwho.boardest.teacher_nmkn64tehfz7a" '
+            '-AppInstallerUri "https://download-boardest.web.app/bst-teacher.appinstaller" '
+            '-CheckOnLaunch \$true -ShowPrompt \$true -UpdateBlocksActivation \$true '
+            '-ForceUpdateFromAnyVersion \$true -HoursBetweenUpdateChecks 0 -ErrorAction SilentlyContinue';
+        await Process.run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psCommand]);
+      }
+    } catch (e) {
+      debugPrint('[RegistryService] AutoUpdateSettings error: $e');
     }
   }
 

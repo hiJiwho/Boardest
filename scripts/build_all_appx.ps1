@@ -108,16 +108,16 @@ $boardestAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.3"
+    Version="2.9.9.4"
     Uri="https://download-boardest.web.app/boardest.appinstaller">
     <MainPackage
         Name="jiwho.boardest.bst"
         Publisher="CN=jiwho"
-        Version="2.9.9.3"
+        Version="2.9.9.4"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/boardest.appx" />
     <UpdateSettings>
-        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="false"/>
+        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="true"/>
         <AutomaticBackgroundTask/>
         <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
     </UpdateSettings>
@@ -131,16 +131,16 @@ $teacherAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.3"
+    Version="2.9.9.4"
     Uri="https://download-boardest.web.app/bst-teacher.appinstaller">
     <MainPackage
         Name="jiwho.boardest.teacher"
         Publisher="CN=jiwho"
-        Version="2.9.9.3"
+        Version="2.9.9.4"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/bst-teacher.appx" />
     <UpdateSettings>
-        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="false"/>
+        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="true"/>
         <AutomaticBackgroundTask/>
         <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
     </UpdateSettings>
@@ -154,12 +154,12 @@ $panserAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.3"
+    Version="2.9.9.4"
     Uri="$repoReleaseBase/bst-overlay-panser.appinstaller">
     <MainPackage
         Name="jiwho.boardest.plugin.overlaypanser"
         Publisher="CN=jiwho"
-        Version="2.9.9.3"
+        Version="2.9.9.4"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/bst-overlay-panser.appx" />
     <UpdateSettings>

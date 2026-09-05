@@ -95,7 +95,7 @@ $choice = Read-Host "선택 번호를 입력하세요 (1, 2, 또는 엔터)"
 if ($choice -eq "1") {
     Write-Host ""
     Write-Host "전자칠판(Boardest) AppInstaller 실행 중..." -ForegroundColor Cyan
-    $appUrl = "https://welcome-to-boardest.web.app/boardest.appinstaller"
+    $appUrl = "https://download-boardest.web.app/boardest.appinstaller"
     try {
         Start-Process "ms-appinstaller:?source=$appUrl"
         Write-Host "Windows 앱 설치 프로그램이 열렸습니다. 설치 창에서 '설치' 버튼을 눌러주세요." -ForegroundColor Green
@@ -103,10 +103,11 @@ if ($choice -eq "1") {
         Write-Host "AppInstaller 프로토콜 실행 실패, Add-AppxPackage로 시도합니다..." -ForegroundColor Yellow
         Add-AppxPackage -AppInstallerFile $appUrl
     }
+    Set-AppxPackageAutoUpdateSettings -PackageFamilyName "jiwho.boardest.bst_nmkn64tehfz7a" -AppInstallerUri $appUrl -CheckOnLaunch $true -ShowPrompt $true -UpdateBlocksActivation $true -ForceUpdateFromAnyVersion $true -HoursBetweenUpdateChecks 0 -ErrorAction SilentlyContinue
 } elseif ($choice -eq "2") {
     Write-Host ""
     Write-Host "교사용(Boardest Teacher) AppInstaller 실행 중..." -ForegroundColor Cyan
-    $appUrl = "https://welcome-to-boardest.web.app/bst-teacher.appinstaller"
+    $appUrl = "https://download-boardest.web.app/bst-teacher.appinstaller"
     try {
         Start-Process "ms-appinstaller:?source=$appUrl"
         Write-Host "Windows 앱 설치 프로그램이 열렸습니다. 설치 창에서 '설치' 버튼을 눌러주세요." -ForegroundColor Green
@@ -114,6 +115,7 @@ if ($choice -eq "1") {
         Write-Host "AppInstaller 프로토콜 실행 실패, Add-AppxPackage로 시도합니다..." -ForegroundColor Yellow
         Add-AppxPackage -AppInstallerFile $appUrl
     }
+    Set-AppxPackageAutoUpdateSettings -PackageFamilyName "jiwho.boardest.teacher_nmkn64tehfz7a" -AppInstallerUri $appUrl -CheckOnLaunch $true -ShowPrompt $true -UpdateBlocksActivation $true -ForceUpdateFromAnyVersion $true -HoursBetweenUpdateChecks 0 -ErrorAction SilentlyContinue
 } else {
     Write-Host ""
     Write-Host "인증서 설치가 완료되었습니다. 웹사이트에서 원하는 앱을 다운로드하세요!" -ForegroundColor Cyan

@@ -1,7 +1,20 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v2.9.9.3** (App: v2.9.9.3 / Web: v2.9.9.3)  
+> **현재 시스템 버전**: **v2.9.9.4** (App: v2.9.9.4 / Web: v2.9.9.4)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 B 2.9.9.4 (2026-09-05)
+
+### 1. 🪟 Windows OS 네이티브 "앱 설치 관리자" (AppInstaller) 매번 실행 시 자동 업데이트 전담
+- **Flutter 인앱 시작 팝업 완전 제거**: 앱 시작 시 Flutter 코드(`UpdateService.checkAndUpdate`)가 자체적으로 업데이트를 체크하거나 다이얼로그를 띄우지 않도록 정리하여, OS 네이티브 설치 관리자가 업데이트를 100% 전담하도록 일원화.
+- **매번 실행 시 차단 및 업데이트 확인 (`UpdateBlocksActivation="true"`, `HoursBetweenUpdateChecks="0"`)**:
+  - `boardest.appinstaller`, `bst-teacher.appinstaller` 등 모든 매니페스트에 `UpdateBlocksActivation="true"` 및 `ShowPrompt="true"`, `HoursBetweenUpdateChecks="0"` 전면 적용.
+  - Windows OS가 앱 아이콘 클릭 즉시 "앱 설치 관리자" UI를 통해 GitHub 최신 버전을 대조하고, 새 버전이 있으면 네이티브 업데이트 다이얼로그를 즉각 띄워 업데이트 후 실행되도록 보장.
+- **OS 레지스트리 자동 설정 보장 (`Set-AppxPackageAutoUpdateSettings`)**:
+  - `RegistryService` 및 `UpdateService.ensureNativeAppInstallerSettings()`를 통해 앱 구동 시 Windows OS에 AppInstaller 자동 업데이트 정책(`CheckOnLaunch`, `ShowPrompt`, `UpdateBlocksActivation`, `ForceUpdateFromAnyVersion`)을 영구 주입.
+  - 신규 설치 스크립트(`install.ps1`, `cer.ps1`)에도 자동 업데이트 설정 명령 포함.
 
 ---
 
