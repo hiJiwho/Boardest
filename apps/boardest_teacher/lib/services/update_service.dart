@@ -68,10 +68,9 @@ class UpdateService {
 
   /// Check for latest update from GitHub Releases (with optional PAT auth)
   Future<UpdateInfo?> checkForUpdate() async {
-    // Windows: Windows OS 자체의 AppX / .appinstaller 시스템이 무인 자동 갱신을 전담하므로 Flutter 내에서는 실행하지 않음
-    // Web: Firebase Hosting에 의해 상시 최신 상태 유지
-    if (kIsWeb || Platform.isWindows) return null;
-    if (!Platform.isAndroid) return null;
+    // Web 환경에서는 브라우저 캐시 정책에 따름
+    if (kIsWeb) return null;
+    if (!Platform.isWindows && !Platform.isAndroid) return null;
     if (_isChecking) return null; // 중복 실행 방지
     _isChecking = true;
     try {
@@ -233,7 +232,7 @@ Write-Host "=================================================" -ForegroundColor 
 Start-Sleep -Milliseconds 800
 try {
   Write-Host "AppInstaller를 통해 최신 AppX 패키지를 배포합니다..." -ForegroundColor Gray
-  Add-AppxPackage -AppInstallerFile '$appInstallerUrl' -ErrorAction Stop
+  Add-AppxPackage -AppInstallerFile '$appInstallerUrl' -ForceUpdateFromAnyVersion -ErrorAction Stop
   Write-Host "업데이트 완료! 교사용 앱을 실행합니다..." -ForegroundColor Green
   Start-Sleep -Milliseconds 800
   Start-Process 'explorer.exe' 'shell:AppsFolder\\jiwho.boardest.teacher_nmkn64tehfz7a!App'

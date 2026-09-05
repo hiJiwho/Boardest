@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_windows/webview_windows.dart';
 import '../helpers/iframe_view_helper.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Android / Web / Windows Cross-Platform 전용 HWP & PPTX 뷰어 (구글 슬라이드/뷰어 & 페이지 넘김 지원)
 class WebHwpPptView extends StatefulWidget {
@@ -50,7 +51,12 @@ class _WebHwpPptViewState extends State<WebHwpPptView> {
         targetUrl = 'https://docs.google.com/viewer?embedded=true&url=${Uri.encodeComponent(widget.filePathOrUrl)}';
       }
     } else {
-      targetUrl = 'https://docs.google.com/viewer?embedded=true&url=${Uri.encodeComponent('https://boardest.web.app/viewer?file=${widget.title}')}';
+      if (!kIsWeb) {
+        try {
+          await launchUrl(Uri.file(widget.filePathOrUrl), mode: LaunchMode.externalApplication);
+        } catch (_) {}
+      }
+      targetUrl = 'about:blank';
     }
 
     _targetUrl = targetUrl;

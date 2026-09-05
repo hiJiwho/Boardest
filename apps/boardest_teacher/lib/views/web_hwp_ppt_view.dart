@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_windows/webview_windows.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Android / Cross-Platform 전용 HWP & PPTX Webview 파서 뷰어 (한봄 스타일 페이지 넘김 지원)
 class WebHwpPptView extends StatefulWidget {
@@ -38,9 +39,15 @@ class _WebHwpPptViewState extends State<WebHwpPptView> {
   }
 
   Future<void> _initWebview() async {
-    final String targetUrl = widget.filePathOrUrl.startsWith('http')
-        ? 'https://docs.google.com/gview?embedded=true&url=${Uri.encodeComponent(widget.filePathOrUrl)}'
-        : 'https://docs.google.com/gview?embedded=true&url=${Uri.encodeComponent('https://boardest.web.app/viewer?file=${widget.title}')}';
+    final String targetUrl;
+    if (widget.filePathOrUrl.startsWith('http')) {
+      targetUrl = 'https://docs.google.com/gview?embedded=true&url=${Uri.encodeComponent(widget.filePathOrUrl)}';
+    } else {
+      try {
+        await launchUrl(Uri.file(widget.filePathOrUrl), mode: LaunchMode.externalApplication);
+      } catch (_) {}
+      targetUrl = 'about:blank';
+    }
 
     if (Platform.isWindows) {
       try {

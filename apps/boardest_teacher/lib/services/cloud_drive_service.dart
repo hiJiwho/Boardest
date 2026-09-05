@@ -508,7 +508,7 @@ class CloudDriveService with ChangeNotifier {
               '?client_id=${AppConfig.googleClientIdWithDrive}'
               '&redirect_uri=http://127.0.0.1:1217'
               '&response_type=code'
-              '&scope=openid%20https://www.googleapis.com/auth/userinfo.profile%20https://www.googleapis.com/auth/userinfo.email%20https://www.googleapis.com/auth/drive.appdata'
+              '&scope=openid%20https://www.googleapis.com/auth/userinfo.profile%20https://www.googleapis.com/auth/userinfo.email%20https://www.googleapis.com/auth/drive.file%20https://www.googleapis.com/auth/drive.appdata'
               '&access_type=offline'
               '&prompt=consent';
           request.response.statusCode = HttpStatus.found;

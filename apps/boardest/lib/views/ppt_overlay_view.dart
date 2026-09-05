@@ -9,7 +9,7 @@ import 'package:flutter/services.dart';
 import '../services/usb_session_service.dart';
 import '../services/annotation_storage_service.dart';
 import '../services/app_paths.dart';
-import 'web_hwp_ppt_view.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Windows 전용: 최첨단 C#/WPF 기반 PowerPoint 슬라이드쇼 판서 오버레이 연동 뷰
 class PptOverlayView extends StatefulWidget {
@@ -55,20 +55,18 @@ class _PptOverlayViewState extends State<PptOverlayView> {
 
   Future<void> _startNativeOverlay() async {
     if (!Platform.isWindows) {
-      Future.microtask(() {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (ctx) => WebHwpPptView(
-                filePathOrUrl: widget.initialFilePath,
-                title: _fileName,
-                scaleFactor: widget.scaleFactor,
-                isPpt: true,
-              ),
-            ),
-          );
+      Future.microtask(() async {
+        if (!mounted) return;
+        try {
+          if (widget.initialFilePath.startsWith('http')) {
+            await launchUrl(Uri.parse(widget.initialFilePath), mode: LaunchMode.externalApplication);
+          } else {
+            await launchUrl(Uri.file(widget.initialFilePath), mode: LaunchMode.externalApplication);
+          }
+        } catch (e) {
+          debugPrint('[PptOverlayView] external launch error: $e');
         }
+        if (mounted) Navigator.of(context).pop();
       });
       return;
     }
@@ -113,19 +111,15 @@ class _PptOverlayViewState extends State<PptOverlayView> {
 
       if (!File(exePath).existsSync()) {
         debugPrint(
-          '[PptOverlayView] Native WPF overlay not found at $exePath, switching to WebHwpPptView fallback',
+          '[PptOverlayView] Native WPF overlay not found at $exePath, launching via OS default application/helper',
         );
+        try {
+          await launchUrl(Uri.file(widget.initialFilePath), mode: LaunchMode.externalApplication);
+        } catch (e) {
+          debugPrint('[PptOverlayView] launchUrl error: $e');
+        }
         if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => WebHwpPptView(
-                scaleFactor: widget.scaleFactor,
-                filePathOrUrl: widget.initialFilePath,
-                title: p.basename(widget.initialFilePath),
-                isPpt: true,
-              ),
-            ),
-          );
+          Navigator.of(context).pop();
         }
         return;
       }

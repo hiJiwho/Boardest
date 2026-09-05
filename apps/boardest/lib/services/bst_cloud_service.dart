@@ -120,6 +120,7 @@ class BstCloudService {
   static final Map<String, Uint8List> webMemoryFiles = {};
 
   String? activeToken;
+  String? activeRefreshToken;
   String? activeFolderId;
   String? activeOwnerEmail;
   String? activeTotpSecret;
@@ -374,12 +375,28 @@ class BstCloudService {
         '&fields=files(id,name,mimeType)';
 
     try {
-      final res = await http.get(
+      var currentToken = token;
+      var res = await http.get(
         Uri.parse(url),
         headers: {
-          'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer $currentToken',
         },
       ).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+        debugPrint('[BstCloudService] fetchDriveFiles 401 Unauthorized. Auto-refreshing access token...');
+        final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+        if (newToken != null && newToken.isNotEmpty) {
+          activeToken = newToken;
+          currentToken = newToken;
+          res = await http.get(
+            Uri.parse(url),
+            headers: {
+              'Authorization': 'Bearer $currentToken',
+            },
+          ).timeout(const Duration(seconds: 8));
+        }
+      }
 
       if (res.statusCode != 200) {
         debugPrint('[BstCloudService] fetchDriveFiles HTTP error: ${res.statusCode} ${res.body}');
@@ -438,10 +455,23 @@ class BstCloudService {
     if (kIsWeb) {
       final url = 'https://www.googleapis.com/drive/v3/files/$fileId?alt=media';
       try {
-        final res = await http.get(
+        var currentToken = token;
+        var res = await http.get(
           Uri.parse(url),
-          headers: {'Authorization': 'Bearer $token'},
+          headers: {'Authorization': 'Bearer $currentToken'},
         ).timeout(const Duration(seconds: 60));
+
+        if (res.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+          final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+          if (newToken != null && newToken.isNotEmpty) {
+            activeToken = newToken;
+            currentToken = newToken;
+            res = await http.get(
+              Uri.parse(url),
+              headers: {'Authorization': 'Bearer $currentToken'},
+            ).timeout(const Duration(seconds: 60));
+          }
+        }
 
         if (res.statusCode == 200) {
           webMemoryFiles[fileId] = res.bodyBytes;
@@ -485,10 +515,24 @@ class BstCloudService {
       // 원격 파일 전체를 한 번에 다운로드
       debugPrint('[BstCloudService] Downloading full file to local disk: $fileName ($fileId)');
       final url = 'https://www.googleapis.com/drive/v3/files/$fileId?alt=media';
-      final res = await http.get(
+      var currentToken = token;
+      var res = await http.get(
         Uri.parse(url),
-        headers: {'Authorization': 'Bearer $token'},
+        headers: {'Authorization': 'Bearer $currentToken'},
       ).timeout(const Duration(seconds: 120));
+
+      if (res.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+        debugPrint('[BstCloudService] downloadDriveFile 401 Unauthorized. Auto-refreshing access token...');
+        final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+        if (newToken != null && newToken.isNotEmpty) {
+          activeToken = newToken;
+          currentToken = newToken;
+          res = await http.get(
+            Uri.parse(url),
+            headers: {'Authorization': 'Bearer $currentToken'},
+          ).timeout(const Duration(seconds: 120));
+        }
+      }
 
       if (res.statusCode != 200) {
         debugPrint('[BstCloudService] downloadDriveFile HTTP error: ${res.statusCode}');
@@ -511,10 +555,25 @@ class BstCloudService {
   Future<Uint8List?> downloadDriveFileBytes(String fileId, String token) async {
     try {
       final url = 'https://www.googleapis.com/drive/v3/files/$fileId?alt=media';
-      final res = await http.get(
+      var currentToken = token;
+      var res = await http.get(
         Uri.parse(url),
-        headers: {'Authorization': 'Bearer $token'},
+        headers: {'Authorization': 'Bearer $currentToken'},
       ).timeout(const Duration(seconds: 60));
+
+      if (res.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+        debugPrint('[BstCloudService] downloadDriveFileBytes 401 Unauthorized. Auto-refreshing access token...');
+        final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+        if (newToken != null && newToken.isNotEmpty) {
+          activeToken = newToken;
+          currentToken = newToken;
+          res = await http.get(
+            Uri.parse(url),
+            headers: {'Authorization': 'Bearer $currentToken'},
+          ).timeout(const Duration(seconds: 60));
+        }
+      }
+
       if (res.statusCode == 200) {
         webMemoryFiles[fileId] = res.bodyBytes;
         return res.bodyBytes;
@@ -1219,6 +1278,7 @@ class BstCloudService {
             final status = (fields['status'] as Map?)?['stringValue'] as String? ?? '';
             if (status == 'authenticated') {
               final token = (fields['accessToken'] as Map?)?['stringValue'] as String?;
+              final refreshTok = (fields['refreshToken'] as Map?)?['stringValue'] as String?;
               final tName = (fields['teacherName'] as Map?)?['stringValue'] as String? ?? '선생님';
               final ownerEmail = (fields['email'] as Map?)?['stringValue'] as String? ?? '';
               final totpSec = (fields['totpSecret'] as Map?)?['stringValue'] as String?;
@@ -1227,6 +1287,7 @@ class BstCloudService {
 
               if (token != null && token.isNotEmpty) {
                 activeToken = token;
+                activeRefreshToken = refreshTok;
                 activeTeacherName = tName;
                 activeOwnerEmail = ownerEmail;
                 activeTotpSecret = totpSec;

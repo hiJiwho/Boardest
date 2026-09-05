@@ -17,13 +17,12 @@ class UpdateService {
   static bool _isChecking = false;
 
   /// GitHub의 최신 릴리즈를 체크하고 업데이트가 필요하면 다운로드 및 설치 프로세스를 시작합니다.
-  static Future<void> checkAndUpdate(BuildContext context) async {
-    // Windows: Windows OS 자체의 AppX / .appinstaller 시스템이 무인 자동 갱신을 전담하므로 Flutter 내에서는 실행하지 않음
+  static Future<void> checkAndUpdate(BuildContext context, {bool silent = true}) async {
     // Web: Firebase Hosting에 의해 상시 최신 상태 유지
-    if (kIsWeb || Platform.isWindows) return;
+    if (kIsWeb) return;
 
-    // Android: APK 전용 인앱 자동 업데이트
-    if (!Platform.isAndroid) return;
+    // Windows 및 Android 인앱 자동 업데이트 지원
+    if (!Platform.isWindows && !Platform.isAndroid) return;
 
     // 중복 실행 방지: 이미 체크 중이면 즉시 리턴
     if (_isChecking) return;
@@ -33,13 +32,18 @@ class UpdateService {
       final response = await http.get(
         url,
         headers: {
-          'User-Agent': 'Boardest-Client/2.9.9.0',
+          'User-Agent': 'Boardest-Client/$currentVersion',
           'Accept': 'application/vnd.github.v3+json',
         },
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 8));
       
       if (response.statusCode != 200) {
         debugPrint('Update check returned status code: ${response.statusCode}');
+        if (!silent && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('업데이트 서버 응답 코드: ${response.statusCode}'), backgroundColor: Colors.redAccent),
+          );
+        }
         return;
       }
 
@@ -52,19 +56,47 @@ class UpdateService {
         debugPrint('New version available: $serverVersion (Current: $currentVersion)');
         final assets = data['assets'] as List<dynamic>? ?? [];
         
-        final apkAsset = assets.firstWhere(
-          (asset) => (asset['name'] as String).endsWith('.apk'),
-          orElse: () => null,
-        );
-        if (apkAsset != null && context.mounted) {
-          final downloadUrl = apkAsset['browser_download_url'] as String;
+        if (context.mounted) {
           _showUpdateDialog(context, serverVersion, () {
-            _performAndroidUpdate(context, downloadUrl);
+            if (Platform.isWindows) {
+              String appInstallerUrl = 'https://download-boardest.web.app/bst.appinstaller';
+              for (final asset in assets) {
+                final name = (asset['name'] as String? ?? '').toLowerCase();
+                if (name.endsWith('.appinstaller') || name == 'boardest.appinstaller' || name == 'bst.appinstaller') {
+                  appInstallerUrl = asset['browser_download_url'] as String? ?? appInstallerUrl;
+                  break;
+                }
+              }
+              _performWindowsUpdate(context, appInstallerUrl);
+            } else if (Platform.isAndroid) {
+              final apkAsset = assets.firstWhere(
+                (asset) => (asset['name'] as String).endsWith('.apk'),
+                orElse: () => null,
+              );
+              if (apkAsset != null) {
+                final downloadUrl = apkAsset['browser_download_url'] as String;
+                _performAndroidUpdate(context, downloadUrl);
+              }
+            }
           });
+        }
+      } else {
+        if (!silent && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🎉 현재 최신 버전(v$currentVersion)을 사용하고 있습니다.'),
+              backgroundColor: Color(0xFF2EC4B6),
+            ),
+          );
         }
       }
     } catch (e) {
       debugPrint('Error during update check: $e');
+      if (!silent && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('업데이트 확인 오류: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
     } finally {
       // 2분 후 재체크 허용
       Future.delayed(const Duration(minutes: 2), () => _isChecking = false);
@@ -190,6 +222,44 @@ class UpdateService {
     );
   }
 
+
+  static Future<void> _performWindowsUpdate(BuildContext context, String appInstallerUrl) async {
+    try {
+      final script = '''
+Write-Host "=================================================" -ForegroundColor Cyan
+Write-Host "     Boardest 전자칠판 AppX 자동 업데이트 진행 중...  " -ForegroundColor Yellow
+Write-Host "=================================================" -ForegroundColor Cyan
+Start-Sleep -Milliseconds 800
+try {
+  Write-Host "AppInstaller를 통해 최신 AppX 패키지를 배포합니다..." -ForegroundColor Gray
+  Add-AppxPackage -AppInstallerFile '$appInstallerUrl' -ForceUpdateFromAnyVersion -ErrorAction Stop
+  Write-Host "업데이트 완료! Boardest를 재실행합니다..." -ForegroundColor Green
+  Start-Sleep -Milliseconds 800
+  Start-Process 'explorer.exe' 'shell:AppsFolder\\jiwho.boardest.bst_nmkn64tehfz7a!App'
+} catch {
+  Write-Host "AppInstaller 실패, 직접 최신 AppX 다운로드 설치를 시도합니다..." -ForegroundColor Yellow
+  \$tempAppx = Join-Path \$env:TEMP 'boardest_update.appx'
+  Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx' -OutFile \$tempAppx
+  Add-AppxPackage -Path \$tempAppx -ForceUpdateFromAnyVersion
+  Remove-Item \$tempAppx -Force -ErrorAction SilentlyContinue
+  Start-Process 'explorer.exe' 'shell:AppsFolder\\jiwho.boardest.bst_nmkn64tehfz7a!App'
+}
+''';
+
+      await Process.start(
+        'powershell.exe',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
+        mode: ProcessStartMode.detached,
+      );
+
+      exit(0);
+    } catch (e) {
+      debugPrint('Error executing Windows update: $e');
+      if (context.mounted) {
+        _showErrorDialog(context, 'Windows 자동 업데이트 실행 중 오류 발생: $e');
+      }
+    }
+  }
 
   static Future<void> _performAndroidUpdate(BuildContext context, String url) async {
     final progressNotifier = ValueNotifier<double>(0.0);

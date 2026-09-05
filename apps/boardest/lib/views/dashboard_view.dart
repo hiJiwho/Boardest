@@ -31,6 +31,7 @@ import 'setup_wizard_view.dart';
 import 'weather_view.dart';
 import 'school_calendar_view.dart';
 import 'ppt_overlay_view.dart';
+import 'hwp_overlay_view.dart';
 import 'pdf_board_view.dart';
 import 'website_board_view.dart';
 import 'youtube_board_view.dart';
@@ -3200,6 +3201,17 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               scale: scale,
               onTap: () => Navigator.pop(sheetCtx, 'dpi_scale'),
             ),
+            if (!kIsWeb) ...[
+              SizedBox(height: 10 * scale),
+              _buildSettingsMenuTile(
+                icon: Icons.system_update_rounded,
+                color: const Color(0xFF2EC4B6),
+                label: '시스템 업데이트 확인',
+                subtitle: '현재 버전: v${UpdateService.currentVersion} (최신 버전 확인)',
+                scale: scale,
+                onTap: () => Navigator.pop(sheetCtx, 'check_update'),
+              ),
+            ],
             SizedBox(height: 10 * scale),
             _buildSettingsMenuTile(
               icon: Icons.logout_rounded,
@@ -3432,6 +3444,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       }
     } else if (choice == 'home_launcher') {
       _showHomeLauncherDialog();
+    } else if (choice == 'check_update') {
+      UpdateService.checkAndUpdate(context, silent: false);
     } else if (choice == 'dpi_scale') {
       _showDpiScaleDialog();
     } else if (choice == 'withdraw') {
@@ -4503,42 +4517,42 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                     ),
                     const SizedBox(width: 14),
 
-                    // Col 2: Center - 시계 (상단 높이 1) & 수업/급식/광고판 (하단 높이 2) (flex: 4)
+                    // Col 2: Center - 시계 (상단 높이 flex 5) & 수업/광고판 (하단 높이 flex 8) (flex: 4)
                     Expanded(
                       flex: 4,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // 상단 행 (높이 flex: 1): 와이드 초대형 시계 카드 (전체 가로폭 단독 점유!)
+                          // 상단 행: 와이드 초대형 시계 카드 (디지털 시계 크기 및 비율 강화)
                           Expanded(
-                            flex: 1,
+                            flex: 5,
                             child: _buildPptClockCard(dateString),
                           ),
                           SizedBox(height: 14 * scale),
 
-                          // 하단 행 (높이 flex: 2): 3:2 = [지금 시간표 (flex: 3)] : [광고판 / Cloud / USB (flex: 2)]
+                          // 하단 행: [지금 시간표 (flex: 7)] : [광고판 / Cloud / USB (flex: 4)]
                           Builder(
                             builder: (context) {
                               final isCloudActive = BstCloudService.instance.activeToken != null && !_hideCloudPanel;
 
                               return Expanded(
-                                flex: 2,
+                                flex: 8,
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    // 1. 지금 시간표 (수업 카드): flex: 3 (비율 3:2의 3)
+                                    // 1. 지금 시간표 (수업 카드): flex: 7 (비율 확대)
                                     Expanded(
-                                      flex: 3,
+                                      flex: 7,
                                       child: _buildPptSubjectCard(todayLessons, isExpandedDock: false),
                                     ),
                                     SizedBox(width: 12 * scale),
 
-                                    // 2. 우측 영역: flex: 2 (비율 3:2의 2)
+                                    // 2. 우측 영역: flex: 4 (광고판/클라우드 비율 최적화)
                                     //    Cloud 연결 시 -> Cloud 패널 (수업 자료 탐색기)
                                     //    USB 연결 시   -> USB 패널
                                     //    일반 기본     -> 광고판 (A4 배너)
                                     Expanded(
-                                      flex: 2,
+                                      flex: 4,
                                       child: isCloudActive
                                           ? _buildFullCloudPanel(scale)
                                           : (_isUsbConnected
@@ -4681,17 +4695,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   void _openCloudPresentation(BstCloudFile file, BstCloudTeacher teacher, {int initialPage = 1}) {
     final lower = file.name.toLowerCase();
     if (kIsWeb) {
-      final driveUrl = 'https://docs.google.com/presentation/d/${file.id}/preview';
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => WebHwpPptView(
-            filePathOrUrl: driveUrl,
-            title: file.name,
-            scaleFactor: _settings.scaleFactor,
-            isPpt: true,
-          ),
-        ),
-      );
+      final driveUrl = 'https://drive.google.com/file/d/${file.id}/view';
+      launchUrl(Uri.parse(driveUrl), mode: LaunchMode.externalApplication);
     } else {
       BstCloudService.instance.downloadDriveFile(file.id, file.name, teacher.directAccessToken ?? '').then((localPath) {
         if (localPath != null && mounted) {
@@ -5145,7 +5150,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     }
 
     final dateFormatted = '${_now.year}.${_now.month.toString().padLeft(2, '0')}.${_now.day.toString().padLeft(2, '0')}';
-    final currentCafeteria = _settings.cafeteriaNum.isNotEmpty ? _settings.cafeteriaNum : '급식실1';
 
     return Container(
       decoration: BoxDecoration(
@@ -5160,7 +5164,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Top Row: Date (Left) & Quick Badges (Aspect Ratio, Cafeteria, D-Day)
+          // Top Row: Date (Left) & Quick Badges (Aspect Ratio, D-Day)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -5175,35 +5179,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Quick Cafeteria Selector Button
-                  GestureDetector(
-                    onTap: _showCafeteriaSelectorDialog,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 3 * scale),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8 * scale),
-                        border: Border.all(
-                          color: const Color(0xFF00F5D4).withValues(alpha: 0.4),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.restaurant_rounded, size: 12 * scale, color: const Color(0xFF00F5D4)),
-                          SizedBox(width: 4 * scale),
-                          Text(
-                            currentCafeteria,
-                            style: GoogleFonts.notoSansKr(
-                              color: const Color(0xFF00F5D4),
-                              fontSize: 12 * scale,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                   if (kIsWeb) ...[
                     SizedBox(width: 8 * scale),
                     // Aspect Ratio & Fullscreen Switcher (짧게 탭: 전체화면, 길게 꾹: 16:9/4:3 화면비 토글)
@@ -8809,7 +8784,52 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         classCode: classCode,
       ));
     } else if (lower.endsWith('.ppt') || lower.endsWith('.pptx')) {
-      _openPptOverlay();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('📂 [${file.name}] 다운로드 및 프레젠테이션 실행 중...'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      if (kIsWeb) {
+        final driveUrl = 'https://drive.google.com/file/d/${file.id}/view';
+        launchUrl(Uri.parse(driveUrl), mode: LaunchMode.externalApplication);
+      } else {
+        final localPath = await BstCloudService.instance.downloadDriveFile(file.id, file.name, token);
+        if (localPath != null && mounted) {
+          if (Platform.isWindows) {
+            _pushBoardRoute(PptOverlayView(
+              initialFilePath: localPath,
+              scaleFactor: _settings.scaleFactor,
+              fullscreen: widget.pptFullscreen,
+            ));
+          } else {
+            await launchUrl(Uri.file(localPath), mode: LaunchMode.externalApplication);
+          }
+        }
+      }
+    } else if (lower.endsWith('.hwp') || lower.endsWith('.hwpx')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('📂 [${file.name}] 다운로드 및 한글 뷰어 실행 중...'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      if (kIsWeb) {
+        final driveUrl = 'https://drive.google.com/file/d/${file.id}/view';
+        launchUrl(Uri.parse(driveUrl), mode: LaunchMode.externalApplication);
+      } else {
+        final localPath = await BstCloudService.instance.downloadDriveFile(file.id, file.name, token);
+        if (localPath != null && mounted) {
+          if (Platform.isWindows) {
+            _pushBoardRoute(HwpOverlayView(
+              initialFilePath: localPath,
+              scaleFactor: _settings.scaleFactor,
+            ));
+          } else {
+            await launchUrl(Uri.file(localPath), mode: LaunchMode.externalApplication);
+          }
+        }
+      }
     } else if (lower.endsWith('.pen') || lower.endsWith('.free.pen')) {
       _pushBoardRoute(
         BoardestPenView(

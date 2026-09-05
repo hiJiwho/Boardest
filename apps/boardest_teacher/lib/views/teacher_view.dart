@@ -1361,9 +1361,21 @@ class _TeacherViewState extends State<TeacherView> {
       final updateInfo = await UpdateService.instance.checkForUpdate();
       if (updateInfo != null && updateInfo.hasUpdate && mounted) {
         UpdateService.instance.showUpdateDialog(context, updateInfo);
+      } else if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 현재 최신 버전(v${UpdateService.currentVersion})을 사용하고 있습니다.'),
+            backgroundColor: Color(0xFF2EC4B6),
+          ),
+        );
       }
     } catch (e) {
       debugPrint('[TeacherView] Update check error: $e');
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('업데이트 확인 실패: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
     }
   }
   void _openSettings() async {
@@ -1647,9 +1659,9 @@ class _TeacherViewState extends State<TeacherView> {
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.stretch,
                                         children: [
-                                          // 상단: 교사 주간 시간표 / 교실 주간시간표 (flex: 5)
+                                          // 상단: 교사 주간 시간표 / 교실 주간시간표 (flex: 4)
                                           Expanded(
-                                            flex: 5,
+                                            flex: 4,
                                             child: isHomeroom
                                                 ? Row(
                                                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1666,23 +1678,23 @@ class _TeacherViewState extends State<TeacherView> {
                                                 : _buildTeacherTimetablePanel(scale),
                                           ),
                                           SizedBox(height: 12 * scale),
-                                          // 하단 2단 패널: 좌측 통합 도구(OTP + 업로드 + 맵핑) (flex: 38) : 우측 파일 탐색기 대폭 확장 (flex: 62)
+                                          // 하단 2단 패널: 좌측 슬림 통합 도구(OTP + 업로드 + 맵핑) (flex: 24) : 우측 파일 탐색기 초대형 확장 (flex: 76)
                                           Expanded(
-                                            flex: 5,
+                                            flex: 6,
                                             child: Row(
                                               crossAxisAlignment: CrossAxisAlignment.stretch,
                                               children: [
-                                                // 좌측: OTP 및 빠른 도구 & 교과/반별 맵핑 (flex: 38)
+                                                // 좌측: 슬림화된 OTP 및 빠른 도구 & 교과/반별 맵핑 (flex: 24)
                                                 Expanded(
-                                                  flex: 38,
+                                                  flex: 24,
                                                   child: _isUsbConnected
                                                       ? _buildUsbPanel(scale)
                                                       : _buildBottomUnifiedToolPanel(scale),
                                                 ),
                                                 SizedBox(width: 12 * scale),
-                                                // 우측: 대폭 확장된 Google Drive 파일 탐색기 (flex: 62)
+                                                // 우측: 대폭 확장된 Google Drive 파일 탐색기 (flex: 76)
                                                 Expanded(
-                                                  flex: 62,
+                                                  flex: 76,
                                                   child: _buildDriveFilesPanel(scale),
                                                 ),
                                               ],
@@ -2092,6 +2104,7 @@ class _TeacherViewState extends State<TeacherView> {
         return false;
       }
       if (_cloudCategoryFilter == 'PDF' && !name.endsWith('.pdf')) return false;
+      if (_cloudCategoryFilter == '한글' && !name.endsWith('.hwp') && !name.endsWith('.hwpx')) return false;
       if (_cloudCategoryFilter == 'Canva' && !name.endsWith('.canva.bst') && !name.endsWith('.canva')) return false;
       if (_cloudCategoryFilter == 'PPT' && !name.endsWith('.ppt') && !name.endsWith('.pptx')) return false;
       if (_cloudCategoryFilter == '판서' && !name.endsWith('.pen') && !name.endsWith('.iwb')) return false;
@@ -2952,52 +2965,34 @@ class _TeacherViewState extends State<TeacherView> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(Icons.security_rounded, size: 16 * s, color: const Color(0xFF00F5D4)),
-                      tooltip: '인증 & 기기 관리 (8자리 자동 OTP)',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: _openAuthAndDeviceManager,
-                    ),
-                    SizedBox(width: 6 * s),
-                    IconButton(
-                      icon: Icon(Icons.create_new_folder_rounded, size: 16 * s, color: const Color(0xFFFFB703)),
-                      tooltip: '새 폴더 만들기',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: _showCreateFolderDialog,
-                    ),
-                    SizedBox(width: 6 * s),
-                    IconButton(
-                      icon: Icon(Icons.upload_file_rounded, size: 16 * s, color: const Color(0xFF4285F4)),
-                      tooltip: '파일 올리기',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: _uploadLocalFileToDrive,
-                    ),
-                    SizedBox(width: 6 * s),
-                    IconButton(
-                      icon: Icon(Icons.palette_rounded, size: 16 * s, color: const Color(0xFF00C4CC)),
-                      tooltip: 'Canva 디자인 등록',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: _showRegisterCanvaDialog,
-                    ),
-                    SizedBox(width: 6 * s),
-                    IconButton(
-                      icon: Icon(Icons.sync_alt_rounded, size: 16 * s, color: const Color(0xFF2EC4B6)),
-                      tooltip: '폴더 동기화 / 맵핑',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: _openDriveFolderSyncDialog,
-                    ),
-                    SizedBox(width: 6 * s),
+                    if (isLogged && displayFiles.isNotEmpty) ...[
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 2 * s),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(6 * s),
+                        ),
+                        child: Text(
+                          '${displayFiles.length}개 자료',
+                          style: TextStyle(color: _textColor70, fontSize: 9 * s),
+                        ),
+                      ),
+                      SizedBox(width: 6 * s),
+                    ],
                     IconButton(
                       icon: Icon(Icons.refresh_rounded, size: 16 * s, color: _textColor54),
-                      tooltip: '새로고침',
+                      tooltip: '드라이브 새로고침',
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                       onPressed: _refreshDriveFiles,
+                    ),
+                    SizedBox(width: 6 * s),
+                    IconButton(
+                      icon: Icon(Icons.manage_accounts_rounded, size: 16 * s, color: const Color(0xFF7F5AF0)),
+                      tooltip: '클라우드 인증 & 계정 관리',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: _openAuthManagement,
                     ),
                   ],
                 ),
@@ -3023,7 +3018,7 @@ class _TeacherViewState extends State<TeacherView> {
                             fillColor: Colors.black26,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6 * s),
-                              borderSide: BorderSide(color: Colors.white12),
+                              borderSide: const BorderSide(color: Colors.white12),
                             ),
                           ),
                         ),
@@ -3035,7 +3030,7 @@ class _TeacherViewState extends State<TeacherView> {
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
-                          children: ['전체', 'PDF', 'Canva', 'PPT', '판서'].map((cat) {
+                          children: ['전체', 'PDF', '한글', 'PPT', 'Canva', '판서'].map((cat) {
                             final isSel = _cloudCategoryFilter == cat;
                             return Padding(
                               padding: EdgeInsets.only(right: 4 * s),
@@ -3073,11 +3068,49 @@ class _TeacherViewState extends State<TeacherView> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.cloud_off_rounded, size: 28 * s, color: _textColor24),
-                              SizedBox(height: 6 * s),
+                              Container(
+                                padding: EdgeInsets.all(12 * s),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00F5D4).withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(Icons.cloud_off_rounded, size: 30 * s, color: const Color(0xFF00F5D4)),
+                              ),
+                              SizedBox(height: 10 * s),
                               Text(
-                                '클라우드 드라이브가 연동되지 않았습니다.',
-                                style: GoogleFonts.notoSansKr(color: _textColor54, fontSize: 10 * s),
+                                'Google Drive가 연동되어 있지 않습니다.',
+                                style: GoogleFonts.notoSansKr(
+                                  color: _textColor,
+                                  fontSize: 12.5 * s,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              SizedBox(height: 4 * s),
+                              Text(
+                                '교사용 Google 계정으로 로그인하면 내 드라이브(bst-save)의\n수업 자료와 교안을 실시간으로 관리할 수 있습니다.',
+                                style: GoogleFonts.notoSansKr(color: _textColor54, fontSize: 9.5 * s, height: 1.4),
+                                textAlign: TextAlign.center,
+                              ),
+                              SizedBox(height: 12 * s),
+                              ElevatedButton.icon(
+                                icon: const Icon(Icons.login_rounded, size: 14),
+                                label: Text(
+                                  'Google Drive 로그인',
+                                  style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold, fontSize: 11 * s),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00F5D4),
+                                  foregroundColor: Colors.black87,
+                                  padding: EdgeInsets.symmetric(horizontal: 14 * s, vertical: 8 * s),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8 * s)),
+                                ),
+                                onPressed: () async {
+                                  final ok = await CloudDriveService.instance.loginWithBrowserOAuth();
+                                  if (ok && mounted) {
+                                    setState(() {});
+                                    _refreshDriveFiles();
+                                  }
+                                },
                               ),
                             ],
                           ),
@@ -3117,6 +3150,10 @@ class _TeacherViewState extends State<TeacherView> {
                                       iconColor = const Color(0xFFEF4565);
                                       iconData = Icons.picture_as_pdf_rounded;
                                       tag = 'PDF';
+                                    } else if (lower.endsWith('.hwp') || lower.endsWith('.hwpx')) {
+                                      iconColor = const Color(0xFF29B6F6);
+                                      iconData = Icons.description_rounded;
+                                      tag = '한글';
                                     } else if (lower.endsWith('.ppt') || lower.endsWith('.pptx')) {
                                       iconColor = const Color(0xFFFF8906);
                                       iconData = Icons.slideshow_rounded;
@@ -7269,27 +7306,77 @@ class _TeacherViewState extends State<TeacherView> {
                       'OTP & 클라우드 도구',
                       style: GoogleFonts.notoSansKr(
                         color: _textColor,
-                        fontSize: 12 * s,
+                        fontSize: 11.5 * s,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const Spacer(),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 2 * s),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFD166).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(6 * s),
-                        border: Border.all(color: const Color(0xFFFFD166).withOpacity(0.3)),
-                      ),
-                      child: Text(
-                        'Cloud ID: ' + cloud.cloudId,
-                        style: GoogleFonts.sourceCodePro(
-                          color: const Color(0xFFFFD166),
-                          fontSize: 9.5 * s,
-                          fontWeight: FontWeight.bold,
+                    if (cloud.isLoggedIn) ...[
+                      Tooltip(
+                        message: '${cloud.userName ?? "선생님"} (${cloud.userEmail ?? ""}) 연동됨\n클릭 시 계정 관리',
+                        child: InkWell(
+                          onTap: _openAuthManagement,
+                          borderRadius: BorderRadius.circular(6 * s),
+                          child: Container(
+                            padding: EdgeInsets.symmetric(horizontal: 5 * s, vertical: 2 * s),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2EC4B6).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(6 * s),
+                              border: Border.all(color: const Color(0xFF2EC4B6).withOpacity(0.4)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 5 * s,
+                                  height: 5 * s,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF2EC4B6),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                SizedBox(width: 3 * s),
+                                Text(
+                                  '연동됨',
+                                  style: TextStyle(
+                                    color: const Color(0xFF2EC4B6),
+                                    fontSize: 8.5 * s,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ] else ...[
+                      InkWell(
+                        onTap: () async {
+                          final ok = await CloudDriveService.instance.loginWithBrowserOAuth();
+                          if (ok && mounted) {
+                            setState(() {});
+                            _refreshDriveFiles();
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(6 * s),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 5 * s, vertical: 2 * s),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF7F5AF0).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6 * s),
+                            border: Border.all(color: const Color(0xFF7F5AF0).withOpacity(0.4)),
+                          ),
+                          child: Text(
+                            '구글 로그인',
+                            style: TextStyle(
+                              color: const Color(0xFF7F5AF0),
+                              fontSize: 8.5 * s,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     SizedBox(width: 4 * s),
                     IconButton(
                       icon: Icon(Icons.devices_rounded, color: const Color(0xFF2EC4B6), size: 16 * s),
@@ -7360,23 +7447,27 @@ class _TeacherViewState extends State<TeacherView> {
                               _remainingSeconds.toString() + '초 뒤 갱신 (클릭 시 복사)',
                               style: TextStyle(color: const Color(0xFFFF8906), fontSize: 8.5 * s),
                             ),
-                            Row(
-                              children: [
-                                Text('Auto-PT', style: TextStyle(color: _textColor70, fontSize: 8.5 * s)),
-                                SizedBox(width: 3 * s),
-                                SizedBox(
-                                  height: 18 * s,
-                                  child: Switch(
-                                    value: _autoPtEnabled,
-                                    activeColor: const Color(0xFF2EC4B6),
-                                    onChanged: (val) async {
-                                      setState(() => _autoPtEnabled = val);
-                                      final prefs = await SharedPreferences.getInstance();
-                                      await prefs.setBool('bst_auto_pt', val);
-                                    },
+                            Tooltip(
+                              message: 'Auto-PT: 전자칠판 연결 시 현재 교시 교안 자동 프레젠테이션',
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text('Auto-PT', style: TextStyle(color: _textColor70, fontSize: 8.5 * s)),
+                                  SizedBox(width: 3 * s),
+                                  SizedBox(
+                                    height: 18 * s,
+                                    child: Switch(
+                                      value: _autoPtEnabled,
+                                      activeColor: const Color(0xFF2EC4B6),
+                                      onChanged: (val) async {
+                                        setState(() => _autoPtEnabled = val);
+                                        final prefs = await SharedPreferences.getInstance();
+                                        await prefs.setBool('bst_auto_pt', val);
+                                      },
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -7386,57 +7477,51 @@ class _TeacherViewState extends State<TeacherView> {
                 ),
                 SizedBox(height: 8 * s),
 
-                // 3. Quick Action Buttons (2x2)
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildActionTile(
+                // 3. Quick Action Toolbar (Compact 4-Action Bar)
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 4 * s, vertical: 4 * s),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.025),
+                    borderRadius: BorderRadius.circular(10 * s),
+                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildSlimActionBtn(
                         icon: Icons.upload_file_rounded,
                         iconColor: const Color(0xFF4285F4),
-                        title: '파일 올리기',
-                        subtitle: 'PDF / PPT / 교안',
+                        label: '업로드',
+                        tooltip: '파일 올리기 (PDF / PPT / 교안)',
                         onTap: _uploadLocalFileToDrive,
                         s: s,
                       ),
-                    ),
-                    SizedBox(width: 6 * s),
-                    Expanded(
-                      child: _buildActionTile(
+                      _buildSlimActionBtn(
                         icon: Icons.palette_rounded,
                         iconColor: const Color(0xFF00C4CC),
-                        title: 'Canva 등록',
-                        subtitle: '디자인 링크 연동',
+                        label: 'Canva',
+                        tooltip: 'Canva 디자인 등록',
                         onTap: _showRegisterCanvaDialog,
                         s: s,
                       ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 6 * s),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildActionTile(
+                      _buildSlimActionBtn(
                         icon: Icons.create_new_folder_rounded,
                         iconColor: const Color(0xFFFF8906),
-                        title: '새 폴더',
-                        subtitle: 'bst-save에 생성',
+                        label: '새 폴더',
+                        tooltip: '새 폴더 생성',
                         onTap: _showCreateFolderDialog,
                         s: s,
                       ),
-                    ),
-                    SizedBox(width: 6 * s),
-                    Expanded(
-                      child: _buildActionTile(
+                      _buildSlimActionBtn(
                         icon: Icons.sync_alt_rounded,
                         iconColor: const Color(0xFF00F5D4),
-                        title: '폴더 동기화',
-                        subtitle: '로컬 ↔ Drive',
+                        label: '동기화',
+                        tooltip: '로컬 ↔ Drive 폴더 동기화',
                         onTap: _openDriveFolderSyncDialog,
                         s: s,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 SizedBox(height: 8 * s),
 
@@ -7573,65 +7658,45 @@ class _TeacherViewState extends State<TeacherView> {
     );
   }
 
-  Widget _buildActionTile({
+  Widget _buildSlimActionBtn({
     required IconData icon,
     required Color iconColor,
-    required String title,
-    required String subtitle,
+    required String label,
+    required String tooltip,
     required VoidCallback onTap,
     required double s,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10 * s),
-        child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 6 * s),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.03),
-            borderRadius: BorderRadius.circular(10 * s),
-            border: Border.all(color: Colors.white.withOpacity(0.06)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(6 * s),
-                decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(8 * s),
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8 * s),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 4 * s),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(5 * s),
+                  decoration: BoxDecoration(
+                    color: iconColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(6 * s),
+                  ),
+                  child: Icon(icon, size: 14 * s, color: iconColor),
                 ),
-                child: Icon(icon, size: 16 * s, color: iconColor),
-              ),
-              SizedBox(width: 8 * s),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.notoSansKr(
-                        color: _textColor,
-                        fontSize: 10.5 * s,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _textColor54,
-                        fontSize: 8.5 * s,
-                      ),
-                    ),
-                  ],
+                SizedBox(height: 3 * s),
+                Text(
+                  label,
+                  style: GoogleFonts.notoSansKr(
+                    color: _textColor70,
+                    fontSize: 8.5 * s,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -7915,21 +7980,6 @@ class _MacTrafficLightsState extends State<_MacTrafficLights> {
   }
 }
 
-class _ToolItem {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-  final bool enabled;
-
-  _ToolItem({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-    required this.enabled,
-  });
-}
 
 /// 교사 본인 교시 + 교실 교시를 합쳐 표현하는 데이터 클래스
 class _CombinedPeriod {

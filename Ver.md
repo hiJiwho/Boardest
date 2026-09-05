@@ -1,7 +1,43 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v2.9.9.1** (App: v2.9.9.1 / Web: v2.9.9.1)  
+> **현재 시스템 버전**: **v2.9.9.2** (App: v2.9.9.2 / Web: v2.9.9.2)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 B 2.9.9.2 (2026-09-05)
+
+### 1. 👩‍🏫 교사용 앱 (`boardest_teacher`) OTP & Drive 통합 제어 및 24:76 와이드 클라우드 탐색기 대개편
+- **OTP & 빠른 도구 초슬림 통합 (`flex: 24`)**: 하단 좌측 제어 영역을 38%에서 24%로 압축하고, [업로드 / Canva / 새 폴더 / 동기화] 4개 주요 동작을 컴팩트 1열 가로 툴바(`_buildSlimActionBtn`)로 슬림화.
+- **Google Drive 클라우드 탐색기 초대형 확장 (`flex: 76`)**: 수업 교안 탐색 영역을 62%에서 76%로 전폭 확장하여, 파일명 및 카테고리가 쾌적하게 한눈에 들어오는 와이드 브라우징 환경 완성.
+- **메인 레이아웃 밸런스 조정**: 주간 시간표 영역(`flex: 4`)과 하단 도구/탐색기 영역(`flex: 6`)의 황금 분할 적용.
+
+### 2. 🖥️ 전자칠판 (`boardest`) 급식 요소 완전 분리 및 시계/시간표 대폭 확대
+- **대시보드 급식 완전 분리**: 급식 기능을 독립 웹앱(`boardest-eat.web.app`)으로 단일화하고, 전자칠판 메인 화면의 급식실 선택 버튼을 제거.
+- **시간표 & 시계 최적화 비율 개편**:
+  - 디지털 시계 카드: `flex: 1` $\rightarrow$ `flex: 5`로 시인성 대폭 강화.
+  - 하단 섹션: '지금 시간표'를 `flex: 3` $\rightarrow$ `flex: 7` (63.6%)로 확대, 우측 광고판/컨텍스트를 `flex: 2` $\rightarrow$ `flex: 4` (36.4%)로 정돈하여 수업 진행 집중도 극대화.
+
+### 3. 📁 파일 실행 방식 엄격 분리 및 웹 인덱스 소스 노출 결함 해결
+- **웹 뷰어 HTML 소스 노출 버그 차단**: `WebHwpPptView`에 로컬 파일 전달 시 구글 뷰어가 `boardest.web.app/viewer?file=...`를 호출하면서 웹 `index.html` 소스코드가 노출되던 취약점 원천 수정.
+- **엄격한 파일 분기 실행**:
+  - **PPT / PPTX / HWP / HWPX**: 웹 뷰어를 우회하고 네이티브 WPF 오버레이 또는 OS 기본 실행 프로그램(`launchUrl(Uri.file)`)으로 직접 구동 (웹 환경은 구글 드라이브 공식 뷰어로 연결).
+  - **PDF / TBP / Canva**: Boardest 내장 전용 뷰어로 부드럽게 전체화면 렌더링.
+  - **기타 확장자**: OS 기본 연결 프로그램 또는 다운로드로 실행.
+
+### 4. 📱 시크릿 QR 코드 기반 자동 로그인 기기 등록 & 401 자가 치유 (Self-Healing)
+- **8자리 텍스트 코드 $\rightarrow$ 시크릿 QR 전환**: 전자칠판 [자동 로그인 기기 등록]을 난수 텍스트 입력 방식에서 카메라 즉시 스캔이 가능한 역방향 페어링 QR 코드로 전환 (`waitForReversePairAuth`).
+- **Google OAuth 401 Unauthorized 자가 치유**:
+  - `BstCloudService`에 `activeRefreshToken` 필드를 신설하여 페어링 세션 완료 시 리프레시 토큰을 안전하게 보관.
+  - Google Drive 파일 탐색(`fetchDriveFiles`) 중 1시간 만료로 인한 `401 Unauthorized` 발생 시, 보관된 `refreshToken`을 사용해 자동으로 새 Access Token을 교환받아 요청을 재시도하는 자가 치유(Self-healing) 로직 구현.
+- **교사 OAuth 포털 토큰 검증**: `boardest-teacher-oauth`에서 로컬스토리지 캐시 토큰의 만료 여부를 사전 검증하고 리프레시 토큰으로 갱신 후 페어링 세션에 기록하도록 보강.
+
+### 5. 🔄 Windows & Android 인앱 실시간 자동 업데이트 완전 복구
+- **Windows 조기 리턴 가드 제거**: `kIsWeb || Platform.isWindows` 조기 종료로 인해 데스크톱 환경에서 업데이트 감지가 무시되던 문제를 해결하고, Windows 환경에서도 GitHub 최신 릴리즈 자동 감지 완비.
+- **AppInstaller & AppX 무인 갱신 파이프라인**:
+  - 최신 릴리즈 출시 시 전자칠판(`boardest`)과 교사용(`boardest_teacher`) 모두 원클릭 업데이트 모달 표시.
+  - `Add-AppxPackage -AppInstallerFile ... -ForceUpdateFromAnyVersion` (실패 시 fallback 최신 .appx 직결 다운로드 설치) 백그라운드 PowerShell 스크립트로 자동 갱신 및 재실행.
+- **설정 메뉴 내 수동 확인 지원**: 전자칠판 설정 바텀시트 및 교사용 메뉴에 [시스템 업데이트 확인] 버튼을 제공하여 최신 버전 여부 실시간 안내.
 
 ---
 

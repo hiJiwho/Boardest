@@ -1,16 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:universal_io/io.dart';
-import '../models/app_settings.dart';
 import '../services/auth_service.dart';
 import '../services/bst_cloud_service.dart';
 import '../views/canva_overlay_view.dart';
 import '../views/pdf_board_view.dart';
 import '../views/ppt_overlay_view.dart';
+import '../views/hwp_overlay_view.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 /// 전자칠판용 클라우드 파일 탐색기 & 터치 키패드 모달 (BstCloudModal)
@@ -51,10 +52,12 @@ class _BstCloudModalState extends State<BstCloudModal> {
   String? _teacherName;
   String _classroomName = '교실';
 
-  // 페어링 등록 상태
+  // 페어링 등록 상태 (시크릿 QR 코드 기반 자동 로그인 기기 등록)
   bool _isPairingOpen = false;
-  String? _pairingCode;
-  int _pairingRemainingSec = 180;
+  ReversePairSession? _pairingQrSession;
+  bool _isLoadingPairingQr = false;
+  bool _pairingCancelled = false;
+  int _pairingRemainingSec = 300;
   Timer? _pairingTimer;
 
   @override
@@ -320,37 +323,94 @@ class _BstCloudModalState extends State<BstCloudModal> {
         );
       }
     } else if (lower.endsWith('.ppt') || lower.endsWith('.pptx')) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (ctx) => PptOverlayView(
-            initialFilePath: file.name,
-            scaleFactor: widget.scaleFactor,
-          ),
-        ),
-      );
+      if (kIsWeb) {
+        final driveUrl = 'https://drive.google.com/file/d/${file.id}/view';
+        launchUrl(Uri.parse(driveUrl), mode: LaunchMode.externalApplication);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('📂 [${file.name}] 다운로드 및 프레젠테이션 실행 중...'), duration: const Duration(seconds: 2)),
+        );
+        final localPath = await BstCloudService.instance.downloadDriveFile(file.id, file.name, token);
+        if (localPath != null && mounted) {
+          if (Platform.isWindows) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (ctx) => PptOverlayView(
+                  initialFilePath: localPath,
+                  scaleFactor: widget.scaleFactor,
+                ),
+              ),
+            );
+          } else {
+            await launchUrl(Uri.file(localPath), mode: LaunchMode.externalApplication);
+          }
+        }
+      }
+    } else if (lower.endsWith('.hwp') || lower.endsWith('.hwpx')) {
+      if (kIsWeb) {
+        final driveUrl = 'https://drive.google.com/file/d/${file.id}/view';
+        launchUrl(Uri.parse(driveUrl), mode: LaunchMode.externalApplication);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('📂 [${file.name}] 다운로드 및 한글 뷰어 실행 중...'), duration: const Duration(seconds: 2)),
+        );
+        final localPath = await BstCloudService.instance.downloadDriveFile(file.id, file.name, token);
+        if (localPath != null && mounted) {
+          if (Platform.isWindows) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (ctx) => HwpOverlayView(
+                  initialFilePath: localPath,
+                  scaleFactor: widget.scaleFactor,
+                ),
+              ),
+            );
+          } else {
+            await launchUrl(Uri.file(localPath), mode: LaunchMode.externalApplication);
+          }
+        }
+      }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('📂 [ ${file.name} ] 파일을 열었습니다.')),
-      );
+      if (kIsWeb) {
+        final driveUrl = 'https://drive.google.com/file/d/${file.id}/view';
+        launchUrl(Uri.parse(driveUrl), mode: LaunchMode.externalApplication);
+      } else {
+        final localPath = await BstCloudService.instance.downloadDriveFile(file.id, file.name, token);
+        if (localPath != null) {
+          await launchUrl(Uri.file(localPath), mode: LaunchMode.externalApplication);
+        }
+      }
     }
   }
 
   void _startPairing() async {
-    final user = await AuthService().getCurrentUser();
-    final schoolCode = user?.school ?? 'ydm';
-    final res = await BstCloudService.instance.requestPairingCode(schoolCode, _classroomName);
-    if (!mounted) return;
+    setState(() {
+      _isPairingOpen = true;
+      _isLoadingPairingQr = true;
+      _pairingCancelled = false;
+      _pairingRemainingSec = 300;
+      _pairingQrSession = null;
+    });
 
-    if (res.success && res.pairingCode != null) {
+    try {
+      final user = await AuthService().getCurrentUser();
+      final session = await BstCloudService.instance.createReversePairSession(
+        schoolCode: user?.school ?? 'ydm',
+        grade: user?.grade,
+        classNum: user?.classNum,
+      );
+      if (!mounted || _pairingCancelled) return;
+
       setState(() {
-        _isPairingOpen = true;
-        _pairingCode = res.pairingCode;
-        _pairingRemainingSec = res.expiresIn ?? 180;
+        _pairingQrSession = session;
+        _isLoadingPairingQr = false;
       });
+
       _pairingTimer?.cancel();
       _pairingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (!mounted || !_isPairingOpen) {
+        if (!mounted || !_isPairingOpen || _pairingCancelled) {
           timer.cancel();
           return;
         }
@@ -363,8 +423,41 @@ class _BstCloudModalState extends State<BstCloudModal> {
           }
         });
       });
-    } else {
-      setState(() => _errorMessage = res.errorMessage ?? '페어링 요청 실패');
+
+      // Poll until phone/teacher scans and authorizes!
+      final res = await BstCloudService.instance.waitForReversePairAuth(
+        session.secret,
+        isCancelled: () => !mounted || !_isPairingOpen || _pairingCancelled,
+      );
+
+      if (!mounted || _pairingCancelled) return;
+
+      if (res.success && BstCloudService.instance.activeToken != null) {
+        await BstCloudService.instance.registerActiveTeacherAsTrusted();
+        if (!mounted) return;
+        _driveToken = BstCloudService.instance.activeToken;
+        _teacherName = res.teacherName ?? '선생님';
+        setState(() {
+          _isPairingOpen = false;
+          _status = 'approved';
+          _enteredPin = '';
+        });
+        _loadFiles();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 [$_teacherName] 선생님의 전자칠판 자동 로그인 기기로 등록되었습니다!'),
+            backgroundColor: const Color(0xFF2EC4B6),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingPairingQr = false;
+          _errorMessage = '시크릿 QR 생성 실패: $e';
+        });
+      }
     }
   }
 
@@ -596,7 +689,7 @@ class _BstCloudModalState extends State<BstCloudModal> {
 
   // ─── 1. 터치 키패드 & QR 로그인 화면 (상단 토글 + PIN 디스플레이/QR + 숫자 키패드) ───
   Widget _buildKeypadLoginView(double s) {
-    if (_isPairingOpen && _pairingCode != null) {
+    if (_isPairingOpen) {
       return _buildPairingUI(s);
     }
 
@@ -1148,38 +1241,123 @@ class _BstCloudModalState extends State<BstCloudModal> {
   Widget _buildPairingUI(double s) {
     return Center(
       child: Container(
-        width: 440 * s,
-        padding: EdgeInsets.all(20 * s),
+        width: 380 * s,
+        padding: EdgeInsets.all(22 * s),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(18 * s),
-          border: Border.all(color: const Color(0xFFFACC15)),
+          color: const Color(0xFF16161A),
+          borderRadius: BorderRadius.circular(24 * s),
+          border: Border.all(color: const Color(0xFFFACC15).withOpacity(0.6), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.6),
+              blurRadius: 30 * s,
+              spreadRadius: 4 * s,
+            ),
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.phonelink_setup_rounded, color: Color(0xFFFACC15), size: 36),
-            SizedBox(height: 10 * s),
-            Text('전자칠판 자동 로그인 기기 등록', style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 15 * s, fontWeight: FontWeight.bold)),
-            SizedBox(height: 6 * s),
-            Text('교사용 웹/앱의 [인증 & 기기 관리] 화면에서 아래 8자리 등록 코드를 입력하세요.', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 11.5 * s), textAlign: TextAlign.center),
-            SizedBox(height: 16 * s),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 20 * s, vertical: 10 * s),
-              decoration: BoxDecoration(color: Colors.black38, borderRadius: BorderRadius.circular(12 * s)),
-              child: Text(
-                _pairingCode != null && _pairingCode!.length == 8
-                    ? '${_pairingCode!.substring(0, 4)}  ${_pairingCode!.substring(4, 8)}'
-                    : (_pairingCode ?? '--------'),
-                style: GoogleFonts.sourceCodePro(color: const Color(0xFF00F5D4), fontSize: 28 * s, fontWeight: FontWeight.w900, letterSpacing: 4 * s),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(6 * s),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFACC15).withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.qr_code_scanner_rounded, color: const Color(0xFFFACC15), size: 22 * s),
+                ),
+                SizedBox(width: 8 * s),
+                Text(
+                  '자동 로그인 기기 등록',
+                  style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 16 * s, fontWeight: FontWeight.bold),
+                ),
+              ],
             ),
             SizedBox(height: 8 * s),
-            Text('유효 시간: $_pairingRemainingSec초', style: GoogleFonts.notoSansKr(color: const Color(0xFFFF8906), fontSize: 11 * s)),
-            SizedBox(height: 14 * s),
-            ElevatedButton(
-              onPressed: () => setState(() => _isPairingOpen = false),
-              child: const Text('닫기'),
+            Text(
+              '선생님의 스마트폰 기본 카메라나 교사용 앱으로\n아래 시크릿 QR 코드를 바로 스캔하세요.',
+              style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 11.5 * s, height: 1.4),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 16 * s),
+
+            // QR 디스플레이 영역
+            Container(
+              width: 200 * s,
+              height: 200 * s,
+              padding: EdgeInsets.all(12 * s),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16 * s),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF00F5D4).withOpacity(0.2),
+                    blurRadius: 16 * s,
+                    spreadRadius: 2 * s,
+                  ),
+                ],
+              ),
+              child: _isLoadingPairingQr
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF7F5AF0)))
+                  : (_pairingQrSession != null
+                      ? QrImageView(
+                          data: _pairingQrSession!.qrUrl,
+                          version: QrVersions.auto,
+                          size: 176 * s,
+                          gapless: false,
+                        )
+                      : Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.error_outline_rounded, color: Colors.grey, size: 30 * s),
+                              SizedBox(height: 6 * s),
+                              Text('QR 생성 실패', style: TextStyle(color: Colors.black54, fontSize: 11 * s)),
+                            ],
+                          ),
+                        )),
+            ),
+            SizedBox(height: 12 * s),
+
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 4 * s),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF8906).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8 * s),
+                border: Border.all(color: const Color(0xFFFF8906).withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.timer_outlined, color: const Color(0xFFFF8906), size: 13 * s),
+                  SizedBox(width: 4 * s),
+                  Text(
+                    '유효 시간: $_pairingRemainingSec초 (스캔 시 즉시 등록)',
+                    style: GoogleFonts.notoSansKr(color: const Color(0xFFFF8906), fontSize: 11 * s, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 16 * s),
+
+            SizedBox(
+              width: double.infinity,
+              height: 40 * s,
+              child: OutlinedButton(
+                onPressed: () {
+                  _pairingCancelled = true;
+                  _pairingTimer?.cancel();
+                  setState(() => _isPairingOpen = false);
+                },
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.white24),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * s)),
+                ),
+                child: Text('닫기', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13 * s)),
+              ),
             ),
           ],
         ),

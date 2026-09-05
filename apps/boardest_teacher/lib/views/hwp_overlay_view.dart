@@ -6,12 +6,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter/services.dart';
-import '../services/usb_bridge_service.dart';
-import '../services/storage_service.dart';
-import 'web_hwp_ppt_view.dart';
 import '../services/usb_session_service.dart';
 import '../services/annotation_storage_service.dart';
 import '../services/app_paths.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Windows 전용: 최첨단 C#/WPF 기반 한글(HWP) 판서 오버레이 연동 뷰
 class HwpOverlayView extends StatefulWidget {
@@ -57,20 +55,18 @@ class _HwpOverlayViewState extends State<HwpOverlayView> {
 
   Future<void> _startNativeOverlay() async {
     if (!Platform.isWindows) {
-      Future.microtask(() {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (ctx) => WebHwpPptView(
-                filePathOrUrl: widget.initialFilePath,
-                title: _fileName,
-                scaleFactor: widget.scaleFactor,
-                isPpt: false,
-              ),
-            ),
-          );
+      Future.microtask(() async {
+        if (!mounted) return;
+        try {
+          if (widget.initialFilePath.startsWith('http')) {
+            await launchUrl(Uri.parse(widget.initialFilePath), mode: LaunchMode.externalApplication);
+          } else {
+            await launchUrl(Uri.file(widget.initialFilePath), mode: LaunchMode.externalApplication);
+          }
+        } catch (e) {
+          debugPrint('[HwpOverlayView] external launch error: $e');
         }
+        if (mounted) Navigator.of(context).pop();
       });
       return;
     }
@@ -115,19 +111,15 @@ class _HwpOverlayViewState extends State<HwpOverlayView> {
 
       if (!File(exePath).existsSync()) {
         debugPrint(
-          '[HwpOverlayView] Native WPF overlay not found at $exePath, switching to WebHwpPptView fallback',
+          '[HwpOverlayView] Native WPF overlay not found at $exePath, launching via OS default application/helper',
         );
+        try {
+          await launchUrl(Uri.file(widget.initialFilePath), mode: LaunchMode.externalApplication);
+        } catch (e) {
+          debugPrint('[HwpOverlayView] launchUrl error: $e');
+        }
         if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => WebHwpPptView(
-                scaleFactor: widget.scaleFactor,
-                filePathOrUrl: widget.initialFilePath,
-                title: p.basename(widget.initialFilePath),
-                isPpt: false,
-              ),
-            ),
-          );
+          Navigator.of(context).pop();
         }
         return;
       }
