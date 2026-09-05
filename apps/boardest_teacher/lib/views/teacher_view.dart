@@ -1389,16 +1389,18 @@ class _TeacherViewState extends State<TeacherView> {
   void _adjustMiniTimer(int seconds) {}
   void _enterMiniMode() {}
 
-  void _openFile(String path) {
-    if (path.isEmpty) return;
+  void _openFile(String path, {Uint8List? memoryBytes}) {
+    if (path.isEmpty && memoryBytes == null) return;
     final lower = path.toLowerCase();
 
     // 1. PDF 문서: Boardest PDF 판서 뷰어로 열기
     if (lower.endsWith('.pdf')) {
+      final bytes = memoryBytes ?? (kIsWeb ? (CloudDriveService.webMemoryFiles[path] ?? CloudDriveService.webMemoryFiles[p.basename(path)]) : null);
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => PdfBoardView(
             initialFilePath: path,
+            pdfData: bytes,
             scaleFactor: _settings.scaleFactor,
           ),
         ),
@@ -1664,30 +1666,24 @@ class _TeacherViewState extends State<TeacherView> {
                                                 : _buildTeacherTimetablePanel(scale),
                                           ),
                                           SizedBox(height: 12 * scale),
-                                          // 하단 3단 패널: 좌측(OTP, 인증 관리) / 중간(파일) / 우측(파일 업로드, 폴더 맵핑) (flex: 5)
+                                          // 하단 2단 패널: 좌측 통합 도구(OTP + 업로드 + 맵핑) (flex: 38) : 우측 파일 탐색기 대폭 확장 (flex: 62)
                                           Expanded(
                                             flex: 5,
                                             child: Row(
                                               crossAxisAlignment: CrossAxisAlignment.stretch,
                                               children: [
-                                                // 좌측: OTP 및 인증/기기 관리 (flex: 33)
+                                                // 좌측: OTP 및 빠른 도구 & 교과/반별 맵핑 (flex: 38)
                                                 Expanded(
-                                                  flex: 33,
+                                                  flex: 38,
                                                   child: _isUsbConnected
                                                       ? _buildUsbPanel(scale)
-                                                      : _buildBottomOtpAndAuthPanel(scale),
+                                                      : _buildBottomUnifiedToolPanel(scale),
                                                 ),
                                                 SizedBox(width: 12 * scale),
-                                                // 중간: 파일 탐색기 (bst-save) (flex: 37)
+                                                // 우측: 대폭 확장된 Google Drive 파일 탐색기 (flex: 62)
                                                 Expanded(
-                                                  flex: 37,
+                                                  flex: 62,
                                                   child: _buildDriveFilesPanel(scale),
-                                                ),
-                                                SizedBox(width: 12 * scale),
-                                                // 우측: 파일 업로드 및 폴더 맵핑 (flex: 30)
-                                                Expanded(
-                                                  flex: 30,
-                                                  child: _buildBottomUploadAndMappingPanel(scale),
                                                 ),
                                               ],
                                             ),
@@ -2444,7 +2440,23 @@ class _TeacherViewState extends State<TeacherView> {
       final localF = await CloudDriveService.instance.downloadDriveFileToTemp(driveFile);
 
       if (isBoardestNativeFormat || isWindowsOffice) {
-        if (localF != null && localF.existsSync()) {
+        if (kIsWeb) {
+          final bytes = CloudDriveService.webMemoryFiles[driveFile.id] ??
+              CloudDriveService.webMemoryFiles[name];
+          if (lower.endsWith('.pdf')) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => PdfBoardView(
+                  initialFilePath: name,
+                  pdfData: bytes,
+                  scaleFactor: _settings.scaleFactor,
+                ),
+              ),
+            );
+            return;
+          }
+          _openFile(name, memoryBytes: bytes);
+        } else if (localF != null && localF.existsSync()) {
           _openFile(localF.path);
         }
       } else {
@@ -4203,7 +4215,10 @@ class _TeacherViewState extends State<TeacherView> {
                                             );
                                             try {
                                               final tempFile = await CloudDriveService.instance.downloadDriveFileToTemp(f);
-                                              if (tempFile != null) {
+                                              if (kIsWeb) {
+                                                final bytes = CloudDriveService.webMemoryFiles[f.id] ?? CloudDriveService.webMemoryFiles[f.name];
+                                                _openFile(f.name, memoryBytes: bytes);
+                                              } else if (tempFile != null && tempFile.existsSync()) {
                                                 _openFile(tempFile.path);
                                               } else {
                                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -6933,366 +6948,7 @@ class _TeacherViewState extends State<TeacherView> {
     );
   }
 
-  // ── 하단 좌측: OTP 및 보안 인증/기기 관리 패널 ──
-  Widget _buildBottomOtpAndAuthPanel(double s) {
-    final cloud = CloudDriveService.instance;
-    return Container(
-      decoration: BoxDecoration(
-        color: _surfaceColor,
-        borderRadius: BorderRadius.circular(20 * s),
-        border: Border.all(color: _borderColor),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20 * s),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Padding(
-            padding: EdgeInsets.all(12 * s),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Header
-                Row(
-                  children: [
-                    Container(
-                      padding: EdgeInsets.all(4 * s),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF7F5AF0).withOpacity(0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.vpn_key_rounded,
-                        color: const Color(0xFF7F5AF0),
-                        size: 14 * s,
-                      ),
-                    ),
-                    SizedBox(width: 6 * s),
-                    Text(
-                      'OTP & 보안 인증 관리',
-                      style: GoogleFonts.notoSansKr(
-                        color: _textColor,
-                        fontSize: 12 * s,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 2 * s),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFD166).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(6 * s),
-                        border: Border.all(color: const Color(0xFFFFD166).withOpacity(0.3)),
-                      ),
-                      child: Text(
-                        'Cloud ID: ' + cloud.cloudId,
-                        style: GoogleFonts.sourceCodePro(
-                          color: const Color(0xFFFFD166),
-                          fontSize: 9.5 * s,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 8 * s),
-
-                // 6자리 Stegano OTP 대형 카드
-                InkWell(
-                  onTap: () {
-                    final full6 = _currentOtp;
-                    Clipboard.setData(ClipboardData(text: full6));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('📋 6자리 접속 코드 [' + full6 + '] 가 복사되었습니다.'),
-                        duration: const Duration(seconds: 2),
-                        backgroundColor: const Color(0xFF2EC4B6),
-                      ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(12 * s),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(vertical: 8 * s, horizontal: 10 * s),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.025),
-                      borderRadius: BorderRadius.circular(12 * s),
-                      border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.2)),
-                    ),
-                    child: Column(
-                      children: [
-                        Builder(
-                          builder: (context) {
-                            final full6 = _currentOtp;
-                            final display6 = full6.length == 6
-                                ? (full6.substring(0, 3) + ' ' + full6.substring(3, 6))
-                                : full6;
-                            return Text(
-                              display6,
-                              style: GoogleFonts.sourceCodePro(
-                                color: const Color(0xFF00F5D4),
-                                fontSize: 22 * s,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 4 * s,
-                              ),
-                            );
-                          },
-                        ),
-                        SizedBox(height: 4 * s),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4 * s),
-                          child: LinearProgressIndicator(
-                            value: _remainingSeconds / 60.0,
-                            minHeight: 3.5 * s,
-                            backgroundColor: Colors.white10,
-                            valueColor: const AlwaysStoppedAnimation(Color(0xFF00F5D4)),
-                          ),
-                        ),
-                        SizedBox(height: 4 * s),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _remainingSeconds.toString() + '초 뒤 갱신 (클릭 시 복사)',
-                              style: TextStyle(color: const Color(0xFFFF8906), fontSize: 9 * s),
-                            ),
-                            Row(
-                              children: [
-                                Text('Auto-PT', style: TextStyle(color: _textColor70, fontSize: 9 * s)),
-                                SizedBox(width: 4 * s),
-                                SizedBox(
-                                  height: 20 * s,
-                                  child: Switch(
-                                    value: _autoPtEnabled,
-                                    activeColor: const Color(0xFF2EC4B6),
-                                    onChanged: (val) async {
-                                      setState(() => _autoPtEnabled = val);
-                                      final prefs = await SharedPreferences.getInstance();
-                                      await prefs.setBool('bst_auto_pt', val);
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: 8 * s),
-
-                // 서브 탭 스위처: [📡 다른 기기 OTP 주기 (온라인)] / [🔐 인증 기기 & 로그]
-                Container(
-                  padding: EdgeInsets.all(2 * s),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8 * s),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => setState(() => _bottomAuthSubTab = 0),
-                          borderRadius: BorderRadius.circular(6 * s),
-                          child: Container(
-                            padding: EdgeInsets.symmetric(vertical: 4 * s),
-                            decoration: BoxDecoration(
-                              color: _bottomAuthSubTab == 0 ? const Color(0xFF00F5D4) : Colors.transparent,
-                              borderRadius: BorderRadius.circular(6 * s),
-                            ),
-                            child: Center(
-                              child: Text(
-                                '📡 다른 기기 OTP 주기',
-                                style: GoogleFonts.notoSansKr(
-                                  color: _bottomAuthSubTab == 0 ? Colors.black : Colors.white70,
-                                  fontSize: 10 * s,
-                                  fontWeight: _bottomAuthSubTab == 0 ? FontWeight.bold : FontWeight.normal,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => setState(() => _bottomAuthSubTab = 1),
-                          borderRadius: BorderRadius.circular(6 * s),
-                          child: Container(
-                            padding: EdgeInsets.symmetric(vertical: 4 * s),
-                            decoration: BoxDecoration(
-                              color: _bottomAuthSubTab == 1 ? const Color(0xFF00F5D4) : Colors.transparent,
-                              borderRadius: BorderRadius.circular(6 * s),
-                            ),
-                            child: Center(
-                              child: Text(
-                                '🔐 인증 기기 목록',
-                                style: GoogleFonts.notoSansKr(
-                                  color: _bottomAuthSubTab == 1 ? Colors.black : Colors.white70,
-                                  fontSize: 10 * s,
-                                  fontWeight: _bottomAuthSubTab == 1 ? FontWeight.bold : FontWeight.normal,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 6 * s),
-
-                // Sub-tab content (Expanded)
-                Expanded(
-                  child: _bottomAuthSubTab == 0
-                      ? _buildOnlineOtpDevicesList(s, cloud)
-                      : _buildRegisteredDevicesList(s, cloud),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // 실시간 온라인 전자칠판 목록 및 8자리 직통 전송
-  Widget _buildOnlineOtpDevicesList(double s, CloudDriveService cloud) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _fetchOnlineClassrooms(_settings.schoolId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(12),
-              child: CircularProgressIndicator(color: Color(0xFF00F5D4), strokeWidth: 2),
-            ),
-          );
-        }
-        final onlineRooms = snapshot.data ?? [];
-        if (onlineRooms.isEmpty) {
-          return Container(
-            alignment: Alignment.center,
-            padding: EdgeInsets.all(8 * s),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.wifi_off_rounded, size: 24 * s, color: Colors.white24),
-                SizedBox(height: 4 * s),
-                Text(
-                  '현재 온라인인 전자칠판이 없습니다.',
-                  style: GoogleFonts.notoSansKr(color: _textColor70, fontSize: 10.5 * s, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 2 * s),
-                Text(
-                  '칠판 앱(Boardest)이 켜지면 5분 이내 자동 감지됩니다.',
-                  style: TextStyle(color: _textColor38, fontSize: 8.5 * s),
-                ),
-                SizedBox(height: 4 * s),
-                IconButton(
-                  icon: const Icon(Icons.refresh_rounded, color: Color(0xFF00F5D4), size: 18),
-                  onPressed: () => setState(() {}),
-                  tooltip: '온라인 기기 다시 검색',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
-          );
-        }
-        return ListView.separated(
-          shrinkWrap: true,
-          itemCount: onlineRooms.length,
-          separatorBuilder: (_, __) => Divider(color: Colors.white.withOpacity(0.04), height: 4 * s),
-          itemBuilder: (ctx, idx) {
-            final r = onlineRooms[idx];
-            final name = (r['nickname'] ?? r['docId'] ?? '전자칠판').toString();
-            final docId = (r['docId'] ?? '').toString();
-            return Container(
-              padding: EdgeInsets.symmetric(vertical: 4 * s, horizontal: 4 * s),
-              child: Row(
-                children: [
-                  Stack(
-                    children: [
-                      Icon(Icons.tv_rounded, color: const Color(0xFF00F5D4), size: 18 * s),
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: Container(
-                          width: 6 * s,
-                          height: 6 * s,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF00F5D4),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(width: 6 * s),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          style: GoogleFonts.notoSansKr(color: _textColor, fontWeight: FontWeight.bold, fontSize: 11 * s),
-                        ),
-                        Text(
-                          '🟢 온라인 · ID: ' + docId,
-                          style: TextStyle(color: const Color(0xFF00F5D4), fontSize: 8.5 * s),
-                        ),
-                      ],
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('📡 [' + name + '] 으로 8자리 자동 OTP 발송 중...')),
-                      );
-                      bool ok = false;
-                      try {
-                        final res = await http.post(
-                          Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/auto-otp'),
-                          headers: {'Content-Type': 'application/json'},
-                          body: jsonEncode({
-                            'email': cloud.userEmail ?? 'teacher@boardest.bst',
-                            'teacherName': cloud.userName ?? '선생님',
-                            'fcmToken': docId,
-                            'classId': docId,
-                            'display': name,
-                          }),
-                        );
-                        ok = (res.statusCode == 200);
-                      } catch (_) {
-                        ok = false;
-                      }
-                      if (ok) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('✅ [' + name + '] 에 8자리 자동 OTP Secret 등록 완료!'), backgroundColor: const Color(0xFF00F5D4)),
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('❌ 발송 실패. 네트워크를 확인해주세요.'), backgroundColor: Colors.redAccent),
-                        );
-                      }
-                    },
-                    icon: Icon(Icons.send_rounded, size: 11 * s, color: Colors.black),
-                    label: Text('8자리 전송', style: TextStyle(fontSize: 9.5 * s, color: Colors.black, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00F5D4),
-                      padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 2 * s),
-                      minimumSize: Size(50 * s, 26 * s),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // 등록된 인증 기기 목록
+  // ── 등록된 인증 기기 목록 ──
   Widget _buildRegisteredDevicesList(double s, CloudDriveService cloud) {
     return FutureBuilder<List<dynamic>>(
       future: cloud.fetchDeviceListAndLogs().then((res) => (res['devices'] as List<dynamic>?) ?? <dynamic>[]),
@@ -7370,8 +7026,214 @@ class _TeacherViewState extends State<TeacherView> {
     );
   }
 
-  // ── 하단 우측: 파일 업로드 및 폴더 맵핑 패널 ──
-  Widget _buildBottomUploadAndMappingPanel(double s) {
+  // ── 신뢰 기기 관리 모달 다이얼로그 ──
+  void _showRegisteredDevicesModal(double s) {
+    final cloud = CloudDriveService.instance;
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF161920),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16 * s),
+            side: BorderSide(color: Colors.white.withOpacity(0.1)),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.devices_rounded, color: const Color(0xFF2EC4B6), size: 20 * s),
+              SizedBox(width: 8 * s),
+              Text('인증된 전자칠판 및 기기 관리', style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14 * s, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              IconButton(
+                icon: Icon(Icons.refresh_rounded, color: Colors.white70, size: 16 * s),
+                onPressed: () => (ctx as Element).markNeedsBuild(),
+                tooltip: '새로고침',
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 440 * s,
+            height: 300 * s,
+            child: _buildRegisteredDevicesList(s, cloud),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('닫기', style: TextStyle(color: Colors.white70, fontSize: 12 * s)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ── 교과 / 반별 폴더 맵핑 추가 다이얼로그 ──
+  void _showAddClassroomMappingDialog(double s) {
+    String selectedGrade = '1학년';
+    String selectedClass = '1반';
+    String selectedFolder = '';
+    final folderCandidates = _driveFiles
+        .where((f) => (f['mimeType']?.toString() ?? '') == 'application/vnd.google-apps.folder')
+        .map((f) => f['name']?.toString() ?? '')
+        .where((name) => name.isNotEmpty)
+        .toList();
+    if (folderCandidates.isNotEmpty) selectedFolder = folderCandidates.first;
+
+    final customFolderController = TextEditingController();
+    bool useCustomFolder = folderCandidates.isEmpty;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDlgState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF161920),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16 * s),
+                side: BorderSide(color: Colors.white.withOpacity(0.1)),
+              ),
+              title: Row(
+                children: [
+                  Icon(Icons.folder_shared_rounded, color: const Color(0xFF00F5D4), size: 20 * s),
+                  SizedBox(width: 8 * s),
+                  Text('교과 / 반별 폴더 매핑 추가', style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14 * s, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: SizedBox(
+                width: 380 * s,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('학급 또는 수업 선택:', style: TextStyle(color: Colors.white70, fontSize: 11 * s, fontWeight: FontWeight.w600)),
+                    SizedBox(height: 6 * s),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: selectedGrade,
+                            dropdownColor: const Color(0xFF1E222D),
+                            style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 12 * s),
+                            decoration: InputDecoration(
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
+                              filled: true,
+                              fillColor: Colors.white.withOpacity(0.05),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8 * s), borderSide: BorderSide.none),
+                            ),
+                            items: ['1학년', '2학년', '3학년', '전체'].map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
+                            onChanged: (val) => setDlgState(() => selectedGrade = val ?? '1학년'),
+                          ),
+                        ),
+                        SizedBox(width: 8 * s),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: selectedClass,
+                            dropdownColor: const Color(0xFF1E222D),
+                            style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 12 * s),
+                            decoration: InputDecoration(
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
+                              filled: true,
+                              fillColor: Colors.white.withOpacity(0.05),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8 * s), borderSide: BorderSide.none),
+                            ),
+                            items: List.generate(10, (i) => '${i + 1}반').map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                            onChanged: (val) => setDlgState(() => selectedClass = val ?? '1반'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 12 * s),
+                    Text('Google Drive 대상 폴더 (bst-save 내):', style: TextStyle(color: Colors.white70, fontSize: 11 * s, fontWeight: FontWeight.w600)),
+                    SizedBox(height: 6 * s),
+                    if (!useCustomFolder && folderCandidates.isNotEmpty)
+                      DropdownButtonFormField<String>(
+                        value: selectedFolder.isNotEmpty ? selectedFolder : null,
+                        dropdownColor: const Color(0xFF1E222D),
+                        style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontSize: 12 * s),
+                        decoration: InputDecoration(
+                          contentPadding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.05),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8 * s), borderSide: BorderSide.none),
+                        ),
+                        items: folderCandidates.map((f) => DropdownMenuItem<String>(value: f, child: Text(f))).toList(),
+                        onChanged: (val) => setDlgState(() => selectedFolder = val ?? ''),
+                      )
+                    else
+                      TextField(
+                        controller: customFolderController,
+                        style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontSize: 12 * s),
+                        decoration: InputDecoration(
+                          hintText: '폴더 이름 입력 (예: 수학, 영어, 과학)',
+                          hintStyle: TextStyle(color: Colors.white30, fontSize: 11 * s),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.05),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8 * s), borderSide: BorderSide.none),
+                        ),
+                      ),
+                    if (folderCandidates.isNotEmpty)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => setDlgState(() => useCustomFolder = !useCustomFolder),
+                            child: Text(
+                              useCustomFolder ? '목록에서 선택' : '직접 입력',
+                              style: TextStyle(color: const Color(0xFF7F5AF0), fontSize: 10.5 * s),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('취소', style: TextStyle(color: Colors.white54, fontSize: 12 * s)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00F5D4),
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8 * s)),
+                  ),
+                  onPressed: () async {
+                    final classKey = '$selectedGrade $selectedClass';
+                    final targetFolder = (useCustomFolder ? customFolderController.text.trim() : selectedFolder).trim();
+                    if (targetFolder.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('매핑할 폴더명을 지정해주세요.')),
+                      );
+                      return;
+                    }
+                    setState(() {
+                      _classroomFolderMappings[classKey] = targetFolder;
+                    });
+                    await _saveClassroomMappings();
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('✨ [$classKey] ➔ [$targetFolder] 매핑이 저장되었습니다.'),
+                        backgroundColor: const Color(0xFF2EC4B6),
+                      ),
+                    );
+                  },
+                  child: Text('매핑 저장', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold, fontSize: 12 * s)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ── 하단 좌측: OTP, 빠른 도구, 교과/반별 매핑 통합 패널 (flex: 38) ──
+  Widget _buildBottomUnifiedToolPanel(double s) {
+    final cloud = CloudDriveService.instance;
     return Container(
       decoration: BoxDecoration(
         color: _surfaceColor,
@@ -7387,24 +7249,24 @@ class _TeacherViewState extends State<TeacherView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Header
+                // 1. Header Row
                 Row(
                   children: [
                     Container(
                       padding: EdgeInsets.all(4 * s),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2EC4B6).withOpacity(0.15),
+                        color: const Color(0xFF7F5AF0).withOpacity(0.15),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
-                        Icons.drive_file_move_rounded,
-                        color: const Color(0xFF2EC4B6),
+                        Icons.vpn_key_rounded,
+                        color: const Color(0xFF7F5AF0),
                         size: 14 * s,
                       ),
                     ),
                     SizedBox(width: 6 * s),
                     Text(
-                      '업로드 & 폴더 맵핑',
+                      'OTP & 클라우드 도구',
                       style: GoogleFonts.notoSansKr(
                         color: _textColor,
                         fontSize: 12 * s,
@@ -7412,105 +7274,220 @@ class _TeacherViewState extends State<TeacherView> {
                       ),
                     ),
                     const Spacer(),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 2 * s),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFD166).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6 * s),
+                        border: Border.all(color: const Color(0xFFFFD166).withOpacity(0.3)),
+                      ),
+                      child: Text(
+                        'Cloud ID: ' + cloud.cloudId,
+                        style: GoogleFonts.sourceCodePro(
+                          color: const Color(0xFFFFD166),
+                          fontSize: 9.5 * s,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 4 * s),
                     IconButton(
-                      icon: Icon(Icons.refresh_rounded, size: 15 * s, color: _textColor54),
-                      tooltip: '새로고침',
+                      icon: Icon(Icons.devices_rounded, color: const Color(0xFF2EC4B6), size: 16 * s),
+                      tooltip: '인증 기기 관리',
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
-                      onPressed: () async {
-                        await _loadCloudDriveMappings();
-                        setState(() {});
-                      },
+                      onPressed: () => _showRegisteredDevicesModal(s),
                     ),
                   ],
                 ),
-                SizedBox(height: 10 * s),
+                SizedBox(height: 8 * s),
 
-                // 4 Action Buttons in 2x2 grid
-                Expanded(
-                  flex: 5,
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: Row(
+                // 2. 6자리 Stegano OTP 대형 카드
+                InkWell(
+                  onTap: () {
+                    final full6 = _currentOtp;
+                    Clipboard.setData(ClipboardData(text: full6));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('📋 6자리 접속 코드 [' + full6 + '] 가 복사되었습니다.'),
+                        duration: const Duration(seconds: 2),
+                        backgroundColor: const Color(0xFF2EC4B6),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(12 * s),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 6 * s, horizontal: 10 * s),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.025),
+                      borderRadius: BorderRadius.circular(12 * s),
+                      border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.2)),
+                    ),
+                    child: Column(
+                      children: [
+                        Builder(
+                          builder: (context) {
+                            final full6 = _currentOtp;
+                            final display6 = full6.length == 6
+                                ? (full6.substring(0, 3) + ' ' + full6.substring(3, 6))
+                                : full6;
+                            return Text(
+                              display6,
+                              style: GoogleFonts.sourceCodePro(
+                                color: const Color(0xFF00F5D4),
+                                fontSize: 20 * s,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 4 * s,
+                              ),
+                            );
+                          },
+                        ),
+                        SizedBox(height: 3 * s),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4 * s),
+                          child: LinearProgressIndicator(
+                            value: _remainingSeconds / 60.0,
+                            minHeight: 3 * s,
+                            backgroundColor: Colors.white10,
+                            valueColor: const AlwaysStoppedAnimation(Color(0xFF00F5D4)),
+                          ),
+                        ),
+                        SizedBox(height: 3 * s),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Expanded(
-                              child: _buildActionTile(
-                                icon: Icons.upload_file_rounded,
-                                iconColor: const Color(0xFF4285F4),
-                                title: '파일 올리기',
-                                subtitle: 'PDF / PPT / 교안',
-                                onTap: _uploadLocalFileToDrive,
-                                s: s,
-                              ),
+                            Text(
+                              _remainingSeconds.toString() + '초 뒤 갱신 (클릭 시 복사)',
+                              style: TextStyle(color: const Color(0xFFFF8906), fontSize: 8.5 * s),
                             ),
-                            SizedBox(width: 6 * s),
-                            Expanded(
-                              child: _buildActionTile(
-                                icon: Icons.palette_rounded,
-                                iconColor: const Color(0xFF00C4CC),
-                                title: 'Canva 등록',
-                                subtitle: '디자인 링크 연동',
-                                onTap: _showRegisterCanvaDialog,
-                                s: s,
-                              ),
+                            Row(
+                              children: [
+                                Text('Auto-PT', style: TextStyle(color: _textColor70, fontSize: 8.5 * s)),
+                                SizedBox(width: 3 * s),
+                                SizedBox(
+                                  height: 18 * s,
+                                  child: Switch(
+                                    value: _autoPtEnabled,
+                                    activeColor: const Color(0xFF2EC4B6),
+                                    onChanged: (val) async {
+                                      setState(() => _autoPtEnabled = val);
+                                      final prefs = await SharedPreferences.getInstance();
+                                      await prefs.setBool('bst_auto_pt', val);
+                                    },
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ),
-                      SizedBox(height: 6 * s),
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _buildActionTile(
-                                icon: Icons.create_new_folder_rounded,
-                                iconColor: const Color(0xFFFF8906),
-                                title: '새 폴더',
-                                subtitle: 'bst-save에 생성',
-                                onTap: _showCreateFolderDialog,
-                                s: s,
-                              ),
-                            ),
-                            SizedBox(width: 6 * s),
-                            Expanded(
-                              child: _buildActionTile(
-                                icon: Icons.sync_alt_rounded,
-                                iconColor: const Color(0xFF00F5D4),
-                                title: '폴더 맵핑',
-                                subtitle: '교과/반별 동기화',
-                                onTap: _openDriveFolderSyncDialog,
-                                s: s,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-                SizedBox(height: 10 * s),
+                SizedBox(height: 8 * s),
 
-                // Folder Mappings Summary
+                // 3. Quick Action Buttons (2x2)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildActionTile(
+                        icon: Icons.upload_file_rounded,
+                        iconColor: const Color(0xFF4285F4),
+                        title: '파일 올리기',
+                        subtitle: 'PDF / PPT / 교안',
+                        onTap: _uploadLocalFileToDrive,
+                        s: s,
+                      ),
+                    ),
+                    SizedBox(width: 6 * s),
+                    Expanded(
+                      child: _buildActionTile(
+                        icon: Icons.palette_rounded,
+                        iconColor: const Color(0xFF00C4CC),
+                        title: 'Canva 등록',
+                        subtitle: '디자인 링크 연동',
+                        onTap: _showRegisterCanvaDialog,
+                        s: s,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 6 * s),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildActionTile(
+                        icon: Icons.create_new_folder_rounded,
+                        iconColor: const Color(0xFFFF8906),
+                        title: '새 폴더',
+                        subtitle: 'bst-save에 생성',
+                        onTap: _showCreateFolderDialog,
+                        s: s,
+                      ),
+                    ),
+                    SizedBox(width: 6 * s),
+                    Expanded(
+                      child: _buildActionTile(
+                        icon: Icons.sync_alt_rounded,
+                        iconColor: const Color(0xFF00F5D4),
+                        title: '폴더 동기화',
+                        subtitle: '로컬 ↔ Drive',
+                        onTap: _openDriveFolderSyncDialog,
+                        s: s,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8 * s),
+
+                // 4. 교과 / 반별 매핑 헤더
                 Row(
                   children: [
                     Icon(Icons.folder_shared_outlined, size: 12 * s, color: _textColor54),
                     SizedBox(width: 4 * s),
                     Text(
-                      '현재 교과 / 반별 매핑 (' + _classroomFolderMappings.length.toString() + ')',
+                      '교과 / 반별 매핑 (' + _classroomFolderMappings.length.toString() + ')',
                       style: GoogleFonts.notoSansKr(
                         color: _textColor70,
                         fontSize: 10 * s,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    const Spacer(),
+                    InkWell(
+                      onTap: () => _showAddClassroomMappingDialog(s),
+                      borderRadius: BorderRadius.circular(4 * s),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 2 * s),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00F5D4).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(4 * s),
+                          border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.add_rounded, size: 10 * s, color: const Color(0xFF00F5D4)),
+                            SizedBox(width: 2 * s),
+                            Text(
+                              '매핑 추가',
+                              style: TextStyle(
+                                color: const Color(0xFF00F5D4),
+                                fontSize: 9 * s,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 SizedBox(height: 4 * s),
+
+                // 5. 매핑 목록 (Expanded)
                 Expanded(
-                  flex: 4,
                   child: Container(
-                    padding: EdgeInsets.all(6 * s),
+                    padding: EdgeInsets.all(4 * s),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(8 * s),
@@ -7518,15 +7495,27 @@ class _TeacherViewState extends State<TeacherView> {
                     ),
                     child: _classroomFolderMappings.isEmpty
                         ? Center(
-                            child: Text(
-                              '매핑된 교과 폴더가 없습니다.\n[폴더 맵핑] 버튼을 눌러 설정하세요.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.white30, fontSize: 9 * s, height: 1.3),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '매핑된 교과 폴더가 없습니다.',
+                                  style: TextStyle(color: Colors.white30, fontSize: 9 * s),
+                                ),
+                                SizedBox(height: 4 * s),
+                                InkWell(
+                                  onTap: () => _showAddClassroomMappingDialog(s),
+                                  child: Text(
+                                    '+ 학급 매핑 추가하기',
+                                    style: TextStyle(color: const Color(0xFF00F5D4), fontSize: 9.5 * s, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
                             ),
                           )
                         : ListView.separated(
                             itemCount: _classroomFolderMappings.length,
-                            separatorBuilder: (_, __) => Divider(color: Colors.white.withOpacity(0.04), height: 4 * s),
+                            separatorBuilder: (_, __) => Divider(color: Colors.white.withOpacity(0.04), height: 3 * s),
                             itemBuilder: (ctx, idx) {
                               final entry = _classroomFolderMappings.entries.elementAt(idx);
                               return InkWell(
@@ -7534,6 +7523,12 @@ class _TeacherViewState extends State<TeacherView> {
                                   setState(() {
                                     _cloudSearchQuery = entry.value;
                                   });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('🔍 [${entry.value}] 폴더로 검색 필터링되었습니다.'),
+                                      duration: const Duration(seconds: 1),
+                                    ),
+                                  );
                                 },
                                 borderRadius: BorderRadius.circular(4 * s),
                                 child: Padding(
@@ -7548,6 +7543,18 @@ class _TeacherViewState extends State<TeacherView> {
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: GoogleFonts.sourceCodePro(color: Colors.white70, fontSize: 9.5 * s),
+                                        ),
+                                      ),
+                                      InkWell(
+                                        onTap: () async {
+                                          setState(() {
+                                            _classroomFolderMappings.remove(entry.key);
+                                          });
+                                          await _saveClassroomMappings();
+                                        },
+                                        child: Padding(
+                                          padding: EdgeInsets.all(2 * s),
+                                          child: Icon(Icons.close_rounded, size: 11 * s, color: Colors.white38),
                                         ),
                                       ),
                                     ],
@@ -8529,136 +8536,6 @@ class _AuthManagementDialogState extends State<_AuthManagementDialog> {
     _ticker?.cancel();
     super.dispose();
   }
-
-  void _showGoogleOtpRegistrationDialog(double s) {
-    final cloud = CloudDriveService.instance;
-    final secret = cloud.totpSecret ?? '';
-    final email = cloud.userEmail ?? 'teacher@boardest.bst';
-    final otpAuthUri = TotpService.getOtpAuthUri(secret: secret, email: email);
-    final qrUrl = TotpService.getQrCodeImageUrl(otpAuthUri, size: 280);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF13171F),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20 * s),
-          side: BorderSide(color: const Color(0xFF00F5D4).withOpacity(0.3)),
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: EdgeInsets.all(8 * s),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00F5D4).withOpacity(0.15),
-                borderRadius: BorderRadius.circular(10 * s),
-              ),
-              child: Icon(Icons.qr_code_scanner_rounded, color: const Color(0xFF00F5D4), size: 22 * s),
-            ),
-            SizedBox(width: 10 * s),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Google OTP 앱 등록',
-                      style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 16 * s, fontWeight: FontWeight.bold)),
-                  Text('Google Authenticator / Microsoft Authenticator 지원',
-                      style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 11 * s)),
-                ],
-              ),
-            ),
-          ],
-        ),
-        content: SizedBox(
-          width: 340 * s,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '스마트폰의 Google OTP 앱에서 [+] ➔ [QR 코드 스캔]을 눌러 아래 QR을 스캔하세요.',
-                style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12 * s, height: 1.4),
-                textAlign: TextAlign.center,
-              ),
-              SizedBox(height: 14 * s),
-              Container(
-                padding: EdgeInsets.all(12 * s),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16 * s),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF00F5D4).withOpacity(0.25),
-                      blurRadius: 16,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: Image.network(
-                  qrUrl,
-                  width: 180 * s,
-                  height: 180 * s,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => Container(
-                    width: 180 * s,
-                    height: 180 * s,
-                    alignment: Alignment.center,
-                    child: const Text('QR 로드 실패', style: TextStyle(color: Colors.black54)),
-                  ),
-                ),
-              ),
-              SizedBox(height: 14 * s),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(10 * s),
-                  border: Border.all(color: Colors.white12),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('수동 직접 입력 키:', style: TextStyle(color: Colors.white38, fontSize: 10 * s)),
-                          Text(
-                            secret,
-                            style: GoogleFonts.outfit(
-                              color: const Color(0xFF74f8e5),
-                              fontSize: 11 * s,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.1,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.copy_rounded, color: Color(0xFF00F5D4), size: 18),
-                      tooltip: '키 복사',
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: secret));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('📋 OTP 시크릿 키가 복사되었습니다!'), backgroundColor: Color(0xFF2EC4B6)),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('닫기', style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final s = widget.scaleFactor;
@@ -8853,12 +8730,6 @@ class _AuthManagementDialogState extends State<_AuthManagementDialog> {
               icon: Icon(Icons.lock_reset_rounded, size: 14 * s, color: Colors.orangeAccent),
               label: Text('현재 기기 OTP 만료 & 새로 받기', style: TextStyle(fontSize: 11.5 * s, color: Colors.orangeAccent)),
               style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.orangeAccent)),
-            ),
-            OutlinedButton.icon(
-              onPressed: () => _showGoogleOtpRegistrationDialog(s),
-              icon: Icon(Icons.qr_code_scanner_rounded, size: 14 * s, color: Colors.white70),
-              label: Text('Google OTP 앱 QR 등록', style: TextStyle(fontSize: 11.5 * s, color: Colors.white70)),
-              style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.white24)),
             ),
           ],
         ),

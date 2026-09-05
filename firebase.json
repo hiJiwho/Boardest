@@ -200,6 +200,98 @@
         }
       ],
       "cleanUrls": true
+    },
+    {
+      "target": "download-boardest",
+      "public": "infra/download_web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" },
+            { "key": "Access-Control-Allow-Origin", "value": "*" }
+          ]
+        },
+        {
+          "source": "**/*.ps1",
+          "headers": [
+            { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+            { "key": "Access-Control-Allow-Origin", "value": "*" }
+          ]
+        },
+        {
+          "source": "**/*.appinstaller",
+          "headers": [
+            { "key": "Content-Type", "value": "application/appinstaller; charset=utf-8" },
+            { "key": "Access-Control-Allow-Origin", "value": "*" }
+          ]
+        },
+        {
+          "source": "**/*.cer",
+          "headers": [
+            { "key": "Content-Type", "value": "application/x-x509-ca-cert" },
+            { "key": "Access-Control-Allow-Origin", "value": "*" }
+          ]
+        }
+      ],
+      "redirects": [
+        {
+          "source": "/bst.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk",
+          "type": 302
+        },
+        {
+          "source": "/boardest.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk",
+          "type": 302
+        },
+        {
+          "source": "/apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk",
+          "type": 302
+        },
+        {
+          "source": "/bst.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "type": 302
+        },
+        {
+          "source": "/boardest.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "type": 302
+        },
+        {
+          "source": "/appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "type": 302
+        },
+        {
+          "source": "/teacher.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx",
+          "type": 302
+        },
+        {
+          "source": "/bst-teacher.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx",
+          "type": 302
+        },
+        {
+          "source": "/cer",
+          "destination": "/BoardestCert.cer",
+          "type": 302
+        },
+        {
+          "source": "/cert",
+          "destination": "/BoardestCert.cer",
+          "type": 302
+        }
+      ],
+      "cleanUrls": true
     }
   ]
 }

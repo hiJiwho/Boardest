@@ -128,6 +128,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   bool _isVerifyingOtp = false;
   String? _otpErrorMsg;
   bool _isCloudQrMode = true; // 스마트폰 QR 모드 기본 활성화
+  bool _hideCloudPanel = false; // 클라우드 패널 최소화/닫기 시 로그인 상태 유지용
   ReversePairSession? _reversePairSession;
   bool _isLoadingQrSession = false;
   bool _qrSessionCancelled = false;
@@ -201,6 +202,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   void _refreshCloudFiles() {
     final token = BstCloudService.instance.activeToken;
     if (token != null && token.isNotEmpty) {
+      _hideCloudPanel = false;
       if (_cloudDockTab == 0) {
         _cloudFilesFuture = BstCloudService.instance.fetchDriveFolderFiles(accessToken: token);
       } else if (_cloudDockTab == 1) {
@@ -4514,72 +4516,34 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                           ),
                           SizedBox(height: 14 * scale),
 
-                          // 하단 행 (높이 flex: 2): 수업/급식/광고판
+                          // 하단 행 (높이 flex: 2): 3:2 = [지금 시간표 (flex: 3)] : [광고판 / Cloud / USB (flex: 2)]
                           Builder(
                             builder: (context) {
-                              final isCloudActive = BstCloudService.instance.activeToken != null;
+                              final isCloudActive = BstCloudService.instance.activeToken != null && !_hideCloudPanel;
 
-                              // 1. Cloud 연결 시: 왼쪽 지금수업(flex: 1 세로형) / 오른쪽 클라우드(flex: 3) (급식 제거)
-                              if (isCloudActive) {
-                                return Expanded(
-                                  flex: 2,
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: [
-                                      Expanded(
-                                        flex: 1,
-                                        child: _buildVerticalPptSubjectCard(todayLessons, scale),
-                                      ),
-                                      SizedBox(width: 12 * scale),
-                                      Expanded(
-                                        flex: 3,
-                                        child: _buildFullCloudPanel(scale),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }
-
-                              // 2. USB 연결 시: 좌측 지금수업(flex: 1 세로형) / 우측 USB 탐색기(flex: 3 와이드 전면)
-                              if (_isUsbConnected) {
-                                return Expanded(
-                                  flex: 2,
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: [
-                                      Expanded(
-                                        flex: 1,
-                                        child: _buildVerticalPptSubjectCard(todayLessons, scale),
-                                      ),
-                                      SizedBox(width: 12 * scale),
-                                      Expanded(
-                                        flex: 3,
-                                        child: _buildFullUsbPanel(scale),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }
-
-                              // 3. 일반 모드 (기본): 지금수업(flex: 4) : 급식(flex: 3) : A4 광고판(AspectRatio 1 / 1.414)
                               return Expanded(
                                 flex: 2,
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
+                                    // 1. 지금 시간표 (수업 카드): flex: 3 (비율 3:2의 3)
                                     Expanded(
-                                      flex: 4,
+                                      flex: 3,
                                       child: _buildPptSubjectCard(todayLessons, isExpandedDock: false),
                                     ),
                                     SizedBox(width: 12 * scale),
+
+                                    // 2. 우측 영역: flex: 2 (비율 3:2의 2)
+                                    //    Cloud 연결 시 -> Cloud 패널 (수업 자료 탐색기)
+                                    //    USB 연결 시   -> USB 패널
+                                    //    일반 기본     -> 광고판 (A4 배너)
                                     Expanded(
-                                      flex: 3,
-                                      child: _buildNeisMealCard(scale),
-                                    ),
-                                    SizedBox(width: 12 * scale),
-                                    AspectRatio(
-                                      aspectRatio: 1 / 1.414,
-                                      child: _buildPptAdBannerCard(),
+                                      flex: 2,
+                                      child: isCloudActive
+                                          ? _buildFullCloudPanel(scale)
+                                          : (_isUsbConnected
+                                              ? _buildFullUsbPanel(scale)
+                                              : _buildPptAdBannerCard()),
                                     ),
                                   ],
                                 ),
@@ -5735,6 +5699,36 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          if (BstCloudService.instance.activeToken != null && _hideCloudPanel) ...[
+                            SizedBox(width: 8 * scale),
+                            InkWell(
+                              onTap: () => setState(() => _hideCloudPanel = false),
+                              borderRadius: BorderRadius.circular(8 * scale),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 4 * scale),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00F5D4).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(8 * scale),
+                                  border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.4)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.cloud_rounded, color: const Color(0xFF00F5D4), size: 13 * scale),
+                                    SizedBox(width: 4 * scale),
+                                    Text(
+                                      '클라우드 다시 열기',
+                                      style: GoogleFonts.notoSansKr(
+                                        color: const Color(0xFF00F5D4),
+                                        fontSize: 11 * scale,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                           SizedBox(width: 10 * scale),
                           Expanded(
                             child: FittedBox(
@@ -6333,12 +6327,12 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               ),
               IconButton(
                 icon: Icon(Icons.close_rounded, color: Colors.white54, size: 16 * scale),
-                tooltip: 'Cloud 패널 닫기',
+                tooltip: 'Cloud 패널 닫기 (로그인 유지)',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 onPressed: () {
                   setState(() {
-                    BstCloudService.instance.activeToken = null;
+                    _hideCloudPanel = true;
                   });
                 },
               ),
@@ -8392,6 +8386,18 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 onPressed: () {
                   setState(() {
                     _refreshCloudFiles();
+                  });
+                },
+              ),
+              SizedBox(width: 6 * scale),
+              IconButton(
+                icon: Icon(Icons.close_rounded, color: Colors.white70, size: 16 * scale),
+                tooltip: 'Cloud 패널 닫기 (로그인 유지)',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () {
+                  setState(() {
+                    _hideCloudPanel = true;
                   });
                 },
               ),
