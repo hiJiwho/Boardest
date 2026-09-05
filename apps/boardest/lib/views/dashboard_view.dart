@@ -4553,6 +4553,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                     // 2. 우측 영역: flex: 4 (광고판/클라우드 비율 최적화)
                                     //    Cloud 연결 시 -> Cloud 패널 (수업 자료 탐색기)
                                     //    USB 연결 시   -> USB 패널
+                                    //    수업 시간 (Cloud 미연결) -> 광고판 대신 Cloud OTP / QR 키패드 패널
                                     //    일반 기본     -> 광고판 (A4 배너)
                                     Expanded(
                                       flex: 4,
@@ -4560,7 +4561,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                           ? _buildFullCloudPanel(scale)
                                           : (_isUsbConnected
                                               ? _buildFullUsbPanel(scale)
-                                              : _buildPptAdBannerCard()),
+                                              : (_currentPeriod != null &&
+                                                      _currentPeriod!.isClass &&
+                                                      BstCloudService.instance.activeToken == null
+                                                  ? _buildCloudOtpKeypadPanel(scale)
+                                                  : _buildPptAdBannerCard())),
                                     ),
                                   ],
                                 ),
@@ -5648,148 +5653,92 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           SizedBox(width: 24 * scale),
           // Right: Real-time status badge & Giant Subject Name / 수업 중 OTP 바로가기
           Expanded(
-            child: (_currentPeriod != null && _currentPeriod!.isClass && BstCloudService.instance.activeToken == null)
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 1. 상단: 상태 뱃지 & 과목명 (위로 배치)
-                      Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 4 * scale),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8 * scale),
-                              border: Border.all(
-                                color: const Color(0xFF00F5D4).withValues(alpha: 0.45),
-                                width: 1.2,
-                              ),
-                            ),
-                            child: Text(
-                              statusBadge,
-                              style: GoogleFonts.notoSansKr(
-                                color: const Color(0xFF74f8e5),
-                                fontSize: 12 * scale,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: -0.3,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 5 * scale),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10 * scale),
+                        border: Border.all(
+                          color: const Color(0xFF00F5D4).withValues(alpha: 0.45),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Text(
+                        statusBadge,
+                        style: GoogleFonts.notoSansKr(
+                          color: const Color(0xFF74f8e5),
+                          fontSize: 13.5 * scale,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (BstCloudService.instance.activeToken != null && _hideCloudPanel) ...[
+                      SizedBox(width: 8 * scale),
+                      InkWell(
+                        onTap: () => setState(() => _hideCloudPanel = false),
+                        borderRadius: BorderRadius.circular(8 * scale),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 4 * scale),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00F5D4).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8 * scale),
+                            border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.4)),
                           ),
-                          if (BstCloudService.instance.activeToken != null && _hideCloudPanel) ...[
-                            SizedBox(width: 8 * scale),
-                            InkWell(
-                              onTap: () => setState(() => _hideCloudPanel = false),
-                              borderRadius: BorderRadius.circular(8 * scale),
-                              child: Container(
-                                padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 4 * scale),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF00F5D4).withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(8 * scale),
-                                  border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.4)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.cloud_rounded, color: const Color(0xFF00F5D4), size: 13 * scale),
-                                    SizedBox(width: 4 * scale),
-                                    Text(
-                                      '클라우드 다시 열기',
-                                      style: GoogleFonts.notoSansKr(
-                                        color: const Color(0xFF00F5D4),
-                                        fontSize: 11 * scale,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                          SizedBox(width: 10 * scale),
-                          Expanded(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                subjectName,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.cloud_rounded, color: const Color(0xFF00F5D4), size: 13 * scale),
+                              SizedBox(width: 4 * scale),
+                              Text(
+                                '클라우드 다시 열기',
                                 style: GoogleFonts.notoSansKr(
-                                  fontSize: 34 * scale,
-                                  fontWeight: FontWeight.w900,
-                                  color: Colors.white,
-                                  letterSpacing: -1,
-                                  shadows: [
-                                    Shadow(
-                                      color: const Color(0xFF00F5D4).withOpacity(0.3),
-                                      blurRadius: 10 * scale,
-                                    ),
-                                  ],
+                                  color: const Color(0xFF00F5D4),
+                                  fontSize: 11 * scale,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 8 * scale),
-                      // 2. 하단: 광고판 크기만큼 OTP Cloud 바로가기 컨테이너!
-                      Expanded(
-                        child: _buildCloudOtpKeypadPanel(scale),
-                      ),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 5 * scale),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10 * scale),
-                          border: Border.all(
-                            color: const Color(0xFF00F5D4).withValues(alpha: 0.45),
-                            width: 1.2,
-                          ),
-                        ),
-                        child: Text(
-                          statusBadge,
-                          style: GoogleFonts.notoSansKr(
-                            color: const Color(0xFF74f8e5),
-                            fontSize: 13.5 * scale,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.3,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      SizedBox(height: 10 * scale),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          subjectName,
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 68 * scale,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                            letterSpacing: -1.5,
-                            shadows: [
-                              Shadow(
-                                color: const Color(0xFF00F5D4).withOpacity(0.3),
-                                blurRadius: 16 * scale,
-                              ),
-                              Shadow(
-                                color: Colors.black.withValues(alpha: 0.9),
-                                blurRadius: 8,
                               ),
                             ],
                           ),
                         ),
                       ),
                     ],
+                  ],
+                ),
+                SizedBox(height: 10 * scale),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    subjectName,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 68 * scale,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                      letterSpacing: -1.5,
+                      shadows: [
+                        Shadow(
+                          color: const Color(0xFF00F5D4).withOpacity(0.3),
+                          blurRadius: 16 * scale,
+                        ),
+                        Shadow(
+                          color: Colors.black.withValues(alpha: 0.9),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
                   ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

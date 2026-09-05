@@ -9,7 +9,7 @@ import 'package:open_filex/open_filex.dart';
 
 
 class UpdateService {
-  static const String defaultVersion = '2.9.9.4';
+  static const String defaultVersion = '2.9.9.5';
 
   /// Dynamically detect installed MSIX/AppX version from WindowsApps folder, or fallback to defaultVersion
   static String get currentVersion {

@@ -1,7 +1,23 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v2.9.9.4** (App: v2.9.9.4 / Web: v2.9.9.4)  
+> **현재 시스템 버전**: **v2.9.9.5** (App: v2.9.9.5 / Web: v2.9.9.5)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 B 2.9.9.5 (2026-09-05)
+
+### 1. 📢 수업 시간 Cloud 창 "광고판(Billboard)" 영역 분리 배치
+- **시간표 카드 가독성 보존**: 수업 시작 시 시간표 카드를 찌그러뜨리며 OTP 패널을 주입하던 구조를 제거하여, 수업 시간 중에도 시원하고 큰 과목명 타이포그래피와 실시간 상태 배지를 유지.
+- **광고판(`flex: 4`) 지능형 전환**: 수업 시간에 교사 클라우드가 미연결 상태일 때 광고판 위치에 **스마트폰 QR 스캔 & 3x4 OTP 키패드 패널**을 표시하고, 인증 완료 시 해당 자리에서 부드럽게 **클라우드 파일 탐색기**로 연결 전환.
+
+### 2. 📱 Android APK 업데이트 무한 루프 해결 및 버전 완전 일치화
+- **Android Gradle 버전 통일**: `android/app/build.gradle.kts`에 `versionName = "2.9.9.5"`, `versionCode = 2995`를 고정 설정하여 4자리 버전 표기 완전 일원화.
+- **최신 릴리즈 APK 갱신**: 구버전 빌드가 남아있어 최신 상태임에도 반복 알림이 뜨던 문제를 최신 소스 기반의 `boardest.apk` 정식 빌드 및 배포로 해결.
+- **`UpdateService` 비교 안정화**: Android와 Windows 모두 `defaultVersion = '2.9.9.5'`로 동기화하여 불필요한 인앱 업데이트 팝업 차단.
+
+### 3. 🚀 멀티플랫폼 일괄 빌드 자동화 파이프라인
+- `scripts/build_all_appx.ps1`에 Android Release APK 자동 빌드(`flutter build apk --release`) 단계를 통합하여, 릴리즈 시 Windows AppX와 Android APK가 반드시 동시에 최신 소스로 동기화되어 배포되도록 보장.
 
 ---
 

@@ -108,12 +108,12 @@ $boardestAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.4"
+    Version="2.9.9.5"
     Uri="https://download-boardest.web.app/boardest.appinstaller">
     <MainPackage
         Name="jiwho.boardest.bst"
         Publisher="CN=jiwho"
-        Version="2.9.9.4"
+        Version="2.9.9.5"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/boardest.appx" />
     <UpdateSettings>
@@ -131,12 +131,12 @@ $teacherAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.4"
+    Version="2.9.9.5"
     Uri="https://download-boardest.web.app/bst-teacher.appinstaller">
     <MainPackage
         Name="jiwho.boardest.teacher"
         Publisher="CN=jiwho"
-        Version="2.9.9.4"
+        Version="2.9.9.5"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/bst-teacher.appx" />
     <UpdateSettings>
@@ -154,12 +154,12 @@ $panserAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.4"
+    Version="2.9.9.5"
     Uri="$repoReleaseBase/bst-overlay-panser.appinstaller">
     <MainPackage
         Name="jiwho.boardest.plugin.overlaypanser"
         Publisher="CN=jiwho"
-        Version="2.9.9.4"
+        Version="2.9.9.5"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/bst-overlay-panser.appx" />
     <UpdateSettings>
@@ -191,7 +191,26 @@ if (Test-Path $WelcomeWebDir) {
     Copy-Item (Join-Path $AppxOutDir "boardest.appinstaller") (Join-Path $WelcomeWebDir "bst.appinstaller") -Force
     Copy-Item (Join-Path $AppxOutDir "bst-teacher.appinstaller") (Join-Path $WelcomeWebDir "bst-teacher.appinstaller") -Force
     Copy-Item (Join-Path $AppxOutDir "bst-teacher.appinstaller") (Join-Path $WelcomeWebDir "teacher.appinstaller") -Force
+    Copy-Item (Join-Path $AppxOutDir "bst-overlay-panser.appinstaller") (Join-Path $WelcomeWebDir "bst-overlay-panser.appinstaller") -Force
     Write-Host "-> Synchronized all manifests to infra/welcome_web" -ForegroundColor Green
 }
 
-Write-Host "`n=== All AppX Packages and AppInstaller files built and signed successfully! ===" -ForegroundColor Cyan
+# 7. Build and synchronize Android Release APK
+Write-Host "`n[6/6] Building Android Release APK (boardest.apk)..." -ForegroundColor Yellow
+$BoardestAppDir = Join-Path $RootDir "apps\boardest"
+Push-Location $BoardestAppDir
+try {
+    & flutter build apk --release
+    if ($LASTEXITCODE -ne 0) { throw "Flutter build apk failed with code $LASTEXITCODE" }
+    
+    $GeneratedApk = Join-Path $BoardestAppDir "build\app\outputs\flutter-apk\app-release.apk"
+    if (-not (Test-Path $GeneratedApk)) { throw "Generated APK not found at $GeneratedApk" }
+    
+    Copy-Item $GeneratedApk (Join-Path $DistDir "boardest.apk") -Force
+    Copy-Item $GeneratedApk (Join-Path $AppxOutDir "boardest.apk") -Force
+    Write-Host "-> Successfully built and copied boardest.apk to dist/ and dist/appx/" -ForegroundColor Green
+} finally {
+    Pop-Location
+}
+
+Write-Host "`n=== All AppX Packages, APK and AppInstaller files built and signed successfully! ===" -ForegroundColor Cyan
