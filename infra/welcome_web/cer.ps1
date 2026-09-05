@@ -95,7 +95,7 @@ $choice = Read-Host "선택 번호를 입력하세요 (1, 2, 또는 엔터)"
 if ($choice -eq "1") {
     Write-Host ""
     Write-Host "전자칠판(Boardest) AppInstaller 실행 중..." -ForegroundColor Cyan
-    $appUrl = "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appinstaller"
+    $appUrl = "https://welcome-to-boardest.web.app/boardest.appinstaller"
     try {
         Start-Process "ms-appinstaller:?source=$appUrl"
         Write-Host "Windows 앱 설치 프로그램이 열렸습니다. 설치 창에서 '설치' 버튼을 눌러주세요." -ForegroundColor Green
@@ -106,7 +106,7 @@ if ($choice -eq "1") {
 } elseif ($choice -eq "2") {
     Write-Host ""
     Write-Host "교사용(Boardest Teacher) AppInstaller 실행 중..." -ForegroundColor Cyan
-    $appUrl = "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appinstaller"
+    $appUrl = "https://welcome-to-boardest.web.app/bst-teacher.appinstaller"
     try {
         Start-Process "ms-appinstaller:?source=$appUrl"
         Write-Host "Windows 앱 설치 프로그램이 열렸습니다. 설치 창에서 '설치' 버튼을 눌러주세요." -ForegroundColor Green

@@ -158,6 +158,45 @@
             { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
             { "key": "Access-Control-Allow-Origin", "value": "*" }
           ]
+        },
+        {
+          "source": "**/*.appinstaller",
+          "headers": [
+            { "key": "Content-Type", "value": "application/appinstaller; charset=utf-8" },
+            { "key": "Access-Control-Allow-Origin", "value": "*" }
+          ]
+        }
+      ],
+      "redirects": [
+        {
+          "source": "/boardest.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "type": 302
+        },
+        {
+          "source": "/teacher.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx",
+          "type": 302
+        },
+        {
+          "source": "/bst-teacher.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx",
+          "type": 302
+        },
+        {
+          "source": "/boardest.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk",
+          "type": 302
+        },
+        {
+          "source": "/login",
+          "destination": "https://boardest-teacher-oauth.web.app",
+          "type": 302
+        },
+        {
+          "source": "/oauth",
+          "destination": "https://boardest-teacher-oauth.web.app",
+          "type": 302
         }
       ],
       "cleanUrls": true

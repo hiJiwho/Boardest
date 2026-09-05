@@ -15,14 +15,18 @@
   <style>
     :root {
       --bg-color: #0B0F19;
-      --card-bg: rgba(18, 24, 38, 0.75);
+      --card-bg: rgba(18, 24, 38, 0.78);
       --card-border: rgba(255, 255, 255, 0.08);
-      --card-border-hover: rgba(59, 130, 246, 0.4);
+      --card-border-hover: rgba(59, 130, 246, 0.45);
       --primary: #3B82F6;
+      --primary-glow: rgba(59, 130, 246, 0.25);
       --teal: #10B981;
+      --teal-glow: rgba(16, 185, 129, 0.25);
       --purple: #8B5CF6;
+      --purple-glow: rgba(139, 92, 246, 0.25);
       --cyan: #06B6D4;
       --amber: #F59E0B;
+      --danger: #EF4444;
       --text-main: #F9FAFB;
       --text-muted: #9CA3AF;
       --code-bg: #030712;
@@ -47,12 +51,12 @@
     /* Ambient background glows */
     .bg-glow-top {
       position: absolute;
-      top: -200px;
+      top: -220px;
       left: 50%;
       transform: translateX(-50%);
-      width: 800px;
-      height: 500px;
-      background: radial-gradient(ellipse at center, rgba(59, 130, 246, 0.2) 0%, rgba(139, 92, 246, 0.1) 45%, rgba(11, 15, 25, 0) 70%);
+      width: 900px;
+      height: 520px;
+      background: radial-gradient(ellipse at center, rgba(59, 130, 246, 0.18) 0%, rgba(139, 92, 246, 0.1) 40%, rgba(11, 15, 25, 0) 70%);
       pointer-events: none;
       z-index: 0;
     }
@@ -61,9 +65,9 @@
       position: absolute;
       bottom: -150px;
       right: -100px;
-      width: 600px;
-      height: 600px;
-      background: radial-gradient(circle, rgba(16, 185, 129, 0.12) 0%, rgba(11, 15, 25, 0) 70%);
+      width: 650px;
+      height: 650px;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.1) 0%, rgba(11, 15, 25, 0) 70%);
       pointer-events: none;
       z-index: 0;
     }
@@ -71,19 +75,21 @@
     .container {
       max-width: 1080px;
       margin: 0 auto;
-      padding: 40px 24px 80px;
+      padding: 32px 24px 80px;
       position: relative;
       z-index: 1;
     }
 
-    /* Header Nav */
+    /* Top Navigation Bar */
     header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 48px;
-      padding-bottom: 20px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      margin-bottom: 36px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      flex-wrap: wrap;
+      gap: 16px;
     }
 
     .brand {
@@ -111,33 +117,53 @@
     }
 
     .brand-subtitle {
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       color: var(--text-muted);
       font-weight: 500;
     }
 
     .nav-links {
       display: flex;
-      gap: 18px;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
-    .nav-links a {
+    .nav-link {
       color: var(--text-muted);
       text-decoration: none;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       font-weight: 500;
-      transition: color 0.2s;
+      padding: 6px 12px;
+      border-radius: 8px;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
 
-    .nav-links a:hover {
+    .nav-link:hover {
       color: var(--text-main);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .nav-link.btn-oauth {
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      color: #C4B5FD;
+      font-weight: 700;
+    }
+
+    .nav-link.btn-oauth:hover {
+      background: rgba(139, 92, 246, 0.28);
+      color: #FFFFFF;
+      box-shadow: 0 0 16px rgba(139, 92, 246, 0.35);
     }
 
     /* Hero Section */
     .hero {
       text-align: center;
-      margin-bottom: 56px;
-      animation: fadeInDown 0.6s ease-out;
+      margin-bottom: 40px;
     }
 
     .badge-pill {
@@ -151,7 +177,7 @@
       color: #60A5FA;
       font-size: 0.82rem;
       font-weight: 700;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
     }
 
     .badge-dot {
@@ -163,10 +189,10 @@
     }
 
     .hero-title {
-      font-size: 2.7rem;
+      font-size: 2.6rem;
       font-weight: 900;
       line-height: 1.25;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
       letter-spacing: -0.03em;
       background: linear-gradient(135deg, #FFFFFF 30%, #BAE6FD 70%, #C4B5FD 100%);
       -webkit-background-clip: text;
@@ -174,78 +200,263 @@
     }
 
     .hero-desc {
-      font-size: 1.15rem;
+      font-size: 1.1rem;
       color: var(--text-muted);
       max-width: 680px;
-      margin: 0 auto 32px;
+      margin: 0 auto;
       font-weight: 400;
+      line-height: 1.6;
     }
 
-    /* Main Install Guide Box (The Star of the Page) */
-    .install-guide-card {
-      background: linear-gradient(145deg, rgba(20, 27, 45, 0.9), rgba(13, 18, 30, 0.9));
-      border: 1px solid rgba(59, 130, 246, 0.35);
-      border-radius: 24px;
-      padding: 36px 32px;
-      margin-bottom: 56px;
-      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45), 0 0 32px rgba(59, 130, 246, 0.12);
+    /* 1. Main Product Selector Cards (Boardest vs Teacher) */
+    .product-selector-box {
+      margin-bottom: 40px;
+    }
+
+    .product-selector-title {
+      text-align: center;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .product-cards-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .product-card {
+      background: var(--card-bg);
+      border: 2px solid var(--card-border);
+      border-radius: 20px;
+      padding: 24px 22px;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       position: relative;
       overflow: hidden;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      user-select: none;
     }
 
-    .install-guide-card::before {
-      content: '';
+    .product-card:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+    }
+
+    .product-card.active.boardest {
+      border-color: #3B82F6;
+      background: linear-gradient(145deg, rgba(30, 41, 69, 0.9), rgba(18, 24, 38, 0.9));
+      box-shadow: 0 12px 36px rgba(59, 130, 246, 0.22);
+    }
+
+    .product-card.active.teacher {
+      border-color: #10B981;
+      background: linear-gradient(145deg, rgba(16, 49, 44, 0.9), rgba(18, 24, 38, 0.9));
+      box-shadow: 0 12px 36px rgba(16, 185, 129, 0.22);
+    }
+
+    .product-badge-selected {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: linear-gradient(90deg, #3B82F6, #10B981, #8B5CF6);
+      top: 14px;
+      right: 14px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      display: none;
     }
 
-    .guide-header {
+    .product-card.active.boardest .product-badge-selected {
+      display: inline-flex;
+      background: #3B82F6;
+      color: #FFFFFF;
+    }
+
+    .product-card.active.teacher .product-badge-selected {
+      display: inline-flex;
+      background: #10B981;
+      color: #FFFFFF;
+    }
+
+    .product-icon-wrap {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
       display: flex;
       align-items: center;
-      gap: 14px;
-      margin-bottom: 24px;
+      justify-content: center;
+      font-size: 1.85rem;
+      flex-shrink: 0;
     }
 
-    .guide-icon {
-      font-size: 2rem;
+    .product-icon-wrap.boardest {
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.35);
       color: #60A5FA;
     }
 
-    .guide-title {
-      font-size: 1.5rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
+    .product-icon-wrap.teacher {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #34D399;
     }
 
-    .guide-sub {
-      font-size: 0.92rem;
+    .product-info {
+      flex: 1;
+    }
+
+    .product-name {
+      font-size: 1.25rem;
+      font-weight: 800;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .product-target-tag {
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.08);
       color: var(--text-muted);
     }
 
-    .step-box {
+    .product-card.active.boardest .product-target-tag {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93C5FD;
+    }
+
+    .product-card.active.teacher .product-target-tag {
+      background: rgba(16, 185, 129, 0.2);
+      color: #A7F3D0;
+    }
+
+    .product-desc {
+      font-size: 0.86rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* 2. Platform Selector Bar (OS Switcher with Auto Detection) */
+    .guide-section {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 32px 28px;
+      margin-bottom: 48px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+      position: relative;
+    }
+
+    .guide-top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .ua-detection-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      border-radius: 12px;
+      background: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #93C5FD;
+    }
+
+    .ua-detection-badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10B981;
+      box-shadow: 0 0 8px #10B981;
+    }
+
+    .platform-tabs {
+      display: flex;
+      gap: 8px;
       background: rgba(10, 14, 23, 0.6);
+      padding: 5px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      flex-wrap: wrap;
+    }
+
+    .platform-tab {
+      padding: 8px 16px;
+      border-radius: 10px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.86rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .platform-tab:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .platform-tab.active {
+      background: var(--primary);
+      color: #FFFFFF;
+      box-shadow: 0 4px 12px var(--primary-glow);
+    }
+
+    /* Step Boxes */
+    .step-box {
+      background: rgba(10, 14, 23, 0.55);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 16px;
       padding: 24px;
       margin-bottom: 20px;
     }
 
+    .step-box.highlight {
+      border-color: rgba(59, 130, 246, 0.4);
+      background: linear-gradient(145deg, rgba(20, 28, 48, 0.65), rgba(10, 14, 23, 0.65));
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
     .step-title-row {
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 12px;
     }
 
     .step-number {
       background: var(--primary);
       color: white;
       font-weight: 800;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       width: 26px;
       height: 26px;
       border-radius: 50%;
@@ -255,16 +466,41 @@
     }
 
     .step-title {
-      font-size: 1.12rem;
-      font-weight: 700;
+      font-size: 1.1rem;
+      font-weight: 800;
       color: var(--text-main);
+    }
+
+    .step-badge {
+      font-size: 0.74rem;
+      font-weight: 800;
+      padding: 3px 10px;
+      border-radius: 6px;
+    }
+
+    .step-badge.recommended {
+      background: rgba(16, 185, 129, 0.2);
+      color: #6EE7B7;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+
+    .step-badge.offline {
+      background: rgba(245, 158, 11, 0.18);
+      color: #FCD34D;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+
+    .step-badge.essential {
+      background: rgba(239, 68, 68, 0.18);
+      color: #FCA5A5;
+      border: 1px solid rgba(239, 68, 68, 0.35);
     }
 
     .step-desc {
       font-size: 0.9rem;
       color: var(--text-muted);
       margin-bottom: 14px;
-      line-height: 1.5;
+      line-height: 1.55;
     }
 
     /* Code Terminal Box */
@@ -272,12 +508,12 @@
       background: var(--code-bg);
       border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 12px;
-      padding: 14px 18px;
+      padding: 13px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      position: relative;
+      margin-top: 10px;
     }
 
     .terminal-content {
@@ -286,10 +522,10 @@
       gap: 10px;
       overflow-x: auto;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       color: #38BDF8;
       white-space: nowrap;
-      padding-right: 12px;
+      padding-right: 8px;
     }
 
     .terminal-prompt {
@@ -305,10 +541,10 @@
       background: rgba(59, 130, 246, 0.2);
       color: #93C5FD;
       border: 1px solid rgba(59, 130, 246, 0.4);
-      padding: 8px 16px;
+      padding: 7px 14px;
       border-radius: 8px;
-      font-size: 0.85rem;
-      font-weight: 600;
+      font-size: 0.82rem;
+      font-weight: 700;
       cursor: pointer;
       transition: all 0.2s;
       flex-shrink: 0;
@@ -327,197 +563,172 @@
       border-color: rgba(16, 185, 129, 0.5);
     }
 
-    /* Buttons inside Step 2 */
-    .installer-actions {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 14px;
-      margin-bottom: 16px;
+    /* Action Buttons */
+    .btn-action-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: linear-gradient(135deg, #2563EB, #1D4ED8);
+      color: white;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 0.95rem;
+      padding: 13px 22px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35);
+      transition: all 0.2s;
     }
 
-    .btn-installer {
-      display: flex;
+    .btn-action-primary:hover {
+      background: linear-gradient(135deg, #3B82F6, #2563EB);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(37, 99, 235, 0.5);
+    }
+
+    .btn-action-secondary {
+      display: inline-flex;
       align-items: center;
-      gap: 14px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      padding: 16px 20px;
-      border-radius: 14px;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.06);
       color: var(--text-main);
       text-decoration: none;
-      transition: all 0.2s ease;
+      font-weight: 600;
+      font-size: 0.9rem;
+      padding: 11px 18px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      transition: all 0.2s;
     }
 
-    .btn-installer:hover {
-      background: rgba(59, 130, 246, 0.15);
-      border-color: rgba(59, 130, 246, 0.4);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    .btn-action-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
     }
 
-    .btn-installer-icon {
-      font-size: 2rem;
-      color: #60A5FA;
+    .button-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      align-items: center;
     }
 
-    .btn-installer-info {
+    /* Notice Callout Box */
+    .callout-box {
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-top: 14px;
+      display: flex;
+      gap: 12px;
+      font-size: 0.88rem;
+      line-height: 1.55;
+    }
+
+    .callout-box.info {
+      background: rgba(59, 130, 246, 0.08);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      color: #93C5FD;
+    }
+
+    .callout-box.warning {
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+      color: #FCD34D;
+    }
+
+    .callout-box.success {
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      color: #6EE7B7;
+    }
+
+    /* PWA Guide Steps */
+    .pwa-steps-list {
       display: flex;
       flex-direction: column;
-      gap: 2px;
-    }
-
-    .btn-installer-title {
-      font-size: 1rem;
-      font-weight: 700;
-    }
-
-    .btn-installer-sub {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-    }
-
-    .alt-cmd-box {
+      gap: 12px;
       margin-top: 14px;
-      border-top: 1px dashed rgba(255, 255, 255, 0.1);
-      padding-top: 14px;
     }
 
-    .alt-cmd-title {
-      font-size: 0.84rem;
-      font-weight: 600;
-      color: #9CA3AF;
-      margin-bottom: 8px;
+    .pwa-step-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 12px 14px;
+      border-radius: 10px;
+      font-size: 0.88rem;
     }
 
-    /* Section Grid */
-    .section-title {
-      font-size: 1.5rem;
+    .pwa-step-idx {
+      background: rgba(139, 92, 246, 0.2);
+      color: #C4B5FD;
       font-weight: 800;
-      margin-bottom: 24px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.78rem;
+      flex-shrink: 0;
+    }
+
+    /* Teacher OAuth Card */
+    .oauth-banner-card {
+      background: linear-gradient(135deg, rgba(76, 29, 149, 0.35), rgba(17, 24, 39, 0.8));
+      border: 1px solid rgba(139, 92, 246, 0.35);
+      border-radius: 20px;
+      padding: 24px 28px;
+      margin-bottom: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 20px;
+      box-shadow: 0 8px 32px rgba(139, 92, 246, 0.15);
+    }
+
+    .oauth-banner-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .oauth-banner-icon {
+      font-size: 2.4rem;
+      color: #C4B5FD;
+    }
+
+    .oauth-banner-title {
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: #FFFFFF;
+      margin-bottom: 4px;
+    }
+
+    .oauth-banner-desc {
+      font-size: 0.88rem;
+      color: #D1D5DB;
+    }
+
+    /* Features Section */
+    .section-heading {
+      font-size: 1.45rem;
+      font-weight: 800;
+      margin-bottom: 20px;
       letter-spacing: -0.02em;
       display: flex;
       align-items: center;
       gap: 10px;
     }
 
-    .download-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      margin-bottom: 56px;
-    }
-
-    .app-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 20px;
-      padding: 28px;
-      backdrop-filter: blur(12px);
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      transition: all 0.2s;
-    }
-
-    .app-card:hover {
-      border-color: var(--card-border-hover);
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-    }
-
-    .app-card-header {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .app-card-icon {
-      width: 54px;
-      height: 54px;
-      border-radius: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.8rem;
-      background: rgba(59, 130, 246, 0.15);
-      border: 1px solid rgba(59, 130, 246, 0.3);
-      color: #60A5FA;
-    }
-
-    .app-card-icon.teacher {
-      background: rgba(16, 185, 129, 0.15);
-      border-color: rgba(16, 185, 129, 0.3);
-      color: #34D399;
-    }
-
-    .app-card-title {
-      font-size: 1.25rem;
-      font-weight: 800;
-    }
-
-    .app-card-desc {
-      font-size: 0.88rem;
-      color: var(--text-muted);
-      line-height: 1.5;
-    }
-
-    .link-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .download-btn {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 12px 16px;
-      border-radius: 12px;
-      color: var(--text-main);
-      text-decoration: none;
-      font-size: 0.88rem;
-      font-weight: 600;
-      transition: all 0.2s;
-    }
-
-    .download-btn:hover {
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.2);
-      transform: translateX(3px);
-    }
-
-    .download-btn-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .tag-badge {
-      font-size: 0.72rem;
-      padding: 2px 8px;
-      border-radius: 6px;
-      font-weight: 700;
-      text-transform: uppercase;
-      background: rgba(59, 130, 246, 0.2);
-      color: #93C5FD;
-    }
-
-    .tag-badge.green {
-      background: rgba(16, 185, 129, 0.2);
-      color: #6EE7B7;
-    }
-
-    .tag-badge.purple {
-      background: rgba(139, 92, 246, 0.2);
-      color: #C4B5FD;
-    }
-
-    /* Features Section */
     .features-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 18px;
       margin-bottom: 56px;
     }
 
@@ -529,6 +740,12 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
+      transition: all 0.2s;
+    }
+
+    .feature-item:hover {
+      border-color: rgba(255, 255, 255, 0.18);
+      transform: translateY(-2px);
     }
 
     .feature-item-icon {
@@ -547,67 +764,13 @@
       line-height: 1.5;
     }
 
-    /* Manual Cert Box */
-    .cert-manual-card {
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 20px;
-      padding: 28px;
-      margin-bottom: 56px;
-    }
-
-    .cert-manual-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-
-    .cert-manual-title {
-      font-size: 1.15rem;
-      font-weight: 700;
-    }
-
-    .cert-manual-desc {
-      font-size: 0.88rem;
-      color: var(--text-muted);
-      margin-bottom: 20px;
-      line-height: 1.6;
-    }
-
-    .cert-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .btn-secondary {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: var(--text-main);
-      padding: 10px 18px;
-      border-radius: 10px;
-      font-size: 0.88rem;
-      font-weight: 600;
-      text-decoration: none;
-      transition: all 0.2s;
-    }
-
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.12);
-      transform: translateY(-1px);
-    }
-
     /* Footer */
     footer {
       text-align: center;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
       padding-top: 32px;
       color: var(--text-muted);
-      font-size: 0.85rem;
+      font-size: 0.84rem;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -619,21 +782,19 @@
       text-decoration: none;
     }
 
-    /* Animations */
-    @keyframes fadeInDown {
-      from { opacity: 0; transform: translateY(-20px); }
-      to { opacity: 1; transform: translateY(0); }
+    footer a:hover {
+      text-decoration: underline;
     }
 
     @media (max-width: 768px) {
-      .download-grid {
+      .product-cards-grid {
         grid-template-columns: 1fr;
       }
       .hero-title {
         font-size: 2rem;
       }
-      .install-guide-card {
-        padding: 24px 18px;
+      .guide-section {
+        padding: 22px 16px;
       }
       .terminal-box {
         flex-direction: column;
@@ -641,6 +802,10 @@
       }
       .copy-btn {
         justify-content: center;
+      }
+      .oauth-banner-card {
+        flex-direction: column;
+        align-items: flex-start;
       }
     }
   </style>
@@ -652,298 +817,611 @@
 
   <div class="container">
 
-    <!-- Header -->
+    <!-- Top Navigation -->
     <header>
       <a href="https://welcome-to-boardest.web.app" class="brand">
         <img src="logo.png" alt="Boardest Logo" />
         <div>
           <div class="brand-title">Boardest</div>
-          <div class="brand-subtitle">Smart Classroom Platform</div>
+          <div class="brand-subtitle">Smart Education Platform</div>
         </div>
       </a>
       <nav class="nav-links">
-        <a href="#install-guide">윈도우 설치 가이드</a>
-        <a href="#boardest-board">전자칠판</a>
-        <a href="#boardest-teacher">교사용</a>
-        <a href="#features">주요 기능</a>
+        <a href="#guide" class="nav-link" onclick="selectProduct('boardest')">🖥️ 전자칠판</a>
+        <a href="#guide" class="nav-link" onclick="selectProduct('teacher')">👩‍🏫 교사용</a>
+        <a href="https://boardest-teacher-oauth.web.app" target="_blank" class="nav-link btn-oauth">
+          <span class="material-icons-round" style="font-size: 1.1rem;">vpn_key</span>
+          <span>교사 포털 (OAuth)</span>
+        </a>
+        <a href="https://boardest-eat.web.app" target="_blank" class="nav-link">
+          <span class="material-icons-round" style="font-size: 1.1rem;">restaurant</span>
+          <span>급식실 지도</span>
+        </a>
+        <a href="https://github.com/hiJiwho/Boardest" target="_blank" class="nav-link">
+          <span>GitHub</span>
+        </a>
       </nav>
     </header>
 
-    <!-- Hero -->
+    <!-- Hero Section -->
     <section class="hero">
       <div class="badge-pill">
         <span class="badge-dot"></span>
         Boardest Ecosystem Online
       </div>
-      <h1 class="hero-title">차세대 스마트 교육 플랫폼<br>Boardest 다운로드 센터</h1>
+      <h1 class="hero-title">차세대 스마트 교육 플랫폼<br>Boardest 다운로드 &amp; 설치 센터</h1>
       <p class="hero-desc">
-        교실 전자칠판과 선생님 스마트폰·노트북이 실시간으로 연결되는 스마트 스쿨 솔루션.<br>
-        실시간 교시 시계, 컴시간 시간표, 스마트 교과서 판서, 급식 호출까지 한 번에 이용하세요.
+        교실 대형 전자칠판과 선생님 스마트폰·노트북이 실시간으로 연결되는 스마트 스쿨 솔루션.<br>
+        실시간 교시 시계, 컴시간 시간표, 스마트 교과서 판서, 급식 호출까지 한 번에 경험하세요.
       </p>
     </section>
 
-    <!-- 🌟 핵심 섹션: 윈도우 설치 방법 (Windows Installation Guide) -->
-    <section id="install-guide" class="install-guide-card">
-      <div class="guide-header">
-        <span class="material-icons-round guide-icon">settings_system_daydream</span>
-        <div>
-          <h2 class="guide-title">윈도우 설치 방법</h2>
-          <p class="guide-sub">PowerShell에서 인증서를 1초 만에 설치하고, AppInstaller로 앱을 자동 업데이트 환경에서 구동하세요.</p>
-        </div>
-      </div>
-
-      <!-- 1단계: 인증서 설치 명령어 -->
-      <div class="step-box">
-        <div class="step-title-row">
-          <span class="step-number">1</span>
-          <h3 class="step-title">인증서 설치 명령어 실행</h3>
-        </div>
-        <p class="step-desc">
-          Windows 키를 누르고 <strong>PowerShell</strong>을 검색하여 실행한 뒤, 아래 명령어를 복사하여 붙여넣고 엔터를 누르세요.<br>
-          (관리자 승격 창이 뜨면 <strong>'예'</strong>를 누르시면 2999년 영구 인증서가 시스템에 무인 자동 등록됩니다)
-        </p>
-
-        <div class="terminal-box">
-          <div class="terminal-content">
-            <span class="terminal-prompt">PS &gt;</span>
-            <span id="cmd-cer">irm https://welcome-to-boardest.web.app/cer.ps1 | iex</span>
+    <!-- 1. 제품 선택 영역 (전자칠판 vs 교사용) -->
+    <section class="product-selector-box">
+      <div class="product-selector-title">👇 설치 또는 이용하고자 하는 앱을 선택하세요</div>
+      <div class="product-cards-grid">
+        
+        <!-- Boardest 전자칠판 카드 -->
+        <div id="card-boardest" class="product-card active boardest" onclick="selectProduct('boardest')">
+          <div class="product-badge-selected">선택됨 ✓</div>
+          <div class="product-icon-wrap boardest">
+            <span class="material-icons-round">desktop_windows</span>
           </div>
-          <button class="copy-btn" onclick="copyToClipboard('irm https://welcome-to-boardest.web.app/cer.ps1 | iex', this)">
-            <span class="material-icons-round" style="font-size: 1.1rem;">content_copy</span>
-            <span>복사</span>
+          <div class="product-info">
+            <div class="product-name">
+              <span>전자칠판 (Boardest)</span>
+              <span class="product-target-tag">교실 칠판용</span>
+            </div>
+            <p class="product-desc">
+              교실 대형 전자칠판 및 교탁 PC 전용 메인 런처.<br>
+              실시간 교시 시계, 컴시간 시간표 자동 파싱, 스마트 교과서(.bsttbp), 오버레이 판서 도구 제공.
+            </p>
+          </div>
+        </div>
+
+        <!-- Teacher 교사용 카드 -->
+        <div id="card-teacher" class="product-card teacher" onclick="selectProduct('teacher')">
+          <div class="product-badge-selected">선택됨 ✓</div>
+          <div class="product-icon-wrap teacher">
+            <span class="material-icons-round">co_present</span>
+          </div>
+          <div class="product-info">
+            <div class="product-name">
+              <span>교사용 (Boardest Teacher)</span>
+              <span class="product-target-tag">선생님 기기용</span>
+            </div>
+            <p class="product-desc">
+              선생님 개인 노트북, 태블릿, 스마트폰 전용 앱.<br>
+              개인 시간표 관리, 구글 드라이브(bst-cld) 수업자료 연동 &amp; 칠판 전송, 자유판서 관리 및 이름 변경 지원.
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 2. 맞춤형 플랫폼 설치 가이드 영역 -->
+    <section id="guide" class="guide-section">
+
+      <!-- 가이드 상단 바: 감지된 UA 배지 & OS 전환 탭 -->
+      <div class="guide-top-bar">
+        <div id="ua-badge" class="ua-detection-badge">
+          <span class="dot"></span>
+          <span id="ua-text">기기 분석 중...</span>
+        </div>
+
+        <div class="platform-tabs">
+          <button id="tab-windows" class="platform-tab active" onclick="selectPlatform('windows')">
+            <span class="material-icons-round" style="font-size: 1.05rem;">desktop_windows</span>
+            <span>Windows</span>
+          </button>
+          <button id="tab-android" class="platform-tab" onclick="selectPlatform('android')">
+            <span class="material-icons-round" style="font-size: 1.05rem;">android</span>
+            <span>Android</span>
+          </button>
+          <button id="tab-web" class="platform-tab" onclick="selectPlatform('web')">
+            <span class="material-icons-round" style="font-size: 1.05rem;">language</span>
+            <span>Web &amp; PWA</span>
+          </button>
+          <button id="tab-cert" class="platform-tab" onclick="selectPlatform('cert')">
+            <span class="material-icons-round" style="font-size: 1.05rem;">verified_user</span>
+            <span>인증서/보안</span>
           </button>
         </div>
       </div>
 
-      <!-- 2단계: AppInstaller 다운 후 실행 또는 대체 명령어 입력 -->
-      <div class="step-box" style="margin-bottom: 0;">
-        <div class="step-title-row">
-          <span class="step-number">2</span>
-          <h3 class="step-title">AppInstaller 다운로드 후 실행 (또는 대체 명령어)</h3>
-        </div>
-        <p class="step-desc">
-          설치하고자 하는 앱의 <strong>AppInstaller</strong>를 클릭하여 실행하세요. (윈도우가 백그라운드 무인 자동 업데이트를 전담합니다)
-        </p>
-
-        <!-- 버튼 옵션 -->
-        <div class="installer-actions">
-          <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appinstaller" class="btn-installer">
-            <span class="material-icons-round btn-installer-icon">desktop_windows</span>
-            <div class="btn-installer-info">
-              <span class="btn-installer-title">전자칠판 (Boardest) 설치</span>
-              <span class="btn-installer-sub">boardest.appinstaller 다운로드</span>
+      <!-- ============================================================= -->
+      <!-- VIEW A: WINDOWS 설치 가이드 -->
+      <!-- ============================================================= -->
+      <div id="view-windows">
+        
+        <!-- 1단계: 인증서 설치 (필수) -->
+        <div class="step-box">
+          <div class="step-header">
+            <div class="step-title-row">
+              <span class="step-number">1</span>
+              <h3 class="step-title">인증서 설치 명령어 실행 (최초 1회 필수)</h3>
             </div>
-          </a>
-
-          <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appinstaller" class="btn-installer">
-            <span class="material-icons-round btn-installer-icon" style="color: #34D399;">co_present</span>
-            <div class="btn-installer-info">
-              <span class="btn-installer-title">교사용 (Teacher) 설치</span>
-              <span class="btn-installer-sub">bst-teacher.appinstaller 다운로드</span>
-            </div>
-          </a>
-        </div>
-
-        <!-- 대체 명령어 박스 -->
-        <div class="alt-cmd-box">
-          <div class="alt-cmd-title">⚡ PowerShell에서 바로 설치할 대체 명령어:</div>
-          <div class="terminal-box" style="margin-bottom: 8px;">
-            <div class="terminal-content">
-              <span class="terminal-prompt">PS &gt;</span>
-              <span>Add-AppxPackage -AppInstallerFile https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appinstaller</span>
-            </div>
-            <button class="copy-btn" onclick="copyToClipboard('Add-AppxPackage -AppInstallerFile https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appinstaller', this)">
-              <span class="material-icons-round" style="font-size: 1.1rem;">content_copy</span>
-              <span>복사</span>
-            </button>
+            <span class="step-badge essential">필수 선행</span>
           </div>
+          <p class="step-desc">
+            Windows 앱 서명 검증(<code>0x800B0109</code>)을 해결하기 위해 PowerShell에서 아래 명령어를 복사하여 실행하세요.<br>
+            관리자 승격 창이 뜨면 <strong>'예'</strong>를 누르시면 2999년 영구 인증서가 로컬 컴퓨터 루트에 무인 등록됩니다.
+          </p>
           <div class="terminal-box">
             <div class="terminal-content">
               <span class="terminal-prompt">PS &gt;</span>
-              <span>Add-AppxPackage -AppInstallerFile https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appinstaller</span>
+              <span>irm https://welcome-to-boardest.web.app/cer.ps1 | iex</span>
             </div>
-            <button class="copy-btn" onclick="copyToClipboard('Add-AppxPackage -AppInstallerFile https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appinstaller', this)">
-              <span class="material-icons-round" style="font-size: 1.1rem;">content_copy</span>
+            <button class="copy-btn" onclick="copyToClipboard('irm https://welcome-to-boardest.web.app/cer.ps1 | iex', this)">
+              <span class="material-icons-round" style="font-size: 1.05rem;">content_copy</span>
               <span>복사</span>
             </button>
           </div>
         </div>
+
+        <!-- 2단계: AppInstaller 온라인 설치 (적극 권장) -->
+        <div class="step-box highlight">
+          <div class="step-header">
+            <div class="step-title-row">
+              <span class="step-number">2</span>
+              <h3 class="step-title">AppInstaller 온라인 설치 (가장 추천 ⭐)</h3>
+            </div>
+            <span class="step-badge recommended">적극 권장 (자동 업데이트)</span>
+          </div>
+          <p class="step-desc">
+            <strong>가급적이면 무인 자동 업데이트가 지원되는 AppInstaller를 사용하세요!</strong><br>
+            새 버전 출시 시 앱 시작 시점에 윈도우 OS가 백그라운드에서 자동으로 최신 상태를 유지하며, 앱 삭제 시 플러그인까지 한 번에 깔끔하게 일괄 제거됩니다.
+          </p>
+
+          <div class="button-row">
+            <a id="win-appinstaller-btn" href="boardest.appinstaller" class="btn-action-primary">
+              <span class="material-icons-round">system_update</span>
+              <span id="win-appinstaller-text">boardest.appinstaller 다운로드 및 실행</span>
+            </a>
+          </div>
+
+          <div class="callout-box info" style="margin-top: 18px;">
+            <span class="material-icons-round" style="font-size: 1.3rem;">terminal</span>
+            <div style="flex: 1;">
+              <strong>⚡ PowerShell에서 명령어 한 줄로 바로 설치하기:</strong>
+              <div class="terminal-box" style="margin-top: 8px;">
+                <div class="terminal-content">
+                  <span class="terminal-prompt">PS &gt;</span>
+                  <span id="win-cmd-install">Add-AppxPackage -AppInstallerFile https://welcome-to-boardest.web.app/boardest.appinstaller</span>
+                </div>
+                <button class="copy-btn" onclick="copyToClipboard(document.getElementById('win-cmd-install').innerText, this)">
+                  <span class="material-icons-round" style="font-size: 1.05rem;">content_copy</span>
+                  <span>복사</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3단계: .appx 오프라인 수동 설치 (폐쇄망/보안망 전용) -->
+        <div class="step-box">
+          <div class="step-header">
+            <div class="step-title-row">
+              <span class="step-number">3</span>
+              <h3 class="step-title">.appx 오프라인 수동 설치 (인터넷 차단 교실 전용)</h3>
+            </div>
+            <span class="step-badge offline">오프라인 전용</span>
+          </div>
+          <p class="step-desc">
+            교내 보안망 또는 인터넷이 연결되지 않는 폐쇄망 교실 PC 전용 패키지입니다.<br>
+            <span style="color: var(--amber);">⚠️ 오프라인 .appx는 자동 업데이트가 지원되지 않으므로, 인터넷이 가능한 일반 PC에서는 위의 <strong>2단계 AppInstaller(온라인 설치)</strong>를 사용하시길 강력히 권장합니다.</span>
+          </p>
+
+          <div class="button-row">
+            <a id="win-appx-btn" href="boardest.appx" class="btn-action-secondary">
+              <span class="material-icons-round">inventory_2</span>
+              <span id="win-appx-text">boardest.appx 다운로드 (오프라인 수동)</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- 4단계: 설치 없는 웹 버전 바로가기 -->
+        <div class="step-box" style="margin-bottom: 0;">
+          <div class="step-header">
+            <div class="step-title-row">
+              <span class="step-number">4</span>
+              <h3 class="step-title">설치 없이 웹 브라우저에서 바로 쓰기</h3>
+            </div>
+            <span class="step-badge recommended">설치 불필요</span>
+          </div>
+          <p class="step-desc">
+            별도의 파일 설치 없이 크롬, 엣지 등 모던 웹 브라우저에서 즉시 실행할 수 있습니다.
+          </p>
+
+          <div class="button-row">
+            <a id="win-web-btn" href="https://boardest.web.app" target="_blank" class="btn-action-secondary">
+              <span class="material-icons-round">open_in_new</span>
+              <span id="win-web-text">전자칠판 웹 버전 열기 (boardest.web.app)</span>
+            </a>
+          </div>
+        </div>
+
       </div>
+
+      <!-- ============================================================= -->
+      <!-- VIEW B: ANDROID 설치 가이드 -->
+      <!-- ============================================================= -->
+      <div id="view-android" style="display: none;">
+        
+        <!-- Case 1: 전자칠판 선택 시 (APK 제공) -->
+        <div id="android-boardest-box">
+          <div class="step-box highlight">
+            <div class="step-header">
+              <div class="step-title-row">
+                <span class="step-number">1</span>
+                <h3 class="step-title">전자칠판 안드로이드 전용 APK 다운로드</h3>
+              </div>
+              <span class="step-badge recommended">안드로이드 칠판 전용</span>
+            </div>
+            <p class="step-desc">
+              안드로이드 OS가 탑재된 스마트 전자칠판에 APK를 다운로드하여 직접 설치할 수 있습니다.<br>
+              터치 판서, 실시간 교시 시계, 컴시간 시간표를 안드로이드 칠판에서 완벽하게 지원합니다.
+            </p>
+
+            <div class="button-row">
+              <a href="boardest.apk" class="btn-action-primary">
+                <span class="material-icons-round">android</span>
+                <span>boardest.apk 다운로드 (최신 릴리즈)</span>
+              </a>
+              <a href="https://boardest.web.app" target="_blank" class="btn-action-secondary">
+                <span class="material-icons-round">language</span>
+                <span>웹 바로가기 (boardest.web.app)</span>
+              </a>
+            </div>
+
+            <div class="callout-box info" style="margin-top: 16px;">
+              <span class="material-icons-round">info</span>
+              <div>
+                <strong>설치 팁:</strong> 다운로드 완료 후 알림창을 내려 <code>boardest.apk</code>를 터치하시고, '출처를 알 수 없는 앱 설치 허용'을 진행하시면 바로 설치됩니다.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Case 2: 교사용 선택 시 (APK 미제공 안내 + PWA 모바일 최적화 웹앱 가이드) -->
+        <div id="android-teacher-box" style="display: none;">
+          <div class="step-box highlight">
+            <div class="step-header">
+              <div class="step-title-row">
+                <span class="step-number">1</span>
+                <h3 class="step-title">교사용 모바일 최적화 웹앱 (PWA) 이용 안내</h3>
+              </div>
+              <span class="step-badge recommended">모바일 최적화</span>
+            </div>
+            <p class="step-desc">
+              <strong>💡 교사용 앱은 실시간 구글 드라이브 연동 및 강력한 보안을 위해 별도의 안드로이드 APK를 배포하지 않습니다.</strong><br>
+              대신 모바일 스마트폰 화면에 완벽히 최적화된 <strong>Teacher Lite 웹앱(PWA)</strong>을 홈 화면에 추가하시면 네이티브 앱과 동일하게 사용하실 수 있습니다.
+            </p>
+
+            <div class="button-row">
+              <a href="https://boardest-teacher-lite.web.app" target="_blank" class="btn-action-primary" style="background: linear-gradient(135deg, #059669, #10B981);">
+                <span class="material-icons-round">smartphone</span>
+                <span>교사용 Lite 웹앱 열기 (boardest-teacher-lite.web.app)</span>
+              </a>
+              <a href="https://boardest-teacher.web.app" target="_blank" class="btn-action-secondary">
+                <span class="material-icons-round">laptop_mac</span>
+                <span>태블릿/PC용 전체 웹 열기</span>
+              </a>
+            </div>
+
+            <!-- PWA 설치 방법 안내 -->
+            <div class="callout-box success" style="margin-top: 20px; flex-direction: column;">
+              <div style="font-weight: 800; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+                <span class="material-icons-round">add_to_home_screen</span>
+                <span>스마트폰 홈 화면에 앱처럼 설치하는 3단계 방법:</span>
+              </div>
+              <div class="pwa-steps-list">
+                <div class="pwa-step-item">
+                  <span class="pwa-step-idx">1</span>
+                  <span>스마트폰 브라우저(Chrome 또는 삼성 인터넷)로 <strong>boardest-teacher-lite.web.app</strong>에 접속합니다.</span>
+                </div>
+                <div class="pwa-step-item">
+                  <span class="pwa-step-idx">2</span>
+                  <span>브라우저 우측 상단 메뉴 버튼(<strong>⋮</strong> 또는 <strong>≡</strong>)을 누릅니다.</span>
+                </div>
+                <div class="pwa-step-item">
+                  <span class="pwa-step-idx">3</span>
+                  <span><strong>[홈 화면에 추가]</strong> 또는 <strong>[앱 설치]</strong>를 누르면 바탕화면에 바로가기 앱 아이콘이 생성되어 주소창 없이 전체 화면으로 구동됩니다!</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- VIEW C: WEB & PWA 가이드 (모든 브라우저, Mac, iOS, iPad) -->
+      <!-- ============================================================= -->
+      <div id="view-web" style="display: none;">
+        <div class="step-box highlight">
+          <div class="step-header">
+            <div class="step-title-row">
+              <span class="step-number">1</span>
+              <h3 class="step-title">웹 브라우저 즉시 접속 &amp; 바로가기</h3>
+            </div>
+            <span class="step-badge recommended">설치 불필요</span>
+          </div>
+          <p class="step-desc">
+            Chrome, Safari, Edge 등 모든 모던 웹 브라우저에서 별도 설치 없이 즉시 실행할 수 있습니다.
+          </p>
+
+          <div class="button-row">
+            <a id="pwa-link-1" href="https://boardest.web.app" target="_blank" class="btn-action-primary">
+              <span class="material-icons-round">open_in_new</span>
+              <span id="pwa-link-text-1">전자칠판 웹 바로가기 (boardest.web.app)</span>
+            </a>
+            <a id="pwa-link-2" href="https://boardest-teacher-lite.web.app" target="_blank" class="btn-action-secondary">
+              <span class="material-icons-round">smartphone</span>
+              <span id="pwa-link-text-2">교사용 Lite 웹앱 바로가기</span>
+            </a>
+          </div>
+
+          <div class="callout-box info" style="margin-top: 20px; flex-direction: column;">
+            <div style="font-weight: 800; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+              <span class="material-icons-round">touch_app</span>
+              <span>iOS(아이폰/아이패드) 및 Mac에서 앱처럼 설치하기 (PWA):</span>
+            </div>
+            <div class="pwa-steps-list">
+              <div class="pwa-step-item">
+                <span class="pwa-step-idx">1</span>
+                <span><strong>Safari(사파리)</strong> 브라우저에서 해당 사이트로 접속합니다.</span>
+              </div>
+              <div class="pwa-step-item">
+                <span class="pwa-step-idx">2</span>
+                <span>하단 중앙의 <strong>[공유]</strong> 버튼 (네모에 위쪽 화살표 모양)을 탭합니다.</span>
+              </div>
+              <div class="pwa-step-item">
+                <span class="pwa-step-idx">3</span>
+                <span>스크롤을 내려 <strong>[홈 화면에 추가]</strong>를 누르면 홈 화면에 전용 앱으로 등록됩니다!</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================= -->
+      <!-- VIEW D: 인증서 및 보안 안내 (수동 다운로드) -->
+      <!-- ============================================================= -->
+      <div id="view-cert" style="display: none;">
+        <div class="step-box">
+          <div class="step-header">
+            <div class="step-title-row">
+              <span class="step-number">1</span>
+              <h3 class="step-title">Boardest 영구 인증서 (2999년 만료) 수동 다운로드</h3>
+            </div>
+            <span class="step-badge essential">보안 인증서</span>
+          </div>
+          <p class="step-desc">
+            Boardest는 윈도우 OS의 강력한 샌드박스 격리 보안 기술을 채택하였으며, <strong>2999년 12월 31일</strong>까지 무제한으로 유효한 영구 서명이 적용되어 있습니다.<br>
+            PowerShell 명령어 실행이 어려운 보안망 환경에서는 인증서 파일(.cer)을 수동 다운로드하여 등록하실 수 있습니다.
+          </p>
+
+          <div class="button-row">
+            <a href="BoardestCert.cer" download="BoardestCert.cer" class="btn-action-primary" style="background: linear-gradient(135deg, #D97706, #B45309);">
+              <span class="material-icons-round">file_download</span>
+              <span>BoardestCert.cer 다운로드</span>
+            </a>
+            <a href="cer.ps1" download="cer.ps1" class="btn-action-secondary">
+              <span class="material-icons-round">code</span>
+              <span>cer.ps1 스크립트 파일 다운로드</span>
+            </a>
+          </div>
+
+          <div class="callout-box warning" style="margin-top: 18px;">
+            <span class="material-icons-round" style="font-size: 1.4rem;">shield</span>
+            <div>
+              <strong>수동 설치 시 주의사항 (0x800B0109 방지):</strong><br>
+              다운로드한 <code>BoardestCert.cer</code>를 더블클릭할 때, <strong>[인증서 설치] ➔ [로컬 컴퓨터] 선택 ➔ [모든 인증서를 다음 저장소에 저장] ➔ [신뢰할 수 있는 루트 인증 기관]</strong>을 지정하셔야 윈도우 앱 배포 서비스가 정상 신뢰된 앱으로 인식합니다.
+            </div>
+          </div>
+        </div>
+      </div>
+
     </section>
 
-    <!-- 다운로드 센터: 보드용 & 교사용 카드 -->
-    <div class="section-title">
-      <span class="material-icons-round" style="color: #60A5FA;">cloud_download</span>
-      <span>플랫폼별 다운로드 &amp; 바로가기</span>
-    </div>
-
-    <div class="download-grid">
-
-      <!-- 보드용 (Boardest) -->
-      <div id="boardest-board" class="app-card">
-        <div class="app-card-header">
-          <div class="app-card-icon">
-            <span class="material-icons-round">desktop_windows</span>
-          </div>
-          <div>
-            <h3 class="app-card-title">전자칠판 (Boardest)</h3>
-            <span class="tag-badge">교실 칠판 전용</span>
-          </div>
-        </div>
-        <p class="app-card-desc">
-          전자칠판 메인 런처, 실시간 교시 시계, 컴시간 시간표 파싱, 스마트 교과서(.bsttbp), 오버레이 판서 캔버스를 제공합니다.
-        </p>
-        <div class="link-list">
-          <a href="https://boardest.web.app" target="_blank" class="download-btn">
-            <div class="download-btn-left">
-              <span class="material-icons-round" style="color: #60A5FA;">language</span>
-              <span>웹 바로가기 (Web)</span>
-            </div>
-            <span class="tag-badge green">설치 불필요</span>
-          </a>
-          <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appinstaller" class="download-btn">
-            <div class="download-btn-left">
-              <span class="material-icons-round" style="color: #38BDF8;">update</span>
-              <span>Windows AppInstaller</span>
-            </div>
-            <span class="tag-badge">자동 업데이트</span>
-          </a>
-          <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx" class="download-btn">
-            <div class="download-btn-left">
-              <span class="material-icons-round" style="color: #9CA3AF;">inventory_2</span>
-              <span>Windows .appx 패키지</span>
-            </div>
-            <span class="tag-badge">수동 설치</span>
-          </a>
-          <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk" class="download-btn">
-            <div class="download-btn-left">
-              <span class="material-icons-round" style="color: #A3E635;">android</span>
-              <span>Android (.apk)</span>
-            </div>
-            <span class="tag-badge">안드로이드 칠판</span>
-          </a>
+    <!-- 3. 교사 통합 포털 & Google OAuth 배너 -->
+    <section class="oauth-banner-card">
+      <div class="oauth-banner-left">
+        <span class="material-icons-round oauth-banner-icon">account_circle</span>
+        <div>
+          <h3 class="oauth-banner-title">Boardest 교사 통합 포털 &amp; 구글 로그인 (OAuth)</h3>
+          <p class="oauth-banner-desc">
+            선생님 Google 계정 연동, 컴시간 교사 ID &amp; 학교 ID 설정, 구글 드라이브(bst-cld) 권한 부여 및 전자칠판 OTP 접속 코드를 관리하세요.
+          </p>
         </div>
       </div>
-
-      <!-- 교사용 (Boardest Teacher) -->
-      <div id="boardest-teacher" class="app-card">
-        <div class="app-card-header">
-          <div class="app-card-icon teacher">
-            <span class="material-icons-round">co_present</span>
-          </div>
-          <div>
-            <h3 class="app-card-title">교사용 (Boardest Teacher)</h3>
-            <span class="tag-badge green">선생님 전용</span>
-          </div>
-        </div>
-        <p class="app-card-desc">
-          선생님 개인 시간표, 수업 자료 구글 드라이브(bst-cld) 업로드 및 원격 칠판 전송, 자유판서 관리 및 이름 변경 기능을 제공합니다.
-        </p>
-        <div class="link-list">
-          <a href="https://boardest-teacher.web.app" target="_blank" class="download-btn">
-            <div class="download-btn-left">
-              <span class="material-icons-round" style="color: #34D399;">laptop_mac</span>
-              <span>교사용 전체 웹 (Web)</span>
-            </div>
-            <span class="tag-badge green">PC / 노트북</span>
-          </a>
-          <a href="https://boardest-teacher-lite.web.app" target="_blank" class="download-btn">
-            <div class="download-btn-left">
-              <span class="material-icons-round" style="color: #FBBF24;">smartphone</span>
-              <span>교사용 Lite 웹 (PWA)</span>
-            </div>
-            <span class="tag-badge purple">스마트폰 최적화</span>
-          </a>
-          <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appinstaller" class="download-btn">
-            <div class="download-btn-left">
-              <span class="material-icons-round" style="color: #38BDF8;">update</span>
-              <span>Windows AppInstaller</span>
-            </div>
-            <span class="tag-badge">자동 업데이트</span>
-          </a>
-          <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx" class="download-btn">
-            <div class="download-btn-left">
-              <span class="material-icons-round" style="color: #9CA3AF;">inventory_2</span>
-              <span>Windows .appx 패키지</span>
-            </div>
-            <span class="tag-badge">수동 설치</span>
-          </a>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- 인증서 수동 다운로드 & 보안 안내 -->
-    <section class="cert-manual-card">
-      <div class="cert-manual-header">
-        <span class="material-icons-round" style="color: #F59E0B; font-size: 1.8rem;">verified_user</span>
-        <h3 class="cert-manual-title">인증서 수동 다운로드 &amp; 보안 안내</h3>
-      </div>
-      <p class="cert-manual-desc">
-        Boardest는 안전한 Windows 샌드박스 격리 기술을 사용하며, <strong>2999년 12월 31일</strong>까지 만료되지 않는 영구 서명이 적용되어 있습니다.<br>
-        PowerShell 스크립트 실행이 제한된 PC에서는 아래의 인증서 파일(.cer)을 수동으로 다운로드하여 <strong>[로컬 컴퓨터] ➔ [신뢰할 수 있는 루트 인증 기관]</strong>에 저장하시면 보안 경고 없이 사용하실 수 있습니다.
-      </p>
-      <div class="cert-actions">
-        <a href="BoardestCert.cer" download="BoardestCert.cer" class="btn-secondary">
-          <span class="material-icons-round">download</span>
-          <span>BoardestCert.cer 다운로드</span>
-        </a>
-        <a href="cer.ps1" download="cer.ps1" class="btn-secondary">
-          <span class="material-icons-round">code</span>
-          <span>cer.ps1 스크립트 파일 다운로드</span>
-        </a>
-        <a href="https://boardest-eat.web.app" target="_blank" class="btn-secondary">
-          <span class="material-icons-round">restaurant</span>
-          <span>Boardest 급식 호출 지도 바로가기</span>
-        </a>
-      </div>
+      <a href="https://boardest-teacher-oauth.web.app" target="_blank" class="btn-action-primary" style="background: linear-gradient(135deg, #7C3AED, #6D28D9); box-shadow: 0 4px 16px rgba(124, 58, 237, 0.4);">
+        <span class="material-icons-round">login</span>
+        <span>교사 포털 로그인 바로가기</span>
+      </a>
     </section>
 
-    <!-- 플랫폼 핵심 기능 소개 -->
-    <div id="features" class="section-title">
+    <!-- 4. Boardest 핵심 기능 소개 -->
+    <div class="section-heading">
       <span class="material-icons-round" style="color: #8B5CF6;">auto_awesome</span>
-      <span>Boardest의 핵심 기능</span>
+      <span>Boardest의 핵심 기능 소개</span>
     </div>
 
     <div class="features-grid">
       <div class="feature-item">
         <span class="material-icons-round feature-item-icon">schedule</span>
-        <h4 class="feature-item-title">실시간 교시 &amp; 시간표</h4>
-        <p class="feature-item-desc">컴시간 시간표 서버와 연동하여 오늘의 학급 시간표, 과목, 교시 잔여 시간을 실시간으로 안내합니다.</p>
+        <h4 class="feature-item-title">실시간 교시 &amp; 시간표 연동</h4>
+        <p class="feature-item-desc">컴시간 시간표 서버와 실시간으로 연동되어 교시 잔여 시간, 다음 교시 과목, 쉬는 시간 타이머를 자동 안내합니다.</p>
       </div>
       <div class="feature-item">
         <span class="material-icons-round feature-item-icon" style="color: #10B981;">draw</span>
-        <h4 class="feature-item-title">스마트 교과서 판서</h4>
-        <p class="feature-item-desc">수업 교과서(.bsttbp)와 PDF 위에 부드럽고 직관적으로 필기하며, 판서 데이터는 클라우드에 자동 저장됩니다.</p>
+        <h4 class="feature-item-title">스마트 교과서 &amp; 판서 엔진</h4>
+        <p class="feature-item-desc">디지털 교과서(.bsttbp)와 PDF 위에 지연 없이 필기하며, 판서 데이터는 과목별로 클라우드에 자동 동기화됩니다.</p>
       </div>
       <div class="feature-item">
         <span class="material-icons-round feature-item-icon" style="color: #F59E0B;">cloud_sync</span>
-        <h4 class="feature-item-title">원격 클라우드 연동</h4>
-        <p class="feature-item-desc">선생님 기기에서 Google Drive(bst-cld)를 통해 판서 이름을 변경하고 수업 자료를 칠판으로 즉시 전송합니다.</p>
+        <h4 class="feature-item-title">구글 드라이브(bst-cld) 원격 전송</h4>
+        <p class="feature-item-desc">선생님 휴대폰이나 노트북에서 판서 이름을 실시간으로 변경하고 수업 자료를 교실 칠판으로 즉시 전파합니다.</p>
       </div>
       <div class="feature-item">
         <span class="material-icons-round feature-item-icon" style="color: #EC4899;">restaurant</span>
-        <h4 class="feature-item-title">급식실 이동 지도</h4>
-        <p class="feature-item-desc">급식실 수용 현황에 따라 학급별로 이동 순번을 실시간으로 칠판에 시각적/청각적으로 호출합니다.</p>
+        <h4 class="feature-item-title">급식실 이동 실시간 호출</h4>
+        <p class="feature-item-desc">급식실 수용 현황에 따라 학급별 식사 순번을 전자칠판 화면에 시각적·청각적으로 전파하여 질서 있는 이동을 돕습니다.</p>
       </div>
     </div>
 
     <!-- Footer -->
     <footer>
-      <div>Boardest Platform · All download links point directly to the <strong>latest</strong> official releases.</div>
-      <div>
+      <div>Boardest Platform · 공식 다운로드 포털은 언제나 최신(<strong>latest</strong>) 공식 릴리즈를 직접 제공합니다.</div>
+      <div style="display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 4px;">
+        <a href="https://welcome-to-boardest.web.app/boardest.appinstaller">boardest.appinstaller</a>
+        <span>·</span>
+        <a href="https://welcome-to-boardest.web.app/bst-teacher.appinstaller">bst-teacher.appinstaller</a>
+        <span>·</span>
+        <a href="https://boardest-teacher-oauth.web.app" target="_blank">교사 포털 (OAuth)</a>
+        <span>·</span>
         <a href="https://github.com/hiJiwho/Boardest" target="_blank">GitHub: hiJiwho/Boardest</a>
       </div>
     </footer>
 
   </div>
 
+  <!-- JavaScript: State Management, UA Detection & Interactive UI -->
   <script>
+    let currentProduct = 'boardest'; // 'boardest' or 'teacher'
+    let currentPlatform = 'windows'; // 'windows', 'android', 'web', 'cert'
+
+    // 1. User Agent 자동 감지
+    function detectUserPlatform() {
+      const ua = (navigator.userAgent || navigator.vendor || window.opera || '').toLowerCase();
+      const platform = (navigator.platform || '').toLowerCase();
+
+      if (/windows|win32|win64/i.test(ua) || /win/i.test(platform)) {
+        return 'windows';
+      } else if (/android/i.test(ua)) {
+        return 'android';
+      } else if (/iphone|ipad|ipod/i.test(ua) || /mac/i.test(platform) || /macintosh/i.test(ua)) {
+        return 'web';
+      } else {
+        return 'web';
+      }
+    }
+
+    // 2. 제품 선택 (전자칠판 vs 교사용)
+    function selectProduct(product) {
+      currentProduct = product;
+
+      // Update Card Visuals
+      const cardB = document.getElementById('card-boardest');
+      const cardT = document.getElementById('card-teacher');
+
+      if (product === 'boardest') {
+        cardB.classList.add('active');
+        cardT.classList.remove('active');
+      } else {
+        cardT.classList.add('active');
+        cardB.classList.remove('active');
+      }
+
+      updateUI();
+    }
+
+    // 3. 플랫폼 선택 (Windows vs Android vs Web vs Cert)
+    function selectPlatform(platform) {
+      currentPlatform = platform;
+
+      // Update Tabs Visuals
+      ['windows', 'android', 'web', 'cert'].forEach(p => {
+        const tab = document.getElementById('tab-' + p);
+        if (tab) {
+          if (p === platform) {
+            tab.classList.add('active');
+          } else {
+            tab.classList.remove('active');
+          }
+        }
+      });
+
+      // Update Views Display
+      ['windows', 'android', 'web', 'cert'].forEach(p => {
+        const view = document.getElementById('view-' + p);
+        if (view) {
+          view.style.display = (p === platform) ? 'block' : 'none';
+        }
+      });
+
+      updateUI();
+    }
+
+    // 4. UI 텍스트 및 링크 동적 반영
+    function updateUI() {
+      const isBoardest = (currentProduct === 'boardest');
+
+      // Windows View Updates
+      const winAppinstallerBtn = document.getElementById('win-appinstaller-btn');
+      const winAppinstallerText = document.getElementById('win-appinstaller-text');
+      const winCmdInstall = document.getElementById('win-cmd-install');
+      const winAppxBtn = document.getElementById('win-appx-btn');
+      const winAppxText = document.getElementById('win-appx-text');
+      const winWebBtn = document.getElementById('win-web-btn');
+      const winWebText = document.getElementById('win-web-text');
+
+      if (isBoardest) {
+        winAppinstallerBtn.href = "boardest.appinstaller";
+        winAppinstallerText.innerText = "boardest.appinstaller 다운로드 및 실행";
+        winCmdInstall.innerText = "Add-AppxPackage -AppInstallerFile https://welcome-to-boardest.web.app/boardest.appinstaller";
+        winAppxBtn.href = "boardest.appx";
+        winAppxText.innerText = "boardest.appx 다운로드 (오프라인 수동)";
+        winWebBtn.href = "https://boardest.web.app";
+        winWebText.innerText = "전자칠판 웹 버전 열기 (boardest.web.app)";
+      } else {
+        winAppinstallerBtn.href = "bst-teacher.appinstaller";
+        winAppinstallerText.innerText = "bst-teacher.appinstaller 다운로드 및 실행";
+        winCmdInstall.innerText = "Add-AppxPackage -AppInstallerFile https://welcome-to-boardest.web.app/bst-teacher.appinstaller";
+        winAppxBtn.href = "teacher.appx";
+        winAppxText.innerText = "bst-teacher.appx 다운로드 (오프라인 수동)";
+        winWebBtn.href = "https://boardest-teacher.web.app";
+        winWebText.innerText = "교사용 웹 버전 열기 (boardest-teacher.web.app)";
+      }
+
+      // Android View Updates
+      const androidBBox = document.getElementById('android-boardest-box');
+      const androidTBox = document.getElementById('android-teacher-box');
+      if (isBoardest) {
+        androidBBox.style.display = 'block';
+        androidTBox.style.display = 'none';
+      } else {
+        androidBBox.style.display = 'none';
+        androidTBox.style.display = 'block';
+      }
+
+      // Web & PWA View Updates
+      const pwa1 = document.getElementById('pwa-link-1');
+      const pwaText1 = document.getElementById('pwa-link-text-1');
+      const pwa2 = document.getElementById('pwa-link-2');
+      const pwaText2 = document.getElementById('pwa-link-text-2');
+
+      if (isBoardest) {
+        pwa1.href = "https://boardest.web.app";
+        pwaText1.innerText = "전자칠판 웹 바로가기 (boardest.web.app)";
+        pwa2.style.display = 'none';
+      } else {
+        pwa1.href = "https://boardest-teacher-lite.web.app";
+        pwaText1.innerText = "교사용 Lite 웹앱 바로가기 (스마트폰 최적화)";
+        pwa2.style.display = 'inline-flex';
+        pwa2.href = "https://boardest-teacher.web.app";
+        pwaText2.innerText = "교사용 전체 웹 바로가기 (PC/태블릿)";
+      }
+    }
+
+    // 5. 클립보드 복사 유틸
     function copyToClipboard(text, btn) {
       navigator.clipboard.writeText(text).then(function() {
         const originalHtml = btn.innerHTML;
         btn.classList.add('copied');
-        btn.innerHTML = '<span class="material-icons-round" style="font-size: 1.1rem;">check</span><span>복사됨!</span>';
+        btn.innerHTML = '<span class="material-icons-round" style="font-size: 1.05rem;">check</span><span>복사됨!</span>';
         setTimeout(function() {
           btn.classList.remove('copied');
           btn.innerHTML = originalHtml;
@@ -952,6 +1430,29 @@
         alert('복사 실패: ' + err);
       });
     }
+
+    // 초기화 및 UA 자동 감지 실행
+    window.addEventListener('DOMContentLoaded', () => {
+      const detectedPlatform = detectUserPlatform();
+      const uaText = document.getElementById('ua-text');
+
+      if (detectedPlatform === 'windows') {
+        uaText.innerText = "💻 감지된 기기: Windows PC (최적 설치 방법)";
+      } else if (detectedPlatform === 'android') {
+        uaText.innerText = "📱 감지된 기기: Android 디바이스";
+      } else {
+        uaText.innerText = "🌐 감지된 기기: 브라우저 / 모바일 / Mac";
+      }
+
+      // URL 해시 확인
+      const hash = window.location.hash.toLowerCase();
+      if (hash.includes('teacher')) {
+        currentProduct = 'teacher';
+      }
+
+      selectProduct(currentProduct);
+      selectPlatform(detectedPlatform);
+    });
   </script>
 </body>
 </html>
