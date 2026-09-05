@@ -37,9 +37,12 @@ $BoardestPkgDir = Join-Path $DistDir "packages\boardest"
 $BoardestReleaseDir = Join-Path $RootDir "apps\boardest\build\windows\x64\runner\Release"
 
 # Copy release files (exclude helper tools to keep main app in clean sandbox)
-Get-ChildItem -Path $BoardestReleaseDir | Where-Object { 
-    $_.Name -notmatch "boardest_ppt.*|boardest_hwp.*|watchdog.*|\.msix$|\.lib$|\.exp$" 
-} | Copy-Item -Destination $BoardestPkgDir -Recurse -Force
+if (Test-Path $BoardestReleaseDir) {
+    Get-ChildItem -Path $BoardestReleaseDir | Where-Object { 
+        $_.Name -notmatch "boardest_ppt.*|boardest_hwp.*|watchdog.*|\.msix$|\.lib$|\.exp$" 
+    } | Copy-Item -Destination $BoardestPkgDir -Recurse -Force
+    Write-Host "-> Synchronized fresh binaries from $BoardestReleaseDir" -ForegroundColor Green
+}
 
 $BoardestAppx = Join-Path $AppxOutDir "boardest.appx"
 & $MakeAppx pack /d $BoardestPkgDir /p $BoardestAppx /o
@@ -56,9 +59,12 @@ $TeacherPkgDir = Join-Path $DistDir "packages\bst-teacher"
 $TeacherReleaseDir = Join-Path $RootDir "apps\boardest_teacher\build\windows\x64\runner\Release"
 
 # Copy release files (exclude helper tools to keep teacher app in clean sandbox)
-Get-ChildItem -Path $TeacherReleaseDir | Where-Object { 
-    $_.Name -notmatch "boardest_ppt.*|boardest_hwp.*|watchdog.*|\.lib$|\.exp$" 
-} | Copy-Item -Destination $TeacherPkgDir -Recurse -Force
+if (Test-Path $TeacherReleaseDir) {
+    Get-ChildItem -Path $TeacherReleaseDir | Where-Object { 
+        $_.Name -notmatch "boardest_ppt.*|boardest_hwp.*|watchdog.*|\.lib$|\.exp$" 
+    } | Copy-Item -Destination $TeacherPkgDir -Recurse -Force
+    Write-Host "-> Synchronized fresh binaries from $TeacherReleaseDir" -ForegroundColor Green
+}
 
 $TeacherAppx = Join-Path $AppxOutDir "bst-teacher.appx"
 & $MakeAppx pack /d $TeacherPkgDir /p $TeacherAppx /o
@@ -108,12 +114,12 @@ $boardestAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.5"
+    Version="2.9.9.6"
     Uri="https://download-boardest.web.app/boardest.appinstaller">
     <MainPackage
         Name="jiwho.boardest.bst"
         Publisher="CN=jiwho"
-        Version="2.9.9.5"
+        Version="2.9.9.6"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/boardest.appx" />
     <UpdateSettings>
@@ -131,12 +137,12 @@ $teacherAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.5"
+    Version="2.9.9.6"
     Uri="https://download-boardest.web.app/bst-teacher.appinstaller">
     <MainPackage
         Name="jiwho.boardest.teacher"
         Publisher="CN=jiwho"
-        Version="2.9.9.5"
+        Version="2.9.9.6"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/bst-teacher.appx" />
     <UpdateSettings>
@@ -154,12 +160,12 @@ $panserAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.5"
+    Version="2.9.9.6"
     Uri="$repoReleaseBase/bst-overlay-panser.appinstaller">
     <MainPackage
         Name="jiwho.boardest.plugin.overlaypanser"
         Publisher="CN=jiwho"
-        Version="2.9.9.5"
+        Version="2.9.9.6"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/bst-overlay-panser.appx" />
     <UpdateSettings>

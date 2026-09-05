@@ -9,7 +9,7 @@ import 'package:open_filex/open_filex.dart';
 
 
 class UpdateService {
-  static const String defaultVersion = '2.9.9.5';
+  static const String defaultVersion = '2.9.9.6';
 
   /// Dynamically detect installed MSIX/AppX version from WindowsApps folder, or fallback to defaultVersion
   static String get currentVersion {
@@ -323,7 +323,7 @@ Start-Sleep -Milliseconds 600
 try {
   Write-Host "2. AppInstaller를 통해 최신 AppX 패키지를 배포합니다..." -ForegroundColor Cyan
   Write-Host "   대상: $safeInstallerUrl" -ForegroundColor DarkGray
-  Add-AppxPackage -AppInstallerFile '$safeInstallerUrl' -ForceUpdateFromAnyVersion -ErrorAction Stop
+  Add-AppxPackage -Path '$safeInstallerUrl' -AppInstallerFile -ForceTargetApplicationShutdown -ErrorAction Stop
   \$updateSuccess = \$true
   Write-Host "-> AppInstaller 배포 완료!" -ForegroundColor Green
 } catch {
@@ -333,7 +333,7 @@ try {
     Write-Host "   최신 boardest.appx 다운로드 중..." -ForegroundColor Cyan
     Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx' -OutFile \$tempAppx -UseBasicParsing
     Write-Host "   패키지 등록 중..." -ForegroundColor Cyan
-    Add-AppxPackage -Path \$tempAppx -ForceUpdateFromAnyVersion -ErrorAction Stop
+    Add-AppxPackage -Path \$tempAppx -ForceApplicationShutdown -ForceTargetApplicationShutdown -ErrorAction Stop
     Remove-Item \$tempAppx -Force -ErrorAction SilentlyContinue
     \$updateSuccess = \$true
     Write-Host "-> 백업 패키지 설치 완료!" -ForegroundColor Green
@@ -357,6 +357,11 @@ if (\$updateSuccess) {
       final tempDir = await getTemporaryDirectory();
       final runnerFile = File(p.join(tempDir.path, 'boardest_updater.ps1'));
       await runnerFile.writeAsString(script);
+
+      // Windows 네이티브 앱 설치 관리자 GUI 창 팝업
+      try {
+        await Process.start('cmd.exe', ['/c', 'start', 'ms-appinstaller:?source=$safeInstallerUrl']);
+      } catch (_) {}
 
       await Process.start(
         'cmd.exe',

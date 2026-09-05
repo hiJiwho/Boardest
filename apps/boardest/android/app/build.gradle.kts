@@ -25,8 +25,8 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = 2995
-        versionName = "2.9.9.5"
+        versionCode = 2996
+        versionName = "2.9.9.6"
         multiDexEnabled = true
         ndk {
             abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86_64"))

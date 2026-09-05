@@ -4543,22 +4543,26 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    // 1. 지금 시간표 (수업 카드): flex: 7 (비율 확대)
+                                    // 1. 좌측 영역: flex: 7 (광활한 메인 영역)
+                                    //    교사 Cloud 연결 시 -> Cloud 패널 (수업 자료 탐색기)이 좌측을 넓게 차지!
+                                    //    평상 시             -> 지금 시간표 (수업 카드)
                                     Expanded(
                                       flex: 7,
-                                      child: _buildPptSubjectCard(todayLessons, isExpandedDock: false),
+                                      child: isCloudActive
+                                          ? _buildFullCloudPanel(scale)
+                                          : _buildPptSubjectCard(todayLessons, isExpandedDock: false),
                                     ),
                                     SizedBox(width: 12 * scale),
 
-                                    // 2. 우측 영역: flex: 4 (광고판/클라우드 비율 최적화)
-                                    //    Cloud 연결 시 -> Cloud 패널 (수업 자료 탐색기)
-                                    //    USB 연결 시   -> USB 패널
+                                    // 2. 우측 영역: flex: 4 (보조/광고판 영역)
+                                    //    교사 Cloud 연결 시 -> 광고판 위치에 "지금 시간표" 컴팩트 배치!
+                                    //    USB 연결 시        -> USB 패널
                                     //    수업 시간 (Cloud 미연결) -> 광고판 대신 Cloud OTP / QR 키패드 패널
-                                    //    일반 기본     -> 광고판 (A4 배너)
+                                    //    일반 기본          -> 광고판 (A4 배너)
                                     Expanded(
                                       flex: 4,
                                       child: isCloudActive
-                                          ? _buildFullCloudPanel(scale)
+                                          ? _buildPptSubjectCard(todayLessons, isExpandedDock: true)
                                           : (_isUsbConnected
                                               ? _buildFullUsbPanel(scale)
                                               : (_currentPeriod != null &&
@@ -5618,7 +5622,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               )
             : null,
       ),
-      padding: EdgeInsets.all(16 * scale),
+      padding: EdgeInsets.all(isExpandedDock ? 12 * scale : 16 * scale),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -5650,7 +5654,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               ),
             ),
           ),
-          SizedBox(width: 24 * scale),
+          SizedBox(width: isExpandedDock ? 14 * scale : 24 * scale),
           // Right: Real-time status badge & Giant Subject Name / 수업 중 OTP 바로가기
           Expanded(
             child: Column(
@@ -5720,7 +5724,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   child: Text(
                     subjectName,
                     style: GoogleFonts.notoSansKr(
-                      fontSize: 68 * scale,
+                      fontSize: isExpandedDock ? 50 * scale : 68 * scale,
                       fontWeight: FontWeight.w900,
                       color: Colors.white,
                       letterSpacing: -1.5,

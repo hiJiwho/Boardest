@@ -28,7 +28,7 @@ class UpdateService {
   static final UpdateService instance = UpdateService._internal();
   UpdateService._internal();
 
-  static const String defaultVersion = '2.9.9.5';
+  static const String defaultVersion = '2.9.9.6';
 
   /// Dynamically detect installed MSIX/AppX version from WindowsApps folder, or fallback to defaultVersion
   static String get currentVersion {
@@ -42,6 +42,22 @@ class UpdateService {
       } catch (_) {}
     }
     return defaultVersion;
+  }
+
+  /// Windows 앱 설치 관리자(AppInstaller)가 매번 실행 시 GitHub/서버에 업데이트가 있는지 확인하도록 OS 설정 보장
+  static Future<void> ensureNativeAppInstallerSettings() async {
+    if (!Platform.isWindows) return;
+    try {
+      final exePath = Platform.resolvedExecutable;
+      if (exePath.contains('WindowsApps')) {
+        final psCommand =
+            'Set-AppxPackageAutoUpdateSettings -PackageFamilyName "jiwho.boardest.teacher_nmkn64tehfz7a" '
+            '-AppInstallerUri "https://download-boardest.web.app/bst-teacher.appinstaller" '
+            '-CheckOnLaunch \$true -ShowPrompt \$true -UpdateBlocksActivation \$true '
+            '-ForceUpdateFromAnyVersion \$true -HoursBetweenUpdateChecks 0 -ErrorAction SilentlyContinue';
+        await Process.run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psCommand]);
+      }
+    } catch (_) {}
   }
 
   static const String githubRepoUrl = 'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
@@ -297,7 +313,7 @@ Start-Sleep -Milliseconds 600
 try {
   Write-Host "2. AppInstaller를 통해 최신 AppX 패키지를 배포합니다..." -ForegroundColor Cyan
   Write-Host "   대상: $safeInstallerUrl" -ForegroundColor DarkGray
-  Add-AppxPackage -AppInstallerFile '$safeInstallerUrl' -ForceUpdateFromAnyVersion -ErrorAction Stop
+  Add-AppxPackage -Path '$safeInstallerUrl' -AppInstallerFile -ForceTargetApplicationShutdown -ErrorAction Stop
   \$updateSuccess = \$true
   Write-Host "-> AppInstaller 배포 완료!" -ForegroundColor Green
 } catch {
@@ -307,7 +323,7 @@ try {
     Write-Host "   최신 패키지 다운로드 중..." -ForegroundColor Cyan
     Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx' -OutFile \$tempAppx -UseBasicParsing
     Write-Host "   패키지 등록 중..." -ForegroundColor Cyan
-    Add-AppxPackage -Path \$tempAppx -ForceUpdateFromAnyVersion -ErrorAction Stop
+    Add-AppxPackage -Path \$tempAppx -ForceApplicationShutdown -ForceTargetApplicationShutdown -ErrorAction Stop
     Remove-Item \$tempAppx -Force -ErrorAction SilentlyContinue
     \$updateSuccess = \$true
     Write-Host "-> 백업 패키지 설치 완료!" -ForegroundColor Green
@@ -331,6 +347,11 @@ if (\$updateSuccess) {
       final tempDir = await getTemporaryDirectory();
       final runnerFile = File(p.join(tempDir.path, 'bst_teacher_updater.ps1'));
       await runnerFile.writeAsString(script);
+
+      // Windows 네이티브 앱 설치 관리자 GUI 창 팝업
+      try {
+        await Process.start('cmd.exe', ['/c', 'start', 'ms-appinstaller:?source=$safeInstallerUrl']);
+      } catch (_) {}
 
       await Process.start(
         'cmd.exe',

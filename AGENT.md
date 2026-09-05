@@ -1,6 +1,7 @@
 # 🤖 Boardest Platform — Core Agent Memory & Complete System Knowledge Base
 
 > **버전 관리 규격**: 버전 변경 이력 및 상세 수정 내역은 [Ver.md](file:///c:/Users/jiwho/Documents/boardest/Ver.md) 파일에 매 작업 완료 시마다 반드시 기록하여 유지합니다.
+> ⚠️ **[중요] Beta 버전 관리 철칙**: Beta 테스트가 공식 종료되기 전까지는 모든 앱과 패키지의 버전을 **반드시 `2.9.9.X`** 형식(예: `2.9.9.1`, `2.9.9.2`, `2.9.9.5`, `2.9.9.6` 등)으로 유지해야 합니다 (절대로 `3.0.0` 등으로 앞자리를 올리지 말 것).
 
 ---
 
