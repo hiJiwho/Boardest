@@ -26,33 +26,50 @@
               ┌─────────────────────────────────────────┼─────────────────────────────────────────┐
               ▼                                         ▼                                         ▼
 ┌──────────────────────────┐               ┌──────────────────────────┐               ┌──────────────────────────┐
-│  전자칠판 메인 앱 (Web/Win)│               │    교사용 앱 (Web/Win)    │               │   교사용 라이트 (Web/PWA) │
-│  (apps/boardest)         │               │  (apps/boardest_teacher) │               │(apps/boardest_teacher_lite)│
+│  전자칠판 메인 앱 (Web/Win)│               │    교사용 앱 (Web/Win)    │               │   독립 급식 지도 웹앱     │
+│  (apps/boardest)         │               │  (apps/boardest_teacher) │               │ (infra/boardest_eat_web) │
 ├──────────────────────────┤               ├──────────────────────────┤               ├──────────────────────────┤
-│ - 터치 숫자 키패드 / 모달 │               │ - 파일 탐색기형 클라우드 UI│               │ - 실시간 컴시간 시간표   │
-│ - PDF, PPT, Canva 판서   │               │ - 8자리 자동 OTP 기기 등록 │               │ - 6자리 Stegano OTP      │
-│ - TBP 스마트 교과서      │               │ - 실시간 접속 로그 & 기기관리│              │ - 실시간 급식 지도 & 호출│
-│ - 실시간 급식 호출 수신  │               │ - 교과/반별 폴더 맵핑     │               │ - Glassmorphism UI       │
+│ - 3:2 시간표:광고판 레이아웃│              │ - 38:62 통합도구:탐색기 분할│             │ - ?schoolCode=... 쿼리스트링│
+│ - 창 닫아도 세션 유지    │               │ - Web PDF 바이트 직결    │               │ - 1~9 급식실 탭 & 학급 호출│
+│ - PDF, PPT, Canva 판서   │               │ - QR 스캔 & 신뢰 기기 차단│              │ - 학년 일괄 호출/취소 & 쪽지│
+│ - TBP 스마트 교과서      │               │ - 교과/반별 폴더 맵핑     │               │ - Web Audio 신디사이저 차임│
 └──────────────────────────┘               └──────────────────────────┘               └──────────────────────────┘
+              │                                         │                                         │
+              └─────────────────────────────────────────┼─────────────────────────────────────────┘
+                                                        ▼
+                               ┌──────────────────────────────────────────┐
+                               │   교사 계정 & 시크릿 허브 (Web)          │
+                               │   (apps/boardest_teacher_oauth)          │
+                               ├──────────────────────────────────────────┤
+                               │ - Google OAuth 2.0 PKCE 인증             │
+                               │ - OTP 노출 제거, 보안 시크릿 키 관리/저장│
+                               │ - 전자칠판 QR 연동용 시크릿 허브         │
+                               └──────────────────────────────────────────┘
 ```
 
 ### 1) `apps/boardest` (전자칠판 메인 앱)
 - **주요 기능**: 전자칠판 메인 뷰어, 화이트보드, PDF 보드(`pdfrx`), PPT 오버레이, Canva 뷰어, TBP 교과서 런처, 실시간 급식 호출 수신.
-- **인증 방식**: 6자리 1회용 OTP 입력, 2자리 Cloud ID 자동로그인, 8자리 자동 기기 페어링.
+- **레이아웃**: 급식 카드를 메인에서 분리하고 **3:2 = [지금 시간표 (flex: 3)] : [광고판 / Cloud / USB (flex: 2)]** 황금비율 단일화.
+- **세션 유지**: 클라우드 패널을 닫아도 로그인이 풀리지 않도록 `_hideCloudPanel` 플래그를 도입하여 세션을 영구 보존.
 - **웹 초기화 필수 사항**: `main.dart`의 `main()`에서 `WidgetsFlutterBinding.ensureInitialized()` 직후 `pdfrxFlutterInitialize()` 호출 필수.
 
 ### 2) `apps/boardest_teacher` (교사용 메인 앱)
-- **주요 기능**: 주간 시간표, 실시간 급식 지도 & 반별 호출(`eat_calls`), 파일 탐색기형 Google Drive 보관함, 8자리 자동 OTP 기기 등록, 실시간 접속 로그, 교과/학급별 폴더 맵핑.
-- **배포 타겟**: `boardest-teacher` (Firebase Hosting) 및 Windows 데스크톱 EXE.
+- **주요 기능**: 주간 시간표, 교실 쪽지 전송, 38:62 2분할 통합 도구(좌측: 시간표, 판서 메모, QR 스캔 & 신뢰기기 관리, 교과 폴더 맵핑 / 우측: Google Drive `bst-save` 와이드 파일 탐색기).
+- **Web PDF 에러 원천 해결**: `kIsWeb` 조건에서 `localF.existsSync()`를 우회하고 `CloudDriveService.webMemoryFiles` 바이트를 직접 `PdfBoardView`로 바인딩하여 브라우저에서도 PDF 즉시 로드.
+- **배포 타겟**: `boardest-teacher` (Firebase Hosting) 및 Windows 데스크톱 EXE/AppX.
 
-### 3) `apps/boardest_teacher_lite` (교사용 라이트 웹/PWA)
-- **주요 기능**: 컴시간 시간표, 6자리 Stegano OTP 카드(60초 자동 갱신), 급식 지도 및 1~9급식실 실시간 호출.
-- **배포 타겟**: `boardest-teacher-lite` (Firebase Hosting).
+### 3) `infra/boardest_eat_web` (독립 급식 지도 웹앱 — `boardest-eat.web.app`)
+- **주요 기능**: 전용 실시간 급식 관제 웹앱. 쿼리스트링(`?schoolCode=ydm&cafeteria=1&callerName=지도교사`) 완전 지원.
+- **특징**: 1~9 급식실 탭별 실시간 온라인 학급 카운트, 학년 일괄 호출, 전체 호출 취소, 전자칠판 쪽지 전송, Web Audio 합성 차임벨.
 
-### 4) `apps/boardest_teacher_oauth` (교사 계정 설정 및 OAuth 포털)
-- **주요 기능**: Google OAuth 2.0 PKCE 인증, 교사 정보(학교, 성명, 컴시간 ID, 담당 학급) 등록 및 수정.
+### 4) `apps/boardest_teacher_oauth` (교사 계정 설정 및 시크릿 관리 허브 — `boardest-teacher-oauth.web.app`)
+- **주요 기능**: Google OAuth 2.0 PKCE 인증, 교사 프로필 등록, **보안 시크릿 키 관리/생성/저장 전용 허브** (보안을 위해 1회용 OTP 번호는 본 사이트에 직접 노출하지 않음).
 
-### 5) `infra/boardest_auth_worker` (Cloudflare Worker 인증 프록시)
+### 5) `infra/welcome_web` & `download-boardest` (설치 & 다운로드 허브)
+- **`welcome-to-boardest.web.app`**: 접속 기기(User-Agent) 자동 감지 맞춤형 온보딩 포털.
+- **`download-boardest.web.app`**: 설치 명령어 및 브라우저 다운로드 출처 URL 지원 서버 (`/bst.ps1`, `/bst.apk`, `/bst.appinstaller`, `/bst.appx`, `/bst.cer`, 루트 접속 시 welcome으로 302 리다이렉트).
+
+### 6) `infra/boardest_auth_worker` (Cloudflare Worker 인증 프록시)
 - **주요 기능**: Zero-Trust Google OAuth 토큰 교환, 6자리 Steganography OTP 검증, 8자리 전자칠판 자동 페어링 관리, 접속 감사 로그(Audit Log) 및 폴더 맵핑 저장.
 
 ---
@@ -61,10 +78,13 @@
 
 | 호스팅 플랫폼 | 타겟 명 / 도메인 | 실제 접속 URL | 설명 및 용도 |
 |---|---|---|---|
+| **Firebase Hosting** | `welcome-to-boardest` | `https://welcome-to-boardest.web.app` | 공식 사용자 안내 및 온보딩 포털 (UA 자동 감지) |
+| **Firebase Hosting** | `download-boardest` | `https://download-boardest.web.app` | 원클릭 스크립트(`bst.ps1`) 및 최신 릴리즈 직접 다운로드 출처 허브 |
+| **Firebase Hosting** | `boardest-eat` | `https://boardest-eat.web.app` | 독립 급식 지도 실시간 웹앱 (쿼리스트링 지원) |
 | **Firebase Hosting** | `boardest-main` | `https://boardest.web.app` | Boardest 메인 전자칠판 앱 (웹 버전) |
-| **Firebase Hosting** | `boardest-teacher` | `https://boardest-teacher.web.app` | 교사용 데스크톱 & 웹 통합 앱 |
-| **Firebase Hosting** | `boardest-teacher-lite` | `https://boardest-teacher-lite.web.app` | 교사용 라이트 웹 포털 |
-| **Firebase Hosting** | `boardest-teacher-oauth` | `https://boardest-teacher-oauth.web.app` | Google OAuth 및 교사 설정 포털 |
+| **Firebase Hosting** | `boardest-teacher` | `https://boardest-teacher.web.app` | 교사용 데스크톱 & 웹 통합 앱 (38:62 2분할 레이아웃) |
+| **Firebase Hosting** | `boardest-teacher-lite` | `https://boardest-teacher-lite.web.app` | 교사용 라이트 모바일 웹앱 |
+| **Firebase Hosting** | `boardest-teacher-oauth` | `https://boardest-teacher-oauth.web.app` | Google OAuth 및 보안 시크릿 키 관리/생성/저장 허브 |
 | **Cloudflare Worker** | `boardest-cloud-token` | `https://boardest-cloud-token.jiwho.workers.dev` | 인증/토큰 교환/OTP 검증/기기 관리 API |
 | **Cloudflare Worker** | `comcigan` | `https://comcigan.jiwho.workers.dev` | 컴시간 시간표 초고속 TCP 프록시 |
 
@@ -138,19 +158,21 @@
 
 1. **`pdfrx` 웹 초기화**:
    `apps/boardest/lib/main.dart`의 `main()` 최상단에서 `WidgetsFlutterBinding.ensureInitialized()` 직후 `pdfrxFlutterInitialize()` 호출 필수.
-2. **Cloud Drive PDF 로딩**:
-   웹 환경에서는 로컬 파일 경로 접근이 불가능하므로, `downloadDriveFileBytes(fileId, token)`를 통해 Drive 바이너리 바이트(`Uint8List`)를 직접 다운로드하여 `PdfBoardView(pdfData: bytes, initialFilePath: name)`로 전달.
+2. **Cloud Drive Web PDF 로딩 (Namespace 에러 방지)**:
+   - 웹 브라우저 환경에서는 `dart:io` `File.existsSync()` 호출 시 `Unsupported operation: _Namespace` 예외가 발생합니다.
+   - 따라서 `kIsWeb` 조건에서는 로컬 파일 존재 검사를 원천 생략하고, `CloudDriveService.webMemoryFiles`에 캐시된 메모리 바이트(`Uint8List`)를 직접 추출하여 `PdfBoardView(initialFilePath: name, pdfData: bytes)`로 전달합니다.
 
 ---
 
 ## 🎨 8. 디자인 시스템 및 공통 UI 사양
 
 - **테마 컬러 팔레트**:
-  - Main Background: Deep Obsidian Slate (`#0B0F19`, `#0F172A`, `#16161A`)
-  - Surface Card: `#1E293B` (Border: `rgba(255, 255, 255, 0.08)`)
+  - Main Background: Deep Obsidian Slate (`#0B0C10`, `#0F172A`, `#16161A`)
+  - Surface Card: `#14161F` ~ `#1E293B` (Border: `rgba(255, 255, 255, 0.08)`)
   - Primary Accent: Mint Emerald (`#00F5D4`, `#2EC4B6`)
   - Secondary Accent: Indigo Violet (`#6366F1`, `#7F5AF0`)
   - Warning/Action: Warm Amber (`#FACC15`, `#FF8906`)
+  - Danger: Neon Coral (`#EF4565`, `#F87171`)
 - **터치 키패드**:
   - 전자칠판 3×4 숫자 키패드 (`1~9`, `C`, `0`, `⌫`).
 - **Cloud 파일 탐색기**:
@@ -160,7 +182,7 @@
 
 ## 🛠️ 9. 빌드 및 배포 명령어 모음
 
-### 1) Flutter Web 일괄 빌드
+### 1) Flutter Web 빌드
 ```powershell
 # 1. 전자칠판 메인
 cd apps/boardest; cmd.exe /c flutter build web --release --no-tree-shake-icons
@@ -172,9 +194,9 @@ cd apps/boardest_teacher; cmd.exe /c flutter build web --release --no-tree-shake
 cd apps/boardest_teacher_lite; cmd.exe /c flutter build web --release --no-tree-shake-icons
 ```
 
-### 2) Firebase Hosting 일괄 배포
+### 2) Firebase Hosting 전체 배포
 ```powershell
-cmd.exe /c firebase deploy --only hosting:boardest-main,hosting:boardest-teacher,hosting:boardest-teacher-lite,hosting:boardest-teacher-oauth
+cmd.exe /c firebase deploy --only hosting:welcome-to-boardest,hosting:download-boardest,hosting:boardest-eat,hosting:boardest-main,hosting:boardest-teacher,hosting:boardest-teacher-lite,hosting:boardest-teacher-oauth
 ```
 
 ### 3) Cloudflare Worker 배포
@@ -184,58 +206,56 @@ cd infra/boardest_auth_worker; cmd.exe /c npx wrangler deploy
 
 ---
 
-## 🖥️ 10. v2.9.8.x 이후 화면 레이아웃 및 런처 규격
+## 🖥️ 10. 최신 화면 레이아웃 규격
 
-### 1) Boardest 메인 전자칠판 대시보드 레이아웃
+### 1) Boardest 메인 전자칠판 대시보드 (3:2 황금 비율)
 - **최좌측 (flex: 18)**: 오늘의 시간표 세로 패널 (`_buildTodayTimetablePanel`).
 - **메인 영역 (flex: 82)**:
-  - **좌측 섹션 (flex: kIsWeb ? 56 : 48)**:
-    - 상단 (flex: 43): 대형 디지털 시계 카드 (`_buildPptClockCard`).
-    - 하단 (flex: 57): 지금 수업 카드 / Cloud 드라이브 패널 전면 전개 (`_buildPptSubjectCard` / `_buildFullCloudPanel`).
-  - **우측 섹션 (런처 & 광고판, flex: kIsWeb ? 44 : 52)**:
-    - **1열 (flex: kIsWeb ? 13 : 12)**:
-      - 1행: 날씨 (`weather`)
-      - 2행: 학사달력 (`school_calendar`)
-      - 3행: 앱서랍 (`app_drawer`)
-      - 4~7행: 광고판 (`_buildAdBannerOrContextCard` — A4 배너 / USB 탐색기 / 수업카드 / OTP 키패드). 1열 4~7행과 좌측 여백을 통합 차지하여 넓은 A4 가로폭 확보.
-    - **2열 (flex: 10)**:
-      - 1~7행 고정 도구: 판서하기, 교과서(TextbookPro), Canva, Cloud, 플러그인, 학생연결, 설정.
-    - **3열 (flex: 10, 데스크톱/안드로이드 전용)**:
-      - 1~7행 시스템 앱 자유 등록 슬롯 (슬롯 인덱스 14~20). 명확한 테두리와 `+ 앱 등록` 안내 제공.
-      - **웹(Web) 버전 규격**: `if (!kIsWeb)` 조건으로 웹 브라우저 환경에서는 3열만 깔끔하게 제외됨.
+  - **상단 섹션 (flex: 43)**: 대형 디지털 시계 카드 (`_buildPptClockCard`) & 런처 상단 3행.
+  - **하단 섹션 (flex: 57)**: **3:2 = [지금 시간표 (flex: 3)] : [광고판 / Cloud / USB (flex: 2)]**
+    - **급식 카드 분리**: 대시보드가 복잡해지는 것을 막기 위해 메인 화면에서 급식을 분리하고 독립 웹앱(`boardest-eat.web.app`)으로 특화.
+    - **세션 영구 보존**: 클라우드 패널을 닫아도 `activeToken = null`이 아닌 `_hideCloudPanel = true`를 적용하여 교사 세션이 풀리지 않고 유지됨. 광고판 하단의 `[☁️ 클라우드 다시 열기]` 버튼으로 언제든 즉시 재전개.
+  - **우측 런처 열 구성**:
+    - **1열**: 1행 날씨, 2행 학사달력, 3행 앱서랍, 4~7행 광고판/컨텍스트 영역.
+    - **2열**: 고정 수업 도구 7행 (판서하기, 교과서, Canva, Cloud, 플러그인, 학생연결, 설정).
+    - **3열 (Windows 데스크톱/Android 전용)**: 사용자 등록 시스템 앱 7행. (Web 환경에서는 `!kIsWeb` 조건으로 자동 제외).
 
-### 2) Boardest Teacher 하단 3단 패널 레이아웃
+### 2) Boardest Teacher 하단 2분할 통합 패널 (38:62 레이아웃)
 - **상단 (flex: 5)**: 교사 주간 시간표 + 담임 학급 주간 시간표 (담임인 경우 1:1 배치).
 - **우측 (flex: 3)**: 3열 × 6행 수업 도구 패널.
-- **하단 (flex: 5, 3단 좌/우 통일 신규 구조)**:
-  - **좌측 (flex: 33) — OTP & 보안 인증 관리**:
-    - 상단: 6자리 Stegano OTP 대형 카드 (코드 복사, 60초 프로그레스 게이지 바, Cloud ID 배지, Auto-PT 토글 스위치).
-    - 하단 서브 탭:
-      - `[📡 다른 기기 OTP 주기]`: 교내 등록된 전자칠판 중 `lastActive`가 5분 이내인 **실제 온라인 기기만** 🟢 뱃지와 함께 노출, [8자리 전송] 클릭 시 Worker를 통해 해당 칠판에 직통 자동 OTP Secret 푸시.
-      - `[🔐 인증 기기 & 로그]`: 계정에 등록된 신뢰 전자칠판 목록 조회 및 원격 연결 해제.
-  - **중간 (flex: 37) — 파일 탐색기**:
-    - Google Drive `bst-save` 보관함 브라우저.
-    - 실시간 검색창 (`_cloudSearchQuery`), 카테고리 필터 칩 (`[전체]`, `[📄 PDF]`, `[🎨 Canva]`, `[📊 PPT]`, `[📝 판서]`).
-    - 파일 클릭 시 바로 열기/다운로드/삭제.
-  - **우측 (flex: 30) — 파일 업로드 & 폴더 맵핑**:
-    - 4개 액션 버튼: [📁 파일 올리기], [🎨 Canva 등록], [📂 새 폴더], [🔄 폴더 맵핑].
-    - 교과 / 반별 폴더 매핑 현황 리스트 및 클릭 시 해당 폴더 파일 필터링.
+- **하단 (flex: 5, [38% 통합 도구] : [62% 클라우드 탐색기] 2분할 구조)**:
+  - **좌측 (flex: 38) — 통합 도구 & 신뢰 기기 & 맵핑 패널**:
+    - **시간표 전문 바로보기**: 컴시간 시간표 팝업 연동.
+    - **칠판 메모**: 수업 중 빠른 메모 작성 및 자동 보관.
+    - **QR 스캔 & 신뢰 기기 관리**: 전자칠판 QR 코드로 즉시 자동 페어링, 등록된 전자칠판 목록 조회 및 차단/삭제. (기존 '다른 기기 주기' 및 'Google OTP 등록'은 폐기 통합).
+    - **교과 / 반별 폴더 매핑**: Google Drive `bst-save` 폴더와 교과/반을 1:1 맵핑하고 다이얼로그에서 추가/삭제/필터링.
+  - **우측 (flex: 62) — 와이드 클라우드 파일 탐색기**:
+    - Google Drive `bst-save` 보관함 전체 전개.
+    - 실시간 검색창, 카테고리 필터 칩 (`[전체]`, `[📄 PDF]`, `[🎨 Canva]`, `[📊 PPT]`, `[📝 판서]`).
+    - [📁 파일 업로드], [🎨 Canva 등록], [📂 새 폴더] 액션 바 제공.
 
 ---
 
-## ⚙️ 11. 자동 업데이트 및 시스템 정책 규격
+## ⚙️ 11. 자동 업데이트, 인증서 및 원클릭 설치 규격
 
-1. **중복 다이얼로그 방지 가드**:
-   - `UpdateService._isChecking` static boolean 플래그를 통해 앱 실행 중 `checkAndUpdate()`가 중복 호출되더라도 다이얼로그가 1회만 표시되도록 뮤텍스 보장.
-2. **명시적 업데이트 팝업 (대놓고 업데이트)**:
-   - 새 버전 감지 시 조용히 숨기지 않고, 명확한 [업데이트 알림] 다이얼로그를 띄워 신규 버전(vX.X.X.X), 릴리즈 안내 및 [업데이트 시작] 버튼 제공.
-3. **Windows 무방해 업데이트**:
-   - AppX 매니페스트 `UpdateBlocksActivation="false"` 적용으로 앱 시작 지연 없이 백그라운드 다운로드 진행.
-4. **Android 홈 런처 및 화면 배율(DPI) 제어**:
-   - `isDefaultHomeLauncher` / `openHomeLauncherSettings` MethodChannel 탑재.
-   - 앱 최초 구동 시 전자칠판 전용 홈 런처로 등록할지 묻는 안내 팝업 제공.
-   - 60% ~ 150% 화면 배율(DPI) 커스텀 슬라이더 다이얼로그 제공.
+1. **`download-boardest.web.app` 원클릭 스크립트**:
+   ```powershell
+   irm https://download-boardest.web.app/bst.ps1 | iex
+   ```
+   - ExecutionPolicy 제한을 우회하여 관리자 권한 자동 승격 후 영구 인증서 설치 및 앱 설치 메뉴 제공.
+2. **다운로드 출처 직접 연결 (GitHub latest 302 리다이렉트)**:
+   - APK: `https://download-boardest.web.app/bst.apk`
+   - AppInstaller: `https://download-boardest.web.app/bst.appinstaller`
+   - AppX: `https://download-boardest.web.app/bst.appx`, `/bst-teacher.appx`
+   - 인증서: `https://download-boardest.web.app/bst.cer`
+3. **영구 자체 서명 인증서**:
+   - `BoardestCert.cer` (발행: `CN=jiwho`, 만료일: **2999년 12월 31일**).
+   - 로컬 머신 루트 인증 기관(`Cert:\LocalMachine\Root`) 및 신뢰할 수 있는 사용자(`Cert:\LocalMachine\TrustedPeople`)에 동시 등록되어 `0x800B0109` 신뢰 오류 원천 차단.
+4. **AppInstaller vs .appx 안내**:
+   - 일반 환경: 자동 백그라운드 업데이트가 지원되는 **AppInstaller** 적극 권장.
+   - 교내 보안망/폐쇄망 환경: 인터넷이 차단된 PC를 위한 수동 **.appx** 오프라인 설치 제공.
 
 ---
 
-> **에이전트 준수 사항**: 향후 어떤 새 대화나 세션에서도 이 문서(`AGENT.md`)에 정의된 아키텍처, 6자리 Steganography 수식, 8자리 자동 페어링 규격, Google Drive 파일/폴더 규칙, 대시보드 3열 레이아웃, Teacher 하단 3단 패널 및 급식 호출 필터 규칙을 최우선 기준으로 준수하여 개발하십시오.
+> **에이전트 준수 사항**: 향후 어떤 새 대화나 세션에서도 이 문서(`AGENT.md`)에 정의된 아키텍처, 6자리 Steganography 수식, 3:2 대시보드 레이아웃, Teacher 38:62 2분할 패널, OAuth 시크릿 허브, 독립 급식 웹앱 규격 및 `download-boardest` 다운로드 프로토콜을 최우선 기준으로 준수하여 개발하십시오.
+

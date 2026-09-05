@@ -1,7 +1,34 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v2.9.8.9** (App: v2.9.8.8 / Web: v2.9.8.8)  
+> **현재 시스템 버전**: **v2.9.9.1** (App: v2.9.9.1 / Web: v2.9.9.1)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 B 2.9.9.1 (2026-09-05)
+
+### 1. 📥 `download-boardest.web.app` 공식 다운로드 및 단축 스크립트 허브 구축
+- **원클릭 설치 명령어**: `irm https://download-boardest.web.app/bst.ps1 | iex`
+- **다운로드 출처 URL 지원**: 크롬 주소창/다운로드 버튼 클릭 시 GitHub 최신 릴리즈(`latest`) 파일로 302 리다이렉트 (`/bst.apk`, `/bst.appinstaller`, `/bst.appx`, `/bst-teacher.appx`, `/bst.cer`).
+- **온보딩 포털 분리**: `welcome-to-boardest.web.app` (접속 기기 UA 자동 감지 및 설치 안내).
+
+### 2. 👩‍🏫 교사용 앱 (`boardest_teacher`) Web PDF 에러 해결 & 38:62 레이아웃 개편
+- **Web PDF `Unsupported operation: _Namespace` 원천 해결**: `kIsWeb` 조건에서 파일 시스템 검사를 우회하고 메모리 바이트를 직접 `PdfBoardView`로 바인딩.
+- **하단 패널 통합**: [좌측 38% 통합 도구] (시간표, 칠판 메모, QR 스캔 & 기기 관리, 폴더 맵핑) : [우측 62% 클라우드 파일 탐색기]로 개편.
+- **불필요 기능 정리**: '다른 기기 주기' 및 'Google OTP 등록' 완전 제거 (전자칠판 QR 코드로 통합).
+
+### 3. 🍱 독립 급식 지도 웹앱 (`boardest-eat.web.app`) 분리 & 쿼리스트링 지원
+- Teacher Lite 리다이렉트가 아닌, **전용 실시간 급식 관제 웹 애플리케이션**으로 전면 구축.
+- `?schoolCode=ydm&cafeteria=1&callerName=지도교사` 등 쿼리스트링 완전 지원 및 공유/북마크 지원.
+- 1~9급식실 탭별 실시간 온라인 학급 카운트, Web Audio 신디사이저 차임벨, 학년 일괄 호출, 전체 호출 취소, 전자칠판 쪽지 전송.
+
+### 4. 🔐 교사 포털 (`boardest-teacher-oauth.web.app`) 시크릿 관리 허브 전환
+- 6자리 일회용 OTP 표시를 제거하고 **보안 시크릿 키 관리/생성/저장 전용 허브**로 개편.
+- `[🎲 새 시크릿 생성]` 및 `[💾 시크릿 저장]` 기능으로 Firestore(`teacher_profiles`, `teacher_cloud_tokens`) 및 브라우저에 안전하게 영구 저장.
+
+### 5. 🖥️ 전자칠판 (`boardest`) 3:2 레이아웃 & 클라우드 세션 보존
+- 메인 대시보드에서 급식 카드를 분리하고, **3:2 = [지금 시간표 (flex: 3)] : [광고판 / Cloud / USB (flex: 2)]**로 단일화.
+- 클라우드 패널을 닫아도 `activeToken = null`이 아닌 `_hideCloudPanel = true`를 적용하여 교사 로그인 세션이 끊기지 않고 유지됨.
 
 ---
 
