@@ -11,7 +11,7 @@ $CerFile = Join-Path $RootDir "certs\BoardestCert.cer"
 $MakeAppx = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\makeappx.exe"
 $SignTool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
 
-$AppVersion = "2.9.9.8"
+$AppVersion = "2.9.9.9"
 $repoReleaseBase = "https://github.com/hiJiwho/Boardest/releases/latest/download"
 
 Write-Host "=== Starting Full AppX & AppInstaller Packaging Pipeline (v$AppVersion) ===" -ForegroundColor Cyan
@@ -42,7 +42,7 @@ $boardestAppinstaller = @"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/boardest.appx" />
     <UpdateSettings>
-        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false"/>
+        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="true"/>
         <AutomaticBackgroundTask/>
         <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
     </UpdateSettings>
@@ -66,7 +66,7 @@ $teacherAppinstaller = @"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/bst-teacher.appx" />
     <UpdateSettings>
-        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false"/>
+        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="true"/>
         <AutomaticBackgroundTask/>
         <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
     </UpdateSettings>
@@ -90,7 +90,7 @@ $panserAppinstaller = @"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/bst-overlay-panser.appx" />
     <UpdateSettings>
-        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false"/>
+        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="true"/>
         <AutomaticBackgroundTask/>
         <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
     </UpdateSettings>

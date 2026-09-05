@@ -16,6 +16,7 @@ import 'totp_service.dart';
 import '../models/app_settings.dart';
 import '../models/school.dart';
 import 'storage_service.dart';
+import 'app_paths.dart';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:http_parser/http_parser.dart';
@@ -251,6 +252,38 @@ class CloudDriveService with ChangeNotifier {
   int get activePort => _activePort;
   VoidCallback? onSessionReady;
 
+  /// Saves the current session to non-volatile disk backup files
+  Future<void> _saveSessionToDisk() async {
+    if (kIsWeb) return;
+    try {
+      final sessionMap = {
+        'accessToken': _accessToken ?? '',
+        'refreshToken': _refreshToken ?? '',
+        'boardestToken': _boardestToken ?? '',
+        'bstCldToken': _bstCldToken ?? '',
+        'email': _userEmail ?? '',
+        'name': _userName ?? '',
+        'school': _schoolName ?? '',
+        'totpSecret': _totpSecret ?? '',
+        'shortId': _shortId ?? '',
+        'deviceKeyId': _keyId ?? '',
+        'trustDeviceEnabled': _trustDeviceEnabled,
+        'autoLessonFlowEnabled': _autoLessonFlowEnabled,
+        'boardestFolderId': _boardestFolderId ?? '',
+        'bstSaveFolderId': _bstSaveFolderId ?? '',
+        'bstPenFolderId': _bstPenFolderId ?? '',
+      };
+      final jsonStr = const JsonEncoder.withIndent('  ').convert(sessionMap);
+      final sessionFile = File(p.join(AppPaths.configDir, 'teacher_session.json'));
+      await sessionFile.parent.create(recursive: true);
+      await sessionFile.writeAsString(jsonStr);
+
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      final exeSessionFile = File(p.join(exeDir, 'teacher_session.json'));
+      await exeSessionFile.writeAsString(jsonStr);
+    } catch (_) {}
+  }
+
   /// 초기화 — 저장된 Google Access Token, Refresh Token 및 유저 프로필 로드 & 상시 루프백 서버 가동
   Future<void> init() async {
     try {
@@ -260,10 +293,58 @@ class CloudDriveService with ChangeNotifier {
       _userEmail = prefs.getString(_userEmailKey);
       _userName = prefs.getString(_userNameKey);
       _schoolName = prefs.getString(_schoolNameKey);
+      _boardestToken = prefs.getString(_boardestTokenKey);
+      _bstCldToken = prefs.getString(_bstCldTokenKey);
+
+      // Disk session recovery if SharedPreferences is empty
+      if (!kIsWeb && (_accessToken == null || _accessToken!.isEmpty) && (_userEmail == null || _userEmail!.isEmpty)) {
+        try {
+          File? candidate;
+          final f1 = File(p.join(AppPaths.configDir, 'teacher_session.json'));
+          if (await f1.exists()) {
+            candidate = f1;
+          } else {
+            final exeDir = File(Platform.resolvedExecutable).parent.path;
+            final f2 = File(p.join(exeDir, 'teacher_session.json'));
+            if (await f2.exists()) candidate = f2;
+          }
+          if (candidate != null) {
+            final content = await candidate.readAsString();
+            final map = jsonDecode(content) as Map<String, dynamic>;
+            _accessToken = map['accessToken']?.toString();
+            _refreshToken = map['refreshToken']?.toString();
+            _boardestToken = map['boardestToken']?.toString();
+            _bstCldToken = map['bstCldToken']?.toString();
+            _userEmail = map['email']?.toString();
+            _userName = map['name']?.toString();
+            _schoolName = map['school']?.toString();
+            _totpSecret = map['totpSecret']?.toString();
+            _shortId = map['shortId']?.toString();
+            _keyId = map['deviceKeyId']?.toString();
+            _trustDeviceEnabled = map['trustDeviceEnabled'] == true;
+            _autoLessonFlowEnabled = map['autoLessonFlowEnabled'] ?? true;
+            _boardestFolderId = map['boardestFolderId']?.toString();
+            _bstSaveFolderId = map['bstSaveFolderId']?.toString();
+            _bstPenFolderId = map['bstPenFolderId']?.toString();
+
+            // Reseed SharedPreferences
+            if (_accessToken != null && _accessToken!.isNotEmpty) await prefs.setString(_tokenKey, _accessToken!);
+            if (_refreshToken != null && _refreshToken!.isNotEmpty) await prefs.setString(_refreshTokenKey, _refreshToken!);
+            if (_userEmail != null && _userEmail!.isNotEmpty) await prefs.setString(_userEmailKey, _userEmail!);
+            if (_userName != null && _userName!.isNotEmpty) await prefs.setString(_userNameKey, _userName!);
+            if (_schoolName != null && _schoolName!.isNotEmpty) await prefs.setString(_schoolNameKey, _schoolName!);
+            if (_boardestToken != null && _boardestToken!.isNotEmpty) await prefs.setString(_boardestTokenKey, _boardestToken!);
+            if (_bstCldToken != null && _bstCldToken!.isNotEmpty) await prefs.setString(_bstCldTokenKey, _bstCldToken!);
+            if (_totpSecret != null && _totpSecret!.isNotEmpty) await prefs.setString(_totpSecretKey, _totpSecret!);
+            if (_shortId != null && _shortId!.isNotEmpty) await prefs.setString(_shortIdKey, _shortId!);
+          }
+        } catch (_) {}
+      }
+
       await _ensureTotpSecret();
       if (isLoggedIn) {
         _startAutoRefreshTimer();
-    unawaited(_syncTeacherCloudTokens());
+        unawaited(_syncTeacherCloudTokens());
       }
       await startPersistentLoopbackServer();
     } catch (_) {}
@@ -745,6 +826,16 @@ class CloudDriveService with ChangeNotifier {
       await prefs.remove(_userNameKey);
       await prefs.remove(_schoolNameKey);
     } catch (_) {}
+
+    if (!kIsWeb) {
+      try {
+        final f1 = File(p.join(AppPaths.configDir, 'teacher_session.json'));
+        if (await f1.exists()) await f1.delete();
+        final exeDir = File(Platform.resolvedExecutable).parent.path;
+        final f2 = File(p.join(exeDir, 'teacher_session.json'));
+        if (await f2.exists()) await f2.delete();
+      } catch (_) {}
+    }
   }
 
   bool _isRefreshing = false;
@@ -912,6 +1003,7 @@ class CloudDriveService with ChangeNotifier {
             }
           } catch (_) {}
 
+          await _saveSessionToDisk();
           debugPrint('[CloudDriveService] 🟢 authorization_code로 OAuth 토큰 획득 성공!');
           return true;
         }
@@ -1351,6 +1443,7 @@ class CloudDriveService with ChangeNotifier {
     }
 
     _startAutoRefreshTimer();
+    await _saveSessionToDisk();
   }
 
   /// 웹사이트를 쳐다보지 않고 127.0.0.1 켜두고 구글 OAuth로 직접 직행

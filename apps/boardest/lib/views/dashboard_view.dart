@@ -8215,18 +8215,33 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         (_adBanners[_currentBannerIndex]['imageUrl'] as String).isNotEmpty)
                       ClipRRect(
                         borderRadius: BorderRadius.circular(24),
-                        child: Image.network(
-                          _getCorsSafeImageUrl(_adBanners[_currentBannerIndex]['imageUrl'] as String),
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Image.network(
-                            'https://images.weserv.nl/?url=${Uri.encodeComponent(_adBanners[_currentBannerIndex]['imageUrl'] as String)}',
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Image.network(
-                              _adBanners[_currentBannerIndex]['imageUrl'] as String,
+                        child: Builder(
+                          builder: (_) {
+                            final imgUrl = _adBanners[_currentBannerIndex]['imageUrl'] as String;
+                            if (imgUrl.startsWith('data:image')) {
+                              try {
+                                final comma = imgUrl.indexOf(',');
+                                final b64 = comma != -1 ? imgUrl.substring(comma + 1) : imgUrl;
+                                final bytes = base64Decode(b64);
+                                return Image.memory(bytes, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox());
+                              } catch (_) {
+                                return const SizedBox();
+                              }
+                            }
+                            return Image.network(
+                              _getCorsSafeImageUrl(imgUrl),
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const SizedBox(),
-                            ),
-                          ),
+                              errorBuilder: (_, __, ___) => Image.network(
+                                'https://images.weserv.nl/?url=${Uri.encodeComponent(imgUrl)}',
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Image.network(
+                                  imgUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const SizedBox(),
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     if (_adBanners.length > 1) ...[
@@ -9109,62 +9124,85 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           ? _settings.schoolId
           : (_settings.connectionName.isNotEmpty ? _settings.connectionName : '');
       String schoolId = rawSchoolId.toLowerCase().trim();
-      if (schoolId.isEmpty || schoolId == '44134' || schoolId.contains('양동')) {
+      final schoolName = _settings.selectedSchool?.name ?? '';
+      if (schoolId.isEmpty || schoolId == 'my' || schoolId == '44134' || schoolId.contains('양동') || schoolName.contains('양동')) {
         schoolId = 'ydm';
       }
 
-      final url = '${AppConfig.firestoreBase}/control_configs/$schoolId?key=${AppConfig.firebaseApiKey}';
-      final response = await http.get(Uri.parse(url));
+      var url = '${AppConfig.firestoreBase}/control_configs/$schoolId?key=${AppConfig.firebaseApiKey}';
+      var response = await http.get(Uri.parse(url));
+
+      // If specific school doc is 404 and schoolId != 'ydm', fallback to ydm
+      if (response.statusCode != 200 && schoolId != 'ydm') {
+        debugPrint('[Boardest] control_configs/$schoolId returned ${response.statusCode}. Falling back to control_configs/ydm...');
+        schoolId = 'ydm';
+        url = '${AppConfig.firestoreBase}/control_configs/$schoolId?key=${AppConfig.firebaseApiKey}';
+        response = await http.get(Uri.parse(url));
+      }
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final fields = data['fields'] as Map<String, dynamic>?;
         final announcementsField = fields?['announcements'];
 
-        if (announcementsField != null) {
-          final values = announcementsField['arrayValue']?['values'] as List<dynamic>? ?? [];
-          final now = DateTime.now();
-          final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+        final values = announcementsField?['arrayValue']?['values'] as List<dynamic>? ?? [];
+        final now = DateTime.now();
+        final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-          final banners = values.where((v) {
+        final banners = values.where((v) {
+          final f = v['mapValue']?['fields'] as Map<String, dynamic>?;
+          if (f == null) return false;
+          final imgUrl = f['imageUrl']?['stringValue'] ?? '';
+          if (imgUrl.isEmpty) return false;
+          final startDate = (f['startDate']?['stringValue'] ?? '').replaceAll('.', '-').replaceAll('/', '-').trim();
+          final endDate = (f['endDate']?['stringValue'] ?? '').replaceAll('.', '-').replaceAll('/', '-').trim();
+          if (startDate.isNotEmpty && startDate.compareTo(todayStr) > 0) return false;
+          if (endDate.isNotEmpty && endDate.compareTo(todayStr) < 0 && endDate != todayStr) return false;
+          return true;
+        }).map((v) {
+          final f = v['mapValue']['fields'] as Map<String, dynamic>;
+          return <String, dynamic>{
+            'title': f['title']?['stringValue'] ?? '',
+            'imageUrl': f['imageUrl']?['stringValue'] ?? '',
+          };
+        }).toList();
+
+        // If date filter excluded all announcements, fallback to showing all valid announcements
+        if (banners.isEmpty && values.isNotEmpty) {
+          for (final v in values) {
             final f = v['mapValue']?['fields'] as Map<String, dynamic>?;
-            if (f == null) return false;
-            final startDate = f['startDate']?['stringValue'] ?? '';
-            final endDate = f['endDate']?['stringValue'] ?? '';
-            if (startDate.isNotEmpty && startDate.compareTo(todayStr) > 0) return false;
-            if (endDate.isNotEmpty && endDate.compareTo(todayStr) < 0 && endDate != todayStr) return false;
-            return true;
-          }).map((v) {
-            final f = v['mapValue']['fields'] as Map<String, dynamic>;
-            return <String, dynamic>{
-              'title': f['title']?['stringValue'] ?? '',
-              'imageUrl': f['imageUrl']?['stringValue'] ?? '',
-            };
-          }).toList();
-
-          if (banners.isEmpty) {
-            banners.add({
-              'title': 'Boardest 스마트 전자칠판',
-              'imageUrl': 'https://cdn.phototourl.com/free/2026-08-19-0b235269-dee4-4b46-ab19-1babd033407c.png',
-            });
-          }
-
-          if (mounted) {
-            setState(() {
-              _adBanners = banners;
-              _currentBannerIndex = 0;
-            });
-
-            _bannerRollingTimer?.cancel();
-            if (_adBanners.length > 1) {
-              _bannerRollingTimer = Timer.periodic(const Duration(seconds: 8), (_) {
-                if (mounted) {
-                  setState(() {
-                    _currentBannerIndex = (_currentBannerIndex + 1) % _adBanners.length;
-                  });
-                }
+            final imgUrl = f?['imageUrl']?['stringValue'] ?? '';
+            if (imgUrl.isNotEmpty) {
+              banners.add({
+                'title': f?['title']?['stringValue'] ?? '',
+                'imageUrl': imgUrl,
               });
             }
+          }
+        }
+
+        if (banners.isEmpty) {
+          banners.add({
+            'title': 'Welcome to Boardest !!',
+            'imageUrl': 'https://cdn.phototourl.com/free/2026-09-05-567651a9-9745-4de2-97e9-3ff58b103931.png',
+          });
+        }
+
+        if (mounted) {
+          setState(() {
+            _adBanners = banners;
+            _currentBannerIndex = 0;
+          });
+
+          _bannerRollingTimer?.cancel();
+          if (_adBanners.length > 1) {
+            _bannerRollingTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+              if (mounted) {
+                setState(() {
+                  _currentBannerIndex = (_currentBannerIndex + 1) % _adBanners.length;
+                });
+              }
+            });
           }
         }
 
@@ -9180,8 +9218,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         setState(() {
           _adBanners = [
             {
-              'title': 'Boardest 스마트 전자칠판',
-              'imageUrl': 'https://cdn.phototourl.com/free/2026-08-19-0b235269-dee4-4b46-ab19-1babd033407c.png',
+              'title': 'Welcome to Boardest !!',
+              'imageUrl': 'https://cdn.phototourl.com/free/2026-09-05-567651a9-9745-4de2-97e9-3ff58b103931.png',
             }
           ];
         });
@@ -10765,6 +10803,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       if (_timetableCheckCounter >= 600) {
         _timetableCheckCounter = 0;
         _fetchTimetableBackground();
+      }
+
+      // 광고판 배너 실시간 갱신 (매 2분마다 자동 동기화)
+      if (_timetableCheckCounter % 120 == 0) {
+        _loadAdBanners();
       }
 
       // 매 60초마다 Class 계정 온라인 상태 Firestore 갱신

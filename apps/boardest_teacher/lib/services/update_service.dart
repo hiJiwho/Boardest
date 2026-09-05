@@ -53,7 +53,7 @@ class UpdateService {
         final psCommand =
             'Set-AppxPackageAutoUpdateSettings -PackageFamilyName "jiwho.boardest.teacher_nmkn64tehfz7a" '
             '-AppInstallerUri "https://download-boardest.web.app/bst-teacher.appinstaller" '
-            '-CheckOnLaunch \$false -ShowPrompt \$false -UpdateBlocksActivation \$false '
+            '-CheckOnLaunch \$true -ShowPrompt \$false -UpdateBlocksActivation \$false '
             '-ForceUpdateFromAnyVersion \$true -HoursBetweenUpdateChecks 0 -ErrorAction SilentlyContinue';
         await Process.run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psCommand]);
       }
@@ -301,6 +301,7 @@ class UpdateService {
 
       final script = '''
 \$ErrorActionPreference = 'Continue'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 \$waitLimit = 20
 while ((Get-Process -Name 'boardest_teacher' -ErrorAction SilentlyContinue) -and (\$waitLimit -gt 0)) {
   Start-Sleep -Seconds 1
@@ -321,11 +322,11 @@ try {
   }
 }
 
-if (-not \$updateSuccess) {
+if (-\$updateSuccess) {
   try {
     \$tempAppx = Join-Path \$env:TEMP 'bst_teacher_update.appx'
     Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx' -OutFile \$tempAppx -UseBasicParsing
-    Add-AppxPackage -Path \$tempAppx -ForceApplicationShutdown -ForceTargetApplicationShutdown -ErrorAction Stop
+    Add-AppxPackage -Path \$tempAppx -ForceApplicationShutdown -ForceTargetApplicationShutdown -ForceUpdateFromAnyVersion -ErrorAction Stop
     Remove-Item \$tempAppx -Force -ErrorAction SilentlyContinue
     \$updateSuccess = \$true
   } catch {}

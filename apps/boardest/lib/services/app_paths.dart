@@ -88,19 +88,17 @@ class AppPaths {
       // 1. 샌드박스 최상위 및 하위 폴더 생성
       await Directory(_dataRoot!).create(recursive: true);
 
-      // 2. 레거시 %APPDATA%\Roaming 데이터가 있으면 샌드박스로 이전 후 Roaming 폴더 완전 영구 삭제 (흔적 제거)
+      // 2. 레거시 %APPDATA%\Roaming 데이터가 있으면 샌드박스로 안전 복제 (shared_preferences 유실 방지를 위해 Roaming 보존)
       final roamingAppData = Platform.environment['APPDATA'];
       if (roamingAppData != null) {
         try {
           final legacyDir = Directory(p.join(roamingAppData, appName));
           if (legacyDir.existsSync()) {
-            debugPrint('[AppPaths] 📦 Migrating legacy data from $legacyDir to sandbox $_dataRoot...');
+            debugPrint('[AppPaths] 📦 Syncing roaming data from $legacyDir to sandbox $_dataRoot...');
             await _copyDirectory(legacyDir, Directory(_dataRoot!));
-            legacyDir.deleteSync(recursive: true);
-            debugPrint('[AppPaths] 🧹 Legacy Roaming directory deleted cleanly. All data is now sandboxed.');
           }
         } catch (e) {
-          debugPrint('[AppPaths] Legacy roaming cleanup notice: $e');
+          debugPrint('[AppPaths] Roaming sync notice: $e');
         }
 
         // 구 com.boardest 잔여 폴더도 완전 삭제

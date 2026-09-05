@@ -51,6 +51,7 @@ import 'video_board_view.dart';
 import 'web_hwp_ppt_view.dart';
 import 'school_calendar_view.dart';
 import 'website_board_view.dart';
+import 'billboard_management_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path/path.dart' as p;
 import '../services/bst_save_service.dart';
@@ -121,6 +122,8 @@ class _TeacherViewState extends State<TeacherView> {
   bool _isLoading = true;
   String? _errorMessage;
   bool _isMiniMode = false;
+  Size _preMiniWindowSize = const Size(1280, 800);
+  Offset _preMiniWindowPos = Offset.zero;
   int _miniWidgetTab = 0; // 0: OTP, 1: 교사 시간표, 2: 교실 시간표
   int _bottomAuthSubTab = 0; // 0: 온라인 전자칠판 OTP 주기, 1: 인증 기기 & 로그
 
@@ -1372,7 +1375,127 @@ class _TeacherViewState extends State<TeacherView> {
   void _startMiniTimer() {}
   void _resetMiniTimer() {}
   void _adjustMiniTimer(int seconds) {}
-  void _enterMiniMode() {}
+  Future<void> _enterMiniMode() async {
+    if (kIsWeb) {
+      _triggerWebPip();
+      return;
+    }
+    try {
+      if (Platform.isWindows) {
+        _preMiniWindowSize = await windowManager.getSize();
+        _preMiniWindowPos = await windowManager.getPosition();
+        await windowManager.setSize(const Size(380, 160));
+        await windowManager.setAlwaysOnTop(true);
+        await windowManager.setResizable(false);
+      }
+      if (mounted) {
+        setState(() {
+          _isMiniMode = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('[TeacherView] enterMiniMode error: $e');
+    }
+  }
+
+  Future<void> _exitMiniMode() async {
+    if (kIsWeb) {
+      if (mounted) setState(() => _isMiniMode = false);
+      return;
+    }
+    try {
+      if (Platform.isWindows) {
+        await windowManager.setSize(_preMiniWindowSize);
+        await windowManager.setPosition(_preMiniWindowPos);
+        await windowManager.setAlwaysOnTop(_isAlwaysOnTop);
+        await windowManager.setResizable(true);
+      }
+      if (mounted) {
+        setState(() {
+          _isMiniMode = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[TeacherView] exitMiniMode error: $e');
+    }
+  }
+
+  void _triggerWebPip() {
+    if (!kIsWeb) {
+      _enterMiniMode();
+      return;
+    }
+    final weekday = _now.weekday;
+    final isWeekend = weekday == 6 || weekday == 7;
+    final displayDay = isWeekend ? 1 : weekday;
+    final targetPeriod = _nextPeriod ?? _currentPeriod ?? 1;
+
+    final teacherLesson = (_timetableResult?.lessons ?? []).firstWhere(
+      (l) => l.weekday == displayDay && _isTeacherMatch(l.teacher) && l.classTime == targetPeriod,
+      orElse: () => Lesson(
+        grade: 0,
+        classNum: 0,
+        weekday: displayDay,
+        classTime: targetPeriod,
+        teacher: '',
+        subject: '',
+        classroom: '',
+        isChanged: false,
+      ),
+    );
+
+    final classLesson = (_timetableResult?.lessons ?? []).firstWhere(
+      (l) =>
+          l.weekday == displayDay &&
+          l.grade == _settings.selectedGrade &&
+          l.classNum == _settings.selectedClass &&
+          l.classTime == targetPeriod,
+      orElse: () => Lesson(
+        grade: _settings.selectedGrade,
+        classNum: _settings.selectedClass,
+        weekday: displayDay,
+        classTime: targetPeriod,
+        teacher: '',
+        subject: '',
+        classroom: '',
+        isChanged: false,
+      ),
+    );
+
+    final periodLabel = _currentPeriod != null
+        ? '현재 $_currentPeriod교시 ➔ 다음 ${targetPeriod}교시'
+        : '다음 ${targetPeriod}교시';
+
+    WebPipService.openMiniPipWindow(
+      periodText: periodLabel,
+      teacherClass: teacherLesson.subject.isNotEmpty
+          ? '${teacherLesson.grade}학년 ${teacherLesson.classNum}반'
+          : '수업 없음',
+      teacherSubject: teacherLesson.subject.replaceAll('*', ''),
+      classroomSubject: classLesson.subject.isNotEmpty
+          ? classLesson.subject.replaceAll('*', '')
+          : '수업 없음',
+      classroomTeacher: classLesson.teacher.replaceAll('*', ''),
+      schoolName: _settings.selectedSchool?.name ?? 'Boardest Teacher',
+      isDark: true,
+      otpCode: _currentOtp,
+      cloudId: _settings.schoolId.isNotEmpty ? _settings.schoolId : 'ydm',
+      remainingSeconds: _remainingSeconds,
+    );
+  }
+
+  void _openBillboardManagement() {
+    showDialog(
+      context: context,
+      builder: (ctx) => BillboardManagementDialog(
+        scaleFactor: _settings.scaleFactor,
+        schoolId: _settings.schoolId.isNotEmpty ? _settings.schoolId : 'ydm',
+        teacherName: _settings.selectedTeacherName.isNotEmpty
+            ? _settings.selectedTeacherName
+            : _settings.selectedTeacher,
+      ),
+    );
+  }
 
   void _openFile(String path, {Uint8List? memoryBytes}) {
     if (path.isEmpty && memoryBytes == null) return;
@@ -1530,7 +1653,273 @@ class _TeacherViewState extends State<TeacherView> {
   }
 
   List<dynamic> _getCombinedTodayLessons() { return []; }
-  Widget _buildMiniWidget(double s) { return Container(); }
+  Widget _buildMiniWidget(double s) {
+    final weekday = _now.weekday;
+    final isWeekend = weekday == 6 || weekday == 7;
+    final displayDay = isWeekend ? 1 : weekday;
+    final targetPeriod = _nextPeriod ?? _currentPeriod ?? 1;
+
+    final teacherLesson = (_timetableResult?.lessons ?? []).firstWhere(
+      (l) => l.weekday == displayDay && _isTeacherMatch(l.teacher) && l.classTime == targetPeriod,
+      orElse: () => Lesson(
+        grade: 0,
+        classNum: 0,
+        weekday: displayDay,
+        classTime: targetPeriod,
+        teacher: '',
+        subject: '',
+        classroom: '',
+        isChanged: false,
+      ),
+    );
+
+    final classLesson = (_timetableResult?.lessons ?? []).firstWhere(
+      (l) =>
+          l.weekday == displayDay &&
+          l.grade == _settings.selectedGrade &&
+          l.classNum == _settings.selectedClass &&
+          l.classTime == targetPeriod,
+      orElse: () => Lesson(
+        grade: _settings.selectedGrade,
+        classNum: _settings.selectedClass,
+        weekday: displayDay,
+        classTime: targetPeriod,
+        teacher: '',
+        subject: '',
+        classroom: '',
+        isChanged: false,
+      ),
+    );
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F0E17),
+      body: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF16161A),
+          border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.5), width: 1.5),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Column(
+          children: [
+            // Mini Title Bar (Draggable)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanStart: (_) {
+                if (!kIsWeb && Platform.isWindows) {
+                  windowManager.startDragging();
+                }
+              },
+              child: Row(
+                children: [
+                  const Icon(Icons.school_rounded, color: Color(0xFF00F5D4), size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Boardest Mini',
+                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF8906).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _currentPeriod != null ? '현재 $_currentPeriod교시 ➔ 다음 ${targetPeriod}교시' : '다음 ${targetPeriod}교시',
+                      style: const TextStyle(color: Color(0xFFFF8906), fontSize: 9.5, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const Spacer(),
+                  // Tabs
+                  InkWell(
+                    onTap: () => setState(() => _miniWidgetTab = 0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _miniWidgetTab == 0 ? const Color(0xFF00F5D4).withOpacity(0.2) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: _miniWidgetTab == 0 ? const Color(0xFF00F5D4) : Colors.transparent),
+                      ),
+                      child: Text('내 수업', style: TextStyle(color: _miniWidgetTab == 0 ? const Color(0xFF00F5D4) : Colors.white60, fontSize: 9, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  InkWell(
+                    onTap: () => setState(() => _miniWidgetTab = 1),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _miniWidgetTab == 1 ? const Color(0xFF7F5AF0).withOpacity(0.2) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: _miniWidgetTab == 1 ? const Color(0xFF7F5AF0) : Colors.transparent),
+                      ),
+                      child: Text('우리 반', style: TextStyle(color: _miniWidgetTab == 1 ? const Color(0xFF7F5AF0) : Colors.white60, fontSize: 9, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  InkWell(
+                    onTap: () => setState(() => _miniWidgetTab = 2),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _miniWidgetTab == 2 ? const Color(0xFF2EC4B6).withOpacity(0.2) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: _miniWidgetTab == 2 ? const Color(0xFF2EC4B6) : Colors.transparent),
+                      ),
+                      child: Text('OTP', style: TextStyle(color: _miniWidgetTab == 2 ? const Color(0xFF2EC4B6) : Colors.white60, fontSize: 9, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: _exitMiniMode,
+                    child: const Tooltip(
+                      message: '전체 화면으로 복원',
+                      child: Icon(Icons.open_in_full_rounded, color: Colors.white70, size: 14),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: () async {
+                      if (!kIsWeb && Platform.isWindows) {
+                        await windowManager.close();
+                      } else {
+                        setState(() => _isMiniMode = false);
+                      }
+                    },
+                    child: const Tooltip(
+                      message: '닫기',
+                      child: Icon(Icons.close_rounded, color: Colors.white70, size: 15),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Divider(color: Colors.white10, height: 1),
+            const SizedBox(height: 6),
+
+            // Content Body based on tab
+            Expanded(
+              child: Builder(
+                builder: (_) {
+                  if (_miniWidgetTab == 0) {
+                    // Teacher Lesson
+                    final hasLesson = teacherLesson.subject.isNotEmpty;
+                    return Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00F5D4).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.3)),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${targetPeriod}교시',
+                              style: const TextStyle(color: Color(0xFF00F5D4), fontWeight: FontWeight.bold, fontSize: 11),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                hasLesson
+                                    ? '${teacherLesson.grade}학년 ${teacherLesson.classNum}반 ${teacherLesson.classroom.isNotEmpty ? "(${teacherLesson.classroom})" : ""}'
+                                    : '수업 없음 (공강)',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                hasLesson ? teacherLesson.subject.replaceAll('*', '') : '자유 시간 또는 교재 연구',
+                                style: TextStyle(color: hasLesson ? const Color(0xFF00F5D4) : Colors.white38, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  } else if (_miniWidgetTab == 1) {
+                    // Classroom Lesson
+                    final hasLesson = classLesson.subject.isNotEmpty;
+                    return Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF7F5AF0).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF7F5AF0).withOpacity(0.3)),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${targetPeriod}교시',
+                              style: const TextStyle(color: Color(0xFF7F5AF0), fontWeight: FontWeight.bold, fontSize: 11),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                '${_settings.selectedGrade}학년 ${_settings.selectedClass}반 : ${hasLesson ? classLesson.subject.replaceAll('*', '') : "수업 없음"}',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                hasLesson ? '담당: ${classLesson.teacher.replaceAll('*', '')} 선생님' : '-',
+                                style: const TextStyle(color: Color(0xFF7F5AF0), fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  } else {
+                    // OTP Tab
+                    return InkWell(
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: _currentOtp));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('OTP [$_currentOtp] 복사됨'), duration: const Duration(seconds: 1)),
+                        );
+                      },
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text('전자칠판 접속 PIN (터치하여 복사)', style: TextStyle(color: Colors.white54, fontSize: 9)),
+                              Text(
+                                _currentOtp,
+                                style: GoogleFonts.sourceCodePro(color: const Color(0xFF00F5D4), fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 4),
+                              ),
+                            ],
+                          ),
+                          Text('${_remainingSeconds}s', style: const TextStyle(color: Color(0xFFFF8906), fontSize: 12, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    );
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
   void _openAuthAndDeviceManager() {
     showDialog(
       context: context,
@@ -1632,7 +2021,7 @@ class _TeacherViewState extends State<TeacherView> {
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.stretch,
                                         children: [
-                                          // 상단: 교사 주간 시간표 / 교실 주간시간표 (flex: 4)
+                                          // 상단: 교사 주간 시간표 / 교실 주간시간표 (주간 시간표 모드)
                                           Expanded(
                                             flex: 4,
                                             child: isHomeroom
@@ -1640,15 +2029,15 @@ class _TeacherViewState extends State<TeacherView> {
                                                     crossAxisAlignment: CrossAxisAlignment.stretch,
                                                     children: [
                                                       Expanded(
-                                                        child: _buildTeacherTimetablePanel(scale),
+                                                        child: _buildWeeklyGridTable(scale, isHomeroom: false, inline: true),
                                                       ),
                                                       SizedBox(width: 12 * scale),
                                                       Expanded(
-                                                        child: _buildClassroomTimetablePanel(scale),
+                                                        child: _buildWeeklyGridTable(scale, isHomeroom: true, inline: true),
                                                       ),
                                                     ],
                                                   )
-                                                : _buildTeacherTimetablePanel(scale),
+                                                : _buildWeeklyGridTable(scale, isHomeroom: false, inline: true),
                                           ),
                                           SizedBox(height: 12 * scale),
                                           // 하단 2단 패널: 좌측 슬림 통합 도구(OTP + 클라우드 허브) (flex: 24) : 우측 파일 탐색기 초대형 확장 (flex: 76)
@@ -6470,9 +6859,6 @@ class _TeacherViewState extends State<TeacherView> {
   }
 
   Widget _buildTitleBar(double s) {
-    if (kIsWeb) {
-      return const SizedBox.shrink();
-    }
     return _buildWindowsTitleBar(s);
   }
 
@@ -6510,229 +6896,332 @@ class _TeacherViewState extends State<TeacherView> {
             ),
           ),
           SizedBox(width: 8 * s),
-          if (!kIsWeb && Platform.isWindows) ...[
-            Tooltip(
-              message: '미니 모드로 전환',
-              child: IconButton(
-                onPressed: _enterMiniMode,
-                icon: Icon(Icons.picture_in_picture_alt_rounded, size: 16 * s, color: _textColor.withOpacity(0.7)),
-                padding: EdgeInsets.zero,
-                constraints: BoxConstraints(minWidth: 28 * s, minHeight: 28 * s),
-              ),
+          Tooltip(
+            message: kIsWeb ? '다음 교시 웹 팝업 (PiP)' : '미니 모드로 전환',
+            child: IconButton(
+              onPressed: kIsWeb ? _triggerWebPip : _enterMiniMode,
+              icon: Icon(Icons.picture_in_picture_alt_rounded, size: 16 * s, color: _textColor.withOpacity(0.7)),
+              padding: EdgeInsets.zero,
+              constraints: BoxConstraints(minWidth: 28 * s, minHeight: 28 * s),
             ),
-            SizedBox(width: 8 * s),
-          ],
+          ),
+          SizedBox(width: 8 * s),
+          Tooltip(
+            message: '전자칠판 광고판 / 공지 관리',
+            child: IconButton(
+              onPressed: _openBillboardManagement,
+              icon: Icon(Icons.campaign_rounded, size: 18 * s, color: const Color(0xFF00F5D4)),
+              padding: EdgeInsets.zero,
+              constraints: BoxConstraints(minWidth: 28 * s, minHeight: 28 * s),
+            ),
+          ),
           SizedBox(width: 12 * s),
 
-                  // USB Status Badge (Only when physical USB is connected)
-                  if (_isUsbConnected) ...[
-                    InkWell(
-                      onTap: _openUsbExplorerDialog,
-                      borderRadius: BorderRadius.circular(10 * s),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 3 * s),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF006a60).withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(10 * s),
-                          border: Border.all(color: const Color(0xFF74f8e5)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.usb_rounded,
-                              size: 13 * s,
-                              color: const Color(0xFF74f8e5),
-                            ),
-                            SizedBox(width: 4 * s),
-                            Text(
-                              'USB (${_usbDriveLetter})',
-                              style: TextStyle(
-                                color: const Color(0xFF74f8e5),
-                                fontSize: 11 * s,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+          // USB Status Badge (Only when physical USB is connected)
+          if (_isUsbConnected) ...[
+            InkWell(
+              onTap: _openUsbExplorerDialog,
+              borderRadius: BorderRadius.circular(10 * s),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 3 * s),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF006a60).withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(10 * s),
+                  border: Border.all(color: const Color(0xFF74f8e5)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.usb_rounded,
+                      size: 13 * s,
+                      color: const Color(0xFF74f8e5),
+                    ),
+                    SizedBox(width: 4 * s),
+                    Text(
+                      'USB (${_usbDriveLetter})',
+                      style: TextStyle(
+                        color: const Color(0xFF74f8e5),
+                        fontSize: 11 * s,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    SizedBox(width: 6 * s),
                   ],
-                  // Google Login Status Badge
-                  InkWell(
-                    onTap: _openBstCloud,
-                    borderRadius: BorderRadius.circular(10 * s),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 3 * s),
-                      decoration: BoxDecoration(
-                        color: CloudDriveService.instance.isLoggedIn ? const Color(0xFF2EC4B6).withOpacity(0.2) : const Color(0xFFFF8906).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10 * s),
-                        border: Border.all(color: CloudDriveService.instance.isLoggedIn ? const Color(0xFF2EC4B6) : const Color(0xFFFF8906)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            CloudDriveService.instance.isLoggedIn ? Icons.cloud_done_rounded : Icons.account_circle_rounded,
-                            size: 13 * s,
-                            color: CloudDriveService.instance.isLoggedIn ? const Color(0xFF2EC4B6) : const Color(0xFFFF8906),
-                          ),
-                          SizedBox(width: 4 * s),
-                          Text(
-                            CloudDriveService.instance.isLoggedIn ? (CloudDriveService.instance.userName ?? 'Google 연결됨') : '로그인 필요',
-                            style: TextStyle(
-                              color: CloudDriveService.instance.isLoggedIn ? const Color(0xFF2EC4B6) : const Color(0xFFFF8906),
-                              fontSize: 11 * s,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
+                ),
+              ),
+            ),
+            SizedBox(width: 6 * s),
+          ],
+          // Google Login Status Badge
+          InkWell(
+            onTap: _openBstCloud,
+            borderRadius: BorderRadius.circular(10 * s),
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 3 * s),
+              decoration: BoxDecoration(
+                color: CloudDriveService.instance.isLoggedIn ? const Color(0xFF2EC4B6).withOpacity(0.2) : const Color(0xFFFF8906).withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10 * s),
+                border: Border.all(color: CloudDriveService.instance.isLoggedIn ? const Color(0xFF2EC4B6) : const Color(0xFFFF8906)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    CloudDriveService.instance.isLoggedIn ? Icons.cloud_done_rounded : Icons.account_circle_rounded,
+                    size: 13 * s,
+                    color: CloudDriveService.instance.isLoggedIn ? const Color(0xFF2EC4B6) : const Color(0xFFFF8906),
+                  ),
+                  SizedBox(width: 4 * s),
+                  Text(
+                    CloudDriveService.instance.isLoggedIn ? (CloudDriveService.instance.userName ?? 'Google 연결됨') : '로그인 필요',
+                    style: TextStyle(
+                      color: CloudDriveService.instance.isLoggedIn ? const Color(0xFF2EC4B6) : const Color(0xFFFF8906),
+                      fontSize: 11 * s,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const Spacer(),
+                ],
+              ),
+            ),
+          ),
 
-                  // Render the 10 BST tools in the title bar (aligned right, only when USB is connected)
-                  if (_isUsbConnected) ...[
-                    Tooltip(
-                      message: _bridgeStatus,
-                      child: IconButton(
-                        onPressed: _openBoardControlDialog,
-                        icon: Icon(
-                          _boardStatus == null
-                              ? Icons.usb_rounded
-                              : Icons.cast_connected_rounded,
-                          color: _boardStatus == null
-                              ? Colors.amber
-                              : const Color(0xFF2CB67D),
+          // Draggable Titlebar Spacer
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanStart: (_) {
+                if (!kIsWeb && Platform.isWindows) {
+                  windowManager.startDragging();
+                }
+              },
+              child: const SizedBox.expand(),
+            ),
+          ),
+
+          // Render the 10 BST tools in the title bar (aligned right, only when USB is connected)
+          if (_isUsbConnected) ...[
+            Tooltip(
+              message: _bridgeStatus,
+              child: IconButton(
+                onPressed: _openBoardControlDialog,
+                icon: Icon(
+                  _boardStatus == null
+                      ? Icons.usb_rounded
+                      : Icons.cast_connected_rounded,
+                  color: _boardStatus == null
+                      ? Colors.amber
+                      : const Color(0xFF2CB67D),
+                  size: 18 * s,
+                ),
+              ),
+            ),
+            ...titleBarTools.map((t) {
+              final id = t['id']!;
+              final name = t['name']!;
+              return Padding(
+                padding: EdgeInsets.symmetric(horizontal: 2 * s),
+                child: Tooltip(
+                  message: name,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _getToolOnTap(id),
+                      borderRadius: BorderRadius.circular(8 * s),
+                      child: Container(
+                        width: 32 * s,
+                        height: 32 * s,
+                        alignment: Alignment.center,
+                        child: Icon(
+                          _getToolIcon(id),
+                          color: _accentColor,
                           size: 18 * s,
                         ),
                       ),
                     ),
-                    ...titleBarTools.map((t) {
-                      final id = t['id']!;
-                      final name = t['name']!;
-                      return Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 2 * s),
-                        child: Tooltip(
-                          message: name,
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: _getToolOnTap(id),
-                              borderRadius: BorderRadius.circular(8 * s),
-                              child: Container(
-                                width: 32 * s,
-                                height: 32 * s,
-                                alignment: Alignment.center,
-                                child: Icon(
-                                  _getToolIcon(id),
-                                  color: _accentColor,
-                                  size: 18 * s,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                    SizedBox(width: 16 * s),
-                  ],
+                  ),
+                ),
+              );
+            }),
+            SizedBox(width: 12 * s),
+          ],
 
-                   // AOT (Always On Top) 토글 버튼 — 항상 표시
-                  Tooltip(
-                    message: _isAlwaysOnTop ? '항상 위 해제' : '항상 위 (AOT)',
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () async {
-                          final next = !_isAlwaysOnTop;
-                          await windowManager.setAlwaysOnTop(next);
-                          setState(() => _isAlwaysOnTop = next);
-                        },
-                        borderRadius: BorderRadius.circular(8 * s),
-                        child: Container(
-                          width: 32 * s,
-                          height: 32 * s,
-                          alignment: Alignment.center,
-                          decoration: _isAlwaysOnTop
-                              ? BoxDecoration(
-                                  color: const Color(0xFF7F5AF0).withOpacity(0.18),
-                                  borderRadius: BorderRadius.circular(8 * s),
-                                  border: Border.all(
-                                    color: const Color(0xFF7F5AF0).withOpacity(0.5),
-                                  ),
-                                )
-                              : null,
-                          child: Icon(
-                            Icons.push_pin_rounded,
-                            color: _isAlwaysOnTop
-                                ? const Color(0xFF7F5AF0)
-                                : _textColor54,
-                            size: 16 * s,
+          // AOT (Always On Top) 토글 버튼 — 항상 표시
+          Tooltip(
+            message: _isAlwaysOnTop ? '항상 위 해제' : '항상 위 (AOT)',
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () async {
+                  if (!kIsWeb && Platform.isWindows) {
+                    final next = !_isAlwaysOnTop;
+                    await windowManager.setAlwaysOnTop(next);
+                    setState(() => _isAlwaysOnTop = next);
+                  }
+                },
+                borderRadius: BorderRadius.circular(8 * s),
+                child: Container(
+                  width: 32 * s,
+                  height: 32 * s,
+                  alignment: Alignment.center,
+                  decoration: _isAlwaysOnTop
+                      ? BoxDecoration(
+                          color: const Color(0xFF7F5AF0).withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(8 * s),
+                          border: Border.all(
+                            color: const Color(0xFF7F5AF0).withOpacity(0.5),
                           ),
-                        ),
-                      ),
+                        )
+                      : null,
+                  child: Icon(
+                    Icons.push_pin_rounded,
+                    color: _isAlwaysOnTop
+                        ? const Color(0xFF7F5AF0)
+                        : _textColor54,
+                    size: 16 * s,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: 8 * s),
+
+          if (!_isUsbConnected) ...[
+            Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: 8 * s,
+                vertical: 3 * s,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(6 * s),
+                border: Border.all(
+                  color: Colors.redAccent.withOpacity(0.3),
+                ),
+              ),
+              child: Text(
+                'USB 연결 없음',
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.redAccent,
+                  fontSize: 11 * s,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            SizedBox(width: 8 * s),
+          ] else if (_usbType == 'Cloud') ...[
+            Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: 8 * s,
+                vertical: 3 * s,
+              ),
+              decoration: BoxDecoration(
+                color: const Color(0xFF006a60).withOpacity(0.18),
+                borderRadius: BorderRadius.circular(6 * s),
+                border: Border.all(
+                  color: const Color(0xFF74f8e5).withOpacity(0.4),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.cloud_done_rounded,
+                      color: const Color(0xFF74f8e5), size: 12 * s),
+                  SizedBox(width: 4 * s),
+                  Text(
+                    'Cloud',
+                    style: GoogleFonts.notoSansKr(
+                      color: const Color(0xFF74f8e5),
+                      fontSize: 11 * s,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  SizedBox(width: 8 * s),
+                ],
+              ),
+            ),
+            SizedBox(width: 8 * s),
+          ],
 
-                  if (!_isUsbConnected) ...[
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 8 * s,
-                        vertical: 3 * s,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.redAccent.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(6 * s),
-                        border: Border.all(
-                          color: Colors.redAccent.withOpacity(0.3),
-                        ),
-                      ),
-                      child: Text(
-                        'USB 연결 없음.',
-                        style: GoogleFonts.notoSansKr(
-                          color: Colors.redAccent,
-                          fontSize: 11 * s,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+          // ── Window Control Buttons (Minimize, Maximize/Restore, Close) ──
+          Container(
+            height: 32 * s,
+            margin: EdgeInsets.only(right: 8 * s),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(8 * s),
+              border: Border.all(color: Colors.white10),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Minimize Button
+                Tooltip(
+                  message: '최소화',
+                  child: InkWell(
+                    onTap: () async {
+                      if (!kIsWeb && Platform.isWindows) {
+                        await windowManager.minimize();
+                      } else {
+                        _triggerWebPip();
+                      }
+                    },
+                    borderRadius: BorderRadius.horizontal(left: Radius.circular(8 * s)),
+                    child: Container(
+                      width: 34 * s,
+                      height: 32 * s,
+                      alignment: Alignment.center,
+                      child: Icon(Icons.remove_rounded, color: Colors.white70, size: 16 * s),
                     ),
-                    SizedBox(width: 16 * s),
-                  ] else if (_usbType == 'Cloud') ...[
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 8 * s,
-                        vertical: 3 * s,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF006a60).withOpacity(0.18),
-                        borderRadius: BorderRadius.circular(6 * s),
-                        border: Border.all(
-                          color: const Color(0xFF74f8e5).withOpacity(0.4),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.cloud_done_rounded,
-                              color: const Color(0xFF74f8e5), size: 12 * s),
-                          SizedBox(width: 4 * s),
-                          Text(
-                            'Cloud',
-                            style: GoogleFonts.notoSansKr(
-                              color: const Color(0xFF74f8e5),
-                              fontSize: 11 * s,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
+                  ),
+                ),
+                Container(width: 1, height: 16 * s, color: Colors.white10),
+
+                // Maximize / Restore Button
+                Tooltip(
+                  message: '최대화 / 복원',
+                  child: InkWell(
+                    onTap: () async {
+                      if (!kIsWeb && Platform.isWindows) {
+                        if (await windowManager.isMaximized()) {
+                          await windowManager.unmaximize();
+                        } else {
+                          await windowManager.maximize();
+                        }
+                      }
+                    },
+                    child: Container(
+                      width: 34 * s,
+                      height: 32 * s,
+                      alignment: Alignment.center,
+                      child: Icon(Icons.crop_square_rounded, color: Colors.white70, size: 14 * s),
                     ),
-                    SizedBox(width: 16 * s),
-                  ],
+                  ),
+                ),
+                Container(width: 1, height: 16 * s, color: Colors.white10),
+
+                // Close Button
+                Tooltip(
+                  message: '창 닫기',
+                  child: InkWell(
+                    onTap: () async {
+                      if (!kIsWeb && Platform.isWindows) {
+                        await windowManager.close();
+                      } else {
+                        TeacherView.onWindowClosePressed?.call();
+                      }
+                    },
+                    borderRadius: BorderRadius.horizontal(right: Radius.circular(8 * s)),
+                    hoverColor: Colors.redAccent.withOpacity(0.85),
+                    child: Container(
+                      width: 34 * s,
+                      height: 32 * s,
+                      alignment: Alignment.center,
+                      child: Icon(Icons.close_rounded, color: Colors.white, size: 16 * s),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -7066,7 +7555,7 @@ class _TeacherViewState extends State<TeacherView> {
                 ),
                 SizedBox(height: 8 * s),
 
-                // 3. Quick Action Toolbar (Compact 4-Action Bar)
+                // 3. Quick Action Toolbar (Expanded 6-Action Bar)
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: 4 * s, vertical: 4 * s),
                   decoration: BoxDecoration(
@@ -7074,40 +7563,66 @@ class _TeacherViewState extends State<TeacherView> {
                     borderRadius: BorderRadius.circular(10 * s),
                     border: Border.all(color: Colors.white.withOpacity(0.06)),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  child: Column(
                     children: [
-                      _buildSlimActionBtn(
-                        icon: Icons.upload_file_rounded,
-                        iconColor: const Color(0xFF4285F4),
-                        label: '업로드',
-                        tooltip: '파일 올리기 (PDF / PPT / 교안)',
-                        onTap: _uploadLocalFileToDrive,
-                        s: s,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildSlimActionBtn(
+                            icon: Icons.upload_file_rounded,
+                            iconColor: const Color(0xFF4285F4),
+                            label: '업로드',
+                            tooltip: '파일 올리기 (PDF / PPT / 교안)',
+                            onTap: _uploadLocalFileToDrive,
+                            s: s,
+                          ),
+                          _buildSlimActionBtn(
+                            icon: Icons.palette_rounded,
+                            iconColor: const Color(0xFF00C4CC),
+                            label: 'Canva',
+                            tooltip: 'Canva 디자인 등록',
+                            onTap: _showRegisterCanvaDialog,
+                            s: s,
+                          ),
+                          _buildSlimActionBtn(
+                            icon: Icons.campaign_rounded,
+                            iconColor: const Color(0xFF00F5D4),
+                            label: '광고판',
+                            tooltip: '교내 광고판 / 공지 관리',
+                            onTap: _openBillboardManagement,
+                            s: s,
+                          ),
+                        ],
                       ),
-                      _buildSlimActionBtn(
-                        icon: Icons.palette_rounded,
-                        iconColor: const Color(0xFF00C4CC),
-                        label: 'Canva',
-                        tooltip: 'Canva 디자인 등록',
-                        onTap: _showRegisterCanvaDialog,
-                        s: s,
-                      ),
-                      _buildSlimActionBtn(
-                        icon: Icons.create_new_folder_rounded,
-                        iconColor: const Color(0xFFFF8906),
-                        label: '새 폴더',
-                        tooltip: '새 폴더 생성',
-                        onTap: _showCreateFolderDialog,
-                        s: s,
-                      ),
-                      _buildSlimActionBtn(
-                        icon: Icons.sync_alt_rounded,
-                        iconColor: const Color(0xFF00F5D4),
-                        label: '동기화',
-                        tooltip: '로컬 ↔ Drive 폴더 동기화',
-                        onTap: _openDriveFolderSyncDialog,
-                        s: s,
+                      SizedBox(height: 4 * s),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildSlimActionBtn(
+                            icon: Icons.picture_in_picture_alt_rounded,
+                            iconColor: const Color(0xFFFF8906),
+                            label: '미니팝업',
+                            tooltip: kIsWeb ? '다음 교시 웹 팝업 (PiP)' : '다음 교시 미니 플로팅',
+                            onTap: kIsWeb ? _triggerWebPip : _enterMiniMode,
+                            s: s,
+                          ),
+                          _buildSlimActionBtn(
+                            icon: Icons.create_new_folder_rounded,
+                            iconColor: const Color(0xFFF4B400),
+                            label: '새 폴더',
+                            tooltip: '새 폴더 생성',
+                            onTap: _showCreateFolderDialog,
+                            s: s,
+                          ),
+                          _buildSlimActionBtn(
+                            icon: Icons.sync_alt_rounded,
+                            iconColor: const Color(0xFF2EC4B6),
+                            label: '동기화',
+                            tooltip: '로컬 ↔ Drive 폴더 동기화',
+                            onTap: _openDriveFolderSyncDialog,
+                            s: s,
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -7172,89 +7687,169 @@ class _TeacherViewState extends State<TeacherView> {
                             ],
                           ),
                         ),
-                        SizedBox(height: 8 * s),
+                        SizedBox(height: 6 * s),
                         // 빠른 실행 및 전자칠판 기기 제어
                         Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              InkWell(
-                                onTap: _openAuthManagement,
-                                borderRadius: BorderRadius.circular(8 * s),
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF00F5D4).withOpacity(0.08),
-                                    borderRadius: BorderRadius.circular(8 * s),
-                                    border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.25)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.devices_rounded, size: 14 * s, color: const Color(0xFF00F5D4)),
-                                      SizedBox(width: 8 * s),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              '전자칠판 기기 관리',
-                                              style: GoogleFonts.notoSansKr(
-                                                color: Colors.white,
-                                                fontSize: 10.5 * s,
-                                                fontWeight: FontWeight.bold,
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                InkWell(
+                                  onTap: _openBillboardManagement,
+                                  borderRadius: BorderRadius.circular(8 * s),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 6 * s),
+                                    margin: EdgeInsets.only(bottom: 6 * s),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF00F5D4).withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(8 * s),
+                                      border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.25)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.campaign_rounded, size: 14 * s, color: const Color(0xFF00F5D4)),
+                                        SizedBox(width: 8 * s),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                '전자칠판 광고판 / 공지 관리',
+                                                style: GoogleFonts.notoSansKr(
+                                                  color: Colors.white,
+                                                  fontSize: 10 * s,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
-                                            ),
-                                            Text(
-                                              '신뢰 기기 승인 및 접속 감사 로그',
-                                              style: TextStyle(color: Colors.white38, fontSize: 8.5 * s),
-                                            ),
-                                          ],
+                                              Text(
+                                                '배너 사진 업로드 및 게시',
+                                                style: TextStyle(color: Colors.white38, fontSize: 8 * s),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                      Icon(Icons.chevron_right_rounded, size: 14 * s, color: const Color(0xFF00F5D4)),
-                                    ],
+                                        Icon(Icons.chevron_right_rounded, size: 13 * s, color: const Color(0xFF00F5D4)),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                              InkWell(
-                                onTap: () => _checkForAppUpdates(silent: false),
-                                borderRadius: BorderRadius.circular(8 * s),
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF2EC4B6).withOpacity(0.08),
-                                    borderRadius: BorderRadius.circular(8 * s),
-                                    border: Border.all(color: const Color(0xFF2EC4B6).withOpacity(0.25)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.system_update_rounded, size: 14 * s, color: const Color(0xFF2EC4B6)),
-                                      SizedBox(width: 8 * s),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              '버전 & 업데이트',
-                                              style: GoogleFonts.notoSansKr(
-                                                color: Colors.white,
-                                                fontSize: 10.5 * s,
-                                                fontWeight: FontWeight.bold,
+                                InkWell(
+                                  onTap: kIsWeb ? _triggerWebPip : _enterMiniMode,
+                                  borderRadius: BorderRadius.circular(8 * s),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 6 * s),
+                                    margin: EdgeInsets.only(bottom: 6 * s),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFF8906).withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(8 * s),
+                                      border: Border.all(color: const Color(0xFFFF8906).withOpacity(0.25)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.picture_in_picture_alt_rounded, size: 14 * s, color: const Color(0xFFFF8906)),
+                                        SizedBox(width: 8 * s),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                kIsWeb ? '다음 교시 웹 팝업 (PiP)' : '다음 교시 미니 플로팅',
+                                                style: GoogleFonts.notoSansKr(
+                                                  color: Colors.white,
+                                                  fontSize: 10 * s,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
-                                            ),
-                                            Text(
-                                              'v${UpdateService.currentVersion} (클릭 시 최신 버전 확인)',
-                                              style: TextStyle(color: Colors.white38, fontSize: 8.5 * s),
-                                            ),
-                                          ],
+                                              Text(
+                                                '앱이 닫혀있을 때도 항상 위로 확인',
+                                                style: TextStyle(color: Colors.white38, fontSize: 8 * s),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                      Icon(Icons.refresh_rounded, size: 14 * s, color: const Color(0xFF2EC4B6)),
-                                    ],
+                                        Icon(Icons.chevron_right_rounded, size: 13 * s, color: const Color(0xFFFF8906)),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
+                                InkWell(
+                                  onTap: _openAuthManagement,
+                                  borderRadius: BorderRadius.circular(8 * s),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 6 * s),
+                                    margin: EdgeInsets.only(bottom: 6 * s),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF7F5AF0).withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(8 * s),
+                                      border: Border.all(color: const Color(0xFF7F5AF0).withOpacity(0.25)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.devices_rounded, size: 14 * s, color: const Color(0xFF7F5AF0)),
+                                        SizedBox(width: 8 * s),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                '전자칠판 기기 관리',
+                                                style: GoogleFonts.notoSansKr(
+                                                  color: Colors.white,
+                                                  fontSize: 10 * s,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              Text(
+                                                '신뢰 기기 승인 및 접속 감사 로그',
+                                                style: TextStyle(color: Colors.white38, fontSize: 8 * s),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Icon(Icons.chevron_right_rounded, size: 13 * s, color: const Color(0xFF7F5AF0)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                InkWell(
+                                  onTap: () => _checkForAppUpdates(silent: false),
+                                  borderRadius: BorderRadius.circular(8 * s),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 6 * s),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF2EC4B6).withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(8 * s),
+                                      border: Border.all(color: const Color(0xFF2EC4B6).withOpacity(0.25)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.system_update_rounded, size: 14 * s, color: const Color(0xFF2EC4B6)),
+                                        SizedBox(width: 8 * s),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                '버전 & 업데이트',
+                                                style: GoogleFonts.notoSansKr(
+                                                  color: Colors.white,
+                                                  fontSize: 10 * s,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              Text(
+                                                'v${UpdateService.currentVersion} (클릭 시 최신 확인)',
+                                                style: TextStyle(color: Colors.white38, fontSize: 8 * s),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Icon(Icons.refresh_rounded, size: 13 * s, color: const Color(0xFF2EC4B6)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],

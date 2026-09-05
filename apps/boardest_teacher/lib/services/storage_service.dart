@@ -18,7 +18,7 @@ class StorageService {
   static const String _keyAppSettings = 'app_settings';
   static const String _usbFileHistoryKey = 'usb_file_history';
 
-  /// Saves the complete AppSettings object to local storage.
+  /// Saves the complete AppSettings object to local storage and hardened disk backup.
   Future<void> saveSettings(AppSettings settings) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyAppSettings, json.encode(settings.toJson()));
@@ -30,6 +30,39 @@ class StorageService {
         final file = File(p.join(exeDir, 'special_classroom.txt'));
         await file.writeAsString(settings.specialClassroomType.toString());
       } catch (_) {}
+
+      // Hardened disk backup for school_config.json
+      try {
+        final configMap = {
+          'region': settings.selectedSchool?.region ?? '서울',
+          'schoolName': settings.selectedSchool?.name ?? '',
+          'schoolId': settings.schoolId.isNotEmpty ? settings.schoolId : 'ydm',
+          'schoolCode': settings.selectedSchool?.code ?? 44134,
+          'grade': settings.selectedGrade,
+          'classNum': settings.selectedClass,
+          'selectedTeacher': settings.selectedTeacher,
+          'selectedTeacherId': settings.selectedTeacherId,
+          'selectedTeacherName': settings.selectedTeacherName,
+          'cafeteriaNum': settings.cafeteriaNum,
+          'isHomeroom': settings.isHomeroom,
+          'isSetupComplete': settings.isSetupComplete,
+          'appSettings': settings.toJson(),
+        };
+        final configJson = const JsonEncoder.withIndent('  ').convert(configMap);
+        
+        final appDataFile = File(AppPaths.schoolConfigPath);
+        await appDataFile.parent.create(recursive: true);
+        await appDataFile.writeAsString(configJson);
+
+        final exeDir = File(Platform.resolvedExecutable).parent.path;
+        final exeFile = File(p.join(exeDir, 'school_config.json'));
+        await exeFile.writeAsString(configJson);
+
+        final devFile = File('school_config.json');
+        if (await devFile.exists()) {
+          await devFile.writeAsString(configJson);
+        }
+      } catch (_) {}
     }
 
     // Maintain legacy fields for compatibility
@@ -40,36 +73,94 @@ class StorageService {
     await prefs.setInt(_keyClass, settings.selectedClass);
   }
 
-  /// Retrieves the AppSettings object from local storage.
+  /// Retrieves the AppSettings object from local storage (with automatic disk backup recovery).
   Future<AppSettings> getSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString(_keyAppSettings);
-    if (jsonStr == null) {
-      // Migrate from legacy fields if they exist
-      final legacySchoolStr = prefs.getString(_keySchool);
-      final legacyGrade = prefs.getInt(_keyGrade) ?? 1;
-      final legacyClass = prefs.getInt(_keyClass) ?? 1;
-      
-      School? legacySchool;
-      if (legacySchoolStr != null) {
-        try {
-          legacySchool = School.fromJson(json.decode(legacySchoolStr) as Map<String, dynamic>);
-        } catch (_) {}
-      }
-
-      return AppSettings(
-        selectedSchool: legacySchool,
-        selectedGrade: legacyGrade,
-        selectedClass: legacyClass,
-        isSetupComplete: false,
-      );
+    if (jsonStr != null && jsonStr.isNotEmpty) {
+      try {
+        final decoded = json.decode(jsonStr) as Map<String, dynamic>;
+        final parsed = AppSettings.fromJson(decoded);
+        if (parsed.isSetupComplete || parsed.selectedSchool != null) {
+          return parsed;
+        }
+      } catch (_) {}
     }
 
-    try {
-      return AppSettings.fromJson(json.decode(jsonStr) as Map<String, dynamic>);
-    } catch (_) {
-      return AppSettings();
+    // Disk fallback: check school_config.json
+    if (!kIsWeb) {
+      try {
+        File? candidateFile;
+        final f1 = File(AppPaths.schoolConfigPath);
+        if (await f1.exists()) {
+          candidateFile = f1;
+        } else {
+          final exeDir = File(Platform.resolvedExecutable).parent.path;
+          final f2 = File(p.join(exeDir, 'school_config.json'));
+          if (await f2.exists()) {
+            candidateFile = f2;
+          } else {
+            final f3 = File('school_config.json');
+            if (await f3.exists()) {
+              candidateFile = f3;
+            }
+          }
+        }
+
+        if (candidateFile != null) {
+          final content = await candidateFile.readAsString();
+          final data = json.decode(content) as Map<String, dynamic>;
+          if (data.containsKey('appSettings') && data['appSettings'] is Map) {
+            final recovered = AppSettings.fromJson(Map<String, dynamic>.from(data['appSettings'] as Map));
+            await prefs.setString(_keyAppSettings, json.encode(recovered.toJson()));
+            return recovered;
+          }
+
+          final schoolName = data['schoolName']?.toString() ?? '양동중학교';
+          final schoolId = data['schoolId']?.toString() ?? 'ydm';
+          final schoolCode = int.tryParse(data['schoolCode']?.toString() ?? '') ?? 44134;
+          final grade = int.tryParse(data['grade']?.toString() ?? '') ?? 1;
+          final classNum = int.tryParse(data['classNum']?.toString() ?? '') ?? 1;
+          final teacher = data['selectedTeacher']?.toString() ?? data['selectedTeacherName']?.toString() ?? '';
+          final teacherId = data['selectedTeacherId']?.toString() ?? teacher;
+          final isSetupComplete = data['isSetupComplete'] == true || (data['isSetupComplete']?.toString() == 'true');
+
+          final recovered = AppSettings(
+            selectedSchool: School(id: schoolCode, code: schoolCode, name: schoolName, region: data['region']?.toString() ?? '서울'),
+            schoolId: schoolId,
+            selectedGrade: grade,
+            selectedClass: classNum,
+            selectedTeacher: teacher,
+            selectedTeacherId: teacherId,
+            selectedTeacherName: teacher,
+            cafeteriaNum: data['cafeteriaNum']?.toString() ?? '1',
+            isHomeroom: data['isHomeroom'] == true,
+            isSetupComplete: isSetupComplete || schoolName.isNotEmpty,
+          );
+          await prefs.setString(_keyAppSettings, json.encode(recovered.toJson()));
+          return recovered;
+        }
+      } catch (_) {}
     }
+
+    // Migrate from legacy fields if they exist
+    final legacySchoolStr = prefs.getString(_keySchool);
+    final legacyGrade = prefs.getInt(_keyGrade) ?? 1;
+    final legacyClass = prefs.getInt(_keyClass) ?? 1;
+    
+    School? legacySchool;
+    if (legacySchoolStr != null) {
+      try {
+        legacySchool = School.fromJson(json.decode(legacySchoolStr) as Map<String, dynamic>);
+      } catch (_) {}
+    }
+
+    return AppSettings(
+      selectedSchool: legacySchool,
+      selectedGrade: legacyGrade,
+      selectedClass: legacyClass,
+      isSetupComplete: false,
+    );
   }
 
   /// Clears all local and cloud session data (Logout)
@@ -89,6 +180,17 @@ class StorageService {
     await prefs.remove('bst_user_name');
     await prefs.remove('bst_school_name');
     await prefs.remove('boardest_auth_callback_search');
+
+    if (!kIsWeb) {
+      try {
+        final f1 = File(AppPaths.schoolConfigPath);
+        if (await f1.exists()) await f1.delete();
+        final exeDir = File(Platform.resolvedExecutable).parent.path;
+        final f2 = File(p.join(exeDir, 'school_config.json'));
+        if (await f2.exists()) await f2.delete();
+      } catch (_) {}
+    }
+
     await CloudDriveService.instance.clearSession();
   }
 
@@ -112,9 +214,8 @@ class StorageService {
         );
         final res = await http.get(url).timeout(const Duration(seconds: 4));
         if (res.statusCode == 404) {
-          debugPrint('[StorageService] ⚠️ Teacher profile not found (deleted from Firestore). Logging out...');
-          await clearAllSession();
-          return AppSettings(isSetupComplete: false);
+          debugPrint('[StorageService] ℹ️ Teacher profile not found in remote Firestore (404). Retaining local cached settings.');
+          return settings;
         } else if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
           final fields = data['fields'] as Map<String, dynamic>?;
@@ -255,6 +356,16 @@ class StorageService {
     await prefs.remove(_keyGrade);
     await prefs.remove(_keyClass);
     await prefs.remove(_keyAppSettings);
+
+    if (!kIsWeb) {
+      try {
+        final f1 = File(AppPaths.schoolConfigPath);
+        if (await f1.exists()) await f1.delete();
+        final exeDir = File(Platform.resolvedExecutable).parent.path;
+        final f2 = File(p.join(exeDir, 'school_config.json'));
+        if (await f2.exists()) await f2.delete();
+      } catch (_) {}
+    }
   }
 
   /// USB 파일 기록 저장 (최근 10개 파일 추적)

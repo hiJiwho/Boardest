@@ -97,7 +97,7 @@ void main(List<String> args) async {
     }
 
     final prefs = await SharedPreferences.getInstance();
-    final cachedToken = prefs.getString('bst_google_access_token') ?? prefs.getString('bst_token') ?? '';
+    final cachedToken = prefs.getString('bst_cld_access_token') ?? prefs.getString('bst_google_access_token') ?? prefs.getString('bst_token') ?? '';
     final cachedEmail = prefs.getString('bst_google_user_email') ?? prefs.getString('bst_user_email') ?? '';
 
     if (params['auth'] == 'success' || params.containsKey('token') || params.containsKey('access_token') || params.containsKey('email') || cachedToken.isNotEmpty || cachedEmail.isNotEmpty) {
@@ -122,11 +122,7 @@ void main(List<String> args) async {
           );
           final res = await http.get(url).timeout(const Duration(seconds: 4));
           if (res.statusCode == 404) {
-            debugPrint('[main.dart] ⚠️ Profile deleted from Firestore (404). Clearing session.');
-            await storage.clearAllSession();
-            // 404 시 설정 완료되지 않은 상태로 초기화
-            await storage.saveSettings(AppSettings(isSetupComplete: false));
-            return;
+            debugPrint('[main.dart] ℹ️ Profile not in Firestore (404). Retaining cached local settings.');
           } else if (res.statusCode == 200) {
             final data = jsonDecode(res.body);
             final fields = data['fields'] as Map<String, dynamic>?;
@@ -187,7 +183,8 @@ void main(List<String> args) async {
         name: schoolName,
         region: '서울',
       );
-      final newSettings = AppSettings(
+      final existing = await storage.getSettings();
+      final newSettings = existing.copyWith(
         selectedSchool: school,
         schoolId: schoolId,
         selectedGrade: grade,
@@ -196,6 +193,7 @@ void main(List<String> args) async {
         selectedTeacherId: teacherId.isNotEmpty ? teacherId : teacherName,
         selectedTeacherName: teacherName,
         cafeteriaNum: cafeteria,
+        isHomeroom: isHomeroom,
         isSetupComplete: true,
       );
       await storage.saveSettings(newSettings);

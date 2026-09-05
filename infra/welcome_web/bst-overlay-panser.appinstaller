@@ -1,16 +1,16 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.8"
+    Version="2.9.9.9"
     Uri="https://github.com/hiJiwho/Boardest/releases/latest/download/bst-overlay-panser.appinstaller">
     <MainPackage
         Name="jiwho.boardest.plugin.overlaypanser"
         Publisher="CN=jiwho"
-        Version="2.9.9.8"
+        Version="2.9.9.9"
         ProcessorArchitecture="x64"
         Uri="https://github.com/hiJiwho/Boardest/releases/latest/download/bst-overlay-panser.appx" />
     <UpdateSettings>
-        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false"/>
+        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="true"/>
         <AutomaticBackgroundTask/>
         <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
     </UpdateSettings>
