@@ -176,10 +176,8 @@ class _TeacherViewState extends State<TeacherView> {
   String? _activeFilePath;
   String? _activeSubject;
 
-  // USB Pro 및 매핑/동기화 상태
-  Map<String, String> _classroomFolderMappings = {};
+  // USB Pro 및 동기화 상태
   List<String> _usbFolders = [];
-  String? _selectedProClassroom;
   List<Map<String, String>> _syncConfigs = [];
   List<StreamSubscription<FileSystemEvent>> _syncWatchers = [];
   Timer? _debounceSyncTimer;
@@ -323,7 +321,11 @@ class _TeacherViewState extends State<TeacherView> {
 
   Future<void> _init() async {
     _startOtpTimer();
-    _checkForAppUpdates(silent: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _checkForAppUpdates(silent: true);
+      }
+    });
     if (!kIsWeb && Platform.isWindows) {
       PanserPluginService.checkAndAutoInstallOnStartup();
     }
@@ -337,7 +339,6 @@ class _TeacherViewState extends State<TeacherView> {
         setState(() {
           _settings = s;
         });
-        _loadClassroomMappings();
         _refreshDriveFiles();
         if (_settings.schoolId.isNotEmpty || _settings.selectedSchool != null) {
           try {
@@ -364,7 +365,6 @@ class _TeacherViewState extends State<TeacherView> {
         }
       }
     });
-    await _loadClassroomMappings();
     final syncConfigs = await _storageService.getSyncConfigs();
     if (mounted) {
       setState(() {
@@ -615,19 +615,6 @@ class _TeacherViewState extends State<TeacherView> {
         _bridgeStatus = 'USB disconnected';
       });
     }
-
-    if (CloudDriveService.instance.isLoggedIn) {
-      _loadCloudDriveMappings();
-    }
-  }
-
-  Future<void> _loadCloudDriveMappings() async {
-    final mappings = await CloudDriveService.instance.fetchClassroomMappings();
-    if (mounted && mappings.isNotEmpty) {
-      setState(() {
-        _classroomFolderMappings = mappings;
-      });
-    }
   }
 
   Future<void> _loadUsbType(String root) async {
@@ -784,26 +771,7 @@ class _TeacherViewState extends State<TeacherView> {
         ? activePeriod.teacherClass
         : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
 
-    // 1. Try manual mapping first!
-    String? mappedFolder = _classroomFolderMappings[gradeClass];
-    if (mappedFolder == null) {
-      final cleanGradeClass = gradeClass.replaceAll(' ', '');
-      for (final entry in _classroomFolderMappings.entries) {
-        if (entry.key.replaceAll(' ', '') == cleanGradeClass) {
-          mappedFolder = entry.value;
-          break;
-        }
-      }
-    }
-
-    if (mappedFolder != null) {
-      final targetDir = Directory(p.join(root, mappedFolder));
-      if (targetDir.existsSync()) {
-        return targetDir.path;
-      }
-    }
-
-    // 2. Fallback to automatic detection
+    // Automatic detection matching classroom grade & class or subject
     final gradeClassClean = gradeClass.replaceAll(' ', '');
     try {
       final dir = Directory(root);
@@ -1358,14 +1326,14 @@ class _TeacherViewState extends State<TeacherView> {
   void _checkForAppUpdates({bool silent = false}) async {
     if (kIsWeb) return;
     try {
-      final updateInfo = await UpdateService.instance.checkForUpdate();
+      final updateInfo = await UpdateService.instance.checkForUpdate(force: !silent);
       if (updateInfo != null && updateInfo.hasUpdate && mounted) {
         UpdateService.instance.showUpdateDialog(context, updateInfo);
       } else if (!silent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('🎉 현재 최신 버전(v${UpdateService.currentVersion})을 사용하고 있습니다.'),
-            backgroundColor: Color(0xFF2EC4B6),
+            backgroundColor: const Color(0xFF2EC4B6),
           ),
         );
       }
@@ -1678,13 +1646,13 @@ class _TeacherViewState extends State<TeacherView> {
                                                 : _buildTeacherTimetablePanel(scale),
                                           ),
                                           SizedBox(height: 12 * scale),
-                                          // 하단 2단 패널: 좌측 슬림 통합 도구(OTP + 업로드 + 맵핑) (flex: 24) : 우측 파일 탐색기 초대형 확장 (flex: 76)
+                                          // 하단 2단 패널: 좌측 슬림 통합 도구(OTP + 클라우드 허브) (flex: 24) : 우측 파일 탐색기 초대형 확장 (flex: 76)
                                           Expanded(
                                             flex: 6,
                                             child: Row(
                                               crossAxisAlignment: CrossAxisAlignment.stretch,
                                               children: [
-                                                // 좌측: 슬림화된 OTP 및 빠른 도구 & 교과/반별 맵핑 (flex: 24)
+                                                // 좌측: 슬림화된 OTP 및 클라우드 안심 연동 허브 (flex: 24)
                                                 Expanded(
                                                   flex: 24,
                                                   child: _isUsbConnected
@@ -2486,8 +2454,7 @@ class _TeacherViewState extends State<TeacherView> {
     }
   }
 
-  /// 로컬 폴더 ↔ Google Drive 폴더 맵핑 및 동기화 다이얼로그
-  /// 로컬 폴더 ↔ Google Drive 폴더 맵핑 및 동기화 다이얼로그 (Web 폴더 API 및 Native EXE 지원)
+  /// 로컬 폴더 ↔ Google Drive 폴더 클라우드 동기화 다이얼로그 (Web 폴더 API 및 Native EXE 지원)
   Future<void> _openDriveFolderSyncDialog() async {
     if (kIsWeb) {
       if (mounted) {
@@ -2528,14 +2495,14 @@ class _TeacherViewState extends State<TeacherView> {
           children: [
             const Icon(Icons.sync_alt_rounded, color: Color(0xFF00F5D4)),
             const SizedBox(width: 8),
-            Text('폴더 동기화 / 맵핑', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
+            Text('폴더 클라우드 동기화', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('선택한 로컬 폴더("$dirName")를 Cloud Drive의 bst-sync 폴더와 맵핑하여 지금 동기화하시겠습니까?', style: GoogleFonts.notoSansKr(color: Colors.white70)),
+            Text('선택한 로컬 폴더("$dirName")를 Cloud Drive의 bst-sync 폴더와 지금 동기화하시겠습니까?', style: GoogleFonts.notoSansKr(color: Colors.white70)),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(8),
@@ -4311,169 +4278,6 @@ class _TeacherViewState extends State<TeacherView> {
     );
   }
 
-  // ── USB 연결 시 반 매핑 패널 (flex 2) ─────────────────
-  // ── 중앙: USB 연결 시 USB 탐색기 / 평상시 및 Web: OTP & Cloud 패널 ───────
-  Widget _buildMappingPanel(double s) {
-    if (_isUsbConnected && !kIsWeb) {
-      return _buildUsbPanel(s);
-    }
-    return _buildCloudDrivePanel(s);
-  }
-
-  // ── (레거시) USB 연결 시 반 매핑 패널 ─────────────────
-  Widget _buildLegacyMappingPanel(double s) {
-    if (kIsWeb) {
-      return _buildCloudDrivePanel(s);
-    }
-    // 이 교사가 담당하는 클래스 목록
-    final teacherName = _settings.selectedTeacher
-        .replaceAll('*', '')
-        .trim()
-        .toUpperCase();
-    final classroomSet = <String>{};
-    if (_timetableResult != null && teacherName.isNotEmpty) {
-      for (final l in _timetableResult!.lessons) {
-        if (l.teacher.replaceAll('*', '').trim().toUpperCase() == teacherName) {
-          classroomSet.add('${l.grade}-${l.classNum}반');
-        }
-      }
-    }
-    final classrooms = classroomSet.toList();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: _surfaceColor,
-        borderRadius: BorderRadius.circular(20 * s),
-        border: Border.all(color: _borderColor),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20 * s),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Padding(
-            padding: EdgeInsets.all(14 * s),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.class_rounded,
-                      color: _accentColor,
-                      size: 16 * s,
-                    ),
-                    SizedBox(width: 6 * s),
-                    Expanded(
-                      child: Text(
-                        '반 매핑',
-                        style: GoogleFonts.notoSansKr(
-                          color: _textColor,
-                          fontSize: 12 * s,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => _openFolderOptionsDialog(initialTab: 1),
-                      child: Icon(
-                        Icons.tune_rounded,
-                        color: _textColor54,
-                        size: 14 * s,
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 10 * s),
-                if (classrooms.isEmpty)
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        '시간표를 먼저 불러오세요',
-                        style: GoogleFonts.notoSansKr(
-                          color: _textColor38,
-                          fontSize: 11 * s,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  )
-                else
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: classrooms.length,
-                      itemBuilder: (_, idx) {
-                        final cls = classrooms[idx];
-                        final longKey = cls.replaceAll('-', '학년 ');
-                        final mapped = _classroomFolderMappings[longKey];
-                        final isActive = mapped != null;
-                        return GestureDetector(
-                          onTap: () => _openFolderOptionsDialog(initialTab: 1),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            margin: EdgeInsets.only(bottom: 6 * s),
-                            padding: EdgeInsets.all(10 * s),
-                            decoration: BoxDecoration(
-                              color: isActive
-                                  ? _accentColor.withOpacity(0.10)
-                                  : _cardColor,
-                              borderRadius: BorderRadius.circular(10 * s),
-                              border: Border.all(
-                                color: isActive
-                                    ? _accentColor.withOpacity(0.4)
-                                    : _borderColor,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.folder_rounded,
-                                  color: isActive ? _accentColor : _textColor38,
-                                  size: 14 * s,
-                                ),
-                                SizedBox(width: 8 * s),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        cls,
-                                        style: GoogleFonts.notoSansKr(
-                                          color: _textColor,
-                                          fontSize: 11 * s,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      if (isActive) ...[
-                                        SizedBox(height: 2 * s),
-                                        Text(
-                                          mapped!,
-                                          style: GoogleFonts.notoSansKr(
-                                            color: _textColor54,
-                                            fontSize: 9 * s,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── 가운데: USB 탐색기 패널 ─────────────────────────
 
   Widget _buildUsbPanel(double s) {
     return Container(
@@ -4589,14 +4393,7 @@ class _TeacherViewState extends State<TeacherView> {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(14 * s),
                             child: UsbExplorer(
-                              drivePath:
-                                  _classroomFolderMappings[_selectedProClassroom] !=
-                                      null
-                                  ? p.join(
-                                      _usbDriveLetter,
-                                      _classroomFolderMappings[_selectedProClassroom]!,
-                                    )
-                                  : _currentDrivePath.isNotEmpty
+                              drivePath: _currentDrivePath.isNotEmpty
                                   ? _currentDrivePath
                                   : _usbDriveLetter,
                               scaleFactor: s,
@@ -4678,8 +4475,8 @@ class _TeacherViewState extends State<TeacherView> {
       badgeColor = _accentColorDark;
       final isMapped = _currentDrivePath != _usbDriveLetter;
       desc = isMapped
-          ? '교실 맵핑 완료 (클릭 시 USB 루트로 복귀)'
-          : 'Boardest-Pro 모드 (클릭 시 현재 교실 폴더로 맵핑)';
+          ? '교실 폴더 이동 완료 (클릭 시 USB 루트로 복귀)'
+          : 'Boardest-Pro 모드 (클릭 시 현재 교실 폴더로 이동)';
     } else {
       badgeColor = const Color(0xFF2EC4B6);
       desc = '포맷되지 않은 일반 상태입니다. USB 내부 전체를 자유롭게 탐색합니다.';
@@ -6553,28 +6350,6 @@ class _TeacherViewState extends State<TeacherView> {
     );
   }
 
-  Future<void> _loadClassroomMappings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString('classroom_folder_mappings');
-    if (jsonStr != null) {
-      try {
-        setState(() {
-          _classroomFolderMappings = Map<String, String>.from(
-            jsonDecode(jsonStr),
-          );
-        });
-      } catch (_) {}
-    }
-  }
-
-  Future<void> _saveClassroomMappings() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'classroom_folder_mappings',
-      jsonEncode(_classroomFolderMappings),
-    );
-  }
-
   void _scanUsbFolders() {
     if (!_isUsbConnected || _usbDriveLetter.isEmpty) {
       setState(() {
@@ -7104,171 +6879,7 @@ class _TeacherViewState extends State<TeacherView> {
     );
   }
 
-  // ── 교과 / 반별 폴더 맵핑 추가 다이얼로그 ──
-  void _showAddClassroomMappingDialog(double s) {
-    String selectedGrade = '1학년';
-    String selectedClass = '1반';
-    String selectedFolder = '';
-    final folderCandidates = _driveFiles
-        .where((f) => (f['mimeType']?.toString() ?? '') == 'application/vnd.google-apps.folder')
-        .map((f) => f['name']?.toString() ?? '')
-        .where((name) => name.isNotEmpty)
-        .toList();
-    if (folderCandidates.isNotEmpty) selectedFolder = folderCandidates.first;
-
-    final customFolderController = TextEditingController();
-    bool useCustomFolder = folderCandidates.isEmpty;
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDlgState) {
-            return AlertDialog(
-              backgroundColor: const Color(0xFF161920),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16 * s),
-                side: BorderSide(color: Colors.white.withOpacity(0.1)),
-              ),
-              title: Row(
-                children: [
-                  Icon(Icons.folder_shared_rounded, color: const Color(0xFF00F5D4), size: 20 * s),
-                  SizedBox(width: 8 * s),
-                  Text('교과 / 반별 폴더 매핑 추가', style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14 * s, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              content: SizedBox(
-                width: 380 * s,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text('학급 또는 수업 선택:', style: TextStyle(color: Colors.white70, fontSize: 11 * s, fontWeight: FontWeight.w600)),
-                    SizedBox(height: 6 * s),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: selectedGrade,
-                            dropdownColor: const Color(0xFF1E222D),
-                            style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 12 * s),
-                            decoration: InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
-                              filled: true,
-                              fillColor: Colors.white.withOpacity(0.05),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8 * s), borderSide: BorderSide.none),
-                            ),
-                            items: ['1학년', '2학년', '3학년', '전체'].map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
-                            onChanged: (val) => setDlgState(() => selectedGrade = val ?? '1학년'),
-                          ),
-                        ),
-                        SizedBox(width: 8 * s),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: selectedClass,
-                            dropdownColor: const Color(0xFF1E222D),
-                            style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 12 * s),
-                            decoration: InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
-                              filled: true,
-                              fillColor: Colors.white.withOpacity(0.05),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8 * s), borderSide: BorderSide.none),
-                            ),
-                            items: List.generate(10, (i) => '${i + 1}반').map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                            onChanged: (val) => setDlgState(() => selectedClass = val ?? '1반'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 12 * s),
-                    Text('Google Drive 대상 폴더 (bst-save 내):', style: TextStyle(color: Colors.white70, fontSize: 11 * s, fontWeight: FontWeight.w600)),
-                    SizedBox(height: 6 * s),
-                    if (!useCustomFolder && folderCandidates.isNotEmpty)
-                      DropdownButtonFormField<String>(
-                        value: selectedFolder.isNotEmpty ? selectedFolder : null,
-                        dropdownColor: const Color(0xFF1E222D),
-                        style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontSize: 12 * s),
-                        decoration: InputDecoration(
-                          contentPadding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
-                          filled: true,
-                          fillColor: Colors.white.withOpacity(0.05),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8 * s), borderSide: BorderSide.none),
-                        ),
-                        items: folderCandidates.map((f) => DropdownMenuItem<String>(value: f, child: Text(f))).toList(),
-                        onChanged: (val) => setDlgState(() => selectedFolder = val ?? ''),
-                      )
-                    else
-                      TextField(
-                        controller: customFolderController,
-                        style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontSize: 12 * s),
-                        decoration: InputDecoration(
-                          hintText: '폴더 이름 입력 (예: 수학, 영어, 과학)',
-                          hintStyle: TextStyle(color: Colors.white30, fontSize: 11 * s),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
-                          filled: true,
-                          fillColor: Colors.white.withOpacity(0.05),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8 * s), borderSide: BorderSide.none),
-                        ),
-                      ),
-                    if (folderCandidates.isNotEmpty)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: () => setDlgState(() => useCustomFolder = !useCustomFolder),
-                            child: Text(
-                              useCustomFolder ? '목록에서 선택' : '직접 입력',
-                              style: TextStyle(color: const Color(0xFF7F5AF0), fontSize: 10.5 * s),
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text('취소', style: TextStyle(color: Colors.white54, fontSize: 12 * s)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00F5D4),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8 * s)),
-                  ),
-                  onPressed: () async {
-                    final classKey = '$selectedGrade $selectedClass';
-                    final targetFolder = (useCustomFolder ? customFolderController.text.trim() : selectedFolder).trim();
-                    if (targetFolder.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('매핑할 폴더명을 지정해주세요.')),
-                      );
-                      return;
-                    }
-                    setState(() {
-                      _classroomFolderMappings[classKey] = targetFolder;
-                    });
-                    await _saveClassroomMappings();
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('✨ [$classKey] ➔ [$targetFolder] 매핑이 저장되었습니다.'),
-                        backgroundColor: const Color(0xFF2EC4B6),
-                      ),
-                    );
-                  },
-                  child: Text('매핑 저장', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold, fontSize: 12 * s)),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // ── 하단 좌측: OTP, 빠른 도구, 교과/반별 매핑 통합 패널 (flex: 38) ──
+  // ── 하단 좌측: OTP, 빠른 도구, 클라우드 안심 연동 허브 (flex: 24) ──
   Widget _buildBottomUnifiedToolPanel(double s) {
     final cloud = CloudDriveService.instance;
     return Container(
@@ -7525,129 +7136,151 @@ class _TeacherViewState extends State<TeacherView> {
                 ),
                 SizedBox(height: 8 * s),
 
-                // 4. 교과 / 반별 매핑 헤더
-                Row(
-                  children: [
-                    Icon(Icons.folder_shared_outlined, size: 12 * s, color: _textColor54),
-                    SizedBox(width: 4 * s),
-                    Text(
-                      '교과 / 반별 매핑 (' + _classroomFolderMappings.length.toString() + ')',
-                      style: GoogleFonts.notoSansKr(
-                        color: _textColor70,
-                        fontSize: 10 * s,
-                        fontWeight: FontWeight.w600,
-                      ),
+                // 4. 클라우드 안심 연동 & 신뢰 기기 허브
+                Expanded(
+                  child: Container(
+                    padding: EdgeInsets.all(10 * s),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.025),
+                      borderRadius: BorderRadius.circular(12 * s),
+                      border: Border.all(color: Colors.white.withOpacity(0.06)),
                     ),
-                    const Spacer(),
-                    InkWell(
-                      onTap: () => _showAddClassroomMappingDialog(s),
-                      borderRadius: BorderRadius.circular(4 * s),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 2 * s),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00F5D4).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(4 * s),
-                          border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.3)),
-                        ),
-                        child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
                           children: [
-                            Icon(Icons.add_rounded, size: 10 * s, color: const Color(0xFF00F5D4)),
-                            SizedBox(width: 2 * s),
+                            Icon(Icons.cloud_done_rounded, size: 14 * s, color: const Color(0xFF00F5D4)),
+                            SizedBox(width: 6 * s),
                             Text(
-                              '매핑 추가',
-                              style: TextStyle(
-                                color: const Color(0xFF00F5D4),
-                                fontSize: 9 * s,
+                              '클라우드 & 연동 센터',
+                              style: GoogleFonts.notoSansKr(
+                                color: _textColor70,
+                                fontSize: 11 * s,
                                 fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Spacer(),
+                            InkWell(
+                              onTap: _refreshDriveFiles,
+                              borderRadius: BorderRadius.circular(4 * s),
+                              child: Padding(
+                                padding: EdgeInsets.all(2 * s),
+                                child: Icon(Icons.refresh_rounded, size: 13 * s, color: _textColor54),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 4 * s),
-
-                // 5. 매핑 목록 (Expanded)
-                Expanded(
-                  child: Container(
-                    padding: EdgeInsets.all(4 * s),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8 * s),
-                      border: Border.all(color: Colors.white.withOpacity(0.04)),
-                    ),
-                    child: _classroomFolderMappings.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '매핑된 교과 폴더가 없습니다.',
-                                  style: TextStyle(color: Colors.white30, fontSize: 9 * s),
+                        SizedBox(height: 8 * s),
+                        // Google 계정 연결 뱃지
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 6 * s),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8 * s),
+                            border: Border.all(color: Colors.white.withOpacity(0.04)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.account_circle_rounded, size: 16 * s, color: const Color(0xFF2EC4B6)),
+                              SizedBox(width: 6 * s),
+                              Expanded(
+                                child: Text(
+                                  CloudDriveService.instance.userEmail ?? 'Google 드라이브 연결됨',
+                                  style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 10 * s),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                SizedBox(height: 4 * s),
-                                InkWell(
-                                  onTap: () => _showAddClassroomMappingDialog(s),
-                                  child: Text(
-                                    '+ 학급 매핑 추가하기',
-                                    style: TextStyle(color: const Color(0xFF00F5D4), fontSize: 9.5 * s, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 8 * s),
+                        // 빠른 실행 및 전자칠판 기기 제어
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              InkWell(
+                                onTap: _openAuthManagement,
+                                borderRadius: BorderRadius.circular(8 * s),
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF00F5D4).withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(8 * s),
+                                    border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.25)),
                                   ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : ListView.separated(
-                            itemCount: _classroomFolderMappings.length,
-                            separatorBuilder: (_, __) => Divider(color: Colors.white.withOpacity(0.04), height: 3 * s),
-                            itemBuilder: (ctx, idx) {
-                              final entry = _classroomFolderMappings.entries.elementAt(idx);
-                              return InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    _cloudSearchQuery = entry.value;
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('🔍 [${entry.value}] 폴더로 검색 필터링되었습니다.'),
-                                      duration: const Duration(seconds: 1),
-                                    ),
-                                  );
-                                },
-                                borderRadius: BorderRadius.circular(4 * s),
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 2 * s, horizontal: 4 * s),
                                   child: Row(
                                     children: [
-                                      Icon(Icons.folder_rounded, size: 11 * s, color: const Color(0xFF00F5D4)),
-                                      SizedBox(width: 4 * s),
+                                      Icon(Icons.devices_rounded, size: 14 * s, color: const Color(0xFF00F5D4)),
+                                      SizedBox(width: 8 * s),
                                       Expanded(
-                                        child: Text(
-                                          entry.key + ' → ' + entry.value,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.sourceCodePro(color: Colors.white70, fontSize: 9.5 * s),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '전자칠판 기기 관리',
+                                              style: GoogleFonts.notoSansKr(
+                                                color: Colors.white,
+                                                fontSize: 10.5 * s,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            Text(
+                                              '신뢰 기기 승인 및 접속 감사 로그',
+                                              style: TextStyle(color: Colors.white38, fontSize: 8.5 * s),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                      InkWell(
-                                        onTap: () async {
-                                          setState(() {
-                                            _classroomFolderMappings.remove(entry.key);
-                                          });
-                                          await _saveClassroomMappings();
-                                        },
-                                        child: Padding(
-                                          padding: EdgeInsets.all(2 * s),
-                                          child: Icon(Icons.close_rounded, size: 11 * s, color: Colors.white38),
-                                        ),
-                                      ),
+                                      Icon(Icons.chevron_right_rounded, size: 14 * s, color: const Color(0xFF00F5D4)),
                                     ],
                                   ),
                                 ),
-                              );
-                            },
+                              ),
+                              InkWell(
+                                onTap: () => _checkForAppUpdates(silent: false),
+                                borderRadius: BorderRadius.circular(8 * s),
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF2EC4B6).withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(8 * s),
+                                    border: Border.all(color: const Color(0xFF2EC4B6).withOpacity(0.25)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.system_update_rounded, size: 14 * s, color: const Color(0xFF2EC4B6)),
+                                      SizedBox(width: 8 * s),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '버전 & 업데이트',
+                                              style: GoogleFonts.notoSansKr(
+                                                color: Colors.white,
+                                                fontSize: 10.5 * s,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            Text(
+                                              'v${UpdateService.currentVersion} (클릭 시 최신 버전 확인)',
+                                              style: TextStyle(color: Colors.white38, fontSize: 8.5 * s),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Icon(Icons.refresh_rounded, size: 14 * s, color: const Color(0xFF2EC4B6)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -8335,16 +7968,6 @@ class _BstCloudDialogState extends State<_BstCloudDialog> {
     }
   }
 
-  final Map<String, String> _classMappings = {};
-  final List<String> _targetClasses = [
-    '전체 반 공용',
-    '1학년 1반',
-    '1학년 2반',
-    '2학년 1반',
-    '2학년 2반',
-    '3학년 1반',
-    '3학년 2반',
-  ];
 
   void _showCreateFolderDialog() {
     final folderCtrl = TextEditingController();
@@ -8473,8 +8096,6 @@ class _BstCloudDialogState extends State<_BstCloudDialog> {
                           }
                         }
 
-                        final currentMappedClass = _classMappings[f.id] ?? '전체 반 공용';
-
                         return Card(
                           color: Colors.white.withOpacity(0.04),
                           margin: const EdgeInsets.only(bottom: 8),
@@ -8483,47 +8104,9 @@ class _BstCloudDialogState extends State<_BstCloudDialog> {
                             leading: Icon(iconData, color: iconColor),
                             title: Text(f.name,
                                 style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12 * s)),
-                            subtitle: Row(
-                              children: [
-                                Text(
-                                  isFolder ? '폴더' : '${f.size > 0 ? (f.size / 1024).round() : 0} KB',
-                                  style: const TextStyle(color: Colors.white38, fontSize: 10),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF2EC4B6).withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: DropdownButton<String>(
-                                    dropdownColor: const Color(0xFF242629),
-                                    value: currentMappedClass,
-                                    isDense: true,
-                                    underline: const SizedBox(),
-                                    style: GoogleFonts.notoSansKr(color: const Color(0xFF2EC4B6), fontSize: 10, fontWeight: FontWeight.bold),
-                                    items: _targetClasses.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                                    onChanged: (val) {
-                                      if (val != null) {
-                                        setState(() => _classMappings[f.id] = val);
-                                        BstCloudService.instance.saveSyncState('folder_mapping', {
-                                          'fileId': f.id,
-                                          'fileName': f.name,
-                                          'mappedClass': val,
-                                          'isFolder': isFolder,
-                                          'mappedAt': DateTime.now().toIso8601String(),
-                                        });
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('🔗 [${f.name}] ▶ [$val] 매핑 설정이 적용되었습니다!'),
-                                            backgroundColor: const Color(0xFF2EC4B6),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ],
+                            subtitle: Text(
+                              isFolder ? '폴더' : '${f.size > 0 ? (f.size / 1024).round() : 0} KB',
+                              style: const TextStyle(color: Colors.white38, fontSize: 10),
                             ),
                             trailing: isFolder
                                 ? null

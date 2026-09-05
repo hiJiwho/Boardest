@@ -1268,26 +1268,6 @@ class CloudDriveService with ChangeNotifier {
     return false;
   }
 
-  /// 교과/반별 폴더 맵핑 저장
-  Future<bool> saveFolderMappings(Map<String, String> mappings) async {
-    if (_userEmail == null || _userEmail!.isEmpty) return false;
-    try {
-      final url = 'https://boardest-cloud-token.jiwho.workers.dev/api/auth/folders/save';
-      final res = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': _userEmail,
-          'folderMappings': mappings,
-        }),
-      ).timeout(const Duration(seconds: 4));
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('[CloudDriveService] saveFolderMappings error: $e');
-    }
-    return false;
-  }
-
   static const String _boardestTokenKey = 'bst_boardest_access_token';
   static const String _bstCldTokenKey = 'bst_cld_access_token';
 
@@ -1625,42 +1605,6 @@ class CloudDriveService with ChangeNotifier {
       _bstSyncFolderId = created;
     }
     return created;
-  }
-
-  /// 과목 및 학년 매핑 설정 (subject_mappings.json) 로드
-  Future<Map<String, dynamic>> fetchSubjectMappings() async {
-    if (!isLoggedIn) return {};
-    try {
-      final saveFolderId = await getOrCreateConnectFolder();
-      if (saveFolderId == null) return {};
-
-      final files = await fetchDriveFiles(folderId: saveFolderId);
-      final mappingFile = files.where((f) => f.name == 'subject_mappings.json').firstOrNull;
-      if (mappingFile != null) {
-        final bytes = await fetchDriveFileBytes(mappingFile.id);
-        if (bytes != null && bytes.isNotEmpty) {
-          return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
-        }
-      }
-    } catch (e) {
-      debugPrint('[CloudDriveService] fetchSubjectMappings error: $e');
-    }
-    return {};
-  }
-
-  /// 과목 및 학년 매핑 설정 (subject_mappings.json) 저장
-  Future<bool> saveSubjectMappings(Map<String, dynamic> mappings) async {
-    if (!isLoggedIn) return false;
-    try {
-      final saveFolderId = await getOrCreateConnectFolder();
-      if (saveFolderId == null) return false;
-
-      final content = utf8.encode(jsonEncode(mappings));
-      return await uploadBytesToDrive(Uint8List.fromList(content), 'subject_mappings.json', folderId: saveFolderId);
-    } catch (e) {
-      debugPrint('[CloudDriveService] saveSubjectMappings error: $e');
-      return false;
-    }
   }
 
   /// bst-save 에 저장된 모든 수업 자료 리스트 조회 (폴더 및 메타데이터 제외)
@@ -2089,61 +2033,6 @@ class CloudDriveService with ChangeNotifier {
       debugPrint('[CloudDriveService] fetchFreePenFiles error: $e');
       return [];
     }
-  }
-
-    /// Google Drive REST API — classroom_mappings.json 검색 및 읽기
-  Future<Map<String, String>> fetchClassroomMappings() async {
-    if (!isLoggedIn) return {};
-
-    try {
-      final url = Uri.parse(
-        'https://www.googleapis.com/drive/v3/files?'
-        'spaces=appDataFolder&'
-        "q=${Uri.encodeComponent("name = 'classroom_mappings.json' and trashed = false")}&"
-        'fields=files(id,name)',
-      );
-
-      final response = await http.get(
-        url,
-        headers: {'Authorization': 'Bearer $_accessToken'},
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final files = data['files'] as List? ?? [];
-        if (files.isNotEmpty) {
-          final fileId = files.first['id'].toString();
-          return await downloadClassroomMappingsFile(fileId);
-        }
-      }
-    } catch (e) {
-      debugPrint('[CloudDriveService] fetchClassroomMappings error: $e');
-    }
-    return {};
-  }
-
-  /// classroom_mappings.json 다운로드
-  Future<Map<String, String>> downloadClassroomMappingsFile(String fileId) async {
-    try {
-      final url = Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId?alt=media');
-      final response = await http.get(
-        url,
-        headers: {'Authorization': 'Bearer $_accessToken'},
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        if (data.containsKey('mappings')) {
-          final map = data['mappings'] as Map<String, dynamic>;
-          return map.map((k, v) => MapEntry(k, v.toString()));
-        } else {
-          return data.map((k, v) => MapEntry(k, v.toString()));
-        }
-      }
-    } catch (e) {
-      debugPrint('[CloudDriveService] downloadClassroomMappingsFile error: $e');
-    }
-    return {};
   }
 
   static final Map<String, Uint8List> webMemoryFiles = {};

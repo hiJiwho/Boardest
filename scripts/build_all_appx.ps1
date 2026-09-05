@@ -108,16 +108,16 @@ $boardestAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.2"
+    Version="2.9.9.3"
     Uri="https://download-boardest.web.app/boardest.appinstaller">
     <MainPackage
         Name="jiwho.boardest.bst"
         Publisher="CN=jiwho"
-        Version="2.9.9.2"
+        Version="2.9.9.3"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/boardest.appx" />
     <UpdateSettings>
-        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false"/>
+        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="false"/>
         <AutomaticBackgroundTask/>
         <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
     </UpdateSettings>
@@ -131,16 +131,16 @@ $teacherAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.2"
+    Version="2.9.9.3"
     Uri="https://download-boardest.web.app/bst-teacher.appinstaller">
     <MainPackage
         Name="jiwho.boardest.teacher"
         Publisher="CN=jiwho"
-        Version="2.9.9.2"
+        Version="2.9.9.3"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/bst-teacher.appx" />
     <UpdateSettings>
-        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false"/>
+        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="false"/>
         <AutomaticBackgroundTask/>
         <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
     </UpdateSettings>
@@ -154,16 +154,16 @@ $panserAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.2"
+    Version="2.9.9.3"
     Uri="$repoReleaseBase/bst-overlay-panser.appinstaller">
     <MainPackage
         Name="jiwho.boardest.plugin.overlaypanser"
         Publisher="CN=jiwho"
-        Version="2.9.9.2"
+        Version="2.9.9.3"
         ProcessorArchitecture="x64"
         Uri="$repoReleaseBase/bst-overlay-panser.appx" />
     <UpdateSettings>
-        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="true"/>
+        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="true"/>
         <AutomaticBackgroundTask/>
         <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
     </UpdateSettings>
@@ -171,5 +171,27 @@ $panserAppinstaller = @"
 "@
 Set-Content -Path (Join-Path $AppxOutDir "bst-overlay-panser.appinstaller") -Value $panserAppinstaller -Encoding UTF8
 Write-Host "Created: bst-overlay-panser.appinstaller" -ForegroundColor Green
+
+# 6. Synchronize .appinstaller manifests to infra/download_web and infra/welcome_web
+Write-Host "`n[5/5] Synchronizing .appinstaller files to web distribution directories..." -ForegroundColor Yellow
+$DownloadWebDir = Join-Path $RootDir "infra\download_web"
+$WelcomeWebDir = Join-Path $RootDir "infra\welcome_web"
+
+if (Test-Path $DownloadWebDir) {
+    Copy-Item (Join-Path $AppxOutDir "boardest.appinstaller") (Join-Path $DownloadWebDir "boardest.appinstaller") -Force
+    Copy-Item (Join-Path $AppxOutDir "boardest.appinstaller") (Join-Path $DownloadWebDir "bst.appinstaller") -Force
+    Copy-Item (Join-Path $AppxOutDir "bst-teacher.appinstaller") (Join-Path $DownloadWebDir "bst-teacher.appinstaller") -Force
+    Copy-Item (Join-Path $AppxOutDir "bst-teacher.appinstaller") (Join-Path $DownloadWebDir "teacher.appinstaller") -Force
+    Copy-Item (Join-Path $AppxOutDir "bst-overlay-panser.appinstaller") (Join-Path $DownloadWebDir "bst-overlay-panser.appinstaller") -Force
+    Write-Host "-> Synchronized all manifests to infra/download_web" -ForegroundColor Green
+}
+
+if (Test-Path $WelcomeWebDir) {
+    Copy-Item (Join-Path $AppxOutDir "boardest.appinstaller") (Join-Path $WelcomeWebDir "boardest.appinstaller") -Force
+    Copy-Item (Join-Path $AppxOutDir "boardest.appinstaller") (Join-Path $WelcomeWebDir "bst.appinstaller") -Force
+    Copy-Item (Join-Path $AppxOutDir "bst-teacher.appinstaller") (Join-Path $WelcomeWebDir "bst-teacher.appinstaller") -Force
+    Copy-Item (Join-Path $AppxOutDir "bst-teacher.appinstaller") (Join-Path $WelcomeWebDir "teacher.appinstaller") -Force
+    Write-Host "-> Synchronized all manifests to infra/welcome_web" -ForegroundColor Green
+}
 
 Write-Host "`n=== All AppX Packages and AppInstaller files built and signed successfully! ===" -ForegroundColor Cyan

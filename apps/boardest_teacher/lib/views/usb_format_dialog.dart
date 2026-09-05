@@ -293,10 +293,10 @@ class _UsbFormatDialogState extends State<UsbFormatDialog> {
         id: 'Pro',
         emoji: '🔵',
         label: 'Boardest-Pro',
-        subtitle: '교안 매칭 — 루트에 숨김 JSON 생성',
+        subtitle: '교안 자동 연결 — 전용 디렉터리 구성',
         desc:
-            '현재 수업 시간표의 반에 매핑된 특정 폴더만 노출합니다.\n'
-            '루트에 숨김 BoardestUSB.json 및 반별 폴더들이 자동 생성됩니다.',
+            '현재 수업 시간표의 학년/반에 맞추어 해당 폴더 자료를 표시합니다.\n'
+            '루트에 전용 BoardestUSB.json 및 학년/반 폴더들이 자동 구성됩니다.',
         accentColor: const Color(0xFF7F5AF0),
         warningText: null,
       ),

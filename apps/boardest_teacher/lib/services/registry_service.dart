@@ -47,10 +47,23 @@ class RegistryService {
           openCommand,
         );
       }
+
+      // 4. 기존 레거시 반/교안 매핑 탐색기 컨텍스트 메뉴 잔재 제거
+      await cleanupLegacyContextMenu();
+
       debugPrint('[RegistryService] Successfully registered Windows file associations!');
     } catch (e) {
       debugPrint('[RegistryService] Registry registration error: $e');
     }
+  }
+
+  /// 과거 버전에서 등록되었던 탐색기 우클릭 교안/반 매핑 레지스트리 키 자동 정리
+  Future<void> cleanupLegacyContextMenu() async {
+    if (!Platform.isWindows) return;
+    try {
+      await Process.run('reg', ['delete', r'HKCU\Software\Classes\Directory\shell\BoardestMap', '/f']);
+      await Process.run('reg', ['delete', r'HKCU\Software\Classes\Drive\shell\BoardestMap', '/f']);
+    } catch (_) {}
   }
 
   Future<bool> _runRegAdd(String keyPath, String valueName, String valueData) async {

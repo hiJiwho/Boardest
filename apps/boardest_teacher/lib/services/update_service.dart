@@ -28,12 +28,30 @@ class UpdateService {
   static final UpdateService instance = UpdateService._internal();
   UpdateService._internal();
 
-  static const String currentVersion = '2.9.9.2';
+  static const String defaultVersion = '2.9.9.3';
+
+  /// Dynamically detect installed MSIX/AppX version from WindowsApps folder, or fallback to defaultVersion
+  static String get currentVersion {
+    if (Platform.isWindows) {
+      try {
+        final exePath = Platform.resolvedExecutable;
+        final match = RegExp(r'jiwho\.boardest\.(?:teacher|bst)_([0-9.]+)_', caseSensitive: false).firstMatch(exePath);
+        if (match != null && match.group(1) != null) {
+          return match.group(1)!;
+        }
+      } catch (_) {}
+    }
+    return defaultVersion;
+  }
+
   static const String githubRepoUrl = 'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String verificationServerUrl = 'https://boardest-update-work.firebaseapp.com';
+  static const String appInstallerManifestUrl = 'https://download-boardest.web.app/bst-teacher.appinstaller';
 
-  // 중복 업데이트 체크 방지 플래그 (앱 실행 중 1회만 실행)
+  // 중복 동시 업데이트 체크 방지 플래그
   static bool _isChecking = false;
+  // 백그라운드 자동 체크 주기 제한 (최대 5분에 1회)
+  static DateTime? _lastSilentCheckTime;
 
   static const String _githubTokenKey = 'bst_github_token';
   static const String _githubUserKey = 'bst_github_username';
@@ -66,78 +84,112 @@ class UpdateService {
     }
   }
 
-  /// Check for latest update from GitHub Releases (with optional PAT auth)
-  Future<UpdateInfo?> checkForUpdate() async {
+  /// Check for latest update from GitHub Releases (with AppInstaller XML fallback)
+  Future<UpdateInfo?> checkForUpdate({bool force = false}) async {
     // Web 환경에서는 브라우저 캐시 정책에 따름
     if (kIsWeb) return null;
     if (!Platform.isWindows && !Platform.isAndroid) return null;
-    if (_isChecking) return null; // 중복 실행 방지
+    if (_isChecking) {
+      debugPrint('[UpdateService] ⏳ Update check already in progress, skipping duplicate call.');
+      return null;
+    }
+
+    final bool shouldThrottle = !force;
+    if (shouldThrottle && _lastSilentCheckTime != null && DateTime.now().difference(_lastSilentCheckTime!) < const Duration(minutes: 5)) {
+      debugPrint('[UpdateService] ⏳ Throttling silent update check (last checked ${_lastSilentCheckTime!.toIso8601String()})');
+      return null;
+    }
+
     _isChecking = true;
+    _lastSilentCheckTime = DateTime.now();
+    debugPrint('[UpdateService] 🔍 checkForUpdate started. Current Version: $currentVersion (force: $force)');
+
+    String latestVersion = '';
+    String notes = '';
+    String downloadUrl = Platform.isWindows ? appInstallerManifestUrl : '';
+
     try {
-      final token = await getGithubToken();
-      final headers = <String, String>{
-        'User-Agent': 'Boardest-Teacher-Client/2.9.8.9',
-        'Accept': 'application/vnd.github.v3+json',
-        if (token != null && token.isNotEmpty) 'Authorization': 'token $token',
-      };
+      // 1. First attempt: GitHub Releases API
+      try {
+        final token = await getGithubToken();
+        final headers = <String, String>{
+          'User-Agent': 'Boardest-Teacher-Client/$currentVersion',
+          'Accept': 'application/vnd.github.v3+json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'token $token',
+        };
 
-      var response = await http.get(
-        Uri.parse(githubRepoUrl),
-        headers: headers,
-      ).timeout(const Duration(seconds: 4));
-
-      if (response.statusCode != 200) {
-        response = await http.get(
-          Uri.parse('https://api.github.com/repos/hiJiwho/Boardest/releases/latest'),
+        final response = await http.get(
+          Uri.parse(githubRepoUrl),
           headers: headers,
-        ).timeout(const Duration(seconds: 4));
+        ).timeout(const Duration(seconds: 5));
+
+        debugPrint('[UpdateService] 📡 GitHub API response status: ${response.statusCode}');
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          latestVersion = (data['tag_name'] ?? '').toString().replaceAll('v', '').trim();
+          notes = (data['body'] ?? '').toString();
+          final List assets = data['assets'] ?? [];
+
+          if (Platform.isAndroid) {
+            for (var asset in assets) {
+              String name = asset['name'].toString().toLowerCase();
+              if (name.endsWith('.apk')) {
+                downloadUrl = asset['browser_download_url'] ?? '';
+                break;
+              }
+            }
+          }
+          debugPrint('[UpdateService] ✅ GitHub latest release tag: $latestVersion');
+        } else {
+          debugPrint('[UpdateService] ⚠️ GitHub API returned status ${response.statusCode}. Falling back to hosted AppInstaller manifest...');
+        }
+      } catch (e) {
+        debugPrint('[UpdateService] ⚠️ GitHub check error: $e. Falling back to hosted AppInstaller manifest...');
       }
 
-      if (response.statusCode != 200) return null;
-
-      final data = json.decode(response.body);
-      final String tag = (data['tag_name'] ?? 'v1.0.0').toString().replaceAll('v', '').trim();
-      final String notes = (data['body'] ?? '새로운 업데이트가 출시되었습니다.').toString();
-
-      List assets = data['assets'] ?? [];
-      String downloadUrl = '';
-
-      // Windows: AppInstaller / AppX 전용 업데이트 (Setup.exe 배제)
-      if (Platform.isWindows) {
-        for (var asset in assets) {
-          String name = asset['name'].toString().toLowerCase();
-          if (name == 'bst-teacher.appinstaller' || (name.contains('teacher') && name.endsWith('.appinstaller'))) {
-            downloadUrl = asset['browser_download_url'] ?? '';
-            break;
+      // 2. Fallback attempt: Hosted AppInstaller XML manifest on Firebase Hosting (zero rate limits, cache-busting)
+      if (latestVersion.isEmpty && Platform.isWindows) {
+        try {
+          final cacheBustedUrl = '$appInstallerManifestUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+          debugPrint('[UpdateService] 🌐 Fetching manifest from $cacheBustedUrl ...');
+          final manifestRes = await http.get(Uri.parse(cacheBustedUrl)).timeout(const Duration(seconds: 5));
+          if (manifestRes.statusCode == 200) {
+            final content = manifestRes.body;
+            final match = RegExp(r'Version="([0-9.]+)"').firstMatch(content);
+            if (match != null) {
+              latestVersion = match.group(1) ?? '';
+              notes = '새로운 최신 버전(v$latestVersion)이 출시되었습니다.';
+              debugPrint('[UpdateService] ✅ Firebase AppInstaller manifest version: $latestVersion');
+            }
+          } else {
+            debugPrint('[UpdateService] ❌ Firebase manifest returned status: ${manifestRes.statusCode}');
           }
-        }
-        if (downloadUrl.isEmpty) {
-          downloadUrl = 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appinstaller';
-        }
-      } else if (Platform.isAndroid) {
-        for (var asset in assets) {
-          String name = asset['name'].toString().toLowerCase();
-          if (name.endsWith('.apk')) {
-            downloadUrl = asset['browser_download_url'] ?? '';
-            break;
-          }
+        } catch (e) {
+          debugPrint('[UpdateService] ❌ Firebase manifest check error: $e');
         }
       }
 
-      bool hasNew = _isVersionNewer(tag, currentVersion);
+      if (latestVersion.isEmpty) {
+        debugPrint('[UpdateService] ❌ Could not determine latest version from either GitHub or Firebase Hosting.');
+        return null;
+      }
+
+      final bool hasNew = _isVersionNewer(latestVersion, currentVersion);
+      debugPrint('[UpdateService] ⚖️ Result: Latest=$latestVersion vs Current=$currentVersion -> HasUpdate=$hasNew');
 
       return UpdateInfo(
-        latestVersion: tag,
+        latestVersion: latestVersion,
         currentVersion: currentVersion,
-        downloadUrl: downloadUrl,
-        releaseNotes: notes,
+        downloadUrl: downloadUrl.isNotEmpty ? downloadUrl : appInstallerManifestUrl,
+        releaseNotes: notes.isNotEmpty ? notes : '최신 시스템 업데이트가 준비되었습니다.',
         hasUpdate: hasNew,
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[UpdateService] ❌ Unexpected error during checkForUpdate: $e');
       return null;
     } finally {
-      // 2분 후 재체크 허용
-      Future.delayed(const Duration(minutes: 2), () => _isChecking = false);
+      // 비동기 체크 완료 즉시 락 해제
+      _isChecking = false;
     }
   }
 
@@ -225,30 +277,64 @@ class UpdateService {
   /// 앱을 즉시 닫고(exit) PowerShell Add-AppxPackage를 통해 bst-teacher.appx를 안전 갱신 후 재실행
   Future<void> executeAppInstallerUpdate(String appInstallerUrl) async {
     try {
+      final safeInstallerUrl = appInstallerUrl.isNotEmpty ? appInstallerUrl : appInstallerManifestUrl;
+      debugPrint('[UpdateService] 🚀 Launching Windows AppInstaller update via PowerShell: $safeInstallerUrl');
+
       final script = '''
+\$Host.UI.RawUI.WindowTitle = "Boardest Teacher Auto Updater"
 Write-Host "=================================================" -ForegroundColor Cyan
 Write-Host "   Boardest Teacher AppX 자동 업데이트 진행 중... " -ForegroundColor Yellow
 Write-Host "=================================================" -ForegroundColor Cyan
-Start-Sleep -Milliseconds 800
+Write-Host "1. 기존 실행 프로세스가 종료될 때까지 대기합니다..." -ForegroundColor Gray
+\$waitLimit = 15
+while ((Get-Process -Name 'boardest_teacher' -ErrorAction SilentlyContinue) -and (\$waitLimit -gt 0)) {
+  Start-Sleep -Seconds 1
+  \$waitLimit--
+}
+Start-Sleep -Milliseconds 600
+
+\$updateSuccess = \$false
 try {
-  Write-Host "AppInstaller를 통해 최신 AppX 패키지를 배포합니다..." -ForegroundColor Gray
-  Add-AppxPackage -AppInstallerFile '$appInstallerUrl' -ForceUpdateFromAnyVersion -ErrorAction Stop
-  Write-Host "업데이트 완료! 교사용 앱을 실행합니다..." -ForegroundColor Green
+  Write-Host "2. AppInstaller를 통해 최신 AppX 패키지를 배포합니다..." -ForegroundColor Cyan
+  Write-Host "   대상: $safeInstallerUrl" -ForegroundColor DarkGray
+  Add-AppxPackage -AppInstallerFile '$safeInstallerUrl' -ForceUpdateFromAnyVersion -ErrorAction Stop
+  \$updateSuccess = \$true
+  Write-Host "-> AppInstaller 배포 완료!" -ForegroundColor Green
+} catch {
+  Write-Host "-> AppInstaller 배포 실패 (\$_). 백업 직접 다운로드 설치를 시도합니다..." -ForegroundColor Yellow
+  try {
+    \$tempAppx = Join-Path \$env:TEMP 'bst_teacher_update.appx'
+    Write-Host "   최신 패키지 다운로드 중..." -ForegroundColor Cyan
+    Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx' -OutFile \$tempAppx -UseBasicParsing
+    Write-Host "   패키지 등록 중..." -ForegroundColor Cyan
+    Add-AppxPackage -Path \$tempAppx -ForceUpdateFromAnyVersion -ErrorAction Stop
+    Remove-Item \$tempAppx -Force -ErrorAction SilentlyContinue
+    \$updateSuccess = \$true
+    Write-Host "-> 백업 패키지 설치 완료!" -ForegroundColor Green
+  } catch {
+    Write-Host "-> 백업 패키지 설치도 실패했습니다: \$_" -ForegroundColor Red
+  }
+}
+
+if (\$updateSuccess) {
+  Write-Host "3. 업데이트 완료! 교사용 앱을 재실행합니다..." -ForegroundColor Green
   Start-Sleep -Milliseconds 800
   Start-Process 'explorer.exe' 'shell:AppsFolder\\jiwho.boardest.teacher_nmkn64tehfz7a!App'
-} catch {
-  Write-Host "AppInstaller URL 실패, 백업 AppX 다운로드 설치를 시도합니다..." -ForegroundColor Yellow
-  \$tempAppx = Join-Path \$env:TEMP 'bst_teacher_update.appx'
-  Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx' -OutFile \$tempAppx
-  Add-AppxPackage -Path \$tempAppx -ForceUpdateFromAnyVersion
-  Remove-Item \$tempAppx -Force -ErrorAction SilentlyContinue
-  Start-Process 'explorer.exe' 'shell:AppsFolder\\jiwho.boardest.teacher_nmkn64tehfz7a!App'
+  Start-Sleep -Seconds 2
+} else {
+  Write-Host "자동 업데이트가 완료되지 못했습니다. 수동 설치 파일을 웹사이트에서 다운로드해주세요." -ForegroundColor Red
+  Write-Host "창을 닫으려면 아무 키나 누르세요..." -ForegroundColor Gray
+  \$null = \$Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 ''';
 
+      final tempDir = await getTemporaryDirectory();
+      final runnerFile = File(p.join(tempDir.path, 'bst_teacher_updater.ps1'));
+      await runnerFile.writeAsString(script);
+
       await Process.start(
-        'powershell.exe',
-        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
+        'cmd.exe',
+        ['/c', 'start', '"Boardest Teacher Auto Updater"', 'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', runnerFile.path],
         mode: ProcessStartMode.detached,
       );
 
@@ -312,7 +398,7 @@ try {
                 Navigator.of(ctx).pop();
                 final installerUrl = info.downloadUrl.isNotEmpty
                     ? info.downloadUrl
-                    : 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appinstaller';
+                    : appInstallerManifestUrl;
                 await executeAppInstallerUpdate(installerUrl);
               },
               icon: const Icon(Icons.download_rounded, color: Colors.black, size: 18),

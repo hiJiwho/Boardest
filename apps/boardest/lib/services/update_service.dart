@@ -9,15 +9,33 @@ import 'package:open_filex/open_filex.dart';
 
 
 class UpdateService {
-  static const String currentVersion = '2.9.9.2';
+  static const String defaultVersion = '2.9.9.3';
+
+  /// Dynamically detect installed MSIX/AppX version from WindowsApps folder, or fallback to defaultVersion
+  static String get currentVersion {
+    if (Platform.isWindows) {
+      try {
+        final exePath = Platform.resolvedExecutable;
+        final match = RegExp(r'jiwho\.boardest\.(?:bst|teacher)_([0-9.]+)_', caseSensitive: false).firstMatch(exePath);
+        if (match != null && match.group(1) != null) {
+          return match.group(1)!;
+        }
+      } catch (_) {}
+    }
+    return defaultVersion;
+  }
+
   static const String repoOwner = 'hiJiwho';
   static const String repoName = 'Boardest';
+  static const String appInstallerManifestUrl = 'https://download-boardest.web.app/boardest.appinstaller';
 
-  // 중복 업데이트 체크 방지 플래그 (앱 실행 중 1회만 실행)
+  // 동시 실행 방지 플래그
   static bool _isChecking = false;
+  // 백그라운드 자동 체크 주기 제어 (최대 5분에 1회)
+  static DateTime? _lastSilentCheckTime;
 
   /// GitHub의 최신 릴리즈를 체크하고 업데이트가 필요하면 다운로드 및 설치 프로세스를 시작합니다.
-  static Future<void> checkAndUpdate(BuildContext context, {bool silent = true}) async {
+  static Future<void> checkAndUpdate(BuildContext context, {bool silent = true, bool force = false}) async {
     // Web: Firebase Hosting에 의해 상시 최신 상태 유지
     if (kIsWeb) return;
 
@@ -25,49 +43,89 @@ class UpdateService {
     if (!Platform.isWindows && !Platform.isAndroid) return;
 
     // 중복 실행 방지: 이미 체크 중이면 즉시 리턴
-    if (_isChecking) return;
+    if (_isChecking) {
+      debugPrint('[UpdateService] ⏳ Update check already in progress, skipping duplicate call.');
+      return;
+    }
+
+    final bool shouldThrottle = silent && !force;
+    if (shouldThrottle && _lastSilentCheckTime != null && DateTime.now().difference(_lastSilentCheckTime!) < const Duration(minutes: 5)) {
+      debugPrint('[UpdateService] ⏳ Throttling silent update check (last checked ${_lastSilentCheckTime!.toIso8601String()})');
+      return;
+    }
+
     _isChecking = true;
+    _lastSilentCheckTime = DateTime.now();
+    debugPrint('[UpdateService] 🔍 checkAndUpdate started (Boardest Main). Current: $currentVersion (silent: $silent, force: $force)');
+
+    String serverVersion = '';
+    List<dynamic> assets = [];
+
     try {
-      final url = Uri.parse('https://api.github.com/repos/$repoOwner/$repoName/releases/latest');
-      final response = await http.get(
-        url,
-        headers: {
-          'User-Agent': 'Boardest-Client/$currentVersion',
-          'Accept': 'application/vnd.github.v3+json',
-        },
-      ).timeout(const Duration(seconds: 8));
-      
-      if (response.statusCode != 200) {
-        debugPrint('Update check returned status code: ${response.statusCode}');
+      // 1. First attempt: GitHub Releases API
+      try {
+        final url = Uri.parse('https://api.github.com/repos/$repoOwner/$repoName/releases/latest');
+        final response = await http.get(
+          url,
+          headers: {
+            'User-Agent': 'Boardest-Client/$currentVersion',
+            'Accept': 'application/vnd.github.v3+json',
+          },
+        ).timeout(const Duration(seconds: 5));
+
+        debugPrint('[UpdateService] 📡 GitHub API response status: ${response.statusCode}');
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body) as Map<String, dynamic>;
+          final tagName = data['tag_name'] as String? ?? '';
+          serverVersion = tagName.replaceAll('v', '').trim();
+          assets = data['assets'] as List<dynamic>? ?? [];
+          debugPrint('[UpdateService] ✅ GitHub latest release tag: $serverVersion');
+        } else {
+          debugPrint('[UpdateService] ⚠️ GitHub API returned status ${response.statusCode}. Falling back to Firebase AppInstaller manifest...');
+        }
+      } catch (e) {
+        debugPrint('[UpdateService] ⚠️ GitHub check error: $e. Falling back to Firebase AppInstaller manifest...');
+      }
+
+      // 2. Fallback attempt: Hosted AppInstaller XML manifest on Firebase Hosting (zero rate limits, cache-busting)
+      if (serverVersion.isEmpty && Platform.isWindows) {
+        try {
+          final cacheBustedUrl = '$appInstallerManifestUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+          debugPrint('[UpdateService] 🌐 Fetching manifest from $cacheBustedUrl ...');
+          final manifestRes = await http.get(Uri.parse(cacheBustedUrl)).timeout(const Duration(seconds: 5));
+          if (manifestRes.statusCode == 200) {
+            final content = manifestRes.body;
+            final match = RegExp(r'Version="([0-9.]+)"').firstMatch(content);
+            if (match != null) {
+              serverVersion = match.group(1) ?? '';
+              debugPrint('[UpdateService] ✅ Firebase AppInstaller manifest version: $serverVersion');
+            }
+          } else {
+            debugPrint('[UpdateService] ❌ Firebase manifest returned status: ${manifestRes.statusCode}');
+          }
+        } catch (e) {
+          debugPrint('[UpdateService] ❌ Firebase manifest check error: $e');
+        }
+      }
+
+      if (serverVersion.isEmpty) {
+        debugPrint('[UpdateService] ❌ Could not determine latest version from either GitHub or Firebase.');
         if (!silent && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('업데이트 서버 응답 코드: ${response.statusCode}'), backgroundColor: Colors.redAccent),
+            const SnackBar(content: Text('업데이트 서버에 연결할 수 없습니다.'), backgroundColor: Colors.redAccent),
           );
         }
         return;
       }
 
-      final data = json.decode(response.body) as Map<String, dynamic>;
-      final tagName = data['tag_name'] as String? ?? '';
-      if (tagName.isEmpty) return;
+      final bool hasNew = _isNewerVersion(currentVersion, serverVersion);
+      debugPrint('[UpdateService] ⚖️ Result: Latest=$serverVersion vs Current=$currentVersion -> HasUpdate=$hasNew');
 
-      final serverVersion = tagName.replaceAll(RegExp(r'[^0-9.]'), ''); // e.g. "v1.0.1" -> "1.0.1"
-      if (_isNewerVersion(currentVersion, serverVersion)) {
-        debugPrint('New version available: $serverVersion (Current: $currentVersion)');
-        final assets = data['assets'] as List<dynamic>? ?? [];
-        
+      if (hasNew) {
         if (context.mounted) {
           _showUpdateDialog(context, serverVersion, () {
             if (Platform.isWindows) {
-              String appInstallerUrl = 'https://download-boardest.web.app/bst.appinstaller';
-              for (final asset in assets) {
-                final name = (asset['name'] as String? ?? '').toLowerCase();
-                if (name.endsWith('.appinstaller') || name == 'boardest.appinstaller' || name == 'bst.appinstaller') {
-                  appInstallerUrl = asset['browser_download_url'] as String? ?? appInstallerUrl;
-                  break;
-                }
-              }
-              _performWindowsUpdate(context, appInstallerUrl);
+              _performWindowsUpdate(context, appInstallerManifestUrl);
             } else if (Platform.isAndroid) {
               final apkAsset = assets.firstWhere(
                 (asset) => (asset['name'] as String).endsWith('.apk'),
@@ -83,34 +141,38 @@ class UpdateService {
       } else {
         if (!silent && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text('🎉 현재 최신 버전(v$currentVersion)을 사용하고 있습니다.'),
-              backgroundColor: Color(0xFF2EC4B6),
+              backgroundColor: const Color(0xFF2EC4B6),
             ),
           );
         }
       }
     } catch (e) {
-      debugPrint('Error during update check: $e');
+      debugPrint('[UpdateService] Error during update check: $e');
       if (!silent && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('업데이트 확인 오류: $e'), backgroundColor: Colors.redAccent),
         );
       }
     } finally {
-      // 2분 후 재체크 허용
-      Future.delayed(const Duration(minutes: 2), () => _isChecking = false);
+      // 락 즉시 해제
+      _isChecking = false;
     }
   }
 
   static bool _isNewerVersion(String current, String server) {
     try {
-      final currentParts = current.split('.').map(int.parse).toList();
-      final serverParts = server.split('.').map(int.parse).toList();
-      for (int i = 0; i < serverParts.length; i++) {
-        if (i >= currentParts.length) return true;
-        if (serverParts[i] > currentParts[i]) return true;
-        if (serverParts[i] < currentParts[i]) return false;
+      final cleanCurrent = current.replaceAll(RegExp(r'[^0-9.]'), '');
+      final cleanServer = server.replaceAll(RegExp(r'[^0-9.]'), '');
+      List<int> c = cleanCurrent.split('.').where((e) => e.isNotEmpty).map((e) => int.tryParse(e) ?? 0).toList();
+      List<int> s = cleanServer.split('.').where((e) => e.isNotEmpty).map((e) => int.tryParse(e) ?? 0).toList();
+      int maxLen = s.length > c.length ? s.length : c.length;
+      for (int i = 0; i < maxLen; i++) {
+        int partS = i < s.length ? s[i] : 0;
+        int partC = i < c.length ? c[i] : 0;
+        if (partS > partC) return true;
+        if (partS < partC) return false;
       }
     } catch (_) {}
     return false;
@@ -225,36 +287,70 @@ class UpdateService {
 
   static Future<void> _performWindowsUpdate(BuildContext context, String appInstallerUrl) async {
     try {
+      final safeInstallerUrl = appInstallerUrl.isNotEmpty ? appInstallerUrl : appInstallerManifestUrl;
+      debugPrint('[UpdateService] 🚀 Launching Boardest Windows AppInstaller update via PowerShell: $safeInstallerUrl');
+
       final script = '''
+\$Host.UI.RawUI.WindowTitle = "Boardest Main Auto Updater"
 Write-Host "=================================================" -ForegroundColor Cyan
 Write-Host "     Boardest 전자칠판 AppX 자동 업데이트 진행 중...  " -ForegroundColor Yellow
 Write-Host "=================================================" -ForegroundColor Cyan
-Start-Sleep -Milliseconds 800
+Write-Host "1. 기존 실행 프로세스가 종료될 때까지 대기합니다..." -ForegroundColor Gray
+\$waitLimit = 15
+while ((Get-Process -Name 'boardest' -ErrorAction SilentlyContinue) -and (\$waitLimit -gt 0)) {
+  Start-Sleep -Seconds 1
+  \$waitLimit--
+}
+Start-Sleep -Milliseconds 600
+
+\$updateSuccess = \$false
 try {
-  Write-Host "AppInstaller를 통해 최신 AppX 패키지를 배포합니다..." -ForegroundColor Gray
-  Add-AppxPackage -AppInstallerFile '$appInstallerUrl' -ForceUpdateFromAnyVersion -ErrorAction Stop
-  Write-Host "업데이트 완료! Boardest를 재실행합니다..." -ForegroundColor Green
+  Write-Host "2. AppInstaller를 통해 최신 AppX 패키지를 배포합니다..." -ForegroundColor Cyan
+  Write-Host "   대상: $safeInstallerUrl" -ForegroundColor DarkGray
+  Add-AppxPackage -AppInstallerFile '$safeInstallerUrl' -ForceUpdateFromAnyVersion -ErrorAction Stop
+  \$updateSuccess = \$true
+  Write-Host "-> AppInstaller 배포 완료!" -ForegroundColor Green
+} catch {
+  Write-Host "-> AppInstaller 실패 (\$_). 직접 최신 AppX 다운로드 설치를 시도합니다..." -ForegroundColor Yellow
+  try {
+    \$tempAppx = Join-Path \$env:TEMP 'boardest_update.appx'
+    Write-Host "   최신 boardest.appx 다운로드 중..." -ForegroundColor Cyan
+    Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx' -OutFile \$tempAppx -UseBasicParsing
+    Write-Host "   패키지 등록 중..." -ForegroundColor Cyan
+    Add-AppxPackage -Path \$tempAppx -ForceUpdateFromAnyVersion -ErrorAction Stop
+    Remove-Item \$tempAppx -Force -ErrorAction SilentlyContinue
+    \$updateSuccess = \$true
+    Write-Host "-> 백업 패키지 설치 완료!" -ForegroundColor Green
+  } catch {
+    Write-Host "-> 백업 패키지 설치도 실패했습니다: \$_" -ForegroundColor Red
+  }
+}
+
+if (\$updateSuccess) {
+  Write-Host "3. 업데이트 완료! Boardest를 재실행합니다..." -ForegroundColor Green
   Start-Sleep -Milliseconds 800
   Start-Process 'explorer.exe' 'shell:AppsFolder\\jiwho.boardest.bst_nmkn64tehfz7a!App'
-} catch {
-  Write-Host "AppInstaller 실패, 직접 최신 AppX 다운로드 설치를 시도합니다..." -ForegroundColor Yellow
-  \$tempAppx = Join-Path \$env:TEMP 'boardest_update.appx'
-  Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx' -OutFile \$tempAppx
-  Add-AppxPackage -Path \$tempAppx -ForceUpdateFromAnyVersion
-  Remove-Item \$tempAppx -Force -ErrorAction SilentlyContinue
-  Start-Process 'explorer.exe' 'shell:AppsFolder\\jiwho.boardest.bst_nmkn64tehfz7a!App'
+  Start-Sleep -Seconds 2
+} else {
+  Write-Host "자동 업데이트가 완료되지 못했습니다. 수동 설치 파일을 웹사이트에서 다운로드해주세요." -ForegroundColor Red
+  Write-Host "창을 닫으려면 아무 키나 누르세요..." -ForegroundColor Gray
+  \$null = \$Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 ''';
 
+      final tempDir = await getTemporaryDirectory();
+      final runnerFile = File(p.join(tempDir.path, 'boardest_updater.ps1'));
+      await runnerFile.writeAsString(script);
+
       await Process.start(
-        'powershell.exe',
-        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
+        'cmd.exe',
+        ['/c', 'start', '"Boardest Main Auto Updater"', 'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', runnerFile.path],
         mode: ProcessStartMode.detached,
       );
 
       exit(0);
     } catch (e) {
-      debugPrint('Error executing Windows update: $e');
+      debugPrint('[UpdateService] Error executing Windows update: $e');
       if (context.mounted) {
         _showErrorDialog(context, 'Windows 자동 업데이트 실행 중 오류 발생: $e');
       }

@@ -27,7 +27,7 @@ Write-Host " 3. Firebase Hosting Deploy " -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Cyan
 
 Set-Location "$PSScriptRoot\.."
-cmd.exe /c "firebase deploy --only hosting:boardest-main,hosting:boardest-teacher"
+cmd.exe /c "firebase deploy --only hosting:boardest-main,hosting:boardest-teacher,hosting:download-boardest,hosting:welcome-to-boardest"
 
 Write-Host "========================================" -ForegroundColor Green
 Write-Host " Web Build & Firebase Deploy Completed! " -ForegroundColor Green

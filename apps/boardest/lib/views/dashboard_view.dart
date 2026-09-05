@@ -3445,7 +3445,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     } else if (choice == 'home_launcher') {
       _showHomeLauncherDialog();
     } else if (choice == 'check_update') {
-      UpdateService.checkAndUpdate(context, silent: false);
+      UpdateService.checkAndUpdate(context, silent: false, force: true);
     } else if (choice == 'dpi_scale') {
       _showDpiScaleDialog();
     } else if (choice == 'withdraw') {

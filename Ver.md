@@ -1,7 +1,28 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v2.9.9.2** (App: v2.9.9.2 / Web: v2.9.9.2)  
+> **현재 시스템 버전**: **v2.9.9.3** (App: v2.9.9.3 / Web: v2.9.9.3)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 B 2.9.9.3 (2026-09-05)
+
+### 1. 🔄 GitHub + Firebase CDN 듀얼 소스 인앱 자동 업데이트 (`UpdateService` 2.9.9.3)
+- **GitHub Rate-Limit & 무응답 원천 차단**: GitHub API 최신 릴리즈 조회 실패(레이트 리밋 HTTP 403, 타임아웃 등) 시 Firebase Hosting CDN(`download-boardest.web.app/*.appinstaller`)에서 실시간 최신 버전을 100% 무중단 판독하는 폴백 메커니즘 구축.
+- **풍부한 진단 로깅 탑재**: 콘솔에 `[UpdateService]` 상세 로그(조회 시작, HTTP 상태코드, 감지된 버전, 비교 판정 결과 등)를 실시간 출력하여 무반응 의구심 완전 해소.
+- **PowerShell 프로세스 잠금 해제 루프 (`0x80073D02` 방지)**: 앱이 종료되기 전에 `Add-AppxPackage`가 실행되어 발생하던 패키지 파일 잠금 에러를 차단하기 위해 프로세스 종료 대기 루프(`Get-Process`) 및 `-UseBasicParsing` 적용.
+- **AppInstaller 매니페스트 `ShowPrompt="true"` 전면 적용**: Windows 네이티브 AppInstaller 및 Flutter 인앱 모달 양방향으로 릴리즈 업데이트 알림 보장.
+
+### 2. 🧹 "반 맵핑" (Class Mapping) 기능 전면 삭제 & 클라우드 안심 연동 허브 개편
+- **구형 반 맵핑 UI/데이터 전면 삭제**: `teacher_view.dart` 내 `_classroomFolderMappings`, `_classMappings`, `_targetClasses`, 매핑 다이얼로그, 카드 내 학급 드롭다운 및 레거시 패널 완전 제거.
+- **하단 좌측 독 개편 ("클라우드 안심 연동 & 신뢰 기기 허브")**: 기존 반 맵핑 패널 위치에 Google 계정 상태 배지, 연동 기기 관리 바로가기, 실시간 수동 업데이트 확인 버튼, 드라이브 새로고침이 결합된 통합 허브 배치.
+- **Auto-PT 간소화**: 정적 맵핑 설정 파일 의존성을 제거하고 현재 교시의 학년/반 폴더를 다이렉트로 자동 탐색하도록 정돈.
+- **백엔드/서비스 레거시 API 제거**: `cloud_drive_service.dart`의 `fetchClassroomMappings`, `downloadClassroomMappingsFile`, `fetchSubjectMappings`, `saveSubjectMappings`, `saveFolderMappings` 완전 제거.
+- **웹 자산 텍스트 정비**: `cloud_lite.html`, `welcome_web/index.html` 내 잔존 매핑 문구를 직관적인 클라우드 동기화로 변경.
+
+### 3. 📦 전체 패키지 & AppX 매니페스트 일괄 동기화 (v2.9.9.3)
+- `boardest`, `boardest_teacher`, `boardest_teacher_lite`의 `pubspec.yaml` 버전 일괄 `2.9.9+2993` 승격.
+- `dist/packages/*/AppxManifest.xml`, `dist/appx/*.appinstaller`, `infra/download_web/*.appinstaller`, `infra/welcome_web/*.appinstaller` 버전 `2.9.9.3` 동기화 및 `scripts/build_all_appx.ps1` 갱신.
 
 ---
 
