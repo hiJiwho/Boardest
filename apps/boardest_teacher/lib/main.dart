@@ -213,10 +213,10 @@ void main(List<String> args) async {
         size: Size(1200, 800),
         minimumSize: Size(960, 640),
         center: true,
-        title: 'Bst Teacher',
+        title: 'Boardest Teacher',
         skipTaskbar: false,
         backgroundColor: Colors.transparent,
-        titleBarStyle: TitleBarStyle.hidden,
+        titleBarStyle: TitleBarStyle.normal,
       );
       await windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.setBackgroundColor(Colors.transparent);

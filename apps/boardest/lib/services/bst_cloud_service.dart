@@ -1328,11 +1328,14 @@ class BstCloudService {
   }
 
   /// 1. 6자리 동적 자릿수 셔플 (Steganography) OTP 검증 (Cloudflare Worker 1차 + Firestore 직접 Fallback 2차)
-  Future<({bool success, String? accessToken, String? teacherName, String? email, String? errorMessage})> verify6DigitSteganoOtp(String fullCode) async {
+  Future<({bool success, String? accessToken, String? teacherName, String? email, String? errorMessage})> verify6DigitSteganoOtp(String fullCode, {String? teacherId2}) async {
     try {
-      final cleanCode = fullCode.replaceAll(RegExp(r'\s+'), '');
+      var cleanCode = fullCode.replaceAll(RegExp(r'\s+'), '');
+      if (cleanCode.length == 4 && teacherId2 != null && teacherId2.trim().isNotEmpty) {
+        cleanCode = TotpService.encodeSteganography6(teacherId2.trim(), cleanCode);
+      }
       if (cleanCode.length != 6 && cleanCode.length != 10) {
-        return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '6자리 접속 코드를 입력해주세요.');
+        return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '6자리 OTP 코드를 입력해주세요.');
       }
 
       // 1차: Cloudflare Worker 시도

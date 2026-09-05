@@ -1,12 +1,12 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.7"
+    Version="2.9.9.8"
     Uri="https://download-boardest.web.app/bst-teacher.appinstaller">
     <MainPackage
         Name="jiwho.boardest.teacher"
         Publisher="CN=jiwho"
-        Version="2.9.9.7"
+        Version="2.9.9.8"
         ProcessorArchitecture="x64"
         Uri="https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx" />
     <UpdateSettings>

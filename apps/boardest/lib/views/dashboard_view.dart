@@ -126,6 +126,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   bool _showFullUsbExplorer = false;
   String _usbDriveLetter = '';
   String _enteredOtp = '';
+  String _enteredTeacherId = '';
+  String _activeKeypadTarget = 'otp'; // 'otp' | 'teacherId'
   bool _isVerifyingOtp = false;
   String? _otpErrorMsg;
   bool _isCloudQrMode = true; // 스마트폰 QR 모드 기본 활성화
@@ -251,6 +253,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     });
     _loadPreferencesAndFetch();
     _preloadAppsList();
+    _loadSavedTextbooksToMemory();
     // _startLocalServer(); // LAN 서버 가동 (연동 철회)
 
     if (!kIsWeb) {
@@ -4566,7 +4569,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                           ? _buildPptSubjectCard(todayLessons, isExpandedDock: true)
                                           : (_isUsbConnected
                                               ? _buildFullUsbPanel(scale)
-                                              : (_currentPeriod != null &&
+                                              : (!isWeekend &&
+                                                      _currentPeriod != null &&
                                                       _currentPeriod!.isClass &&
                                                       BstCloudService.instance.activeToken == null
                                                   ? _buildCloudOtpKeypadPanel(scale)
@@ -5905,14 +5909,23 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
-  // --- [신규] 스마트폰 QR 스캔 & 3x4 터치 키패드 통합 패널 (광고판과 동일한 크기) ---
+  // --- [신규] 상단 QR 스캔 & 하단 OTP(6자리)/교사ID(2자리) 키패드 통합 패널 (수업시간 광고판 대체) ---
   Widget _buildCloudOtpKeypadPanel(double scale) {
+    if (_reversePairSession == null && !_isLoadingQrSession) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _initReverseQrSession();
+      });
+    }
+
+    final isOtpFocused = _activeKeypadTarget == 'otp';
+    final isTeacherIdFocused = _activeKeypadTarget == 'teacherId';
+
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF081714),
         borderRadius: BorderRadius.circular(24 * scale),
         border: Border.all(
-          color: const Color(0xFF00F5D4).withOpacity(0.35),
+          color: const Color(0xFF00F5D4).withValues(alpha: 0.35),
           width: 1.5,
         ),
         gradient: const LinearGradient(
@@ -5925,7 +5938,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF00F5D4).withOpacity(0.12),
+            color: const Color(0xFF00F5D4).withValues(alpha: 0.12),
             blurRadius: 16 * scale,
             spreadRadius: 2,
           ),
@@ -5935,166 +5948,283 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 상단 모드 전환 탭 (📷 스마트폰 QR vs 🔢 번호 입력)
-          Container(
-            padding: EdgeInsets.all(3 * scale),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.4),
-              borderRadius: BorderRadius.circular(12 * scale),
-              border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.2)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () {
-                      if (!_isCloudQrMode) {
-                        setState(() => _isCloudQrMode = true);
-                        _initReverseQrSession();
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(9 * scale),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(vertical: 5 * scale),
-                      decoration: BoxDecoration(
-                        color: _isCloudQrMode ? const Color(0xFF00F5D4) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(9 * scale),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.qr_code_scanner_rounded,
-                            size: 13 * scale,
-                            color: _isCloudQrMode ? const Color(0xFF081714) : Colors.white60,
-                          ),
-                          SizedBox(width: 4 * scale),
-                          Text(
-                            '스마트폰 QR',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 11 * scale,
-                              fontWeight: FontWeight.bold,
-                              color: _isCloudQrMode ? const Color(0xFF081714) : Colors.white60,
-                            ),
-                          ),
-                        ],
-                      ),
+          // 상단 배지 헤더
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.cloud_sync_rounded, color: const Color(0xFF00F5D4), size: 14 * scale),
+                  SizedBox(width: 5 * scale),
+                  Text(
+                    '교사용 Cloud 즉시 연결',
+                    style: GoogleFonts.notoSansKr(
+                      color: const Color(0xFF00F5D4),
+                      fontSize: 11.5 * scale,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ),
-                SizedBox(width: 4 * scale),
-                Expanded(
-                  child: InkWell(
-                    onTap: () {
-                      if (_isCloudQrMode) {
-                        setState(() => _isCloudQrMode = false);
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(9 * scale),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(vertical: 5 * scale),
-                      decoration: BoxDecoration(
-                        color: !_isCloudQrMode ? const Color(0xFF00F5D4) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(9 * scale),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.dialpad_rounded,
-                            size: 13 * scale,
-                            color: !_isCloudQrMode ? const Color(0xFF081714) : Colors.white60,
-                          ),
-                          SizedBox(width: 4 * scale),
-                          Text(
-                            '번호 입력',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 11 * scale,
-                              fontWeight: FontWeight.bold,
-                              color: !_isCloudQrMode ? const Color(0xFF081714) : Colors.white60,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                ],
+              ),
+              InkWell(
+                onTap: _refreshReverseQrSession,
+                borderRadius: BorderRadius.circular(6 * scale),
+                child: Padding(
+                  padding: EdgeInsets.all(2 * scale),
+                  child: Row(
+                    children: [
+                      Icon(Icons.refresh_rounded, size: 12 * scale, color: Colors.white60),
+                      SizedBox(width: 3 * scale),
+                      Text('새로고침', style: GoogleFonts.notoSansKr(fontSize: 10 * scale, color: Colors.white60)),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           SizedBox(height: 6 * scale),
 
-          // 메인 영역: QR 뷰 vs 숫자 키패드 뷰
+          // 1. [위] QR 코드 뷰 영역 (스마트폰 카메라 스캔용)
           Expanded(
-            child: _isCloudQrMode
-                ? _buildCloudQrScannerView(scale)
-                : Column(
-                    children: [
-                      // 6자리 PIN 디스플레이 인디케이터
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 6 * scale),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.4),
-                          borderRadius: BorderRadius.circular(10 * scale),
-                          border: Border.all(
-                            color: _otpErrorMsg != null ? Colors.redAccent : const Color(0xFF00F5D4).withOpacity(0.3),
-                            width: 1,
+            flex: 6,
+            child: Container(
+              padding: EdgeInsets.symmetric(vertical: 6 * scale),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(14 * scale),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: _isLoadingQrSession
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)))
+                  : (_reversePairSession != null
+                      ? Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(6 * scale),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12 * scale),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF00F5D4).withValues(alpha: 0.2),
+                                    blurRadius: 10 * scale,
+                                  ),
+                                ],
+                              ),
+                              child: QrImageView(
+                                data: _reversePairSession!.qrUrl,
+                                version: QrVersions.auto,
+                                size: 85 * scale,
+                                backgroundColor: Colors.white,
+                                padding: EdgeInsets.zero,
+                              ),
+                            ),
+                            SizedBox(height: 5 * scale),
+                            Text(
+                              '📷 스마트폰 카메라로 QR 스캔 시 즉시 연결',
+                              style: GoogleFonts.notoSansKr(
+                                color: const Color(0xFF74F8E5),
+                                fontSize: 10 * scale,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Center(
+                          child: Text(
+                            'QR 코드 로딩 중...',
+                            style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 11 * scale),
                           ),
+                        )),
+            ),
+          ),
+          SizedBox(height: 8 * scale),
+
+          // 2. [밑] 6자리 OTP 빈칸 & 2자리 교사 ID 빈칸
+          Row(
+            children: [
+              // 6자리 OTP 빈칸
+              Expanded(
+                flex: 7,
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      _activeKeypadTarget = 'otp';
+                      _otpErrorMsg = null;
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(10 * scale),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 5 * scale),
+                    decoration: BoxDecoration(
+                      color: isOtpFocused
+                          ? const Color(0xFF00F5D4).withValues(alpha: 0.12)
+                          : Colors.black.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(10 * scale),
+                      border: Border.all(
+                        color: isOtpFocused ? const Color(0xFF00F5D4) : Colors.white24,
+                        width: isOtpFocused ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'OTP (6자리)',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 9.5 * scale,
+                                fontWeight: FontWeight.bold,
+                                color: isOtpFocused ? const Color(0xFF00F5D4) : Colors.white60,
+                              ),
+                            ),
+                            if (isOtpFocused)
+                              Text('입력 중', style: GoogleFonts.notoSansKr(fontSize: 8.5 * scale, color: const Color(0xFF00F5D4))),
+                          ],
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        SizedBox(height: 3 * scale),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: List.generate(6, (idx) {
                             final hasChar = idx < _enteredOtp.length;
                             final char = hasChar ? _enteredOtp[idx] : '';
                             return Container(
-                              width: 24 * scale,
-                              height: 28 * scale,
+                              width: 17 * scale,
+                              height: 22 * scale,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
-                                color: hasChar ? const Color(0xFF00F5D4).withOpacity(0.15) : Colors.white.withOpacity(0.04),
-                                borderRadius: BorderRadius.circular(5 * scale),
+                                color: hasChar ? const Color(0xFF00F5D4).withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(4 * scale),
                                 border: Border.all(
-                                  color: hasChar ? const Color(0xFF00F5D4) : Colors.white24,
-                                  width: 1.1,
+                                  color: hasChar ? const Color(0xFF00F5D4) : (isOtpFocused && idx == _enteredOtp.length ? const Color(0xFF00F5D4).withValues(alpha: 0.6) : Colors.white12),
+                                  width: 1,
                                 ),
                               ),
                               child: Text(
                                 char.isNotEmpty ? char : '-',
                                 style: GoogleFonts.sourceCodePro(
-                                  color: hasChar ? const Color(0xFF00F5D4) : Colors.white30,
-                                  fontSize: 14 * scale,
+                                  color: hasChar ? const Color(0xFF00F5D4) : Colors.white24,
+                                  fontSize: 12 * scale,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                             );
                           }),
                         ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: 6 * scale),
+
+              // 2자리 교사 ID 빈칸
+              Expanded(
+                flex: 4,
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      _activeKeypadTarget = 'teacherId';
+                      _otpErrorMsg = null;
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(10 * scale),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 5 * scale),
+                    decoration: BoxDecoration(
+                      color: isTeacherIdFocused
+                          ? const Color(0xFF00F5D4).withValues(alpha: 0.12)
+                          : Colors.black.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(10 * scale),
+                      border: Border.all(
+                        color: isTeacherIdFocused ? const Color(0xFF00F5D4) : Colors.white24,
+                        width: isTeacherIdFocused ? 1.5 : 1,
                       ),
-                      if (_otpErrorMsg != null) ...[
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '교사 ID (2자리)',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 9.5 * scale,
+                                fontWeight: FontWeight.bold,
+                                color: isTeacherIdFocused ? const Color(0xFF00F5D4) : Colors.white60,
+                              ),
+                            ),
+                            if (isTeacherIdFocused)
+                              Text('선택', style: GoogleFonts.notoSansKr(fontSize: 8.5 * scale, color: const Color(0xFF00F5D4))),
+                          ],
+                        ),
                         SizedBox(height: 3 * scale),
-                        Text(
-                          _otpErrorMsg!,
-                          style: GoogleFonts.notoSansKr(color: Colors.redAccent, fontSize: 9.5 * scale, fontWeight: FontWeight.bold),
-                          textAlign: TextAlign.center,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: List.generate(2, (idx) {
+                            final hasChar = idx < _enteredTeacherId.length;
+                            final char = hasChar ? _enteredTeacherId[idx] : '';
+                            return Container(
+                              width: 20 * scale,
+                              height: 22 * scale,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: hasChar ? const Color(0xFF00F5D4).withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(4 * scale),
+                                border: Border.all(
+                                  color: hasChar ? const Color(0xFF00F5D4) : (isTeacherIdFocused && idx == _enteredTeacherId.length ? const Color(0xFF00F5D4).withValues(alpha: 0.6) : Colors.white12),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                char.isNotEmpty ? char : '-',
+                                style: GoogleFonts.sourceCodePro(
+                                  color: hasChar ? const Color(0xFF00F5D4) : Colors.white24,
+                                  fontSize: 12 * scale,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            );
+                          }),
                         ),
                       ],
-                      SizedBox(height: 6 * scale),
-                      // 3x4 터치 키패드
-                      Expanded(
-                        child: _isVerifyingOtp
-                            ? const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)))
-                            : Column(
-                                children: [
-                                  Expanded(child: _buildKeypadRow(['1', '2', '3'], scale)),
-                                  SizedBox(height: 3 * scale),
-                                  Expanded(child: _buildKeypadRow(['4', '5', '6'], scale)),
-                                  SizedBox(height: 3 * scale),
-                                  Expanded(child: _buildKeypadRow(['7', '8', '9'], scale)),
-                                  SizedBox(height: 3 * scale),
-                                  Expanded(child: _buildKeypadRow(['CLEAR', '0', 'BACK'], scale)),
-                                ],
-                              ),
-                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          if (_otpErrorMsg != null) ...[
+            SizedBox(height: 4 * scale),
+            Text(
+              _otpErrorMsg!,
+              style: GoogleFonts.notoSansKr(color: Colors.redAccent, fontSize: 9.5 * scale, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          SizedBox(height: 5 * scale),
+
+          // 3. 터치 숫자 키패드 (하단 상시 배치)
+          Expanded(
+            flex: 7,
+            child: _isVerifyingOtp
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)))
+                : Column(
+                    children: [
+                      Expanded(child: _buildKeypadRow(['1', '2', '3'], scale)),
+                      SizedBox(height: 2.5 * scale),
+                      Expanded(child: _buildKeypadRow(['4', '5', '6'], scale)),
+                      SizedBox(height: 2.5 * scale),
+                      Expanded(child: _buildKeypadRow(['7', '8', '9'], scale)),
+                      SizedBox(height: 2.5 * scale),
+                      Expanded(child: _buildKeypadRow(['CLEAR', '0', 'BACK'], scale)),
                     ],
                   ),
           ),
@@ -6152,15 +6282,39 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     setState(() {
       _otpErrorMsg = null;
       if (key == 'CLEAR') {
-        _enteredOtp = '';
-      } else if (key == 'BACK') {
-        if (_enteredOtp.isNotEmpty) {
-          _enteredOtp = _enteredOtp.substring(0, _enteredOtp.length - 1);
+        if (_activeKeypadTarget == 'otp') {
+          _enteredOtp = '';
+        } else {
+          _enteredTeacherId = '';
         }
-      } else if (_enteredOtp.length < 6) {
-        _enteredOtp += key;
-        if (_enteredOtp.length == 6) {
-          _submitCloudOtp(_enteredOtp);
+      } else if (key == 'BACK') {
+        if (_activeKeypadTarget == 'otp') {
+          if (_enteredOtp.isNotEmpty) {
+            _enteredOtp = _enteredOtp.substring(0, _enteredOtp.length - 1);
+          }
+        } else {
+          if (_enteredTeacherId.isNotEmpty) {
+            _enteredTeacherId = _enteredTeacherId.substring(0, _enteredTeacherId.length - 1);
+          }
+        }
+      } else {
+        if (_activeKeypadTarget == 'otp') {
+          if (_enteredOtp.length < 6) {
+            _enteredOtp += key;
+            if (_enteredOtp.length == 6) {
+              _submitCloudOtp(_enteredOtp);
+            }
+          }
+        } else {
+          if (_enteredTeacherId.length < 2) {
+            _enteredTeacherId += key;
+            if (_enteredTeacherId.length == 2) {
+              _activeKeypadTarget = 'otp';
+              if (_enteredOtp.length == 6) {
+                _submitCloudOtp(_enteredOtp);
+              }
+            }
+          }
         }
       }
     });
@@ -6172,11 +6326,15 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       _otpErrorMsg = null;
     });
     try {
-      final res = await BstCloudService.instance.verify6DigitSteganoOtp(otp);
+      final res = await BstCloudService.instance.verify6DigitSteganoOtp(
+        otp,
+        teacherId2: _enteredTeacherId.isNotEmpty ? _enteredTeacherId : null,
+      );
       if (res.success) {
         if (mounted) {
           setState(() {
             _enteredOtp = '';
+            _enteredTeacherId = '';
             _isVerifyingOtp = false;
             _otpErrorMsg = null;
             _refreshCloudFiles();
@@ -6192,7 +6350,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         if (mounted) {
           setState(() {
             _isVerifyingOtp = false;
-            _otpErrorMsg = res.errorMessage ?? 'OTP 불일치';
+            _otpErrorMsg = res.errorMessage ?? 'OTP 또는 교사 ID 불일치';
             _enteredOtp = '';
           });
         }
@@ -6943,6 +7101,76 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     await _storageService.saveSettings(updated);
   }
 
+  File? _resolveLocalTextbookFile(String? imgPath, {String? subjectTitle}) {
+    if (kIsWeb) return null;
+    final candidates = <String>[];
+    if (imgPath != null && imgPath.isNotEmpty) {
+      candidates.add(imgPath);
+      final filename = p.basename(imgPath);
+      candidates.add(p.join(AppPaths.dataRootSync, 'textbooks', filename));
+    }
+    if (subjectTitle != null && subjectTitle.isNotEmpty) {
+      final stem = AppSettings.getSubjectStem(subjectTitle);
+      final grade = _settings.selectedGrade;
+      for (final ext in ['png', 'jpg', 'jpeg', 'webp', 'bmp']) {
+        candidates.add(p.join(AppPaths.dataRootSync, 'textbooks', '${grade}_$stem.$ext'));
+        candidates.add(p.join(AppPaths.dataRootSync, 'textbooks', '$stem.$ext'));
+      }
+    }
+    for (final c in candidates) {
+      try {
+        final f = File(c);
+        if (f.existsSync()) return f;
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  Future<void> _loadSavedTextbooksToMemory() async {
+    if (kIsWeb) return;
+    try {
+      final textbookDir = Directory(p.join(AppPaths.dataRootSync, 'textbooks'));
+      if (await textbookDir.exists()) {
+        final files = textbookDir.listSync().whereType<File>();
+        final Map<String, String> updatedPaths = Map<String, String>.from(_settings.textbookImages);
+        bool needsSave = false;
+
+        for (final file in files) {
+          final filename = p.basename(file.path);
+          if (filename.startsWith('.') || filename.startsWith('__MACOSX')) continue;
+          final dotIdx = filename.lastIndexOf('.');
+          if (dotIdx == -1) continue;
+          final rawStem = filename.substring(0, dotIdx);
+          final ext = filename.substring(dotIdx + 1).toLowerCase();
+          if (!['png', 'jpg', 'jpeg', 'webp', 'bmp'].contains(ext)) continue;
+
+          final bytes = await file.readAsBytes();
+          _inMemoryTextbookBytes[rawStem] = bytes;
+          final stem = AppSettings.getSubjectStem(rawStem);
+          _inMemoryTextbookBytes[stem] = bytes;
+          _inMemoryTextbookBytes['${_settings.selectedGrade}_$stem'] = bytes;
+
+          if (updatedPaths[stem] != file.path || updatedPaths['${_settings.selectedGrade}_$stem'] != file.path) {
+            updatedPaths[stem] = file.path;
+            updatedPaths['${_settings.selectedGrade}_$stem'] = file.path;
+            needsSave = true;
+          }
+        }
+
+        if (needsSave && mounted) {
+          final updated = _settings.copyWith(textbookImages: updatedPaths);
+          setState(() {
+            _settings = updated;
+          });
+          await _storageService.saveSettings(updated);
+          debugPrint('[TextbookPreloader] 📚 Successfully loaded ${files.length} local textbook covers into memory and settings.');
+        }
+      }
+    } catch (e) {
+      debugPrint('[TextbookPreloader] Error loading textbooks: $e');
+    }
+  }
+
   ImageProvider? _getAdaptiveImageProvider(String? imgPath, {String? subject}) {
     if (subject != null && subject.isNotEmpty) {
       final stem = AppSettings.getSubjectStem(subject);
@@ -6954,8 +7182,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         return MemoryImage(_inMemoryTextbookBytes[stem]!);
       }
     }
-    if (imgPath == null || imgPath.isEmpty) return null;
-    if (imgPath.startsWith('data:image/')) {
+    if (imgPath != null && imgPath.startsWith('data:image/')) {
       try {
         final commaIdx = imgPath.indexOf(',');
         if (commaIdx != -1) {
@@ -6964,15 +7191,13 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         }
       } catch (_) {}
     }
-    if (kIsWeb || imgPath.startsWith('http://') || imgPath.startsWith('https://') || imgPath.startsWith('blob:')) {
+    if (imgPath != null && (kIsWeb || imgPath.startsWith('http://') || imgPath.startsWith('https://') || imgPath.startsWith('blob:'))) {
       return NetworkImage(imgPath);
     }
-    try {
-      final file = File(imgPath);
-      if (file.existsSync()) {
-        return FileImage(file);
-      }
-    } catch (_) {}
+    final resolvedFile = _resolveLocalTextbookFile(imgPath, subjectTitle: subject);
+    if (resolvedFile != null) {
+      return FileImage(resolvedFile);
+    }
     return null;
   }
 
@@ -7005,10 +7230,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       }
     }
 
-    if (imgPath == null || imgPath.isEmpty) {
-      return _buildFallbackBookCover(subjectTitle ?? '교과서');
-    }
-    if (imgPath.startsWith('data:image/')) {
+    if (imgPath != null && imgPath.startsWith('data:image/')) {
       try {
         final commaIdx = imgPath.indexOf(',');
         if (commaIdx != -1) {
@@ -7023,7 +7245,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         }
       } catch (_) {}
     }
-    if (kIsWeb || imgPath.startsWith('http://') || imgPath.startsWith('https://') || imgPath.startsWith('blob:')) {
+    if (imgPath != null && (kIsWeb || imgPath.startsWith('http://') || imgPath.startsWith('https://') || imgPath.startsWith('blob:'))) {
       final safeUrl = _getCorsSafeImageUrl(imgPath);
       return Image.network(
         safeUrl,
@@ -7039,18 +7261,18 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         ),
       );
     }
-    try {
-      final file = File(imgPath);
-      if (file.existsSync()) {
-        return Image.file(
-          file,
-          width: width,
-          height: height,
-          fit: fit,
-          errorBuilder: (_, __, ___) => _buildFallbackBookCover(subjectTitle ?? '교과서'),
-        );
-      }
-    } catch (_) {}
+
+    final resolvedFile = _resolveLocalTextbookFile(imgPath, subjectTitle: subjectTitle);
+    if (resolvedFile != null) {
+      return Image.file(
+        resolvedFile,
+        width: width,
+        height: height,
+        fit: fit,
+        errorBuilder: (_, __, ___) => _buildFallbackBookCover(subjectTitle ?? '교과서'),
+      );
+    }
+
     return _buildFallbackBookCover(subjectTitle ?? '교과서');
   }
 
@@ -7932,46 +8154,57 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: _adBanners.isEmpty
-              ? Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: _openBstCloud,
-                    borderRadius: BorderRadius.circular(24),
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: EdgeInsets.all(10 * scale),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF6366F1).withOpacity(0.18),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Icons.cloud_upload_rounded,
-                              color: const Color(0xFF818CF8),
-                              size: 28 * scale,
+              ? Container(
+                  padding: EdgeInsets.all(20 * scale),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(12 * scale),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00F5D4).withOpacity(0.12),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFF00F5D4).withOpacity(0.3),
+                              width: 1.2,
                             ),
                           ),
-                          SizedBox(height: 8 * scale),
-                          Text(
-                            '☁️ 교사용 Cloud 연결하기',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 13 * scale,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+                          child: Icon(
+                            Icons.campaign_rounded,
+                            color: const Color(0xFF00F5D4),
+                            size: 32 * scale,
                           ),
-                          SizedBox(height: 4 * scale),
-                          Text(
-                            '터치하여 6자리 OTP 또는 간편 접속',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 10.5 * scale,
-                              color: Colors.white54,
-                            ),
+                        ),
+                        SizedBox(height: 12 * scale),
+                        Text(
+                          '📢 교내 알림판',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 15 * scale,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
                           ),
-                        ],
-                      ),
+                        ),
+                        SizedBox(height: 6 * scale),
+                        Text(
+                          '등록된 공지 또는 행사 알림이 없습니다',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 11 * scale,
+                            color: Colors.white60,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: 4 * scale),
+                        Text(
+                          '오늘 하루도 활기차고 행복한 시간 되세요! 🌟',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 10 * scale,
+                            color: const Color(0xFF00F5D4).withOpacity(0.7),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
                   ),
                 )

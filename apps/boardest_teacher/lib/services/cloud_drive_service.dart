@@ -278,19 +278,23 @@ class CloudDriveService with ChangeNotifier {
     }
     const defaultPort = 1217;
     try {
-      _localServer = await HttpServer.bind(InternetAddress.loopbackIPv4, defaultPort, shared: true);
+      _localServer = await HttpServer.bind(InternetAddress.anyIPv4, defaultPort, shared: true);
     } catch (e) {
-      debugPrint('[CloudDriveService] Port $defaultPort on loopbackIPv4 unavailable ($e). Binding to dynamic available port...');
       try {
-        _localServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0, shared: true);
-      } catch (e2) {
-        debugPrint('[CloudDriveService] Failed to bind loopback server: $e2');
-        return;
+        _localServer = await HttpServer.bind(InternetAddress.loopbackIPv4, defaultPort, shared: true);
+      } catch (e1) {
+        debugPrint('[CloudDriveService] Port $defaultPort unavailable ($e1). Binding to dynamic available port...');
+        try {
+          _localServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0, shared: true);
+        } catch (e2) {
+          debugPrint('[CloudDriveService] Failed to bind loopback server: $e2');
+          return;
+        }
       }
     }
 
     _activePort = _localServer!.port;
-    debugPrint('[CloudDriveService] 🚀 Persistent Loopback Server started on http://127.0.0.1:$_activePort');
+    debugPrint('[CloudDriveService] 🚀 Persistent Loopback Server started on port $_activePort');
 
     _localServer!.listen((HttpRequest request) async {
       debugPrint('[CloudDriveService] 📥 Received loopback request: ${request.method} ${request.uri}');
@@ -298,6 +302,7 @@ class CloudDriveService with ChangeNotifier {
       request.response.headers.add('Access-Control-Allow-Origin', '*');
       request.response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       request.response.headers.add('Access-Control-Allow-Headers', '*');
+      request.response.headers.add('Access-Control-Allow-Private-Network', 'true');
       
       if (request.method == 'OPTIONS') {
         request.response.statusCode = HttpStatus.ok;

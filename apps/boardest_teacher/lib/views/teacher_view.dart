@@ -312,7 +312,7 @@ class _TeacherViewState extends State<TeacherView> {
   void _applyWindowFrameStyle(String style) async {
     if (kIsWeb || !Platform.isWindows) return;
     try {
-      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+      await windowManager.setTitleBarStyle(TitleBarStyle.normal);
       await const MethodChannel('com.boardest/launch_args').invokeMethod('setWindowFrameStyle', style);
     } catch (e) {
       debugPrint('[TeacherView] setWindowFrameStyle error: $e');
@@ -6498,55 +6498,32 @@ class _TeacherViewState extends State<TeacherView> {
       child: Row(
         children: [
           SizedBox(width: 16 * s),
-          if (!kIsWeb && Platform.isWindows) ...[
-            _MacTrafficLights(
-              scale: s,
-              onClose: () => exit(0),
-              onMinimize: () => windowManager.minimize(),
-              onMaximize: () async {
-                bool isMax = await windowManager.isMaximized();
-                if (isMax) {
-                  await windowManager.unmaximize();
-                } else {
-                  await windowManager.maximize();
-                }
-              },
-              onPopup: () => _enterMiniMode(),
+          Icon(Icons.school_rounded, color: _accentColor, size: 18 * s),
+          SizedBox(width: 8 * s),
+          Text(
+            'Boardest Teacher',
+            style: GoogleFonts.outfit(
+              color: _textColor,
+              fontSize: 15 * s,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
             ),
-            SizedBox(width: 16 * s),
+          ),
+          SizedBox(width: 8 * s),
+          if (!kIsWeb && Platform.isWindows) ...[
+            Tooltip(
+              message: '미니 모드로 전환',
+              child: IconButton(
+                onPressed: _enterMiniMode,
+                icon: Icon(Icons.picture_in_picture_alt_rounded, size: 16 * s, color: _textColor.withOpacity(0.7)),
+                padding: EdgeInsets.zero,
+                constraints: BoxConstraints(minWidth: 28 * s, minHeight: 28 * s),
+              ),
+            ),
+            SizedBox(width: 8 * s),
           ],
-          Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onPanStart: (_) {
-                if (!kIsWeb && Platform.isWindows) {
-                  windowManager.startDragging();
-                }
-              },
-              onDoubleTap: () async {
-                if (!kIsWeb && Platform.isWindows) {
-                  bool isMax = await windowManager.isMaximized();
-                  if (isMax) {
-                    await windowManager.unmaximize();
-                  } else {
-                    await windowManager.maximize();
-                  }
-                }
-              },
-              child: Row(
-                children: [
-                  Icon(Icons.school_rounded, color: _accentColor, size: 18 * s),
-                  SizedBox(width: 8 * s),
-                  Text(
-                    'Boardest Teacher',
-                    style: GoogleFonts.outfit(
-                      color: _textColor,
-                      fontSize: 15 * s,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  SizedBox(width: 12 * s),
+          SizedBox(width: 12 * s),
+
                   // USB Status Badge (Only when physical USB is connected)
                   if (_isUsbConnected) ...[
                     InkWell(
@@ -6756,10 +6733,6 @@ class _TeacherViewState extends State<TeacherView> {
                     ),
                     SizedBox(width: 16 * s),
                   ],
-                ],
-              ),
-            ),
-          ),
         ],
       ),
     );
