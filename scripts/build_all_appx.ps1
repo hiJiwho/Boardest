@@ -11,7 +11,10 @@ $CerFile = Join-Path $RootDir "certs\BoardestCert.cer"
 $MakeAppx = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\makeappx.exe"
 $SignTool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
 
-Write-Host "=== Starting Full AppX & AppInstaller Packaging Pipeline ===" -ForegroundColor Cyan
+$AppVersion = "2.9.9.7"
+$repoReleaseBase = "https://github.com/hiJiwho/Boardest/releases/latest/download"
+
+Write-Host "=== Starting Full AppX & AppInstaller Packaging Pipeline (v$AppVersion) ===" -ForegroundColor Cyan
 
 # 1. Ensure output directory exists
 if (-not (Test-Path $AppxOutDir)) {
@@ -22,27 +25,99 @@ if (-not (Test-Path $AppxOutDir)) {
 Copy-Item $CerFile (Join-Path $AppxOutDir "BoardestCert.cer") -Force
 Copy-Item (Join-Path $RootDir "certs\install_certificate.bat") (Join-Path $AppxOutDir "install_certificate.bat") -Force
 
-# Helper tools definition
-$helpers = @(
-    (Join-Path $RootDir "apps\boardest_teacher\build\windows\x64\runner\Release\boardest_ppt_helper.exe"),
-    (Join-Path $RootDir "apps\boardest_teacher\build\windows\x64\runner\Release\boardest_ppt_overlay.exe"),
-    (Join-Path $RootDir "apps\boardest_teacher\build\windows\x64\runner\Release\boardest_hwp_overlay.exe"),
-    (Join-Path $RootDir "apps\boardest_teacher\build\windows\x64\runner\Release\watchdog.exe"),
-    (Join-Path $RootDir "installer\driver_installer.exe")
-)
+# 2. Create .appinstaller XML files (Quiet mode: ShowPrompt="false" UpdateBlocksActivation="false")
+Write-Host "`n[1/6] Generating AppInstaller manifests (v$AppVersion)..." -ForegroundColor Yellow
 
-# 2. Package 1: Boardest Main App (Sandboxed)
-Write-Host "`n[1/3] Packaging Boardest Main (jiwho.boardest.bst)..." -ForegroundColor Yellow
+# 2.1 boardest.appinstaller
+$boardestAppinstaller = @"
+<?xml version="1.0" encoding="utf-8"?>
+<AppInstaller
+    xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
+    Version="$AppVersion"
+    Uri="https://download-boardest.web.app/boardest.appinstaller">
+    <MainPackage
+        Name="jiwho.boardest.bst"
+        Publisher="CN=jiwho"
+        Version="$AppVersion"
+        ProcessorArchitecture="x64"
+        Uri="$repoReleaseBase/boardest.appx" />
+    <UpdateSettings>
+        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false"/>
+        <AutomaticBackgroundTask/>
+        <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
+    </UpdateSettings>
+</AppInstaller>
+"@
+$boardestAppinstallerPath = Join-Path $AppxOutDir "boardest.appinstaller"
+Set-Content -Path $boardestAppinstallerPath -Value $boardestAppinstaller -Encoding UTF8
+Write-Host "Created: boardest.appinstaller" -ForegroundColor Green
+
+# 2.2 bst-teacher.appinstaller
+$teacherAppinstaller = @"
+<?xml version="1.0" encoding="utf-8"?>
+<AppInstaller
+    xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
+    Version="$AppVersion"
+    Uri="https://download-boardest.web.app/bst-teacher.appinstaller">
+    <MainPackage
+        Name="jiwho.boardest.teacher"
+        Publisher="CN=jiwho"
+        Version="$AppVersion"
+        ProcessorArchitecture="x64"
+        Uri="$repoReleaseBase/bst-teacher.appx" />
+    <UpdateSettings>
+        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false"/>
+        <AutomaticBackgroundTask/>
+        <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
+    </UpdateSettings>
+</AppInstaller>
+"@
+$teacherAppinstallerPath = Join-Path $AppxOutDir "bst-teacher.appinstaller"
+Set-Content -Path $teacherAppinstallerPath -Value $teacherAppinstaller -Encoding UTF8
+Write-Host "Created: bst-teacher.appinstaller" -ForegroundColor Green
+
+# 2.3 bst-overlay-panser.appinstaller
+$panserAppinstaller = @"
+<?xml version="1.0" encoding="utf-8"?>
+<AppInstaller
+    xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
+    Version="$AppVersion"
+    Uri="$repoReleaseBase/bst-overlay-panser.appinstaller">
+    <MainPackage
+        Name="jiwho.boardest.plugin.overlaypanser"
+        Publisher="CN=jiwho"
+        Version="$AppVersion"
+        ProcessorArchitecture="x64"
+        Uri="$repoReleaseBase/bst-overlay-panser.appx" />
+    <UpdateSettings>
+        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="false" UpdateBlocksActivation="false"/>
+        <AutomaticBackgroundTask/>
+        <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
+    </UpdateSettings>
+</AppInstaller>
+"@
+$panserAppinstallerPath = Join-Path $AppxOutDir "bst-overlay-panser.appinstaller"
+Set-Content -Path $panserAppinstallerPath -Value $panserAppinstaller -Encoding UTF8
+Write-Host "Created: bst-overlay-panser.appinstaller" -ForegroundColor Green
+
+# Copy manifests to assets for in-app access
+Copy-Item $boardestAppinstallerPath (Join-Path $RootDir "apps\boardest\assets\boardest.appinstaller") -Force
+Copy-Item $teacherAppinstallerPath (Join-Path $RootDir "apps\boardest_teacher\assets\bst-teacher.appinstaller") -Force
+
+# 3. Package 1: Boardest Main App (Sandboxed)
+Write-Host "`n[2/6] Packaging Boardest Main (jiwho.boardest.bst)..." -ForegroundColor Yellow
 $BoardestPkgDir = Join-Path $DistDir "packages\boardest"
 $BoardestReleaseDir = Join-Path $RootDir "apps\boardest\build\windows\x64\runner\Release"
 
-# Copy release files (exclude helper tools to keep main app in clean sandbox)
 if (Test-Path $BoardestReleaseDir) {
     Get-ChildItem -Path $BoardestReleaseDir | Where-Object { 
         $_.Name -notmatch "boardest_ppt.*|boardest_hwp.*|watchdog.*|\.msix$|\.lib$|\.exp$" 
     } | Copy-Item -Destination $BoardestPkgDir -Recurse -Force
     Write-Host "-> Synchronized fresh binaries from $BoardestReleaseDir" -ForegroundColor Green
 }
+# Embed .appinstaller directly into package root
+Copy-Item $boardestAppinstallerPath (Join-Path $BoardestPkgDir "boardest.appinstaller") -Force
+Write-Host "-> Embedded boardest.appinstaller into package root" -ForegroundColor Cyan
 
 $BoardestAppx = Join-Path $AppxOutDir "boardest.appx"
 & $MakeAppx pack /d $BoardestPkgDir /p $BoardestAppx /o
@@ -53,18 +128,20 @@ if ($LASTEXITCODE -ne 0) { throw "SignTool failed for Boardest" }
 Write-Host "-> Successfully created and signed boardest.appx" -ForegroundColor Green
 
 
-# 3. Package 2: Boardest Teacher App (Sandboxed)
-Write-Host "`n[2/3] Packaging Boardest Teacher (jiwho.boardest.teacher)..." -ForegroundColor Yellow
+# 4. Package 2: Boardest Teacher App (Sandboxed)
+Write-Host "`n[3/6] Packaging Boardest Teacher (jiwho.boardest.teacher)..." -ForegroundColor Yellow
 $TeacherPkgDir = Join-Path $DistDir "packages\bst-teacher"
 $TeacherReleaseDir = Join-Path $RootDir "apps\boardest_teacher\build\windows\x64\runner\Release"
 
-# Copy release files (exclude helper tools to keep teacher app in clean sandbox)
 if (Test-Path $TeacherReleaseDir) {
     Get-ChildItem -Path $TeacherReleaseDir | Where-Object { 
         $_.Name -notmatch "boardest_ppt.*|boardest_hwp.*|watchdog.*|\.lib$|\.exp$" 
     } | Copy-Item -Destination $TeacherPkgDir -Recurse -Force
     Write-Host "-> Synchronized fresh binaries from $TeacherReleaseDir" -ForegroundColor Green
 }
+# Embed .appinstaller directly into package root
+Copy-Item $teacherAppinstallerPath (Join-Path $TeacherPkgDir "bst-teacher.appinstaller") -Force
+Write-Host "-> Embedded bst-teacher.appinstaller into package root" -ForegroundColor Cyan
 
 $TeacherAppx = Join-Path $AppxOutDir "bst-teacher.appx"
 & $MakeAppx pack /d $TeacherPkgDir /p $TeacherAppx /o
@@ -75,11 +152,10 @@ if ($LASTEXITCODE -ne 0) { throw "SignTool failed for Boardest Teacher" }
 Write-Host "-> Successfully created and signed bst-teacher.appx" -ForegroundColor Green
 
 
-# 4. Package 3: BST Overlay Panser (Un-sandboxed FullTrust Extension Plugin)
-Write-Host "`n[3/3] Packaging BST Overlay Panser (jiwho.boardest.plugin.overlaypanser)..." -ForegroundColor Yellow
+# 5. Package 3: BST Overlay Panser (Un-sandboxed FullTrust Extension Plugin)
+Write-Host "`n[4/6] Packaging BST Overlay Panser (jiwho.boardest.plugin.overlaypanser)..." -ForegroundColor Yellow
 $PanserPkgDir = Join-Path $DistDir "packages\bst-overlay-panser"
 
-# Copy helper tools into Panser package
 $helpers = @(
     (Join-Path $TeacherReleaseDir "boardest_ppt_helper.exe"),
     (Join-Path $TeacherReleaseDir "boardest_ppt_overlay.exe"),
@@ -94,6 +170,8 @@ foreach ($h in $helpers) {
         Write-Host "Included in Panser: $(Split-Path $h -Leaf)" -ForegroundColor Gray
     }
 }
+# Embed .appinstaller directly into package root
+Copy-Item $panserAppinstallerPath (Join-Path $PanserPkgDir "bst-overlay-panser.appinstaller") -Force
 
 $PanserAppx = Join-Path $AppxOutDir "bst-overlay-panser.appx"
 & $MakeAppx pack /d $PanserPkgDir /p $PanserAppx /o
@@ -104,82 +182,8 @@ if ($LASTEXITCODE -ne 0) { throw "SignTool failed for BST Overlay Panser" }
 Write-Host "-> Successfully created and signed bst-overlay-panser.appx" -ForegroundColor Green
 
 
-# 5. Create .appinstaller XML files for all 3 packages
-Write-Host "`n[4/4] Creating AppInstaller XML files..." -ForegroundColor Yellow
-
-$repoReleaseBase = "https://github.com/hiJiwho/Boardest/releases/latest/download"
-
-# 5.1 boardest.appinstaller
-$boardestAppinstaller = @"
-<?xml version="1.0" encoding="utf-8"?>
-<AppInstaller
-    xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.6"
-    Uri="https://download-boardest.web.app/boardest.appinstaller">
-    <MainPackage
-        Name="jiwho.boardest.bst"
-        Publisher="CN=jiwho"
-        Version="2.9.9.6"
-        ProcessorArchitecture="x64"
-        Uri="$repoReleaseBase/boardest.appx" />
-    <UpdateSettings>
-        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="true"/>
-        <AutomaticBackgroundTask/>
-        <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
-    </UpdateSettings>
-</AppInstaller>
-"@
-Set-Content -Path (Join-Path $AppxOutDir "boardest.appinstaller") -Value $boardestAppinstaller -Encoding UTF8
-Write-Host "Created: boardest.appinstaller" -ForegroundColor Green
-
-# 5.2 bst-teacher.appinstaller
-$teacherAppinstaller = @"
-<?xml version="1.0" encoding="utf-8"?>
-<AppInstaller
-    xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.6"
-    Uri="https://download-boardest.web.app/bst-teacher.appinstaller">
-    <MainPackage
-        Name="jiwho.boardest.teacher"
-        Publisher="CN=jiwho"
-        Version="2.9.9.6"
-        ProcessorArchitecture="x64"
-        Uri="$repoReleaseBase/bst-teacher.appx" />
-    <UpdateSettings>
-        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="true"/>
-        <AutomaticBackgroundTask/>
-        <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
-    </UpdateSettings>
-</AppInstaller>
-"@
-Set-Content -Path (Join-Path $AppxOutDir "bst-teacher.appinstaller") -Value $teacherAppinstaller -Encoding UTF8
-Write-Host "Created: bst-teacher.appinstaller (with OptionalPackages binding)" -ForegroundColor Green
-
-# 5.3 bst-overlay-panser.appinstaller
-$panserAppinstaller = @"
-<?xml version="1.0" encoding="utf-8"?>
-<AppInstaller
-    xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="2.9.9.6"
-    Uri="$repoReleaseBase/bst-overlay-panser.appinstaller">
-    <MainPackage
-        Name="jiwho.boardest.plugin.overlaypanser"
-        Publisher="CN=jiwho"
-        Version="2.9.9.6"
-        ProcessorArchitecture="x64"
-        Uri="$repoReleaseBase/bst-overlay-panser.appx" />
-    <UpdateSettings>
-        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="true"/>
-        <AutomaticBackgroundTask/>
-        <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
-    </UpdateSettings>
-</AppInstaller>
-"@
-Set-Content -Path (Join-Path $AppxOutDir "bst-overlay-panser.appinstaller") -Value $panserAppinstaller -Encoding UTF8
-Write-Host "Created: bst-overlay-panser.appinstaller" -ForegroundColor Green
-
 # 6. Synchronize .appinstaller manifests to infra/download_web and infra/welcome_web
-Write-Host "`n[5/5] Synchronizing .appinstaller files to web distribution directories..." -ForegroundColor Yellow
+Write-Host "`n[5/6] Synchronizing .appinstaller files to web distribution directories..." -ForegroundColor Yellow
 $DownloadWebDir = Join-Path $RootDir "infra\download_web"
 $WelcomeWebDir = Join-Path $RootDir "infra\welcome_web"
 

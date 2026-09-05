@@ -255,10 +255,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
     if (!kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Windows 환경에서는 OS 네이티브 앱 설치 관리자(AppInstaller)가 실행 시 업데이트를 100% 전담
+        // Windows 환경에서는 OS 네이티브 팝업 대신 인앱 자동 확인 후 조용히 업데이트 실행
         if (Platform.isWindows) {
           UpdateService.ensureNativeAppInstallerSettings();
         }
+        UpdateService.checkAndUpdate(context, silent: true);
         if (Platform.isAndroid) {
           _checkAndPromptHomeLauncher();
         }

@@ -1,7 +1,25 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v2.9.9.6** (App: v2.9.9.6 / Web: v2.9.9.6)  
+> **현재 시스템 버전**: **v2.9.9.7** (App: v2.9.9.7 / Web: v2.9.9.7)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 B 2.9.9.7 (2026-09-05)
+
+### 1. 🛡️ Windows AppX 완전 샌드박스 격리 및 흔적 없는 앱 삭제 (Zero-Trace Uninstall)
+- **로컬 데이터 100% 샌드박스 감금**: `boardest` (`jiwho.boardest.bst`)와 `boardest_teacher` (`jiwho.boardest.teacher`)의 모든 데이터(교사 계정 토큰, 보안 시크릿, 학교 설정, 판서 및 캐시)를 Windows 공식 패키지 격리 저장소인 `%LOCALAPPDATA%\Packages\<PackageFamilyName>\LocalState` 내부로 전면 이전.
+- **레거시 Roaming 데이터 자동 이전 및 완전 삭제**: 기존 `%APPDATA%\Roaming`에 남아있던 폴더 데이터를 샌드박스로 자동 마이그레이션 후 Roaming 폴더를 영구 소거하여, 앱 외부에 데이터가 남지 않도록 정리.
+- **앱 삭제 시 0-Trace 보장**: 사용자가 Windows 설정/제어판에서 Boardest를 제거(Uninstall)하면 Windows OS 커널이 패키지 컨테이너를 통째로 지우므로 PC에 교사 계정 정보나 설정 흔적이 100% 완전 소거됨.
+
+### 2. ⚡ 무중단 인앱 자동 업데이트 & 조용한 백그라운드 배포 (Silent Auto-Update & Self-Exit)
+- **앱 실행 시 OS 설치 관리자 간섭 차단**: `Set-AppxPackageAutoUpdateSettings`를 `-CheckOnLaunch $false -ShowPrompt $false -UpdateBlocksActivation $false`로 설정하여, 부팅/실행 시 Windows OS App Installer 창이 먼저 떠서 닫히거나 실행을 방해하던 문제 원천 차단.
+- **Flutter 실행 ➔ 최신 버전 감지 ➔ 백그라운드 갱신 ➔ 앱 자살(Exit)**: Flutter 앱이 정상 실행된 후 백그라운드에서 GitHub 최신 릴리즈와 Firebase 매니페스트를 대조하여, 새 버전이 발견되면 즉시 숨김 모드(`-WindowStyle Hidden`) PowerShell을 구동하고 앱을 즉시 종료(`exit(0)`).
+- **`'Main'을(를) 찾을 수 없습니다` 오류 완전 해결**: `cmd.exe /c start`의 따옴표 파싱 충돌을 제거하고 PowerShell 프로세스를 안전하게 Detached 모드로 직결 호출하여 Windows 팝업 에러 원천 방지.
+- **AppX 배포 후 자동 재실행**: PowerShell 스크립트가 앱 프로세스 종료를 확인한 후 `Add-AppxPackage`로 최신 버전을 배포하고 `shell:AppsFolder\...`를 통해 앱을 자동 재실행.
+
+### 3. 📦 앱 패키지 내 `.appinstaller` 매니페스트 직접 내장 (Bundled AppInstaller)
+- `boardest.appinstaller`, `bst-teacher.appinstaller`, `bst-overlay-panser.appinstaller`를 패키지 루트 디렉터리와 Flutter `assets/`에 직접 번들링하여 MakeAppx 패키징.
 
 ---
 

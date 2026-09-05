@@ -1328,7 +1328,12 @@ class _TeacherViewState extends State<TeacherView> {
     try {
       final updateInfo = await UpdateService.instance.checkForUpdate(force: !silent);
       if (updateInfo != null && updateInfo.hasUpdate && mounted) {
-        UpdateService.instance.showUpdateDialog(context, updateInfo);
+        if (silent && Platform.isWindows) {
+          debugPrint('[TeacherView] 🚀 Background update found on launch. Executing quiet updater and terminating.');
+          UpdateService.instance.executeAppInstallerUpdate(updateInfo.downloadUrl);
+        } else {
+          UpdateService.instance.showUpdateDialog(context, updateInfo);
+        }
       } else if (!silent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

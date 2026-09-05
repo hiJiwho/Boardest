@@ -9,7 +9,7 @@ import 'package:open_filex/open_filex.dart';
 
 
 class UpdateService {
-  static const String defaultVersion = '2.9.9.6';
+  static const String defaultVersion = '2.9.9.7';
 
   /// Dynamically detect installed MSIX/AppX version from WindowsApps folder, or fallback to defaultVersion
   static String get currentVersion {
@@ -25,7 +25,7 @@ class UpdateService {
     return defaultVersion;
   }
 
-  /// Windows 앱 설치 관리자(AppInstaller)가 매번 실행 시 GitHub/서버에 업데이트가 있는지 확인하도록 OS 설정 보장
+  /// Windows 앱 설치 관리자(AppInstaller) 설정: 앱 실행 시 OS 창 팝업 차단 (인앱 백그라운드 체크 전담)
   static Future<void> ensureNativeAppInstallerSettings() async {
     if (!Platform.isWindows) return;
     try {
@@ -34,7 +34,7 @@ class UpdateService {
         final psCommand =
             'Set-AppxPackageAutoUpdateSettings -PackageFamilyName "jiwho.boardest.bst_nmkn64tehfz7a" '
             '-AppInstallerUri "https://download-boardest.web.app/boardest.appinstaller" '
-            '-CheckOnLaunch \$true -ShowPrompt \$true -UpdateBlocksActivation \$true '
+            '-CheckOnLaunch \$false -ShowPrompt \$false -UpdateBlocksActivation \$false '
             '-ForceUpdateFromAnyVersion \$true -HoursBetweenUpdateChecks 0 -ErrorAction SilentlyContinue';
         await Process.run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psCommand]);
       }
@@ -138,7 +138,10 @@ class UpdateService {
       debugPrint('[UpdateService] ⚖️ Result: Latest=$serverVersion vs Current=$currentVersion -> HasUpdate=$hasNew');
 
       if (hasNew) {
-        if (context.mounted) {
+        if (silent && Platform.isWindows) {
+          debugPrint('[UpdateService] 🚀 Background update found on launch. Executing quiet updater and terminating.');
+          _performWindowsUpdate(null, appInstallerManifestUrl);
+        } else if (context.mounted) {
           _showUpdateDialog(context, serverVersion, () {
             if (Platform.isWindows) {
               _performWindowsUpdate(context, appInstallerManifestUrl);
@@ -301,56 +304,49 @@ class UpdateService {
   }
 
 
-  static Future<void> _performWindowsUpdate(BuildContext context, String appInstallerUrl) async {
+  static Future<void> _performWindowsUpdate(BuildContext? context, String appInstallerUrl) async {
     try {
       final safeInstallerUrl = appInstallerUrl.isNotEmpty ? appInstallerUrl : appInstallerManifestUrl;
       debugPrint('[UpdateService] 🚀 Launching Boardest Windows AppInstaller update via PowerShell: $safeInstallerUrl');
 
+      final exeDir = p.dirname(Platform.resolvedExecutable);
+      final localAppInstaller = p.join(exeDir, 'boardest.appinstaller');
+
       final script = '''
-\$Host.UI.RawUI.WindowTitle = "Boardest Main Auto Updater"
-Write-Host "=================================================" -ForegroundColor Cyan
-Write-Host "     Boardest 전자칠판 AppX 자동 업데이트 진행 중...  " -ForegroundColor Yellow
-Write-Host "=================================================" -ForegroundColor Cyan
-Write-Host "1. 기존 실행 프로세스가 종료될 때까지 대기합니다..." -ForegroundColor Gray
-\$waitLimit = 15
+\$ErrorActionPreference = 'Continue'
+\$waitLimit = 20
 while ((Get-Process -Name 'boardest' -ErrorAction SilentlyContinue) -and (\$waitLimit -gt 0)) {
   Start-Sleep -Seconds 1
   \$waitLimit--
 }
-Start-Sleep -Milliseconds 600
+Start-Sleep -Milliseconds 800
 
 \$updateSuccess = \$false
 try {
-  Write-Host "2. AppInstaller를 통해 최신 AppX 패키지를 배포합니다..." -ForegroundColor Cyan
-  Write-Host "   대상: $safeInstallerUrl" -ForegroundColor DarkGray
   Add-AppxPackage -Path '$safeInstallerUrl' -AppInstallerFile -ForceTargetApplicationShutdown -ErrorAction Stop
   \$updateSuccess = \$true
-  Write-Host "-> AppInstaller 배포 완료!" -ForegroundColor Green
 } catch {
-  Write-Host "-> AppInstaller 실패 (\$_). 직접 최신 AppX 다운로드 설치를 시도합니다..." -ForegroundColor Yellow
-  try {
-    \$tempAppx = Join-Path \$env:TEMP 'boardest_update.appx'
-    Write-Host "   최신 boardest.appx 다운로드 중..." -ForegroundColor Cyan
-    Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx' -OutFile \$tempAppx -UseBasicParsing
-    Write-Host "   패키지 등록 중..." -ForegroundColor Cyan
-    Add-AppxPackage -Path \$tempAppx -ForceApplicationShutdown -ForceTargetApplicationShutdown -ErrorAction Stop
-    Remove-Item \$tempAppx -Force -ErrorAction SilentlyContinue
-    \$updateSuccess = \$true
-    Write-Host "-> 백업 패키지 설치 완료!" -ForegroundColor Green
-  } catch {
-    Write-Host "-> 백업 패키지 설치도 실패했습니다: \$_" -ForegroundColor Red
+  if (Test-Path '$localAppInstaller') {
+    try {
+      Add-AppxPackage -Path '$localAppInstaller' -AppInstallerFile -ForceTargetApplicationShutdown -ErrorAction Stop
+      \$updateSuccess = \$true
+    } catch {}
   }
 }
 
+if (-not \$updateSuccess) {
+  try {
+    \$tempAppx = Join-Path \$env:TEMP 'boardest_update.appx'
+    Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx' -OutFile \$tempAppx -UseBasicParsing
+    Add-AppxPackage -Path \$tempAppx -ForceApplicationShutdown -ForceTargetApplicationShutdown -ErrorAction Stop
+    Remove-Item \$tempAppx -Force -ErrorAction SilentlyContinue
+    \$updateSuccess = \$true
+  } catch {}
+}
+
 if (\$updateSuccess) {
-  Write-Host "3. 업데이트 완료! Boardest를 재실행합니다..." -ForegroundColor Green
   Start-Sleep -Milliseconds 800
   Start-Process 'explorer.exe' 'shell:AppsFolder\\jiwho.boardest.bst_nmkn64tehfz7a!App'
-  Start-Sleep -Seconds 2
-} else {
-  Write-Host "자동 업데이트가 완료되지 못했습니다. 수동 설치 파일을 웹사이트에서 다운로드해주세요." -ForegroundColor Red
-  Write-Host "창을 닫으려면 아무 키나 누르세요..." -ForegroundColor Gray
-  \$null = \$Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 ''';
 
@@ -358,21 +354,18 @@ if (\$updateSuccess) {
       final runnerFile = File(p.join(tempDir.path, 'boardest_updater.ps1'));
       await runnerFile.writeAsString(script);
 
-      // Windows 네이티브 앱 설치 관리자 GUI 창 팝업
-      try {
-        await Process.start('cmd.exe', ['/c', 'start', 'ms-appinstaller:?source=$safeInstallerUrl']);
-      } catch (_) {}
-
+      // Launch PowerShell silently in detached background mode (no cmd.exe quote issues, no window flashing)
       await Process.start(
-        'cmd.exe',
-        ['/c', 'start', '"Boardest Main Auto Updater"', 'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', runnerFile.path],
+        'powershell.exe',
+        ['-NoProfile', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', runnerFile.path],
         mode: ProcessStartMode.detached,
       );
 
+      // Immediately terminate the Flutter application so AppX files are completely unlocked for update
       exit(0);
     } catch (e) {
       debugPrint('[UpdateService] Error executing Windows update: $e');
-      if (context.mounted) {
+      if (context != null && context.mounted) {
         _showErrorDialog(context, 'Windows 자동 업데이트 실행 중 오류 발생: $e');
       }
     }

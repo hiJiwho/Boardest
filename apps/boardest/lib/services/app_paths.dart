@@ -5,32 +5,35 @@ import 'package:flutter/material.dart' show BuildContext, MediaQuery;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-/// Boardest 전자칠판용 앱 데이터 경로 (%APPDATA%\jiwho.boardest.board).
+/// Boardest 전자칠판용 앱 데이터 경로 (Windows AppX 샌드박스: %LOCALAPPDATA%\Packages\jiwho.boardest.bst_nmkn64tehfz7a\LocalState).
 class AppPaths {
   AppPaths._();
 
   static const String appName = 'jiwho.boardest.board';
+  static const String packageFamilyName = 'jiwho.boardest.bst_nmkn64tehfz7a';
   static String? _dataRoot;
   static bool _initialized = false;
 
-  /// 앱 기본 최상위 데이터 폴더 (%APPDATA%\jiwho.boardest.board)
+  /// 앱 기본 최상위 데이터 폴더 (Windows AppX 샌드박스 내부로 완전 격리)
   static String get dataRootSync {
     if (_dataRoot != null) return _dataRoot!;
     if (!kIsWeb && Platform.isWindows) {
-      return p.join(
-        Platform.environment['APPDATA'] ?? Directory.systemTemp.path,
-        appName,
-      );
+      final localAppData = Platform.environment['LOCALAPPDATA'] ?? Directory.systemTemp.path;
+      final packageLocalState = p.join(localAppData, 'Packages', packageFamilyName, 'LocalState');
+      if (Directory(packageLocalState).existsSync() || Platform.resolvedExecutable.contains('WindowsApps')) {
+        return packageLocalState;
+      }
+      return p.join(localAppData, appName, 'LocalState');
     }
     return appName;
   }
 
-  /// 설정 및 자료 저장 폴더 (%APPDATA%\jiwho.boardest.board\bst-save)
+  /// 설정 및 자료 저장 폴더 (샌드박스\bst-save)
   static String get bstSaveRootSync {
     return p.join(dataRootSync, 'bst-save');
   }
 
-  /// 판서 저장 폴더 (%APPDATA%\jiwho.boardest.board\bst-pen)
+  /// 판서 저장 폴더 (샌드박스\bst-pen)
   static String get bstPenRootSync {
     return p.join(dataRootSync, 'bst-pen');
   }
@@ -49,7 +52,7 @@ class AppPaths {
   /// 크래시 로그 파일 위치
   static String get crashLogPath => p.join(dataRootSync, 'crash_logs.txt');
 
-  /// C++ / C# 헬퍼 오버레이 실행 폴더 (%APPDATA%\jiwho.boardest.board\Cpp-runner)
+  /// C++ / C# 헬퍼 오버레이 실행 폴더 (샌드박스\Cpp-runner)
   static String get cppRunnerDirSync {
     if (kIsWeb) return 'Cpp-runner';
     final runnerDir = p.join(dataRootSync, 'Cpp-runner');
@@ -60,10 +63,10 @@ class AppPaths {
     return runnerDir;
   }
 
-  /// 설정 저장 폴더 위치 (%APPDATA%\jiwho.boardest.board\bst-save\config)
+  /// 설정 저장 폴더 위치 (샌드박스\bst-save\config)
   static String get configDir => p.join(bstSaveRootSync, 'config');
 
-  /// 학교 기본 설정 파일 위치 (%APPDATA%\jiwho.boardest.board\bst-save\config\school_config.json)
+  /// 학교 기본 설정 파일 위치 (샌드박스\bst-save\config\school_config.json)
   static String get schoolConfigPath => p.join(configDir, 'school_config.json');
 
   static Future<void> init() async {
@@ -74,19 +77,41 @@ class AppPaths {
       return;
     }
     if (Platform.isWindows) {
-      final appData = Platform.environment['APPDATA'] ?? Directory.systemTemp.path;
-      _dataRoot = p.join(appData, appName);
-      
-      // Cleanup legacy com.boardest folders if present in APPDATA
-      try {
-        for (final legacy in ['com.boardest', 'com.boardest.comcigan']) {
-          final dir = Directory(p.join(appData, legacy));
-          if (dir.existsSync()) {
-            dir.deleteSync(recursive: true);
+      final localAppData = Platform.environment['LOCALAPPDATA'] ?? Directory.systemTemp.path;
+      final packageLocalState = p.join(localAppData, 'Packages', packageFamilyName, 'LocalState');
+      if (Directory(packageLocalState).existsSync() || Platform.resolvedExecutable.contains('WindowsApps')) {
+        _dataRoot = packageLocalState;
+      } else {
+        _dataRoot = p.join(localAppData, appName, 'LocalState');
+      }
+
+      // 1. 샌드박스 최상위 및 하위 폴더 생성
+      await Directory(_dataRoot!).create(recursive: true);
+
+      // 2. 레거시 %APPDATA%\Roaming 데이터가 있으면 샌드박스로 이전 후 Roaming 폴더 완전 영구 삭제 (흔적 제거)
+      final roamingAppData = Platform.environment['APPDATA'];
+      if (roamingAppData != null) {
+        try {
+          final legacyDir = Directory(p.join(roamingAppData, appName));
+          if (legacyDir.existsSync()) {
+            debugPrint('[AppPaths] 📦 Migrating legacy data from $legacyDir to sandbox $_dataRoot...');
+            await _copyDirectory(legacyDir, Directory(_dataRoot!));
+            legacyDir.deleteSync(recursive: true);
+            debugPrint('[AppPaths] 🧹 Legacy Roaming directory deleted cleanly. All data is now sandboxed.');
           }
+        } catch (e) {
+          debugPrint('[AppPaths] Legacy roaming cleanup notice: $e');
         }
-      } catch (e) {
-        debugPrint('[AppPaths] Cleanup legacy folder error: $e');
+
+        // 구 com.boardest 잔여 폴더도 완전 삭제
+        try {
+          for (final legacy in ['com.boardest', 'com.boardest.comcigan']) {
+            final dir = Directory(p.join(roamingAppData, legacy));
+            if (dir.existsSync()) {
+              dir.deleteSync(recursive: true);
+            }
+          }
+        } catch (_) {}
       }
     } else if (Platform.isAndroid || Platform.isIOS) {
       final dir = await getApplicationSupportDirectory();
@@ -99,6 +124,20 @@ class AppPaths {
     await Directory(bstPenRootSync).create(recursive: true);
     await Directory(configDir).create(recursive: true);
     _initialized = true;
+  }
+
+  static Future<void> _copyDirectory(Directory source, Directory destination) async {
+    await destination.create(recursive: true);
+    await for (final entity in source.list(recursive: false)) {
+      final newPath = p.join(destination.path, p.basename(entity.path));
+      if (entity is Directory) {
+        await _copyDirectory(entity, Directory(newPath));
+      } else if (entity is File) {
+        if (!File(newPath).existsSync()) {
+          await entity.copy(newPath);
+        }
+      }
+    }
   }
 
   /// 1920×1080 기준 화면비 동적 UI 스케일 (오버플로우 방지 및 Android 80% 배율 적용)
