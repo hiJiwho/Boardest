@@ -951,9 +951,9 @@
           <div class="terminal-box">
             <div class="terminal-content">
               <span class="terminal-prompt">PS &gt;</span>
-              <span>irm https://download-boardest.web.app/bst.ps1 | iex</span>
+              <span>irm https://download-boardest.web.app/win-cer.ps1 | iex</span>
             </div>
-            <button class="copy-btn" onclick="copyToClipboard('irm https://download-boardest.web.app/bst.ps1 | iex', this)">
+            <button class="copy-btn" onclick="copyToClipboard('irm https://download-boardest.web.app/win-cer.ps1 | iex', this)">
               <span class="material-icons-round" style="font-size: 1.05rem;">content_copy</span>
               <span>복사</span>
             </button>
@@ -999,33 +999,11 @@
           </div>
         </div>
 
-        <!-- 3단계: .appx 오프라인 수동 설치 (폐쇄망/보안망 전용) -->
-        <div class="step-box">
-          <div class="step-header">
-            <div class="step-title-row">
-              <span class="step-number">3</span>
-              <h3 class="step-title">.appx 오프라인 수동 설치 (인터넷 차단 교실 전용)</h3>
-            </div>
-            <span class="step-badge offline">오프라인 전용</span>
-          </div>
-          <p class="step-desc">
-            교내 보안망 또는 인터넷이 연결되지 않는 폐쇄망 교실 PC 전용 패키지입니다.<br>
-            <span style="color: var(--amber);">⚠️ 오프라인 .appx는 자동 업데이트가 지원되지 않으므로, 인터넷이 가능한 일반 PC에서는 위의 <strong>2단계 AppInstaller(온라인 설치)</strong>를 사용하시길 강력히 권장합니다.</span>
-          </p>
-
-          <div class="button-row">
-            <a id="win-appx-btn" href="https://download-boardest.web.app/bst.appx" class="btn-action-secondary">
-              <span class="material-icons-round">inventory_2</span>
-              <span id="win-appx-text">bst.appx 다운로드 (오프라인 수동)</span>
-            </a>
-          </div>
-        </div>
-
-        <!-- 4단계: 설치 없는 웹 버전 바로가기 -->
+        <!-- 3단계: 설치 없는 웹 버전 바로가기 -->
         <div class="step-box" style="margin-bottom: 0;">
           <div class="step-header">
             <div class="step-title-row">
-              <span class="step-number">4</span>
+              <span class="step-number">3</span>
               <h3 class="step-title">설치 없이 웹 브라우저에서 바로 쓰기</h3>
             </div>
             <span class="step-badge recommended">설치 불필요</span>
@@ -1208,9 +1186,9 @@
               <span class="material-icons-round">file_download</span>
               <span>BoardestCert.cer 다운로드</span>
             </a>
-            <a href="cer.ps1" download="cer.ps1" class="btn-action-secondary">
+            <a href="win-cer.ps1" download="win-cer.ps1" class="btn-action-secondary">
               <span class="material-icons-round">code</span>
-              <span>cer.ps1 스크립트 파일 다운로드</span>
+              <span>win-cer.ps1 스크립트 파일 다운로드</span>
             </a>
           </div>
 
@@ -1363,8 +1341,6 @@
       const winAppinstallerBtn = document.getElementById('win-appinstaller-btn');
       const winAppinstallerText = document.getElementById('win-appinstaller-text');
       const winCmdInstall = document.getElementById('win-cmd-install');
-      const winAppxBtn = document.getElementById('win-appx-btn');
-      const winAppxText = document.getElementById('win-appx-text');
       const winWebBtn = document.getElementById('win-web-btn');
       const winWebText = document.getElementById('win-web-text');
 
@@ -1372,16 +1348,12 @@
         winAppinstallerBtn.href = "https://download-boardest.web.app/boardest.appinstaller";
         winAppinstallerText.innerText = "boardest.appinstaller 다운로드 및 실행";
         winCmdInstall.innerText = "Add-AppxPackage -AppInstallerFile https://download-boardest.web.app/boardest.appinstaller";
-        winAppxBtn.href = "https://download-boardest.web.app/bst.appx";
-        winAppxText.innerText = "bst.appx 다운로드 (오프라인 수동)";
         winWebBtn.href = "https://boardest.web.app";
         winWebText.innerText = "전자칠판 웹 버전 열기 (boardest.web.app)";
       } else {
         winAppinstallerBtn.href = "https://download-boardest.web.app/bst-teacher.appinstaller";
         winAppinstallerText.innerText = "bst-teacher.appinstaller 다운로드 및 실행";
         winCmdInstall.innerText = "Add-AppxPackage -AppInstallerFile https://download-boardest.web.app/bst-teacher.appinstaller";
-        winAppxBtn.href = "https://download-boardest.web.app/bst-teacher.appx";
-        winAppxText.innerText = "bst-teacher.appx 다운로드 (오프라인 수동)";
         winWebBtn.href = "https://boardest-teacher.web.app";
         winWebText.innerText = "교사용 웹 버전 열기 (boardest-teacher.web.app)";
       }

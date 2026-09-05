@@ -238,11 +238,13 @@ cd infra/boardest_auth_worker; cmd.exe /c npx wrangler deploy
 
 ## ⚙️ 11. 자동 업데이트, 인증서 및 원클릭 설치 규격
 
-1. **`download-boardest.web.app` 원클릭 스크립트**:
+1. **`download-boardest.web.app/win-cer.ps1` 인증서 전용 설치 스크립트**:
    ```powershell
-   irm https://download-boardest.web.app/bst.ps1 | iex
+   irm https://download-boardest.web.app/win-cer.ps1 | iex
    ```
-   - ExecutionPolicy 제한을 우회하여 관리자 권한 자동 승격 후 영구 인증서 설치 및 앱 설치 메뉴 제공.
+   - 앱 설치와 별개로 **보안 인증서만 단독으로 설치**하는 경량 전용 스크립트.
+   - ExecutionPolicy 제한을 우회하여 관리자 권한 자동 승격 후 `BoardestCert.cer`를 로컬 머신 루트 및 신뢰할 수 있는 사용자 저장소에 등록 완료 후 즉시 종료.
+   - 앱 설치는 이후 웹사이트 다운로드 또는 `Add-AppxPackage`를 통해 사용자가 별도로 진행.
 2. **다운로드 출처 직접 연결 (GitHub latest 302 리다이렉트)**:
    - APK: `https://download-boardest.web.app/bst.apk`
    - AppInstaller: `https://download-boardest.web.app/bst.appinstaller`

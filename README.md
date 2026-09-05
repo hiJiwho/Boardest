@@ -23,11 +23,22 @@
 
 ## 🚀 Quick Start & Installation (빠른 설치 및 이용)
 
-### ⚡ 1. Windows 원클릭 자동 설치 (추천 ⭐⭐⭐⭐⭐)
-PowerShell을 열고 아래 명령어를 입력하면 **관리자 권한 승격, 영구 인증서 등록 및 최신 AppInstaller 설치**가 전자동으로 진행됩니다.
+### 🪟 Windows 설치 가이드 (2단계 분리 설치)
 
+#### 1단계: 영구 서명 인증서 설치 (최초 1회 필수)
+PowerShell을 열고 아래 명령어를 입력하여 2999년 영구 보안 서명 인증서를 등록합니다. (앱 설치와 완전히 분리되어 인증서만 깔끔하게 등록됩니다)
 ```powershell
-irm https://download-boardest.web.app/bst.ps1 | iex
+irm https://download-boardest.web.app/win-cer.ps1 | iex
+```
+
+#### 2단계: 원하는 앱 설치 (온라인 AppInstaller 권장 ⭐⭐⭐⭐⭐)
+인증서 등록 후, 웹사이트([welcome-to-boardest.web.app](https://welcome-to-boardest.web.app))에서 다운로드하거나 PowerShell에서 설치합니다:
+```powershell
+# 전자칠판 메인 (Boardest) 설치
+Add-AppxPackage -AppInstallerFile https://download-boardest.web.app/bst.appinstaller
+
+# 또는 교사용 (Boardest Teacher) 설치
+Add-AppxPackage -AppInstallerFile https://download-boardest.web.app/bst-teacher.appinstaller
 ```
 
 > [!TIP]
@@ -37,18 +48,18 @@ irm https://download-boardest.web.app/bst.ps1 | iex
 
 ---
 
-### 📥 2. 공식 다운로드 직통 URL (`download-boardest.web.app`)
+### 📥 공식 다운로드 직통 URL (`download-boardest.web.app`)
 브라우저 주소창이나 다운로드 버튼 클릭 시 GitHub 최신 릴리즈(`latest`) 파일로 자동 연결됩니다:
 
 | 다운로드 항목 | 직통 URL (Latest 302 리다이렉트) | 설명 |
 |---|---|---|
-| **📱 안드로이드 APK** | [`https://download-boardest.web.app/bst.apk`](https://download-boardest.web.app/bst.apk) | 전자칠판/태블릿 전용 설치 파일 |
+| **🔑 영구 서명 설치 스크립트** | [`https://download-boardest.web.app/win-cer.ps1`](https://download-boardest.web.app/win-cer.ps1) | 인증서 전용 원클릭 PowerShell 스크립트 |
+| **🔑 영구 보안 인증서 파일** | [`https://download-boardest.web.app/bst.cer`](https://download-boardest.web.app/bst.cer) | 2999-12-31 만료 영구 자체 서명 인증서 (.cer) |
 | **🪟 전자칠판 AppInstaller** | [`https://download-boardest.web.app/bst.appinstaller`](https://download-boardest.web.app/bst.appinstaller) | Windows 자동 업데이트 온라인 설치기 |
 | **👩‍🏫 교사용 AppInstaller** | [`https://download-boardest.web.app/bst-teacher.appinstaller`](https://download-boardest.web.app/bst-teacher.appinstaller) | 교사용 PC 자동 업데이트 온라인 설치기 |
 | **📦 전자칠판 .appx** | [`https://download-boardest.web.app/bst.appx`](https://download-boardest.web.app/bst.appx) | 폐쇄망/오프라인 수동 설치 패키지 |
 | **📦 교사용 .appx** | [`https://download-boardest.web.app/bst-teacher.appx`](https://download-boardest.web.app/bst-teacher.appx) | 폐쇄망/오프라인 수동 설치 패키지 |
-| **🔑 영구 보안 인증서** | [`https://download-boardest.web.app/bst.cer`](https://download-boardest.web.app/bst.cer) | 2999-12-31 만료 영구 자체 서명 인증서 |
-| **📜 원클릭 스크립트** | [`https://download-boardest.web.app/bst.ps1`](https://download-boardest.web.app/bst.ps1) | PowerShell 원클릭 설치 스크립트 |
+| **📱 안드로이드 APK** | [`https://download-boardest.web.app/bst.apk`](https://download-boardest.web.app/bst.apk) | 전자칠판/태블릿 전용 설치 파일 |
 
 ---
 
