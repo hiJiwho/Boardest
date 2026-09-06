@@ -423,7 +423,13 @@ class MealCallService {
     final activeSettings = settings ?? _currentSettings ?? await StorageService().getSettings();
     if (activeSettings.connectionName.isEmpty && activeSettings.selectedSchool == null && !activeSettings.specialClassroomMode) return;
 
-    final connName = activeSettings.connectionName.isNotEmpty ? activeSettings.connectionName : 'My';
+    final schoolId = activeSettings.schoolId.trim();
+    final code = activeSettings.selectedSchool?.code?.toString() ?? '';
+    String connName = schoolId.isNotEmpty ? schoolId : activeSettings.connectionName;
+    if (connName.isEmpty || connName.toLowerCase() == 'my') {
+      connName = code.isNotEmpty ? code : 'school';
+    }
+    connName = connName.toLowerCase();
     
     var cafeteria = activeSettings.cafeteriaNum;
     if (cafeteria.startsWith("급식실")) {

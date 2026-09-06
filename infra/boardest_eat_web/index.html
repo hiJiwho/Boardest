@@ -930,6 +930,7 @@
               const docSchoolCode = (f.schoolCode?.stringValue || '').trim().toLowerCase();
               const docName = d.name ? d.name.split('/').pop() : '';
               if (docSchoolCode === schoolCode || docName.startsWith(schoolCode + '_')) {
+                const isCalled = f.called?.booleanValue || false;
                 rawList.push({
                   docId: docName,
                   schoolCode: docSchoolCode,
@@ -938,7 +939,8 @@
                   grade: f.grade?.integerValue || (docName.split('_')[2] || '1'),
                   classNum: f.classNum?.integerValue || (docName.split('_')[3] || '1'),
                   nickname: f.classNickname?.stringValue || '',
-                  lastActive: f.lastActive?.timestampValue || null
+                  lastActive: f.lastActive?.timestampValue || null,
+                  called: isCalled
                 });
               }
             });
@@ -962,6 +964,11 @@
         }
 
         if (isOnline) {
+          if (c.called) {
+            calledRooms.add(c.docId);
+          } else {
+            calledRooms.delete(c.docId);
+          }
           const parts = (c.docId || '').split('_');
           const grade = c.grade || (parts.length >= 3 ? parts[2] : '1');
           const classNum = c.classNum || (parts.length >= 4 ? parts[3] : '1');
@@ -988,6 +995,31 @@
       renderClassrooms();
       showToast(`🔔 ${grade}학년 ${classNum}반에 급식 호출 신호를 전송했습니다!`);
 
+      const nowIso = new Date().toISOString();
+      const caller = callerName || '급식지도교사';
+
+      // 1. 해당 학급 전자칠판 전용 문서 직접 업데이트 (칠판 MealCallService가 즉시 감지하여 팝업 트리거)
+      try {
+        const updateMask = 'updateMask.fieldPaths=called&updateMask.fieldPaths=lastCalledAt&updateMask.fieldPaths=calledAt&updateMask.fieldPaths=calledBy&updateMask.fieldPaths=message';
+        const url = `${FIRESTORE_BASE}/eat_calls/${encodeURIComponent(docId)}?${updateMask}`;
+        await fetch(url, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fields: {
+              called: { booleanValue: true },
+              lastCalledAt: { stringValue: nowIso },
+              calledAt: { stringValue: nowIso },
+              calledBy: { stringValue: caller },
+              message: { stringValue: `${grade}학년 ${classNum}반 급식실로 이동하세요` }
+            }
+          })
+        });
+      } catch (e) {
+        console.error('Direct classroom call error:', e);
+      }
+
+      // 2. 학교 공통 브로드캐스트 문서 동기화 (기존 호환성 유지)
       try {
         const url = `${FIRESTORE_BASE}/eat_calls/${encodeURIComponent(schoolCode)}`;
         await fetch(url, {
@@ -999,8 +1031,8 @@
               cafeteria: { stringValue: String(selectedCafeteria) },
               targetDocId: { stringValue: docId },
               targetClass: { stringValue: `${grade}-${classNum}` },
-              callerName: { stringValue: callerName || '급식지도교사' },
-              timestamp: { timestampValue: new Date().toISOString() }
+              callerName: { stringValue: caller },
+              timestamp: { timestampValue: nowIso }
             }
           })
         });
@@ -1014,6 +1046,24 @@
       renderClassrooms();
       showToast(`호출이 취소되었습니다.`);
 
+      // 1. 해당 학급 전자칠판 전용 문서의 called 해제
+      try {
+        const updateMask = 'updateMask.fieldPaths=called';
+        const url = `${FIRESTORE_BASE}/eat_calls/${encodeURIComponent(docId)}?${updateMask}`;
+        await fetch(url, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fields: {
+              called: { booleanValue: false }
+            }
+          })
+        });
+      } catch (e) {
+        console.error('Cancel classroom call error:', e);
+      }
+
+      // 2. 학교 공통 브로드캐스트 문서 해제
       try {
         const url = `${FIRESTORE_BASE}/eat_calls/${encodeURIComponent(schoolCode)}`;
         await fetch(url, {
@@ -1049,6 +1099,29 @@
       renderClassrooms();
       showToast(`📢 총 ${filtered.length}개 학급에 급식실 이동 호출 신호를 발송했습니다!`);
 
+      const nowIso = new Date().toISOString();
+      const caller = callerName || '급식지도교사';
+
+      // 1. 각 온라인 학급 문서에 각각 called: true 전송
+      await Promise.allSettled(filtered.map(c => {
+        const updateMask = 'updateMask.fieldPaths=called&updateMask.fieldPaths=lastCalledAt&updateMask.fieldPaths=calledAt&updateMask.fieldPaths=calledBy&updateMask.fieldPaths=message';
+        const url = `${FIRESTORE_BASE}/eat_calls/${encodeURIComponent(c.docId)}?${updateMask}`;
+        return fetch(url, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fields: {
+              called: { booleanValue: true },
+              lastCalledAt: { stringValue: nowIso },
+              calledAt: { stringValue: nowIso },
+              calledBy: { stringValue: caller },
+              message: { stringValue: `${c.grade}학년 ${c.classNum}반 급식실로 이동하세요` }
+            }
+          })
+        });
+      }));
+
+      // 2. 학교 공통 브로드캐스트 문서 동기화
       try {
         const url = `${FIRESTORE_BASE}/eat_calls/${encodeURIComponent(schoolCode)}`;
         await fetch(url, {
@@ -1059,8 +1132,8 @@
               active: { booleanValue: true },
               cafeteria: { stringValue: String(selectedCafeteria) },
               targetClass: { stringValue: 'all' },
-              callerName: { stringValue: callerName || '급식지도교사' },
-              timestamp: { timestampValue: new Date().toISOString() }
+              callerName: { stringValue: caller },
+              timestamp: { timestampValue: nowIso }
             }
           })
         });
