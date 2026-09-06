@@ -1,8 +1,8 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
     Version="3.0.3.0"
-    Uri="https://download-boardest.web.app/bst-teacher.appinstaller">
+    Uri="https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appinstaller">
     <MainPackage
         Name="jiwho.boardest.teacher"
         Publisher="CN=jiwho"

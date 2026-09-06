@@ -41,13 +41,15 @@ foreach ($manifestPath in @(
 # 2. Create .appinstaller XML files (Quiet mode: ShowPrompt="false" UpdateBlocksActivation="false")
 Write-Host "`n[1/6] Generating AppInstaller manifests (v$AppVersion)..." -ForegroundColor Yellow
 
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+
 # 2.1 boardest.appinstaller
 $boardestAppinstaller = @"
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
     Version="$AppVersion"
-    Uri="https://download-boardest.web.app/boardest.appinstaller">
+    Uri="$repoReleaseBase/boardest.appinstaller">
     <MainPackage
         Name="jiwho.boardest.bst"
         Publisher="CN=jiwho"
@@ -62,7 +64,7 @@ $boardestAppinstaller = @"
 </AppInstaller>
 "@
 $boardestAppinstallerPath = Join-Path $AppxOutDir "boardest.appinstaller"
-Set-Content -Path $boardestAppinstallerPath -Value $boardestAppinstaller -Encoding UTF8
+[System.IO.File]::WriteAllText($boardestAppinstallerPath, $boardestAppinstaller, $utf8NoBom)
 Write-Host "Created: boardest.appinstaller" -ForegroundColor Green
 
 # 2.2 bst-teacher.appinstaller
@@ -71,7 +73,7 @@ $teacherAppinstaller = @"
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
     Version="$AppVersion"
-    Uri="https://download-boardest.web.app/bst-teacher.appinstaller">
+    Uri="$repoReleaseBase/bst-teacher.appinstaller">
     <MainPackage
         Name="jiwho.boardest.teacher"
         Publisher="CN=jiwho"
@@ -86,7 +88,7 @@ $teacherAppinstaller = @"
 </AppInstaller>
 "@
 $teacherAppinstallerPath = Join-Path $AppxOutDir "bst-teacher.appinstaller"
-Set-Content -Path $teacherAppinstallerPath -Value $teacherAppinstaller -Encoding UTF8
+[System.IO.File]::WriteAllText($teacherAppinstallerPath, $teacherAppinstaller, $utf8NoBom)
 Write-Host "Created: bst-teacher.appinstaller" -ForegroundColor Green
 
 # 2.3 bst-overlay-panser.appinstaller
@@ -110,7 +112,7 @@ $panserAppinstaller = @"
 </AppInstaller>
 "@
 $panserAppinstallerPath = Join-Path $AppxOutDir "bst-overlay-panser.appinstaller"
-Set-Content -Path $panserAppinstallerPath -Value $panserAppinstaller -Encoding UTF8
+[System.IO.File]::WriteAllText($panserAppinstallerPath, $panserAppinstaller, $utf8NoBom)
 Write-Host "Created: bst-overlay-panser.appinstaller" -ForegroundColor Green
 
 # Copy manifests to assets for in-app access
