@@ -254,7 +254,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     });
     _loadPreferencesAndFetch();
     _preloadAppsList();
-    _loadSavedTextbooksToMemory();
+    _loadSavedTextbooksToMemory().then((_) {
+      _syncSchoolTextbooksFromFirestore();
+    });
     // _startLocalServer(); // LAN 서버 가동 (연동 철회)
 
     if (!kIsWeb) {
@@ -1473,6 +1475,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       });
       _applyAutoSleepSchedule();
       _startDashboardTimer();
+      _syncSchoolTextbooksFromFirestore();
 
       if (!_initialToolTriggered && widget.initialTool != null) {
         _initialToolTriggered = true;
@@ -9425,22 +9428,21 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     }
   }
 
-  /// Firestore control_configs에 등록된 학년별 교과서 ZIP 다운로드 및 압축 해제
-  Future<void> _syncSchoolTextbooksFromFirestore(Map<String, dynamic>? fields) async {
-    if (fields == null) return;
+  /// 학년별 교과서 ZIP 다운로드 및 압축 해제 (Firestore control_configs 또는 공식 GitHub 기본 저장소)
+  Future<void> _syncSchoolTextbooksFromFirestore([Map<String, dynamic>? fields]) async {
     try {
-      final grade = _settings.selectedGrade;
+      final grade = _settings.selectedGrade > 0 ? _settings.selectedGrade : 1;
       final zipKey = 'textbookZip$grade';
-      String? zipUrl = fields[zipKey]?['stringValue']?.toString().trim();
+      String? zipUrl = fields?[zipKey]?['stringValue']?.toString().trim();
 
       // Fallback 1: textbookZip (전체 공통)
       if (zipUrl == null || zipUrl.isEmpty) {
-        zipUrl = fields['textbookZip']?['stringValue']?.toString().trim();
+        zipUrl = fields?['textbookZip']?['stringValue']?.toString().trim();
       }
       // Fallback 2: textbookZip1, 2, 3 순회
       if (zipUrl == null || zipUrl.isEmpty) {
         for (int g = 1; g <= 3; g++) {
-          final candidate = fields['textbookZip$g']?['stringValue']?.toString().trim();
+          final candidate = fields?['textbookZip$g']?['stringValue']?.toString().trim();
           if (candidate != null && candidate.isNotEmpty && g == grade) {
             zipUrl = candidate;
             break;
@@ -9448,22 +9450,42 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         }
       }
 
-      if (zipUrl == null || zipUrl.isEmpty) return;
+      final defaultZipUrl = 'https://raw.githubusercontent.com/hiJiwho/TB22-ydms/main/${grade}%ED%95%99%EB%85%84.zip';
+      final effectiveZipUrl = (zipUrl != null && zipUrl.isNotEmpty) ? zipUrl : defaultZipUrl;
+
+      // 로컬 디렉터리에 실제 파일들이 이미 존재하는지 확인
+      Directory? localTextbookDir;
+      bool hasLocalFiles = false;
+      if (!kIsWeb) {
+        try {
+          localTextbookDir = Directory(p.join(AppPaths.dataRootSync, 'textbooks'));
+          if (await localTextbookDir.exists()) {
+            final files = localTextbookDir.listSync().whereType<File>();
+            if (files.isNotEmpty) {
+              hasLocalFiles = true;
+            }
+          } else {
+            await localTextbookDir.create(recursive: true);
+          }
+        } catch (_) {}
+      }
 
       final lastProcessedKey = 'last_downloaded_zip_$grade';
       final prefs = await SharedPreferences.getInstance();
       final lastUrl = prefs.getString(lastProcessedKey);
-      if (lastUrl == zipUrl && (_inMemoryTextbookBytes.isNotEmpty || (!kIsWeb && _settings.textbookImages.isNotEmpty))) {
-        debugPrint('[TextbookSync] ZIP already up to date for grade $grade: $zipUrl');
+
+      // 이미 메모리에 로드되어 있거나 로컬 파일이 온전히 존재하는 경우 스킵
+      if (lastUrl == effectiveZipUrl && (_inMemoryTextbookBytes.isNotEmpty || hasLocalFiles)) {
+        debugPrint('[TextbookSync] Textbook covers already loaded and up to date for grade $grade.');
         return;
       }
 
-      // CDN Fallback 파이프라인 (20MB 이상 대용량 ZIP 호환)
+      // CDN 파이프라인 (가장 신뢰성 높은 GitHub Raw 및 Fastly CDN 우선)
       final List<String> candidateUrls = [
-        'https://rawcdn.githack.com/hiJiwho/TB22-ydms/main/${grade}%ED%95%99%EB%85%84.zip',
-        zipUrl,
-        'https://raw.githubusercontent.com/hiJiwho/TB22-ydms/main/${grade}%ED%95%99%EB%85%84.zip',
+        defaultZipUrl,
+        if (zipUrl != null && zipUrl.isNotEmpty) zipUrl,
         'https://cdn.jsdelivr.net/gh/hiJiwho/TB22-ydms@main/${grade}%ED%95%99%EB%85%84.zip',
+        'https://rawcdn.githack.com/hiJiwho/TB22-ydms/main/${grade}%ED%95%99%EB%85%84.zip',
       ];
 
       http.Response? resp;
@@ -9493,16 +9515,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       final Map<String, String> updatedImages = Map<String, String>.from(_settings.textbookImages);
       int extractedCount = 0;
 
-      Directory? localTextbookDir;
-      if (!kIsWeb) {
-        try {
-          localTextbookDir = Directory(p.join(AppPaths.dataRootSync, 'textbooks'));
-          if (!await localTextbookDir.exists()) {
-            await localTextbookDir.create(recursive: true);
-          }
-        } catch (_) {}
-      }
-
       for (final file in archive) {
         if (file.isFile) {
           final fullName = file.name;
@@ -9526,7 +9538,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           _inMemoryTextbookBytes[stem] = bytes;
           _inMemoryTextbookBytes['${grade}_$stem'] = bytes;
 
-          // 2. On native desktop: save file to disk as well
+          // 2. On native platforms: save file to disk as well
           if (!kIsWeb && localTextbookDir != null) {
             try {
               final localFile = File(p.join(localTextbookDir.path, '${grade}_$stem.$ext'));
@@ -9541,21 +9553,14 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       }
 
       if (extractedCount > 0) {
-        await prefs.setString(lastProcessedKey, zipUrl);
-        if (!kIsWeb) {
-          final updatedSettings = _settings.copyWith(textbookImages: updatedImages);
-          if (mounted) {
-            setState(() {
-              _settings = updatedSettings;
-            });
-          }
-          await _storageService.saveSettings(updatedSettings);
-        } else {
-          // Web: DO NOT save 20MB of Base64 strings to localStorage! Just trigger setState.
-          if (mounted) {
-            setState(() {});
-          }
+        await prefs.setString(lastProcessedKey, effectiveZipUrl);
+        final updatedSettings = _settings.copyWith(textbookImages: updatedImages);
+        if (mounted) {
+          setState(() {
+            _settings = updatedSettings;
+          });
         }
+        await _storageService.saveSettings(updatedSettings);
         debugPrint('[TextbookSync] Successfully extracted and registered $extractedCount textbooks in memory for Grade $grade!');
       }
     } catch (e, st) {

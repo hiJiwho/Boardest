@@ -1,7 +1,19 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v3.0.2** (App: v3.0.2 / Web: v3.0.2)  
+> **현재 시스템 버전**: **v3.0.3** (App: v3.0.3 / Web: v3.0.3)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 v3.0.3 (2026-09-06) — 🚀 Boardest 3.0.3 Release
+
+### 1. 📱 Android 교과서 커버 이미지 로드 문제 완전 해결
+- Firestore `control_configs`에 특정 학교 정보나 `textbookZip` 필드가 없어도 공식 교과서 CDN(`TB22-ydms/main/${grade}학년.zip`)을 통해 안정적으로 자동 다운로드 및 메모리/로컬 디렉터리 동기화 지원.
+- Android 초기 실행 시 시간표 로드 파이프라인에서 교과서 동기화가 누락되던 구조 개선 및 앱 시작 시 비동기 즉시 프리로드 연동.
+
+### 2. 🪟 Windows AppX 패키징 및 AppInstaller 설치 안정화
+- `AppxManifest.xml`의 `TargetDeviceFamily` `MinVersion`이 빌드 스크립트 정규식으로 인해 변조되던 버그 수정(`MinVersion="10.0.17763.0"` 고정).
+- 패키지 Identity Version만 정밀 갱신(`3.0.3.0`)하여 Windows App Installer 구문 분석 오류 원천 차단 및 로컬 PC 설치 검증 완료.
 
 ---
 
