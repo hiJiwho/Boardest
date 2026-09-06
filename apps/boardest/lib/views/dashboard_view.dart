@@ -1126,6 +1126,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         : (_usbDriveLetter.isNotEmpty ? _usbDriveLetter : 'C:\\');
     Process.run('explorer.exe', [root]).catchError((e) {
       debugPrint('[USB] Failed to open explorer: $e');
+      return ProcessResult(0, -1, '', e.toString());
     });
   }
 

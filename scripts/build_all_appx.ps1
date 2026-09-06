@@ -11,7 +11,7 @@ $CerFile = Join-Path $RootDir "certs\BoardestCert.cer"
 $MakeAppx = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\makeappx.exe"
 $SignTool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
 
-$AppVersion = "3.0.1.0"
+$AppVersion = "3.0.2.0"
 $repoReleaseBase = "https://github.com/hiJiwho/Boardest/releases/latest/download"
 
 Write-Host "=== Starting Full AppX & AppInstaller Packaging Pipeline (v$AppVersion) ===" -ForegroundColor Cyan
@@ -24,6 +24,19 @@ if (-not (Test-Path $AppxOutDir)) {
 # Copy public cert to appx folder for distribution
 Copy-Item $CerFile (Join-Path $AppxOutDir "BoardestCert.cer") -Force
 Copy-Item (Join-Path $RootDir "certs\install_certificate.bat") (Join-Path $AppxOutDir "install_certificate.bat") -Force
+
+# Update AppxManifest.xml files to match $AppVersion
+foreach ($manifestPath in @(
+    (Join-Path $DistDir "packages\boardest\AppxManifest.xml"),
+    (Join-Path $DistDir "packages\bst-teacher\AppxManifest.xml"),
+    (Join-Path $DistDir "packages\bst-overlay-panser\AppxManifest.xml")
+)) {
+    if (Test-Path $manifestPath) {
+        $xml = Get-Content $manifestPath -Raw -Encoding UTF8
+        $xml = [regex]::Replace($xml, 'Version="[0-9.]+"', "Version=""$AppVersion""")
+        Set-Content -Path $manifestPath -Value $xml -Encoding UTF8
+    }
+}
 
 # 2. Create .appinstaller XML files (Quiet mode: ShowPrompt="false" UpdateBlocksActivation="false")
 Write-Host "`n[1/6] Generating AppInstaller manifests (v$AppVersion)..." -ForegroundColor Yellow

@@ -18,7 +18,7 @@ import '../models/board_tools.dart';
 import '../services/board_storage_service.dart';
 import '../services/bst_save_service.dart';
 import '../services/bst_cloud_service.dart';
-import 'package:bst_pen/bst_pen.dart';
+import 'package:bst_pen/bst_pen.dart' hide ToolMode, ShapeType;
 
 // ═══════════════════════════════════════════════════════
 // DATA MODELS

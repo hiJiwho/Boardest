@@ -100,6 +100,11 @@ class StorageService {
     }).catchError((_) {});
   }
 
+  Future<void> saveSelectedSchool(School school) async {
+    final current = await getSettings();
+    await saveSettings(current.copyWith(selectedSchool: school));
+  }
+
   /// Retrieves the AppSettings object from local storage.
   Future<AppSettings> getSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -170,6 +175,7 @@ class StorageService {
           );
           
           final String resolvedSchoolId = (jsonMap['schoolId'] as String?) ?? settings.schoolId;
+          final bool configIsComplete = (jsonMap['isSetupComplete'] as bool?) ?? settings.isSetupComplete;
           
           final updated = settings.copyWith(
             selectedSchool: matched,
