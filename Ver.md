@@ -1,7 +1,26 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v3.0.1** (App: v3.0.1 / Web: v3.0.1)  
+> **현재 시스템 버전**: **v3.0.2** (App: v3.0.2 / Web: v3.0.2)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 v3.0.2 (2026-09-06) — 🚀 Boardest 3.0.2 Release
+
+### 1. 🖊️ .pen 전용 포맷 표준화 (화이트보드 / PPT / HWP 오버레이)
+- 화이트보드 교사별 판서 및 `AppData/Roaming/Boardest/whiteboards` 저장 포맷을 `.pen`(무압축 SVG 폴더 구조)으로 전면 표준화.
+- PPT / HWP 오버레이 판서 툴(`boardest_ppt_overlay`, `boardest_hwp_overlay`) 역시 `.pen` 규격으로 완벽 마이그레이션 및 C# 네이티브 재컴파일.
+
+### 2. 🍱 boardest-eat 웹 및 교사용 기능 고도화
+- 최초 접속 시 학교 ID, 급식실, 교사명 필수 입력 모달 및 쿼리스트링(`?schoolId=...&cafeteria=...`) 파라미터 지원.
+- 교사명 최초 1회 로컬 저장 기능 및 미접속(오프라인) 학급 필터링.
+- 급식 카드 식단명 폰트 크기 확대 및 UI 가독성 향상.
+- 전자칠판 클라우드 동기화 버튼 임시 회색 비활성화 및 교사용 앱 임시 비활성화.
+- 기본값에 남아있던 YDM, 양동중학교 등 하드코딩된 특정 학교 정보 완전 제거.
+
+### 3. 🛡️ 시스템 안정성 및 편의 기능 개선
+- Flutter Accessibility AXTree 오류 차단을 위해 PPT 오버레이 런처에 accessibility 비활성화 플래그 적용.
+- USB 꽂았을 때 자동 실행 제거 및 탐색기 USB 추출 시 "USB를 제거하시기 바랍니다" 안내 모달 연동.
 
 ---
 
