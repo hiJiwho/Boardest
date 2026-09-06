@@ -318,7 +318,7 @@ class _AuthViewState extends State<AuthView>
                 _buildTextField(
                   controller: _schoolCtrl,
                   label: '학교명 (풀네임)',
-                  hint: '양동중학교',
+                  hint: '○○중학교',
                   icon: Icons.location_city_rounded,
                   scale: scale,
                   onChanged: (_) => setState(() {}),
@@ -327,7 +327,7 @@ class _AuthViewState extends State<AuthView>
                     if (!v.trim().endsWith('학교') &&
                         !v.trim().endsWith('학원') &&
                         v.trim().length < 3) {
-                      return '학교 풀네임을 입력해 주세요. (예: 양동중학교)';
+                      return '학교 풀네임을 입력해 주세요. (예: ○○중학교)';
                     }
                     return null;
                   },

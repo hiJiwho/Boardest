@@ -397,7 +397,7 @@ class _BstCloudModalState extends State<BstCloudModal> {
     try {
       final user = await AuthService().getCurrentUser();
       final session = await BstCloudService.instance.createReversePairSession(
-        schoolCode: user?.school ?? 'ydm',
+        schoolCode: user?.school ?? '',
         grade: user?.grade,
         classNum: user?.classNum,
       );

@@ -123,6 +123,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
   // USB & App layout state
   bool _isUsbConnected = false;
+  bool _isUsbEjected = false;
   bool _showFullUsbExplorer = false;
   String _usbDriveLetter = '';
   String _enteredOtp = '';
@@ -530,13 +531,15 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         if (!_isUsbConnected || _usbDriveLetter != foundDrive) {
           setState(() {
             _isUsbConnected = true;
+            _isUsbEjected = false;
             _usbDriveLetter = foundDrive!;
           });
           await _handleNewUsbConnected(foundDrive);
         }
-      } else if (_isUsbConnected) {
+      } else if (_isUsbConnected || _isUsbEjected) {
         setState(() {
           _isUsbConnected = false;
+          _isUsbEjected = false;
           _usbDriveLetter = '';
           _usbSessionId = '';
         });
@@ -550,11 +553,15 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     if (kIsWeb || !Platform.isWindows) return;
     if (!mounted || _usbHandling) return;
     _usbHandling = true;
+    _isUsbEjected = false;
     try {
       // 1. USB 고유 ID 획득
       final usbId = await UsbSessionService.getUsbSerialId(usbRoot) ?? usbRoot;
       if (!mounted) return;
-      setState(() => _usbSessionId = usbId);
+      setState(() {
+        _usbSessionId = usbId;
+        _isUsbEjected = false;
+      });
 
       // 2. 파일 스캔
       final schoolName =
@@ -576,10 +583,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         return;
       }
 
-      // 3. 기존 세션 확인
+      // 3. 기존 세션 확인 (자동 열기는 수행하지 않음: 사용자 요청으로 자동 실행 비활성화)
       final hasSession = await UsbSessionService.instance.hasSession(usbId);
       if (!mounted) return;
-      bool autoOpen = true;
       if (!hasSession) {
         // 첫 번째 삽입: 세션 생성
         await UsbSessionService.instance.initSession(
@@ -590,33 +596,15 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       } else {
         // 이후 삽입: 세션 업데이트
         await UsbSessionService.instance.updateSortedFiles(usbId, sortedFiles);
-        if (!mounted) return;
-        final session = await UsbSessionService.instance.getSession(usbId);
-        autoOpen = session?.autoOpenEnabled ?? true;
       }
 
       if (!mounted) return;
       setState(() {
         _usbSortedFiles = sortedFiles;
-        _usbAutoOpenEnabled = autoOpen;
+        _usbAutoOpenEnabled = false;
       });
 
-      // 4. 자동 열기 처리 (다이얼로그 팝업 없이 자동 실행!)
-      if (autoOpen) {
-        final lastFile = await UsbSessionService.instance.getLastOpenedFile(
-          usbId,
-        );
-        if (lastFile != null && sortedFiles.contains(lastFile)) {
-          final state = await UsbSessionService.instance.getFileState(
-            usbId,
-            lastFile,
-          );
-          final lastPage = state?.lastPage ?? 0;
-          _openUsbFileWithSession(usbId, lastFile, lastPage);
-        } else if (sortedFiles.isNotEmpty) {
-          _openUsbFileWithSession(usbId, sortedFiles.first, 0);
-        }
-      }
+      // 4. 자동 열기 제거: 사용자가 직접 클릭하여 수업 파일을 열도록 함
     } finally {
       _usbHandling = false;
     }
@@ -1099,6 +1087,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   child: UsbExplorer(
                     drivePath: _usbDriveLetter,
                     scaleFactor: scale,
+                    isEjected: _isUsbEjected,
                     onFileOpen: (filePath) async {
                       Navigator.pop(context); // Close explorer modal
                       int startPage = 0;
@@ -5379,7 +5368,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       '오늘의 급식 ($currentCafeteria)',
                       style: GoogleFonts.notoSansKr(
                         color: Colors.white,
-                        fontSize: 14 * scale,
+                        fontSize: 17 * scale,
                         fontWeight: FontWeight.bold,
                         letterSpacing: -0.3,
                       ),
@@ -5388,7 +5377,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   ),
                   IconButton(
                     onPressed: _showCafeteriaSelectorDialog,
-                    icon: Icon(Icons.tune_rounded, size: 16 * scale, color: Colors.white60),
+                    icon: Icon(Icons.tune_rounded, size: 18 * scale, color: Colors.white60),
                     tooltip: '급식실 선택',
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -5405,7 +5394,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         ? Center(
                             child: Text(
                               '오늘 등록된 급식 정보가 없습니다',
-                              style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 13 * scale),
+                              style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 15 * scale),
                             ),
                           )
                         : ScrollConfiguration(
@@ -5416,14 +5405,14 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                 children: lines
                                     .map(
                                       (line) => Padding(
-                                        padding: EdgeInsets.only(bottom: 5 * scale),
+                                        padding: EdgeInsets.only(bottom: 6 * scale),
                                         child: Text(
                                           line,
                                           style: GoogleFonts.notoSansKr(
-                                            fontSize: 13 * scale,
-                                            color: Colors.white.withValues(alpha: 0.9),
-                                            fontWeight: FontWeight.w500,
-                                            height: 1.4,
+                                            fontSize: 17 * scale,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                            height: 1.5,
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
@@ -5443,6 +5432,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   }
 
   void _showMealInfoDialog() {
+    final scale = _settings.scaleFactor;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -5453,24 +5443,24 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         ),
         title: Row(
           children: [
-            const Icon(Icons.restaurant_rounded, color: Color(0xFF00F5D4)),
-            const SizedBox(width: 8),
+            const Icon(Icons.restaurant_rounded, color: Color(0xFF00F5D4), size: 26),
+            const SizedBox(width: 10),
             Text(
               '오늘의 급식 식단',
-              style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+              style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22),
             ),
           ],
         ),
         content: SingleChildScrollView(
           child: Text(
             _mealInfo.isNotEmpty ? _mealInfo : '급식 정보가 없습니다.',
-            style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 15, height: 1.6),
+            style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 20, height: 1.8, fontWeight: FontWeight.w500),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('확인', style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontWeight: FontWeight.bold)),
+            child: Text('확인', style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontWeight: FontWeight.bold, fontSize: 18)),
           ),
         ],
       ),
@@ -6673,6 +6663,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             child: UsbExplorer(
               drivePath: _usbDriveLetter,
               scaleFactor: scale,
+              isEjected: _isUsbEjected,
               onFileOpen: (filePath) async {
                 int startPage = 0;
                 if (_usbSessionId.isNotEmpty) {
@@ -6695,6 +6686,38 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
   // --- [신규] 좁은 폭의 컴팩트 USB 파일 탐색기 (USB 차등 대우) ---
   Widget _buildCompactUsbExplorer(double scale) {
+    if (_isUsbEjected) {
+      return Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF081714),
+          borderRadius: BorderRadius.circular(24 * scale),
+          border: Border.all(
+            color: const Color(0xFF2EC4B6).withValues(alpha: 0.3),
+            width: 1.5,
+          ),
+        ),
+        padding: EdgeInsets.all(16 * scale),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.eject_rounded, size: 36 * scale, color: const Color(0xFF2EC4B6)),
+              SizedBox(height: 10 * scale),
+              Text(
+                'USB를 제거하시기 바랍니다',
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14 * scale,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF081714),
@@ -6949,7 +6972,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
     final tools = [
       {'name': '플러그인', 'icon': Icons.extension_rounded, 'action': null, 'disabled': true},
-      {'name': '클라우드', 'icon': Icons.cloud_off_rounded, 'action': _openBstCloud, 'disabled': true},
+      {'name': '클라우드', 'icon': Icons.cloud_off_rounded, 'action': null, 'disabled': true},
       {'name': '계산기', 'icon': Icons.calculate, 'action': _openCalculator, 'disabled': false},
       {'name': '설정', 'icon': Icons.settings, 'action': _openSettingsWizard, 'disabled': false},
     ];
@@ -6958,16 +6981,16 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       return Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: (disabled && label == '클라우드') ? _openBstCloud : (disabled ? null : onTap),
+          onTap: disabled ? null : onTap,
           borderRadius: BorderRadius.circular(12 * scale),
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: 10 * scale),
             decoration: BoxDecoration(
-              color: disabled ? const Color(0xFF0A1A17).withValues(alpha: 0.5) : const Color(0xFF0F2622),
+              color: disabled ? const Color(0xFF1E232A) : const Color(0xFF0F2622),
               borderRadius: BorderRadius.circular(12 * scale),
               border: Border.all(
                 color: disabled
-                    ? const Color(0xFF2EC4B6).withValues(alpha: 0.12)
+                    ? Colors.white.withValues(alpha: 0.08)
                     : const Color(0xFF2EC4B6).withValues(alpha: 0.35),
                 width: 1.2,
               ),
@@ -6986,14 +7009,14 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               children: [
                 Icon(
                   icon,
-                  color: disabled ? const Color(0xFF00F5D4).withValues(alpha: 0.3) : const Color(0xFF00F5D4),
+                  color: disabled ? Colors.white30 : const Color(0xFF00F5D4),
                   size: 20 * scale,
                 ),
                 SizedBox(width: 8 * scale),
                 Text(
                   label,
                   style: GoogleFonts.notoSansKr(
-                    color: disabled ? Colors.white38 : Colors.white,
+                    color: disabled ? Colors.white30 : Colors.white,
                     fontSize: 13 * scale,
                     fontWeight: FontWeight.w600,
                   ),
@@ -7146,15 +7169,15 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             style: GoogleFonts.notoSansKr(
               color: Colors.white,
               fontWeight: FontWeight.bold,
-              fontSize: 18 * scale,
+              fontSize: 22 * scale,
             ),
             textAlign: TextAlign.center,
           ),
           content: SizedBox(
-            width: 320 * scale,
+            width: 360 * scale,
             child: Wrap(
-              spacing: 10 * scale,
-              runSpacing: 10 * scale,
+              spacing: 12 * scale,
+              runSpacing: 12 * scale,
               alignment: WrapAlignment.center,
               children: List.generate(9, (i) {
                 final num = i + 1;
@@ -7173,8 +7196,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   },
                   borderRadius: BorderRadius.circular(12 * scale),
                   child: Container(
-                    width: 90 * scale,
-                    padding: EdgeInsets.symmetric(vertical: 12 * scale),
+                    width: 100 * scale,
+                    padding: EdgeInsets.symmetric(vertical: 14 * scale),
                     decoration: BoxDecoration(
                       color: isSelected
                           ? const Color(0xFF00F5D4).withValues(alpha: 0.2)
@@ -7192,8 +7215,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         '$num 급식실',
                         style: GoogleFonts.notoSansKr(
                           color: isSelected ? const Color(0xFF00F5D4) : Colors.white,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          fontSize: 14 * scale,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                          fontSize: 17 * scale,
                         ),
                       ),
                     ),
@@ -8043,6 +8066,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       ? UsbExplorer(
                           drivePath: _usbDriveLetter,
                           scaleFactor: scale,
+                          isEjected: _isUsbEjected,
                           onFileOpen: (filePath) async {
                             int startPage = 0;
                             if (_usbSessionId.isNotEmpty) {
@@ -9239,21 +9263,12 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           ? _settings.schoolId
           : (_settings.connectionName.isNotEmpty ? _settings.connectionName : '');
       String schoolId = rawSchoolId.toLowerCase().trim();
-      final schoolName = _settings.selectedSchool?.name ?? '';
-      if (schoolId.isEmpty || schoolId == 'my' || schoolId == '44134' || schoolId.contains('양동') || schoolName.contains('양동')) {
-        schoolId = 'ydm';
+      if (schoolId.isEmpty || schoolId == 'my') {
+        return;
       }
 
       var url = '${AppConfig.firestoreBase}/control_configs/$schoolId?key=${AppConfig.firebaseApiKey}';
       var response = await http.get(Uri.parse(url));
-
-      // If specific school doc is 404 and schoolId != 'ydm', fallback to ydm
-      if (response.statusCode != 200 && schoolId != 'ydm') {
-        debugPrint('[Boardest] control_configs/$schoolId returned ${response.statusCode}. Falling back to control_configs/ydm...');
-        schoolId = 'ydm';
-        url = '${AppConfig.firestoreBase}/control_configs/$schoolId?key=${AppConfig.firebaseApiKey}';
-        response = await http.get(Uri.parse(url));
-      }
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -9955,11 +9970,14 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       ]);
       if (result.exitCode == 0) {
         if (mounted) {
+          setState(() {
+            _isUsbEjected = true;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: const Color(0xFF2EC4B6),
               content: Text(
-                'USB가 안전하게 제거되었습니다.',
+                'USB를 제거하시기 바랍니다.',
                 style: GoogleFonts.notoSansKr(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -10299,22 +10317,24 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     }
 
     // Boardest tool slot
-    accentColor = colors[slot.id.hashCode.abs() % colors.length];
-    icon = _getToolIcon(slot.id);
-    final onTap = _getToolOnTap(slot.id);
+    final isCloudTool = slot.id == 'bst_cloud';
+    final isDisabled = isUpcoming || isCloudTool;
+    accentColor = isCloudTool ? Colors.grey : colors[slot.id.hashCode.abs() % colors.length];
+    icon = isCloudTool ? Icons.cloud_off_rounded : _getToolIcon(slot.id);
+    final onTap = isCloudTool ? null : _getToolOnTap(slot.id);
 
     return Material(
       color: Colors.transparent,
       child: Stack(
         children: [
           InkWell(
-            onTap: isUpcoming ? null : onTap,
+            onTap: isDisabled ? null : onTap,
             borderRadius: BorderRadius.circular(10),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.02),
+                color: isCloudTool ? const Color(0xFF16191E) : Colors.white.withValues(alpha: 0.02),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                border: Border.all(color: isCloudTool ? Colors.white10 : Colors.white.withValues(alpha: 0.05)),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -10324,19 +10344,19 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       width: 22 * scale,
                       height: 22 * scale,
                       decoration: BoxDecoration(
-                        color: (isUpcoming ? Colors.grey : accentColor)
-                            .withValues(alpha: 0.18),
+                        color: (isDisabled ? Colors.grey : accentColor)
+                            .withValues(alpha: isCloudTool ? 0.1 : 0.18),
                         borderRadius: BorderRadius.circular(6 * scale),
                         border: Border.all(
-                          color: (isUpcoming ? Colors.grey : accentColor)
-                              .withValues(alpha: 0.5),
+                          color: (isDisabled ? Colors.grey : accentColor)
+                              .withValues(alpha: isCloudTool ? 0.2 : 0.5),
                           width: 1,
                         ),
                       ),
                       child: Center(
                         child: Icon(
                           icon,
-                          color: isUpcoming ? Colors.grey : accentColor,
+                          color: isDisabled ? Colors.white30 : accentColor,
                           size: 12 * scale,
                         ),
                       ),
@@ -10348,7 +10368,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                     style: GoogleFonts.notoSansKr(
                       fontSize: 8.5 * scale,
                       fontWeight: FontWeight.w600,
-                      color: isUpcoming
+                      color: isDisabled
                           ? Colors.white30
                           : Colors.white.withValues(alpha: 0.75),
                     ),

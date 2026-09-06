@@ -1283,7 +1283,7 @@ namespace BoardestPptOverlay
             string pptDir = Path.Combine(dataRoot, "bst-pen", "PPT");
             if (!Directory.Exists(pptDir)) Directory.CreateDirectory(pptDir);
             string sanitized = Regex.Replace(_fileName, @"[\\/:*?""<>| ]", "_");
-            return Path.Combine(pptDir, sanitized + ".iwb");
+            return Path.Combine(pptDir, sanitized + ".pen");
         }
 
         private string GetPPTMetadataFilePath()
@@ -1443,13 +1443,15 @@ namespace BoardestPptOverlay
         private void LoadStrokesFromStorage(int slideIndex)
         {
             if (slideIndex <= 0) return;
-            string iwbPath = GetPPTStrokesFilePath();
-            if (!File.Exists(iwbPath)) return;
+            string penPath = GetPPTStrokesFilePath();
+            string iwbPath = Path.ChangeExtension(penPath, ".iwb");
+            string targetPath = File.Exists(penPath) ? penPath : (File.Exists(iwbPath) ? iwbPath : null);
+            if (targetPath == null) return;
 
             try
             {
                 string slideKey = (slideIndex - 1).ToString();
-                var pagesDict = ParseIwbPages(iwbPath);
+                var pagesDict = ParseIwbPages(targetPath);
                 if (!pagesDict.ContainsKey(slideKey)) return;
 
                 string json = pagesDict[slideKey];

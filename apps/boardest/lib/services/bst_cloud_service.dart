@@ -217,16 +217,6 @@ class BstCloudService {
     final tSchool = t.school.trim().toLowerCase();
     final tSchoolId = t.schoolId.trim().toLowerCase();
 
-    // Yangdong / YDM special matching
-    if (code.contains('양동') || code == 'ydm' || name.contains('양동') || name == 'ydm') {
-      if (tSchool.contains('양동') || tSchoolId == 'ydm' || tSchoolId == '48588' || t.teacherName.contains('양동')) {
-        return true;
-      }
-      if (tSchool.isEmpty && tSchoolId.isEmpty) {
-        return true;
-      }
-      return false; // Definitely another school
-    }
 
     if (tSchool.isEmpty && tSchoolId.isEmpty) return true;
 

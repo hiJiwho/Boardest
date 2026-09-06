@@ -18,6 +18,7 @@ import '../models/board_tools.dart';
 import '../services/board_storage_service.dart';
 import '../services/bst_save_service.dart';
 import '../services/bst_cloud_service.dart';
+import 'package:bst_pen/bst_pen.dart';
 
 // ═══════════════════════════════════════════════════════
 // DATA MODELS
@@ -170,6 +171,23 @@ class _BoardestPenViewState extends State<BoardestPenView>
 
   Future<void> _loadBoardData(String path) async {
     try {
+      if (path.endsWith('.pen')) {
+        final penDoc = await PenArchiveService.instance.loadLocalPenFile(path);
+        if (penDoc != null) {
+          final strokesMap = penDoc.toStrokesMap();
+          final Map<int, List<Map<String, dynamic>>> convertedStrokes = {};
+          strokesMap.forEach((pageIdx, strokes) {
+            convertedStrokes[pageIdx] = strokes.map((s) => {
+              'points': s.points.map((pt) => {'dx': pt.dx, 'dy': pt.dy}).toList(),
+              'color': s.color.value,
+              'strokeWidth': s.strokeWidth,
+              'type': 0,
+            }).toList();
+          });
+          _applyLoadedStrokes(penDoc.totalPages, convertedStrokes);
+          return;
+        }
+      }
       if (kIsWeb) {
         final prefs = await SharedPreferences.getInstance();
         final key = 'web_board_${_boardFileBaseName.isNotEmpty ? _boardFileBaseName : 'active'}';
@@ -311,9 +329,28 @@ class _BoardestPenViewState extends State<BoardestPenView>
   Future<void> _autoSaveBoard() async {
     try {
       final Map<int, List<Map<String, dynamic>>> pageData = {};
+      final Map<int, List<AnnotationStroke>> strokesPages = {};
+
       for (int pIndex = 1; pIndex <= _totalPages; pIndex++) {
         final strokes = _pageStrokes[pIndex] ?? [];
         pageData[pIndex] = strokes.map(_strokeToMap).toList();
+        strokesPages[pIndex] = strokes.map((s) => AnnotationStroke(
+          points: s.points,
+          color: s.color,
+          strokeWidth: s.strokeWidth,
+        )).toList();
+      }
+
+      final penDoc = PenDocument.fromStrokesMap(
+        title: _boardFileBaseName.isNotEmpty ? _boardFileBaseName : 'Boardest_판서',
+        strokesPages: strokesPages,
+        classroom: widget.teacher,
+        subject: widget.subject,
+      );
+
+      // Ensure _activeFilePath ends with .pen if it had .iwb
+      if (_activeFilePath.endsWith('.iwb')) {
+        _activeFilePath = p.setExtension(_activeFilePath, '.pen');
       }
 
       final payload = json.encode({
@@ -331,7 +368,7 @@ class _BoardestPenViewState extends State<BoardestPenView>
         unawaited(
           BstCloudService.instance.uploadPenBytesDirectly(
             fileName: cloudPenName,
-            bytes: Uint8List.fromList(utf8.encode(payload)),
+            bytes: PenArchiveService.instance.packToPenBytes(penDoc),
           ),
         );
       }
@@ -344,16 +381,26 @@ class _BoardestPenViewState extends State<BoardestPenView>
         return;
       }
 
-      // Save directly to the opened active file path (preserving .pen, .bstpen, or .iwb)
-      final file = File(_activeFilePath);
-      final parent = file.parent;
-      if (!await parent.exists()) {
-        await parent.create(recursive: true);
+      // 2. 로컬 / AppData 파일에 .pen 표준 포맷으로 저장 (SVG 무압축 zip 규격)
+      if (_activeFilePath.isNotEmpty) {
+        if (_activeFilePath.endsWith('.pen')) {
+          await PenArchiveService.instance.saveLocalPenFile(_activeFilePath, penDoc);
+        } else {
+          final file = File(_activeFilePath);
+          final parent = file.parent;
+          if (!await parent.exists()) {
+            await parent.create(recursive: true);
+          }
+          await file.writeAsString(payload);
+        }
       }
-      await file.writeAsString(payload);
 
       if (_isBstSaveBoard ||
           (widget.teacher != null && widget.subject != null)) {
+        final dir = await BstSaveService.instance.directoryFor(BstSaveService.subBoard);
+        final penPath = p.join(dir.path, '$_boardFileBaseName.pen');
+        await PenArchiveService.instance.saveLocalPenFile(penPath, penDoc);
+
         final metadata = <String, dynamic>{
           'teacher': widget.teacher ?? '',
           'subject': widget.subject ?? '',
@@ -375,11 +422,11 @@ class _BoardestPenViewState extends State<BoardestPenView>
         );
 
         if (widget.teacher != null && widget.subject != null) {
-          await _saveBoardMapping(_activeFilePath);
+          await _saveBoardMapping(penPath);
         }
       }
 
-      debugPrint('[BoardestPenView] Auto-saved whiteboard to $_activeFilePath');
+      debugPrint('[BoardestPenView] Auto-saved whiteboard (.pen) to $_activeFilePath');
     } catch (e) {
       debugPrint('Error auto-saving whiteboard: $e');
     }
@@ -1734,13 +1781,13 @@ class _BoardestPenViewState extends State<BoardestPenView>
                   widget.teacher!,
                   widget.subject!,
                 );
-                _activeFilePath = p.join(dir.path, '${base}_$stamp.iwb');
+                _activeFilePath = p.join(dir.path, '${base}_$stamp.pen');
                 await _saveBoardMapping(_activeFilePath);
               }
               await _autoSaveBoard();
             }),
-            // IWB 가져오기
-            _buildMenuItem(Icons.file_open_rounded, 'IWB 파일 가져오기', () async {
+            // .pen 가져오기
+            _buildMenuItem(Icons.file_open_rounded, '판서 파일(.pen) 가져오기', () async {
               setState(() => _isMenuOpen = false);
               final result = await fp.FilePicker.pickFiles(
                 dialogTitle: '판서 파일 가져오기 (.pen, .iwb)',
@@ -1757,8 +1804,8 @@ class _BoardestPenViewState extends State<BoardestPenView>
                 await _autoSaveBoard();
               }
             }),
-            // IWB 내보내기
-            _buildMenuItem(Icons.save_rounded, 'IWB 파일로 저장/내보내기', () {
+            // .pen 내보내기
+            _buildMenuItem(Icons.save_rounded, '.pen 파일로 저장/내보내기', () {
               _saveBoard();
               setState(() => _isMenuOpen = false);
             }),
@@ -1998,57 +2045,52 @@ class _BoardestPenViewState extends State<BoardestPenView>
 
   Future<void> _saveBoard() async {
     try {
-      final Map<String, dynamic> iwbData = {
-        'version': 1,
-        'totalPages': _totalPages,
-        'boardBgColor': _boardBgColor.value,
-        'bgPattern': _bgPattern,
-        'pages': {},
-      };
-
-      for (int p = 1; p <= _totalPages; p++) {
-        final strokes = _pageStrokes[p] ?? [];
-        final pageData = [];
-        for (final stroke in strokes) {
-          pageData.add({
-            'points': stroke.points
-                .map((pt) => {'dx': pt.dx, 'dy': pt.dy})
-                .toList(),
-            'color': stroke.color.value,
-            'strokeWidth': stroke.strokeWidth,
-            'type': stroke.type.index,
-          });
-        }
-        iwbData['pages'][p.toString()] = pageData;
+      final Map<int, List<AnnotationStroke>> strokesPages = {};
+      for (int pIndex = 1; pIndex <= _totalPages; pIndex++) {
+        final strokes = _pageStrokes[pIndex] ?? [];
+        strokesPages[pIndex] = strokes.map((s) => AnnotationStroke(
+          points: s.points,
+          color: s.color,
+          strokeWidth: s.strokeWidth,
+        )).toList();
       }
 
-      final iwbBytes = Uint8List.fromList(utf8.encode(json.encode(iwbData)));
+      final penDoc = PenDocument.fromStrokesMap(
+        title: _boardFileBaseName.isNotEmpty ? _boardFileBaseName : 'Boardest_판서',
+        strokesPages: strokesPages,
+        classroom: widget.teacher,
+        subject: widget.subject,
+      );
+
+      final penBytes = PenArchiveService.instance.packToPenBytes(penDoc);
 
       final outputFile = await fp.FilePicker.saveFile(
-        dialogTitle: 'IWB 파일 저장',
-        fileName: 'board_backup.iwb',
+        dialogTitle: '판서 파일 저장 (.pen)',
+        fileName: '${_boardFileBaseName.isNotEmpty ? _boardFileBaseName : 'board_backup'}.pen',
         type: fp.FileType.custom,
-        allowedExtensions: ['iwb'],
-        bytes: iwbBytes,
+        allowedExtensions: ['pen'],
+        bytes: penBytes,
       );
       if (outputFile == null && !kIsWeb) return;
 
       if (!kIsWeb && outputFile != null) {
-        final file = File(outputFile);
-        await file.writeAsString(json.encode(iwbData));
-      }
-
-      if (mounted) {
+        final ok = await PenArchiveService.instance.saveLocalPenFile(outputFile, penDoc);
+        if (ok && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('판서 칠판이 .pen 포맷으로 성공적으로 백업되었습니다! 💾')),
+          );
+        }
+      } else if (kIsWeb && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('판서 칠판이 IWB 포맷으로 성공적으로 백업되었습니다! 💾')),
+          const SnackBar(content: Text('판서 파일(.pen)이 다운로드되었습니다! 💾')),
         );
       }
     } catch (e) {
-      debugPrint('Error saving IWB: $e');
+      debugPrint('Error saving .pen: $e');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('IWB 파일 저장 중 오류가 발생했습니다: $e')));
+        ).showSnackBar(SnackBar(content: Text('.pen 파일 저장 중 오류가 발생했습니다: $e')));
       }
     }
   }

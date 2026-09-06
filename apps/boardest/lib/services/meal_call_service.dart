@@ -203,7 +203,7 @@ class MealCallService {
     final schoolId = _currentSettings!.schoolId.trim();
     String connName = schoolId.isNotEmpty ? schoolId : _currentSettings!.connectionName;
     if (connName.isEmpty || connName.toLowerCase() == 'my') {
-      connName = code.isNotEmpty ? code : 'ydm';
+      connName = code.isNotEmpty ? code : 'school';
     }
     connName = connName.toLowerCase();
     
@@ -250,7 +250,7 @@ class MealCallService {
       final code = _currentSettings!.selectedSchool?.code?.toString() ?? '';
       String connName = schoolId.isNotEmpty ? schoolId : _currentSettings!.connectionName;
       if (connName.isEmpty || connName.toLowerCase() == 'my') {
-        connName = code.isNotEmpty ? code : 'ydm';
+        connName = code.isNotEmpty ? code : 'school';
       }
       connName = connName.toLowerCase();
 

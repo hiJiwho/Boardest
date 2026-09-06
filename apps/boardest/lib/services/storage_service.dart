@@ -20,9 +20,9 @@ class StorageService {
     if (kIsWeb) return;
     try {
       final configMap = {
-        'region': settings.selectedSchool?.region ?? '서울',
+        'region': settings.selectedSchool?.region ?? '',
         'schoolName': settings.selectedSchool?.name ?? '',
-        'schoolId': settings.schoolId.isNotEmpty ? settings.schoolId : 'ydm',
+        'schoolId': settings.schoolId,
         'grade': settings.selectedGrade,
         'classNum': settings.selectedClass,
         'isSetupComplete': settings.isSetupComplete,
@@ -60,9 +60,9 @@ class StorageService {
 
       try {
         final configMap = {
-          'region': settings.selectedSchool?.region ?? '서울',
+          'region': settings.selectedSchool?.region ?? '',
           'schoolName': settings.selectedSchool?.name ?? '',
-          'schoolId': settings.schoolId.isNotEmpty ? settings.schoolId : 'ydm',
+          'schoolId': settings.schoolId,
           'grade': settings.selectedGrade,
           'classNum': settings.selectedClass,
           'isSetupComplete': settings.isSetupComplete,
@@ -169,8 +169,7 @@ class StorageService {
             orElse: () => schools.isNotEmpty ? schools.first : School(id: 0, region: region, name: schoolName, code: 31828),
           );
           
-          final bool configIsComplete = (jsonMap['isSetupComplete'] as bool?) ?? settings.isSetupComplete || (schoolName.isNotEmpty && grade > 0);
-          final String resolvedSchoolId = (jsonMap['schoolId'] as String?) ?? (schoolName.contains('양동') ? 'ydm' : settings.schoolId);
+          final String resolvedSchoolId = (jsonMap['schoolId'] as String?) ?? settings.schoolId;
           
           final updated = settings.copyWith(
             selectedSchool: matched,

@@ -199,7 +199,7 @@ class AppSettings {
   final String selectedTeacher; // 특별실 교사명/약칭 (개인정보 보호를 위해 마스킹하여 내부 연동용으로만 사용)
   final String selectedTeacherId; // 컴시간 교사 ID (가린 이름, 예: 홍길)
   final String selectedTeacherName; // 원본 교사 성함 (예: 홍길동)
-  final String schoolId; // 학교 식별 ID (예: "ydm")
+  final String schoolId; // 학교 식별 ID
   final String windowFrameStyle; // "mac", "win7"
   final String aspectRatio; // "16:9", "4:3"
 
@@ -218,7 +218,7 @@ class AppSettings {
 
   AppSettings({
     this.selectedSchool,
-    this.schoolId = 'ydm',
+    this.schoolId = '',
     this.selectedGrade = 1,
     this.selectedClass = 1,
     TimeSettings? timeSettings,
@@ -647,7 +647,7 @@ class AppSettings {
       selectedSchool: json['selectedSchool'] != null
           ? School.fromJson(json['selectedSchool'] as Map<String, dynamic>)
           : null,
-      schoolId: json['schoolId'] as String? ?? (json['connectionName'] as String? ?? 'ydm'),
+      schoolId: json['schoolId'] as String? ?? (json['connectionName'] as String? ?? ''),
       selectedGrade: json['selectedGrade'] as int? ?? 1,
       selectedClass: json['selectedClass'] as int? ?? 1,
       timeSettings: json['timeSettings'] != null

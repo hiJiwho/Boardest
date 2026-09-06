@@ -154,12 +154,8 @@ class _PptOverlayViewState extends State<PptOverlayView> {
         pageArg,
       ]);
 
-      try {
-        const channel = MethodChannel('com.boardest/launch_args');
-        await channel.invokeMethod('minimizeWindow');
-      } catch (e) {
-        debugPrint('[PptOverlayView] Failed to minimize Flutter window: $e');
-      }
+      // Native WPF overlay runs as TopMost window above Flutter without minimizing Flutter window,
+      // avoiding AXTree accessibility bridge desync on Windows.
 
       setState(() {
         _isLaunching = false;
@@ -290,7 +286,9 @@ class _PptOverlayViewState extends State<PptOverlayView> {
   @override
   Widget build(BuildContext context) {
     final scale = widget.scaleFactor;
-    return Scaffold(
+    return ExcludeSemantics(
+      excluding: true,
+      child: Scaffold(
       backgroundColor: const Color(0xFF13171F),
       body: Center(
         child: Padding(
@@ -417,6 +415,6 @@ class _PptOverlayViewState extends State<PptOverlayView> {
           ),
         ),
       ),
-    );
+    ));
   }
 }

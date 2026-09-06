@@ -812,7 +812,7 @@ class _SetupWizardViewState extends State<SetupWizardView> {
     debugPrint('[Boardest-board] _loadSchoolFromId initiated for schoolId: "$schoolId"');
     if (schoolId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('학교 ID를 입력해 주세요. (예: ydm)'), backgroundColor: Color(0xFFEF4565)),
+        const SnackBar(content: Text('학교 ID를 입력해 주세요.'), backgroundColor: Color(0xFFEF4565)),
       );
       return;
     }
@@ -2025,7 +2025,7 @@ class _SetupWizardViewState extends State<SetupWizardView> {
                           ),
                           textCapitalization: TextCapitalization.none,
                           decoration: InputDecoration(
-                            hintText: 'ydm',
+                            hintText: 'school-id',
                             hintStyle: GoogleFonts.outfit(
                               color: const Color(0xFF72757E),
                               fontSize: 20 * scale,
@@ -4635,7 +4635,7 @@ class _SetupWizardViewState extends State<SetupWizardView> {
       selectedSchool: _selectedSchool,
       schoolId: _schoolSearchController.text.trim().isNotEmpty
           ? _schoolSearchController.text.trim().toLowerCase()
-          : 'ydm',
+          : '',
       selectedGrade: _selectedGrade,
       selectedClass: _selectedClass,
       timeSettings: TimeSettings(

@@ -660,7 +660,7 @@
       </p>
       
       <label class="input-label">학교 ID (코드) <span>*쿼리스트링 가능 (?schoolId=...)</span></label>
-      <input type="text" id="modalSchoolCode" class="input-field" placeholder="예: ydm (학교 접속 ID)" />
+      <input type="text" id="modalSchoolCode" class="input-field" placeholder="학교 접속 ID를 입력하세요" />
 
       <label class="input-label">담당 급식실 <span>*쿼리스트링 가능 (?cafeteria=...)</span></label>
       <div class="cafeteria-select-grid" id="modalCafGrid">
@@ -692,7 +692,7 @@
     const qsCaller = (urlParams.get('callerName') || urlParams.get('teacherName') || urlParams.get('teacher') || urlParams.get('name') || '').trim();
 
     // Active session variables (School & Cafeteria are NOT saved to localStorage, only Teacher Name is saved)
-    let schoolCode = qsSchool || 'ydm';
+    let schoolCode = qsSchool || '';
     let selectedCafeteria = (qsCafeteria && ['1','2','3','4','5','6','7','8','9','all'].includes(qsCafeteria)) ? qsCafeteria : '1';
     let callerName = qsCaller || localStorage.getItem('bst_eat_saved_teacher') || '';
     let schoolName = '';
@@ -769,7 +769,7 @@
       const cName = document.getElementById('modalCallerName').value.trim();
 
       if (!sCode) {
-        alert('학교 ID(코드)를 입력해 주세요. (예: ydm)');
+        alert('학교 ID(코드)를 입력해 주세요.');
         return;
       }
       if (!cName) {
@@ -800,7 +800,7 @@
 
     // ─── Header & Cafeteria Chips ───
     function updateHeaderInfo() {
-      const dispSchool = schoolName || (schoolCode === 'ydm' ? '양동중학교' : schoolCode.toUpperCase());
+      const dispSchool = schoolName || (schoolCode ? schoolCode.toUpperCase() : '급식실');
       document.getElementById('subInfoSchool').innerText = dispSchool;
       document.getElementById('subInfoTeacher').innerText = callerName || '-';
 
@@ -901,50 +901,81 @@
       container.innerHTML = html;
     }
 
-    // ─── Realtime Presence Polling (온라인 엄격 판정) ───
+    // ─── Realtime Presence Polling (온라인 엄격 판정 + 시계 오차 허용 + Firestore fallback) ───
     async function fetchData() {
       if (!schoolCode) return;
 
+      let rawList = [];
       try {
         const workerUrl = `https://boardest-cloud-token.jiwho.workers.dev/api/classrooms?schoolCode=${encodeURIComponent(schoolCode)}`;
         const res = await fetch(workerUrl, { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
-          const list = data.classrooms || [];
-          const nowMs = Date.now();
-
-          // ★ 엄격한 온라인 판정: heartbeat가 최근 15분 이내인 학급만 온라인으로 인정
-          onlineClassrooms = [];
-          list.forEach(c => {
-            let isOnline = false;
-            if (c.lastActive) {
-              const lastMs = new Date(c.lastActive).getTime();
-              const diffMin = (nowMs - lastMs) / (1000 * 60);
-              if (!isNaN(diffMin) && diffMin >= 0 && diffMin <= 15) {
-                isOnline = true;
-              }
-            }
-
-            if (isOnline) {
-              const parts = (c.docId || '').split('_');
-              const grade = c.grade || (parts.length >= 3 ? parts[2] : '1');
-              const classNum = c.classNum || (parts.length >= 4 ? parts[3] : '1');
-              const caf = c.cafeteria || (parts.length >= 2 ? parts[1] : '1');
-              onlineClassrooms.push({
-                docId: c.docId,
-                grade: grade,
-                classNum: classNum,
-                cafeteria: caf,
-                isOnline: true
-              });
-            }
-          });
+          rawList = data.classrooms || [];
         }
       } catch (e) {
         console.warn('Worker presence lookup error:', e);
       }
 
-      // ★ 가짜 mock fallback 완전히 제거! (진짜 온라인 학급만 표시)
+      // Worker에 데이터가 없거나 실패한 경우, Firestore eat_calls 컬렉션 직접 조회 (안전망)
+      if (!rawList || rawList.length === 0) {
+        try {
+          const fsRes = await fetch(`${FIRESTORE_BASE}/eat_calls?pageSize=100`, { cache: 'no-store' });
+          if (fsRes.ok) {
+            const fsData = await fsRes.json();
+            const docs = fsData.documents || [];
+            rawList = [];
+            docs.forEach(d => {
+              const f = d.fields || {};
+              const docSchoolCode = (f.schoolCode?.stringValue || '').trim().toLowerCase();
+              const docName = d.name ? d.name.split('/').pop() : '';
+              if (docSchoolCode === schoolCode || docName.startsWith(schoolCode + '_')) {
+                rawList.push({
+                  docId: docName,
+                  schoolCode: docSchoolCode,
+                  schoolName: f.schoolName?.stringValue || '',
+                  cafeteria: f.cafeteriaNum?.stringValue || '1',
+                  grade: f.grade?.integerValue || (docName.split('_')[2] || '1'),
+                  classNum: f.classNum?.integerValue || (docName.split('_')[3] || '1'),
+                  nickname: f.classNickname?.stringValue || '',
+                  lastActive: f.lastActive?.timestampValue || null
+                });
+              }
+            });
+          }
+        } catch (fe) {
+          console.warn('Firestore fallback lookup error:', fe);
+        }
+      }
+
+      const nowMs = Date.now();
+      onlineClassrooms = [];
+      rawList.forEach(c => {
+        let isOnline = false;
+        if (c.lastActive) {
+          const lastMs = new Date(c.lastActive).getTime();
+          const diffMin = (nowMs - lastMs) / (1000 * 60);
+          // 시계 오차 허용 (-5분 ~ 30분 이내 활성)
+          if (!isNaN(diffMin) && diffMin >= -5 && diffMin <= 30) {
+            isOnline = true;
+          }
+        }
+
+        if (isOnline) {
+          const parts = (c.docId || '').split('_');
+          const grade = c.grade || (parts.length >= 3 ? parts[2] : '1');
+          const classNum = c.classNum || (parts.length >= 4 ? parts[3] : '1');
+          const caf = c.cafeteria || (parts.length >= 2 ? parts[1] : '1');
+          onlineClassrooms.push({
+            docId: c.docId,
+            grade: grade,
+            classNum: classNum,
+            cafeteria: caf,
+            nickname: c.nickname || '',
+            isOnline: true
+          });
+        }
+      });
 
       renderCafeteriaChips();
       renderClassrooms();
@@ -1041,7 +1072,7 @@
     // ─── Neis Meal Menu API ───
     async function loadNeisMealMenu() {
       const container = document.getElementById('mealChipsContainer');
-      const queryName = schoolName || (schoolCode === 'ydm' ? '양동중학교' : schoolCode);
+      const queryName = schoolName || schoolCode;
 
       try {
         const schoolUrl = `https://open.neis.go.kr/hub/schoolInfo?KEY=${NEIS_KEY}&Type=json&pIndex=1&pSize=5&SCHUL_NM=${encodeURIComponent(queryName)}`;

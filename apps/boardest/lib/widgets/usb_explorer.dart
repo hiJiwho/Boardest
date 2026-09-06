@@ -7,12 +7,14 @@ import '../services/storage_service.dart';
 class UsbExplorer extends StatefulWidget {
   final String drivePath;
   final double scaleFactor;
+  final bool isEjected;
   final void Function(String filePath)? onFileOpen;
 
   const UsbExplorer({
     super.key,
     required this.drivePath,
     this.scaleFactor = 1.4,
+    this.isEjected = false,
     this.onFileOpen,
   });
 
@@ -180,6 +182,54 @@ class _UsbExplorerState extends State<UsbExplorer> {
   @override
   Widget build(BuildContext context) {
     final scale = widget.scaleFactor;
+
+    if (widget.isEjected) {
+      return Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF131B26),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF2EC4B6).withValues(alpha: 0.3)),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: EdgeInsets.all(18 * scale),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2EC4B6).withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.eject_rounded,
+                  size: 48 * scale,
+                  color: const Color(0xFF2EC4B6),
+                ),
+              ),
+              SizedBox(height: 16 * scale),
+              Text(
+                'USB를 제거하시기 바랍니다',
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18 * scale,
+                ),
+              ),
+              SizedBox(height: 8 * scale),
+              Text(
+                '안전하게 연결이 해제되었습니다.\n본체에서 USB를 분리해 주세요.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white60,
+                  fontSize: 13 * scale,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     
     // Breadcrumbs calculations
     final relativePath = _currentPath.substring(widget.drivePath.length);

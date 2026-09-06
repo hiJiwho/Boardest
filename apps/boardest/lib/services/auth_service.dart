@@ -106,8 +106,8 @@ class AuthService {
   }
 
   /// 보드용 앱 이메일 구조: {classID}@{schoolID}.boardest.local
-  /// ex1) 201@ydm.boardest.local (2학년 1반)
-  /// ex2) music2@ydm.boardest.local (특별실)
+  /// ex1) 201@school.boardest.local (2학년 1반)
+  /// ex2) music2@school.boardest.local (특별실)
   static String buildEmail({
     required String school,
     String schoolId = '',
@@ -133,7 +133,7 @@ class AuthService {
     bool isSpecial = false,
     String specialId = '',
   }) {
-    final sId = schoolId.trim().isNotEmpty ? schoolId.trim().toLowerCase() : (school.trim().isNotEmpty ? school.trim() : 'ydm');
+    final sId = schoolId.trim().isNotEmpty ? schoolId.trim().toLowerCase() : (school.trim().isNotEmpty ? school.trim() : 'school');
     if (isSpecial && specialId.trim().isNotEmpty) {
       final cleanId = specialId.trim().replaceAll(' ', '').toLowerCase();
       return '$cleanId@$sId.boardest.local';

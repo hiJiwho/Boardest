@@ -1144,7 +1144,7 @@ namespace BoardestHwpOverlay
             string hwpDir = Path.Combine(dataRoot, "bst-pen", "PDF"); // Using PDF storage folder as document board
             if (!Directory.Exists(hwpDir)) Directory.CreateDirectory(hwpDir);
             string sanitized = Regex.Replace(_fileName, @"[\\/:*?""<>| ]", "_");
-            return Path.Combine(hwpDir, sanitized + ".iwb");
+            return Path.Combine(hwpDir, sanitized + ".pen");
         }
 
         private string GetHwpMetadataFilePath()
@@ -1280,13 +1280,15 @@ namespace BoardestHwpOverlay
         private void LoadStrokesFromStorage(int pageIndex)
         {
             if (pageIndex <= 0) return;
-            string iwbPath = GetHwpStrokesFilePath();
-            if (!File.Exists(iwbPath)) return;
+            string penPath = GetHwpStrokesFilePath();
+            string iwbPath = Path.ChangeExtension(penPath, ".iwb");
+            string targetPath = File.Exists(penPath) ? penPath : (File.Exists(iwbPath) ? iwbPath : null);
+            if (targetPath == null) return;
 
             try
             {
                 string pageKey = (pageIndex - 1).ToString();
-                var pagesDict = ParseIwbPages(iwbPath);
+                var pagesDict = ParseIwbPages(targetPath);
                 if (!pagesDict.ContainsKey(pageKey)) return;
 
                 string json = pagesDict[pageKey];
