@@ -11,7 +11,7 @@ $CerFile = Join-Path $RootDir "certs\BoardestCert.cer"
 $MakeAppx = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\makeappx.exe"
 $SignTool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
 
-$AppVersion = "3.0.0.0"
+$AppVersion = "3.0.1.0"
 $repoReleaseBase = "https://github.com/hiJiwho/Boardest/releases/latest/download"
 
 Write-Host "=== Starting Full AppX & AppInstaller Packaging Pipeline (v$AppVersion) ===" -ForegroundColor Cyan
@@ -105,7 +105,17 @@ Copy-Item $boardestAppinstallerPath (Join-Path $RootDir "apps\boardest\assets\bo
 Copy-Item $teacherAppinstallerPath (Join-Path $RootDir "apps\boardest_teacher\assets\bst-teacher.appinstaller") -Force
 
 # 3. Package 1: Boardest Main App (Sandboxed)
-Write-Host "`n[2/6] Packaging Boardest Main (jiwho.boardest.bst)..." -ForegroundColor Yellow
+Write-Host "`n[2/6] Building & Packaging Boardest Main (jiwho.boardest.bst)..." -ForegroundColor Yellow
+$BoardestAppDir = Join-Path $RootDir "apps\boardest"
+Push-Location $BoardestAppDir
+try {
+    Write-Host "-> Compiling Boardest Windows Release..." -ForegroundColor Cyan
+    & flutter build windows --release
+    if ($LASTEXITCODE -ne 0) { throw "Flutter build windows failed for Boardest" }
+} finally {
+    Pop-Location
+}
+
 $BoardestPkgDir = Join-Path $DistDir "packages\boardest"
 $BoardestReleaseDir = Join-Path $RootDir "apps\boardest\build\windows\x64\runner\Release"
 
@@ -129,7 +139,17 @@ Write-Host "-> Successfully created and signed boardest.appx" -ForegroundColor G
 
 
 # 4. Package 2: Boardest Teacher App (Sandboxed)
-Write-Host "`n[3/6] Packaging Boardest Teacher (jiwho.boardest.teacher)..." -ForegroundColor Yellow
+Write-Host "`n[3/6] Building & Packaging Boardest Teacher (jiwho.boardest.teacher)..." -ForegroundColor Yellow
+$TeacherAppDir = Join-Path $RootDir "apps\boardest_teacher"
+Push-Location $TeacherAppDir
+try {
+    Write-Host "-> Compiling Boardest Teacher Windows Release..." -ForegroundColor Cyan
+    & flutter build windows --release
+    if ($LASTEXITCODE -ne 0) { throw "Flutter build windows failed for Boardest Teacher" }
+} finally {
+    Pop-Location
+}
+
 $TeacherPkgDir = Join-Path $DistDir "packages\bst-teacher"
 $TeacherReleaseDir = Join-Path $RootDir "apps\boardest_teacher\build\windows\x64\runner\Release"
 

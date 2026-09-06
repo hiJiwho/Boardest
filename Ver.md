@@ -1,7 +1,19 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v3.0.0** (App: v3.0.0 / Web: v3.0.0)  
+> **현재 시스템 버전**: **v3.0.1** (App: v3.0.1 / Web: v3.0.1)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 v3.0.1 (2026-09-06) — 🚀 Boardest 3.0.1 Quickfix & Package Alignment
+
+### 1. 🍱 boardest-eat 웹 UI 및 에셋 교사용 MealView 완벽 동기화
+- **공식 에셋 적용**: `boardest-eat.web.app`에 교사용 공식 로고 및 파비콘(`logo.png`, `favicon.ico`, `favicon.png`) 적용.
+- **UI 1:1 일치**: 급식실 선택(1~9) 칩 바, 실시간 온라인 학급 목록, NEIS 급식 식단 카드로 전면 개편.
+
+### 2. 🪟 Windows AppInstaller 패키지 3.0.1.0 갱신 및 재빌드
+- `boardest.appx`, `bst-teacher.appx`, `boardest.apk` 전체 재빌드 및 서명.
+- AppInstaller의 3.0.1.0 버전 증가를 통한 업데이트 강제 적용.
 
 ---
 

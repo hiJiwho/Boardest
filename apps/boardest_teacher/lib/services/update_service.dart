@@ -28,7 +28,7 @@ class UpdateService {
   static final UpdateService instance = UpdateService._internal();
   UpdateService._internal();
 
-  static const String defaultVersion = '2.9.9.8';
+  static const String defaultVersion = '3.0.1';
 
   /// Dynamically detect installed MSIX/AppX version from WindowsApps folder, or fallback to defaultVersion
   static String get currentVersion {

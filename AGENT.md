@@ -1,7 +1,8 @@
 # 🤖 Boardest Platform — Core Agent Memory & Complete System Knowledge Base
 
+> **Current Platform Version**: `3.0.1` (App: `3.0.1`, Web: `3.0.1`)  
 > **버전 관리 규격**: 버전 변경 이력 및 상세 수정 내역은 [Ver.md](file:///c:/Users/jiwho/Documents/boardest/Ver.md) 파일에 매 작업 완료 시마다 반드시 기록하여 유지합니다.
-> 🚀 **[정식 버전] Boardest 3.0.0**: 2026-09-06 부로 Beta 테스트가 성공적으로 종료되고 **Boardest v3.0.0 정식 버전**으로 공식 승격되었습니다.
+> 🚀 **[정식 버전] Boardest 3.0.1**: 2026-09-06 부로 **Boardest v3.0.1**이 적용되었습니다.
 
 ---
 
