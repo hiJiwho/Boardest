@@ -26,13 +26,11 @@ service cloud.firestore {
 
     // ─── /control_configs — 학교별 중앙 설정 ──────────────────
     match /control_configs/{schoolId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read, write: if true;
     }
 
     match /control_configs/{schoolId}/{document=**} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read, write: if true;
     }
 
     // ─── /admins — 관리자 목록 ─────────────────────────────────
@@ -47,8 +45,7 @@ service cloud.firestore {
 
     // ─── /ad_banners — 광고 배너 ───────────────────────────────
     match /ad_banners/{bannerId} {
-      allow read: if true;
-      allow write: if isAuthenticated();
+      allow read, write: if true;
     }
 
     // ─── /releases — exe, apk 동시 배포 바이너리 ────────────────

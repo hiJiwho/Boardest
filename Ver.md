@@ -1,7 +1,35 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v2.9.9.9** (App: v2.9.9.9 / Web: v2.9.9.9)  
+> **현재 시스템 버전**: **v3.0.0** (App: v3.0.0 / Web: v3.0.0)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 v3.0.0 (2026-09-06) — 🚀 Boardest 3.0 Official Release
+
+### 1. ☁️ Cloud 기능 안전 비활성화 & USB 대체 생태계 단일화
+- **기존 Cloud 코드 100% 보존**: `BstCloudService` 및 `BstCloudModal` 등 레거시 연동 코드를 일체 삭제하지 않고 `isCloudFeatureDisabled = true` 플래그로 기능만 안전하게 비활성화.
+- **USB 최우선 대체**: 수업 자료 및 파일 접근은 USB 연결 시 즉시 반응하는 와이드 USB 탐색기(`_buildFullUsbPanel`)로 완전 대체.
+
+### 2. 🍱 전자칠판 하단 flex: 4 슬롯 '오늘의 급식 식단' 상시 배치
+- **광고판 및 OTP 창 ➔ 급식 정보 카드 교체**: 수업 중 및 평상시 대시보드 하단 우측(flex: 4) 영역에 광고판 대신 `_buildNeisMealCard`를 상시 배치하여 당일 급식 식단표 및 배정 급식실 정보를 시원하고 선명하게 제공.
+- **급식실 원터치 변경**: 급식 카드 우측 설정 아이콘을 통해 1~9 급식실을 즉시 변경하고 Neis 식단과 실시간 동기화.
+
+### 3. 🍱 독립 급식 지도 관제 시스템 (`boardest-eat.web.app`) 공식 호스팅 분리 & 쿼리스트링 고도화
+- **독립 전용 웹사이트 배포**: `boardest-eat`을 Firebase Hosting 전용 타깃으로 신규 등록하여 독립 서비스로 단일화.
+- **3대 쿼리스트링 완전 지원**:
+  - 학교 ID: `?schoolId=...` / `?schoolCode=...`
+  - 지도 교사명: `?callerName=...` / `?teacherName=...` / `?teacher=...`
+  - 급식실 번호: `?cafeteria=...` / `?caf=...`
+- **리다이렉트 최신화**: `welcome-to-boardest.web.app/eat` 접속 시 `boardest-eat.web.app`으로 302 직결.
+
+### 4. 🚫 웹 사이트 4종 403 Forbidden 차단 (코드 제거 없이 서빙 격리)
+- **차단 대상**: `boardest.web.app`, `boardest-teacher.web.app`, `boardest-teacher-lite.web.app`, `boardest-teacher-oauth.web.app`.
+- **안전한 403 격리**: 소스코드는 온전히 보존한 채 `infra/forbidden_403_web` 전용 403 차단 안내 페이지를 서빙하도록 `firebase.json` 구성.
+
+### 5. 👩‍🏫 `welcome-to-boardest` 교사용 다운로드 비활성화
+- 교사용 카드(`card-teacher`)에 `[다운로드 일시 중단]` 배지 적용 및 시각적 비활성화.
+- Windows 설치 탭 내 AppInstaller 다운로드 버튼 및 PowerShell 명령어 비활성화.
 
 ---
 

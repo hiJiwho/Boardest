@@ -1266,11 +1266,21 @@ namespace BoardestPptOverlay
             _pptApp = null;
         }
 
-        // Strokes storage helpers
+        // Strokes storage helpers (100% Windows Sandbox LocalState, No Roaming)
+        private static string GetSandboxDataRoot()
+        {
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string packageDir = Path.Combine(localAppData, "Packages", "jiwho.boardest.bst_nmkn64tehfz7a", "LocalState");
+            if (Directory.Exists(packageDir)) return packageDir;
+            string fallback = Path.Combine(localAppData, "jiwho.boardest.board", "LocalState");
+            if (!Directory.Exists(fallback)) Directory.CreateDirectory(fallback);
+            return fallback;
+        }
+
         private string GetPPTStrokesFilePath()
         {
-            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            string pptDir = Path.Combine(appData, "jiwho.boardest.board", "bst-pen", "PPT");
+            string dataRoot = GetSandboxDataRoot();
+            string pptDir = Path.Combine(dataRoot, "bst-pen", "PPT");
             if (!Directory.Exists(pptDir)) Directory.CreateDirectory(pptDir);
             string sanitized = Regex.Replace(_fileName, @"[\\/:*?""<>| ]", "_");
             return Path.Combine(pptDir, sanitized + ".iwb");
@@ -1278,8 +1288,8 @@ namespace BoardestPptOverlay
 
         private string GetPPTMetadataFilePath()
         {
-            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            string pptDir = Path.Combine(appData, "jiwho.boardest.board", "bst-save", "PPT");
+            string dataRoot = GetSandboxDataRoot();
+            string pptDir = Path.Combine(dataRoot, "bst-save", "PPT");
             if (!Directory.Exists(pptDir)) Directory.CreateDirectory(pptDir);
             string sanitized = Regex.Replace(_fileName, @"[\\/:*?""<>| ]", "_");
             return Path.Combine(pptDir, sanitized + ".json");

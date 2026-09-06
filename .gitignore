@@ -24,3 +24,5 @@ apps/boardest_teacher_oauth/
 .firebase/
 infra/*
 !infra/welcome_web/
+!infra/forbidden_403_web/
+!infra/boardest_eat_web/

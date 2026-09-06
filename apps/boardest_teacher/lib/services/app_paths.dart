@@ -85,32 +85,8 @@ class AppPaths {
         _dataRoot = p.join(localAppData, appName, 'LocalState');
       }
 
-      // 1. 샌드박스 최상위 및 하위 폴더 생성
+      // 100% 샌드박스 내부(%LOCALAPPDATA%\Packages\...\LocalState)만 사용하여 앱 삭제 시 완전 소거 보장 (Roaming 접근 일체 차단)
       await Directory(_dataRoot!).create(recursive: true);
-
-      // 2. 레거시 %APPDATA%\Roaming 데이터가 있으면 샌드박스로 안전 복제 (shared_preferences 유실 방지를 위해 Roaming 보존)
-      final roamingAppData = Platform.environment['APPDATA'];
-      if (roamingAppData != null) {
-        try {
-          final legacyDir = Directory(p.join(roamingAppData, appName));
-          if (legacyDir.existsSync()) {
-            debugPrint('[AppPaths] 📦 Syncing roaming data from $legacyDir to sandbox $_dataRoot...');
-            await _copyDirectory(legacyDir, Directory(_dataRoot!));
-          }
-        } catch (e) {
-          debugPrint('[AppPaths] Roaming sync notice: $e');
-        }
-
-        // 구 com.boardest 잔여 폴더도 완전 삭제
-        try {
-          for (final legacy in ['com.boardest', 'com.boardest.comcigan']) {
-            final dir = Directory(p.join(roamingAppData, legacy));
-            if (dir.existsSync()) {
-              dir.deleteSync(recursive: true);
-            }
-          }
-        } catch (_) {}
-      }
     } else if (Platform.isAndroid || Platform.isIOS) {
       final dir = await getApplicationSupportDirectory();
       _dataRoot = p.join(dir.path, appName);
@@ -122,20 +98,6 @@ class AppPaths {
     await Directory(bstPenRootSync).create(recursive: true);
     await Directory(configDir).create(recursive: true);
     _initialized = true;
-  }
-
-  static Future<void> _copyDirectory(Directory source, Directory destination) async {
-    await destination.create(recursive: true);
-    await for (final entity in source.list(recursive: false)) {
-      final newPath = p.join(destination.path, p.basename(entity.path));
-      if (entity is Directory) {
-        await _copyDirectory(entity, Directory(newPath));
-      } else if (entity is File) {
-        if (!File(newPath).existsSync()) {
-          await entity.copy(newPath);
-        }
-      }
-    }
   }
 
   /// 1920×1080 기준 화면비 동적 UI 스케일 (오버플로우 방지)

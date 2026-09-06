@@ -1127,11 +1127,21 @@ namespace BoardestHwpOverlay
             hwpApp = null;
         }
 
-        // Strokes storage helpers (Perfect compatibility with AnnotationStorageService)
+        // Strokes storage helpers (100% Windows Sandbox LocalState, No Roaming)
+        private static string GetSandboxDataRoot()
+        {
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string packageDir = Path.Combine(localAppData, "Packages", "jiwho.boardest.bst_nmkn64tehfz7a", "LocalState");
+            if (Directory.Exists(packageDir)) return packageDir;
+            string fallback = Path.Combine(localAppData, "jiwho.boardest.board", "LocalState");
+            if (!Directory.Exists(fallback)) Directory.CreateDirectory(fallback);
+            return fallback;
+        }
+
         private string GetHwpStrokesFilePath()
         {
-            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            string hwpDir = Path.Combine(appData, "jiwho.boardest.board", "bst-pen", "PDF"); // Using PDF storage folder as document board
+            string dataRoot = GetSandboxDataRoot();
+            string hwpDir = Path.Combine(dataRoot, "bst-pen", "PDF"); // Using PDF storage folder as document board
             if (!Directory.Exists(hwpDir)) Directory.CreateDirectory(hwpDir);
             string sanitized = Regex.Replace(_fileName, @"[\\/:*?""<>| ]", "_");
             return Path.Combine(hwpDir, sanitized + ".iwb");
@@ -1139,8 +1149,8 @@ namespace BoardestHwpOverlay
 
         private string GetHwpMetadataFilePath()
         {
-            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            string hwpDir = Path.Combine(appData, "jiwho.boardest.board", "bst-save", "PDF");
+            string dataRoot = GetSandboxDataRoot();
+            string hwpDir = Path.Combine(dataRoot, "bst-save", "PDF");
             if (!Directory.Exists(hwpDir)) Directory.CreateDirectory(hwpDir);
             string sanitized = Regex.Replace(_fileName, @"[\\/:*?""<>| ]", "_");
             return Path.Combine(hwpDir, sanitized + ".json");

@@ -1,7 +1,7 @@
 # 🤖 Boardest Platform — Core Agent Memory & Complete System Knowledge Base
 
 > **버전 관리 규격**: 버전 변경 이력 및 상세 수정 내역은 [Ver.md](file:///c:/Users/jiwho/Documents/boardest/Ver.md) 파일에 매 작업 완료 시마다 반드시 기록하여 유지합니다.
-> ⚠️ **[중요] Beta 버전 관리 철칙**: Beta 테스트가 공식 종료되기 전까지는 모든 앱과 패키지의 버전을 **반드시 `2.9.9.X`** 형식(예: `2.9.9.1`, `2.9.9.2`, `2.9.9.5`, `2.9.9.6` 등)으로 유지해야 합니다 (절대로 `3.0.0` 등으로 앞자리를 올리지 말 것).
+> 🚀 **[정식 버전] Boardest 3.0.0**: 2026-09-06 부로 Beta 테스트가 성공적으로 종료되고 **Boardest v3.0.0 정식 버전**으로 공식 승격되었습니다.
 
 ---
 
@@ -83,10 +83,11 @@
 |---|---|---|---|
 | **Firebase Hosting** | `welcome-to-boardest` | `https://welcome-to-boardest.web.app` | 공식 사용자 안내 및 온보딩 포털 (UA 자동 감지 & 기능 소개) |
 | **Firebase Hosting** | `download-boardest` | `https://download-boardest.web.app` | 원클릭 스크립트(`win-cer.ps1`) 및 최신 릴리즈 직접 다운로드 출처 허브 |
-| **Firebase Hosting** | `boardest-main` | `https://boardest.web.app` | Boardest 메인 전자칠판 앱 (웹 버전) |
-| **Firebase Hosting** | `boardest-teacher` | `https://boardest-teacher.web.app` | 교사용 데스크톱 & 웹 통합 앱 (38:62 2분할 레이아웃) |
-| **Firebase Hosting** | `boardest-teacher-lite` | `https://boardest-teacher-lite.web.app` | 교사용 라이트 모바일 웹앱 (급식 호출 & OTP) |
-| **Firebase Hosting** | `boardest-teacher-oauth` | `https://boardest-teacher-oauth.web.app` | Google OAuth 및 보안 시크릿 키 관리/생성/저장 허브 |
+| **Firebase Hosting** | `boardest-main` | `https://boardest.web.app` | 403 차단 (Windows/Android 전용, 소스 보존) |
+| **Firebase Hosting** | `boardest-teacher` | `https://boardest-teacher.web.app` | 403 차단 (다운로드 일시 중단, 소스 보존) |
+| **Firebase Hosting** | `boardest-teacher-lite` | `https://boardest-teacher-lite.web.app` | 403 차단 (소스 보존) |
+| **Firebase Hosting** | `boardest-teacher-oauth` | `https://boardest-teacher-oauth.web.app` | 403 차단 (소스 보존) |
+| **Firebase Hosting** | `boardest-eat` | `https://boardest-eat.web.app` | 독립 급식 지도 관제 시스템 (학교ID/교사명/급식실 쿼리스트링 지원) |
 | **Cloudflare Worker** | `boardest-cloud-token` | `https://boardest-cloud-token.jiwho.workers.dev` | 인증/토큰 교환/OTP 검증/기기 관리 API |
 | **Cloudflare Worker** | `comcigan` | `https://comcigan.jiwho.workers.dev` | 컴시간 시간표 초고속 TCP 프록시 |
 
@@ -214,9 +215,10 @@ cd infra/boardest_auth_worker; cmd.exe /c npx wrangler deploy
 - **최좌측 (flex: 18)**: 오늘의 시간표 세로 패널 (`_buildTodayTimetablePanel`).
 - **메인 영역 (flex: 82)**:
   - **상단 섹션 (flex: 5)**: 확대된 디지털 시계 카드 (`_buildPptClockCard`) & 런처 상단 3행.
-  - **하단 섹션 (flex: 8)**: **7:4 = [지금 시간표 (flex: 7, 63.6%)] : [광고판 / Cloud / USB (flex: 4, 36.4%)]**
-    - **급식 요소 완전 분리**: 급식 기능은 독립 웹앱(`boardest-eat.web.app`)으로 단일화하고, 메인 대시보드에서는 급식 선택 버튼을 제거하여 시간표와 시계에 화면 공간 집중.
-    - **세션 영구 보존**: 클라우드 패널을 닫아도 `activeToken = null`이 아닌 `_hideCloudPanel = true`를 적용하여 교사 세션이 풀리지 않고 유지됨. 광고판 하단의 `[☁️ 클라우드 다시 열기]` 버튼으로 언제든 즉시 재전개.
+  - **하단 섹션 (flex: 8)**: **7:4 = [지금 시간표 (flex: 7, 63.6%)] : [오늘의 급식 식단 / USB (flex: 4, 36.4%)]**
+    - **급식 식단 상시 배치**: 우측 flex: 4 영역에 오늘의 급식 식단표(`_buildNeisMealCard`)를 상시 배치하여 당일 메뉴 및 급식실 번호 즉시 확인.
+    - **USB 최우선 탐색**: USB 메모리 연결 시 flex: 4 슬롯이 와이드 USB 탐색기로 즉시 자동 전환되어 수업 자료 접근 (Cloud 대체).
+    - **독립 급식 지도**: 급식 호출 관제는 독립 웹앱(`boardest-eat.web.app`)으로 단일화하여 운영.
   - **우측 런처 열 구성**:
     - **1열**: 1행 날씨, 2행 학사달력, 3행 앱서랍, 4~7행 광고판/컨텍스트 영역.
     - **2열**: 고정 수업 도구 7행 (판서하기, 교과서, Canva, Cloud, 플러그인, 학생연결, 설정).

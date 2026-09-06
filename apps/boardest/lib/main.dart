@@ -144,9 +144,9 @@ void main(List<String> args) async {
   final authService = AuthService();
   var currentUser = await authService.getCurrentUser();
 
-  // 자가 치유 및 백그라운드 자동 로그인
-  if (settings.isSetupComplete && currentUser == null) {
-    if (settings.selectedSchool != null) {
+  // 로그인 검증 및 미로그인 시 샌드박스 정리 & 로그인 요구 (하위 호환 무시, 깨끗한 초기화)
+  if (currentUser == null) {
+    if (settings.isSetupComplete && settings.selectedSchool != null) {
       try {
         final err = await authService.loginOrSignupClass(
           region: settings.selectedSchool!.region,
@@ -166,6 +166,20 @@ void main(List<String> args) async {
       } catch (e) {
         debugPrint('[Boardest Startup] Auto-login error: $e');
       }
+    }
+
+    // 여전히 로그인이 안 되어있으면 샌드박스 내부 임시 데이터 소거 및 로그인 요구창 진입
+    if (currentUser == null) {
+      debugPrint('[Boardest Startup] Not logged in. Purging sandbox data and prompting login...');
+      try {
+        final tempDir = Directory(AppPaths.bstCldTempRootSync);
+        if (tempDir.existsSync()) {
+          tempDir.deleteSync(recursive: true);
+          tempDir.createSync(recursive: true);
+        }
+      } catch (_) {}
+      settings = settings.copyWith(isSetupComplete: false);
+      await storage.saveSettings(settings);
     }
   }
 

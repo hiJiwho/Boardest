@@ -1384,7 +1384,7 @@ class _TeacherViewState extends State<TeacherView> {
       if (Platform.isWindows) {
         _preMiniWindowSize = await windowManager.getSize();
         _preMiniWindowPos = await windowManager.getPosition();
-        await windowManager.setSize(const Size(380, 160));
+        await windowManager.setSize(const Size(430, 56));
         await windowManager.setAlwaysOnTop(true);
         await windowManager.setResizable(false);
       }
@@ -1691,231 +1691,155 @@ class _TeacherViewState extends State<TeacherView> {
       ),
     );
 
+    final teacherSubject = teacherLesson.subject.isNotEmpty
+        ? '${teacherLesson.grade}-${teacherLesson.classNum} ${teacherLesson.subject.replaceAll('*', '')}'
+        : '공강';
+    final classSubject = classLesson.subject.isNotEmpty
+        ? classLesson.subject.replaceAll('*', '')
+        : '수업없음';
+    final timeStr = '${_now.hour.toString().padLeft(2, '0')}:${_now.minute.toString().padLeft(2, '0')}';
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0E17),
-      body: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF16161A),
-          border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.5), width: 1.5),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Column(
-          children: [
-            // Mini Title Bar (Draggable)
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onPanStart: (_) {
-                if (!kIsWeb && Platform.isWindows) {
-                  windowManager.startDragging();
-                }
-              },
-              child: Row(
-                children: [
-                  const Icon(Icons.school_rounded, color: Color(0xFF00F5D4), size: 14),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Boardest Mini',
-                    style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF8906).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      _currentPeriod != null ? '현재 $_currentPeriod교시 ➔ 다음 ${targetPeriod}교시' : '다음 ${targetPeriod}교시',
-                      style: const TextStyle(color: Color(0xFFFF8906), fontSize: 9.5, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const Spacer(),
-                  // Tabs
-                  InkWell(
-                    onTap: () => setState(() => _miniWidgetTab = 0),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _miniWidgetTab == 0 ? const Color(0xFF00F5D4).withOpacity(0.2) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: _miniWidgetTab == 0 ? const Color(0xFF00F5D4) : Colors.transparent),
-                      ),
-                      child: Text('내 수업', style: TextStyle(color: _miniWidgetTab == 0 ? const Color(0xFF00F5D4) : Colors.white60, fontSize: 9, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  InkWell(
-                    onTap: () => setState(() => _miniWidgetTab = 1),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _miniWidgetTab == 1 ? const Color(0xFF7F5AF0).withOpacity(0.2) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: _miniWidgetTab == 1 ? const Color(0xFF7F5AF0) : Colors.transparent),
-                      ),
-                      child: Text('우리 반', style: TextStyle(color: _miniWidgetTab == 1 ? const Color(0xFF7F5AF0) : Colors.white60, fontSize: 9, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  InkWell(
-                    onTap: () => setState(() => _miniWidgetTab = 2),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _miniWidgetTab == 2 ? const Color(0xFF2EC4B6).withOpacity(0.2) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: _miniWidgetTab == 2 ? const Color(0xFF2EC4B6) : Colors.transparent),
-                      ),
-                      child: Text('OTP', style: TextStyle(color: _miniWidgetTab == 2 ? const Color(0xFF2EC4B6) : Colors.white60, fontSize: 9, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  InkWell(
-                    onTap: _exitMiniMode,
-                    child: const Tooltip(
-                      message: '전체 화면으로 복원',
-                      child: Icon(Icons.open_in_full_rounded, color: Colors.white70, size: 14),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  InkWell(
-                    onTap: () async {
-                      if (!kIsWeb && Platform.isWindows) {
-                        await windowManager.close();
-                      } else {
-                        setState(() => _isMiniMode = false);
-                      }
-                    },
-                    child: const Tooltip(
-                      message: '닫기',
-                      child: Icon(Icons.close_rounded, color: Colors.white70, size: 15),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Divider(color: Colors.white10, height: 1),
-            const SizedBox(height: 6),
-
-            // Content Body based on tab
-            Expanded(
-              child: Builder(
-                builder: (_) {
-                  if (_miniWidgetTab == 0) {
-                    // Teacher Lesson
-                    final hasLesson = teacherLesson.subject.isNotEmpty;
-                    return Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF00F5D4).withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.3)),
-                          ),
-                          child: Center(
-                            child: Text(
-                              '${targetPeriod}교시',
-                              style: const TextStyle(color: Color(0xFF00F5D4), fontWeight: FontWeight.bold, fontSize: 11),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                hasLesson
-                                    ? '${teacherLesson.grade}학년 ${teacherLesson.classNum}반 ${teacherLesson.classroom.isNotEmpty ? "(${teacherLesson.classroom})" : ""}'
-                                    : '수업 없음 (공강)',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                hasLesson ? teacherLesson.subject.replaceAll('*', '') : '자유 시간 또는 교재 연구',
-                                style: TextStyle(color: hasLesson ? const Color(0xFF00F5D4) : Colors.white38, fontSize: 11),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-                  } else if (_miniWidgetTab == 1) {
-                    // Classroom Lesson
-                    final hasLesson = classLesson.subject.isNotEmpty;
-                    return Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF7F5AF0).withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF7F5AF0).withOpacity(0.3)),
-                          ),
-                          child: Center(
-                            child: Text(
-                              '${targetPeriod}교시',
-                              style: const TextStyle(color: Color(0xFF7F5AF0), fontWeight: FontWeight.bold, fontSize: 11),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                '${_settings.selectedGrade}학년 ${_settings.selectedClass}반 : ${hasLesson ? classLesson.subject.replaceAll('*', '') : "수업 없음"}',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                hasLesson ? '담당: ${classLesson.teacher.replaceAll('*', '')} 선생님' : '-',
-                                style: const TextStyle(color: Color(0xFF7F5AF0), fontSize: 11),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanStart: (_) {
+          if (!kIsWeb && Platform.isWindows) {
+            windowManager.startDragging();
+          }
+        },
+        child: Container(
+          height: 56,
+          decoration: BoxDecoration(
+            color: const Color(0xFF16161A),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.35), width: 1.2),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // 1. 닫기
+              InkWell(
+                onTap: () async {
+                  if (!kIsWeb && Platform.isWindows) {
+                    await windowManager.close();
                   } else {
-                    // OTP Tab
-                    return InkWell(
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(text: _currentOtp));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('OTP [$_currentOtp] 복사됨'), duration: const Duration(seconds: 1)),
-                        );
-                      },
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text('전자칠판 접속 PIN (터치하여 복사)', style: TextStyle(color: Colors.white54, fontSize: 9)),
-                              Text(
-                                _currentOtp,
-                                style: GoogleFonts.sourceCodePro(color: const Color(0xFF00F5D4), fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 4),
-                              ),
-                            ],
-                          ),
-                          Text('${_remainingSeconds}s', style: const TextStyle(color: Color(0xFFFF8906), fontSize: 12, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    );
+                    setState(() => _isMiniMode = false);
                   }
                 },
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(Icons.close_rounded, color: Colors.redAccent, size: 14),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 6),
+              // 2. 앱 열기
+              InkWell(
+                onTap: _exitMiniMode,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(Icons.open_in_full_rounded, color: Colors.white70, size: 14),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // 3. 교사 시간표
+              Expanded(
+                child: Tooltip(
+                  message: '교사 수업: ${targetPeriod}교시 $teacherSubject',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00F5D4).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.25)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.person_rounded, size: 12, color: Color(0xFF00F5D4)),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            '${targetPeriod}교시 $teacherSubject',
+                            style: GoogleFonts.notoSansKr(
+                              color: const Color(0xFF00F5D4),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              // 4. 교실 시간표
+              Expanded(
+                child: Tooltip(
+                  message: '우리반 수업: ${targetPeriod}교시 $classSubject (${classLesson.teacher})',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7F5AF0).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF7F5AF0).withOpacity(0.25)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.class_rounded, size: 12, color: Color(0xFF7F5AF0)),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            '우리반 $classSubject',
+                            style: GoogleFonts.notoSansKr(
+                              color: const Color(0xFF7F5AF0),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // 5. 현재 시간
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  timeStr,
+                  style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2474,13 +2398,22 @@ class _TeacherViewState extends State<TeacherView> {
     }).toList();
   }
 
-  Future<void> _refreshDriveFiles({String? folderId, String? folderName}) async {
+  Future<void> _refreshDriveFiles({String? folderId, String? folderName, bool resetToRoot = false}) async {
     if (!CloudDriveService.instance.isLoggedIn) return;
     if (mounted) {
       setState(() {
         _isLoadingDriveFiles = true;
-        if (folderId != null) _currentDriveFolderId = folderId;
-        if (folderName != null) _currentDriveFolderName = folderName;
+        if (resetToRoot) {
+          _currentDriveFolderId = null;
+          _currentDriveFolderName = '최상위 교안함';
+          _driveFolderNavStack.clear();
+        } else {
+          _currentDriveFolderId = folderId;
+          if (folderName != null) _currentDriveFolderName = folderName;
+          if (folderId == null && folderName == null) {
+            _currentDriveFolderName = '최상위 교안함';
+          }
+        }
       });
     }
     try {
@@ -3291,24 +3224,46 @@ class _TeacherViewState extends State<TeacherView> {
                     ),
                     SizedBox(width: 6 * s),
                     if (_driveFolderNavStack.isNotEmpty) ...[
+                      // 🏠 루트 버튼
+                      InkWell(
+                        onTap: () {
+                          _driveFolderNavStack.clear();
+                          _refreshDriveFiles(resetToRoot: true);
+                        },
+                        borderRadius: BorderRadius.circular(4 * s),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 5 * s, vertical: 2 * s),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.home_rounded, size: 14 * s, color: const Color(0xFF00F5D4)),
+                              SizedBox(width: 2 * s),
+                              Text('루트', style: TextStyle(color: const Color(0xFF00F5D4), fontSize: 9.5 * s, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 4 * s),
+                      // ⬆️ 상위 버튼
                       InkWell(
                         onTap: () {
                           _driveFolderNavStack.removeLast();
                           final parent = _driveFolderNavStack.isNotEmpty ? _driveFolderNavStack.last : null;
                           _refreshDriveFiles(
                             folderId: parent?['id'],
-                            folderName: parent?['name'] ?? 'bst-save',
+                            folderName: parent?['name'] ?? '최상위 교안함',
+                            resetToRoot: parent == null,
                           );
                         },
                         borderRadius: BorderRadius.circular(4 * s),
                         child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 4 * s, vertical: 2 * s),
+                          padding: EdgeInsets.symmetric(horizontal: 5 * s, vertical: 2 * s),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(Icons.arrow_back_rounded, size: 14 * s, color: const Color(0xFF00F5D4)),
                               SizedBox(width: 2 * s),
-                              Text('상위', style: TextStyle(color: const Color(0xFF00F5D4), fontSize: 9 * s, fontWeight: FontWeight.bold)),
+                              Text('상위', style: TextStyle(color: const Color(0xFF00F5D4), fontSize: 9.5 * s, fontWeight: FontWeight.bold)),
                             ],
                           ),
                         ),

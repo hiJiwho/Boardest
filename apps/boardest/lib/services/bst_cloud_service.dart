@@ -117,6 +117,11 @@ class BstCloudService {
   static final BstCloudService instance = BstCloudService._();
   BstCloudService._();
 
+  /// [Cloud 기능 비활성화 플래그]
+  /// true일 경우 전자칠판 내 Cloud 접속 및 OTP 키패드가 비활성화되고,
+  /// 광고판/급식 식단 및 USB 탐색기가 해당 영역을 대체합니다.
+  static const bool isCloudFeatureDisabled = true;
+
   static final Map<String, Uint8List> webMemoryFiles = {};
 
   String? activeToken;
@@ -1454,32 +1459,75 @@ class BstCloudService {
         );
       }
 
-      final currentOtp = TotpService.generate4DigitOtp(pairedSecret);
+      final currentOtp = TotpService.generate8DigitOtp(pairedSecret);
       final res = await http.post(
         Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/verify-otp'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'shortId': cloudId.trim(),
+          'teacherId': cloudId.trim(),
           'otp': currentOtp,
           'keyId': pairedKeyId,
           'roomCode': roomCode,
+          'deviceSecret': pairedSecret,
         }),
       ).timeout(const Duration(seconds: 5));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         activeToken = data['accessToken']?.toString();
+        activeTeacherName = data['teacherName']?.toString() ?? '선생님';
+        activeOwnerEmail = data['email']?.toString();
+        activeTotpSecret = data['totpSecret']?.toString();
+        activeFolderId = data['folderId']?.toString();
         return (
           success: true,
           accessToken: activeToken,
-          teacherName: data['teacherName']?.toString() ?? '선생님',
-          email: data['email']?.toString(),
+          teacherName: activeTeacherName,
+          email: activeOwnerEmail,
           errorMessage: null,
         );
-      } else {
-        final err = jsonDecode(res.body);
-        return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: err['error']?.toString() ?? '자동 로그인 실패: 등록되지 않은 Cloud ID이거나 페어링이 만료되었습니다.');
       }
+
+      // 2차: Firestore 직접 Fallback 검증
+      try {
+        final teachers = await getCloudTeachers();
+        for (final teacher in teachers) {
+          final sec = (teacher.totpSecret != null && teacher.totpSecret!.isNotEmpty)
+              ? teacher.totpSecret!
+              : pairedSecret;
+
+          final v8 = TotpService.verify8DigitOtp(
+            secret: sec,
+            inputOtp8: currentOtp,
+            lastConsumedWindow: 0,
+          );
+
+          if (v8.isValid || pairedSecret == teacher.totpSecret) {
+            String? tok = teacher.directAccessToken;
+            if (teacher.refreshToken != null && teacher.refreshToken!.isNotEmpty) {
+              tok = await exchangeRefreshTokenForAccessToken(teacher.refreshToken!);
+            }
+            if (tok != null && tok.isNotEmpty) {
+              activeToken = tok;
+              activeTeacherName = teacher.teacherName;
+              activeOwnerEmail = teacher.ownerEmail;
+              activeTotpSecret = teacher.totpSecret;
+              activeFolderId = teacher.bstCloudFolderId.isNotEmpty ? teacher.bstCloudFolderId : teacher.folderId;
+              return (
+                success: true,
+                accessToken: activeToken,
+                teacherName: activeTeacherName,
+                email: activeOwnerEmail,
+                errorMessage: null,
+              );
+            }
+          }
+        }
+      } catch (_) {}
+
+      final err = jsonDecode(res.body);
+      return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: err['error']?.toString() ?? '자동 로그인 실패: 등록되지 않은 교사 ID이거나 전자칠판 인증이 필요합니다.');
     } catch (e) {
       return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '네트워크 오류: $e');
     }

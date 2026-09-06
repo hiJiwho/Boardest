@@ -8,7 +8,7 @@
   "hosting": [
     {
       "target": "boardest-main",
-      "public": "apps/boardest/build/web",
+      "public": "infra/forbidden_403_web",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -28,7 +28,7 @@
     },
     {
       "target": "boardest-teacher",
-      "public": "apps/boardest_teacher/build/web",
+      "public": "infra/forbidden_403_web",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -48,7 +48,7 @@
     },
     {
       "target": "boardest-teacher-lite",
-      "public": "apps/boardest_teacher_lite/build/web",
+      "public": "infra/forbidden_403_web",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -109,7 +109,27 @@
     },
     {
       "target": "boardest-teacher-oauth",
-      "public": "apps/boardest_teacher_oauth",
+      "public": "infra/forbidden_403_web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+          ]
+        }
+      ],
+      "rewrites": [
+        { "source": "**", "destination": "/index.html" }
+      ]
+    },
+    {
+      "target": "boardest-eat",
+      "public": "infra/boardest_eat_web",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -192,7 +212,7 @@
         },
         {
           "source": "/eat",
-          "destination": "https://boardest-teacher-lite.web.app",
+          "destination": "https://boardest-eat.web.app",
           "type": 302
         }
       ],

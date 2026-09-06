@@ -586,7 +586,7 @@ class _BstCloudModalState extends State<BstCloudModal> {
                       Icon(Icons.qr_code_scanner_rounded, size: 14 * s, color: _loginMode == 2 ? const Color(0xFF0B0F19) : Colors.white70),
                       SizedBox(width: 5 * s),
                       Text(
-                        '📷 스마트폰 QR',
+                        'QR로 로그인',
                         style: GoogleFonts.notoSansKr(
                           color: _loginMode == 2 ? const Color(0xFF0B0F19) : Colors.white70,
                           fontSize: 12 * s,
@@ -614,13 +614,20 @@ class _BstCloudModalState extends State<BstCloudModal> {
                   borderRadius: BorderRadius.circular(10 * s),
                 ),
                 child: Center(
-                  child: Text(
-                    '🔑 6자리 코드',
-                    style: GoogleFonts.notoSansKr(
-                      color: _loginMode == 0 ? Colors.white : Colors.white60,
-                      fontSize: 12 * s,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.pin_rounded, size: 14 * s, color: _loginMode == 0 ? Colors.white : Colors.white60),
+                      SizedBox(width: 5 * s),
+                      Text(
+                        'OTP로 로그인',
+                        style: GoogleFonts.notoSansKr(
+                          color: _loginMode == 0 ? Colors.white : Colors.white60,
+                          fontSize: 12 * s,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -641,13 +648,20 @@ class _BstCloudModalState extends State<BstCloudModal> {
                   borderRadius: BorderRadius.circular(10 * s),
                 ),
                 child: Center(
-                  child: Text(
-                    '⚡ Cloud ID',
-                    style: GoogleFonts.notoSansKr(
-                      color: _loginMode == 1 ? Colors.white : Colors.white60,
-                      fontSize: 12 * s,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.badge_rounded, size: 14 * s, color: _loginMode == 1 ? Colors.white : Colors.white60),
+                      SizedBox(width: 5 * s),
+                      Text(
+                        '교사용 ID로 로그인',
+                        style: GoogleFonts.notoSansKr(
+                          color: _loginMode == 1 ? Colors.white : Colors.white60,
+                          fontSize: 12 * s,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -839,8 +853,8 @@ class _BstCloudModalState extends State<BstCloudModal> {
                 // 안내 텍스트
                 Text(
                   _loginMode == 0
-                      ? '선생님 화면의 6자리 번호를 입력하세요 (학생 훔쳐보기 방지)'
-                      : '등록된 전자칠판 전용 Cloud ID 2자리를 입력하세요',
+                      ? '선생님 앱 또는 구글 OTP 앱의 번호를 입력하세요'
+                      : '전자칠판에 등록된 교사용 ID (2자리)를 입력하세요',
                   style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12 * s),
                   textAlign: TextAlign.center,
                 ),
@@ -913,7 +927,7 @@ class _BstCloudModalState extends State<BstCloudModal> {
                   ),
                   onPressed: _submitPin,
                   child: Text(
-                    _loginMode == 0 ? '🚀 6자리 코드로 접속' : '⚡ Cloud ID로 잠금해제',
+                    _loginMode == 0 ? '🚀 OTP로 로그인' : '⚡ 교사용 ID로 로그인',
                     style: GoogleFonts.notoSansKr(fontSize: 14 * s, fontWeight: FontWeight.bold),
                   ),
                 ),

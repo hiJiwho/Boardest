@@ -4540,7 +4540,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                           // 하단 행: [지금 시간표 (flex: 7)] : [광고판 / Cloud / USB (flex: 4)]
                           Builder(
                             builder: (context) {
-                              final isCloudActive = BstCloudService.instance.activeToken != null && !_hideCloudPanel;
+                              final isCloudActive = !BstCloudService.isCloudFeatureDisabled &&
+                                  BstCloudService.instance.activeToken != null &&
+                                  !_hideCloudPanel;
 
                               return Expanded(
                                 flex: 8,
@@ -4558,23 +4560,17 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                     ),
                                     SizedBox(width: 12 * scale),
 
-                                    // 2. 우측 영역: flex: 4 (보조/광고판 영역)
+                                    // 2. 우측 영역: flex: 4 (보조/급식/USB 영역)
                                     //    교사 Cloud 연결 시 -> 광고판 위치에 "지금 시간표" 컴팩트 배치!
-                                    //    USB 연결 시        -> USB 패널
-                                    //    수업 시간 (Cloud 미연결) -> 광고판 대신 Cloud OTP / QR 키패드 패널
-                                    //    일반 기본          -> 광고판 (A4 배너)
+                                    //    USB 연결 시        -> USB 패널 (Cloud 대체)
+                                    //    평상 시            -> 오늘의 급식 식단 카드
                                     Expanded(
                                       flex: 4,
                                       child: isCloudActive
-                                          ? _buildPptSubjectCard(todayLessons, isExpandedDock: true)
+                                          ? _buildCompactCurrentLessonCard(_currentLesson, scale)
                                           : (_isUsbConnected
                                               ? _buildFullUsbPanel(scale)
-                                              : (!isWeekend &&
-                                                      _currentPeriod != null &&
-                                                      _currentPeriod!.isClass &&
-                                                      BstCloudService.instance.activeToken == null
-                                                  ? _buildCloudOtpKeypadPanel(scale)
-                                                  : _buildPptAdBannerCard())),
+                                              : _buildNeisMealCard(scale)),
                                     ),
                                   ],
                                 ),
@@ -5333,7 +5329,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
-  /// [신규] 급식 정보 카드 (Neis API 기반, 2:3 분할 상단용)
+  /// [신규] 급식 정보 카드 (Neis API 기반, 전자칠판 우측 보조 카드용)
   Widget _buildNeisMealCard(double scale) {
     final currentCafeteria = _settings.cafeteriaNum.isNotEmpty ? _settings.cafeteriaNum : '급식실1';
     final lines = _mealInfo
@@ -5342,74 +5338,106 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         .where((l) => l.isNotEmpty)
         .toList();
 
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF081714),
-        borderRadius: BorderRadius.circular(20 * scale),
-        border: Border.all(
-          color: const Color(0xFF2EC4B6).withValues(alpha: 0.25),
-          width: 1.2,
-        ),
-      ),
-      padding: EdgeInsets.all(10 * scale),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.restaurant_rounded, size: 14 * scale, color: const Color(0xFF00F5D4)),
-              SizedBox(width: 6 * scale),
-              Expanded(
-                child: Text(
-                  '오늘의 급식 ($currentCafeteria)',
-                  style: GoogleFonts.notoSansKr(
-                    color: Colors.white,
-                    fontSize: 11 * scale,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _showMealInfoDialog,
+        borderRadius: BorderRadius.circular(24 * scale),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0D141C),
+            borderRadius: BorderRadius.circular(24 * scale),
+            border: Border.all(
+              color: const Color(0xFF00F5D4).withValues(alpha: 0.25),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 10 * scale,
+                offset: Offset(0, 4 * scale),
               ),
             ],
           ),
-          SizedBox(height: 6 * scale),
-          Expanded(
-            child: _isLoadingMeal
-                ? const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00F5D4)))
-                : lines.isEmpty
-                    ? Center(
-                        child: Text(
-                          '급식 정보가 없습니다',
-                          style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 10.5 * scale),
-                        ),
-                      )
-                    : ScrollConfiguration(
-                        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-                        child: SingleChildScrollView(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: lines
-                                .map(
-                                  (line) => Padding(
-                                    padding: EdgeInsets.only(bottom: 2.5 * scale),
-                                    child: Text(
-                                      line,
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 10 * scale,
-                                        color: Colors.white.withValues(alpha: 0.85),
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                        ),
+          padding: EdgeInsets.symmetric(horizontal: 16 * scale, vertical: 14 * scale),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(6 * scale),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8 * scale),
+                    ),
+                    child: Icon(Icons.restaurant_rounded, size: 16 * scale, color: const Color(0xFF00F5D4)),
+                  ),
+                  SizedBox(width: 10 * scale),
+                  Expanded(
+                    child: Text(
+                      '오늘의 급식 ($currentCafeteria)',
+                      style: GoogleFonts.notoSansKr(
+                        color: Colors.white,
+                        fontSize: 14 * scale,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.3,
                       ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _showCafeteriaSelectorDialog,
+                    icon: Icon(Icons.tune_rounded, size: 16 * scale, color: Colors.white60),
+                    tooltip: '급식실 선택',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+              SizedBox(height: 10 * scale),
+              Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
+              SizedBox(height: 10 * scale),
+              Expanded(
+                child: _isLoadingMeal
+                    ? const Center(child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF00F5D4)))
+                    : lines.isEmpty
+                        ? Center(
+                            child: Text(
+                              '오늘 등록된 급식 정보가 없습니다',
+                              style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 13 * scale),
+                            ),
+                          )
+                        : ScrollConfiguration(
+                            behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                            child: SingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: lines
+                                    .map(
+                                      (line) => Padding(
+                                        padding: EdgeInsets.only(bottom: 5 * scale),
+                                        child: Text(
+                                          line,
+                                          style: GoogleFonts.notoSansKr(
+                                            fontSize: 13 * scale,
+                                            color: Colors.white.withValues(alpha: 0.9),
+                                            fontWeight: FontWeight.w500,
+                                            height: 1.4,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ),
+                          ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -6309,15 +6337,59 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           if (_enteredTeacherId.length < 2) {
             _enteredTeacherId += key;
             if (_enteredTeacherId.length == 2) {
-              _activeKeypadTarget = 'otp';
-              if (_enteredOtp.length == 6) {
-                _submitCloudOtp(_enteredOtp);
-              }
+              _submitTeacherIdAutoLogin(_enteredTeacherId);
             }
           }
         }
       }
     });
+  }
+
+  Future<void> _submitTeacherIdAutoLogin(String teacherId) async {
+    setState(() {
+      _isVerifyingOtp = true;
+      _otpErrorMsg = null;
+    });
+    try {
+      final roomCode = '${_settings.selectedGrade}-${_settings.selectedClass}';
+      final res = await BstCloudService.instance.verify2DigitAutoLogin(
+        teacherId,
+        roomCode,
+      );
+      if (res.success) {
+        if (mounted) {
+          setState(() {
+            _enteredOtp = '';
+            _enteredTeacherId = '';
+            _isVerifyingOtp = false;
+            _otpErrorMsg = null;
+            _refreshCloudFiles();
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('☁️ [${res.teacherName ?? "선생님"}] 교사 ID로 자동 로그인되었습니다!', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold)),
+              backgroundColor: const Color(0xFF2CB67D),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isVerifyingOtp = false;
+            _otpErrorMsg = res.errorMessage ?? '미등록 교사 ID이거나 전자칠판 인증 필요';
+            _activeKeypadTarget = 'otp';
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isVerifyingOtp = false;
+          _otpErrorMsg = '자동 로그인 실패: $e';
+          _activeKeypadTarget = 'otp';
+        });
+      }
+    }
   }
 
   Future<void> _submitCloudOtp(String otp) async {
@@ -6430,11 +6502,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           ),
           SizedBox(height: 6 * scale),
 
-          // 상단: 교과서 표지 썸네일
+          // 상단: 교과서 표지 썸네일 (소형으로 상단 배치)
           Expanded(
-            flex: 6,
+            flex: 3,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(12 * scale),
+              borderRadius: BorderRadius.circular(8 * scale),
               child: Container(
                 color: Colors.black38,
                 alignment: Alignment.center,
@@ -6446,11 +6518,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               ),
             ),
           ),
-          SizedBox(height: 8 * scale),
+          SizedBox(height: 6 * scale),
 
-          // 하단: 대형 과목명 + 교사/교실 정보
+          // 하단: 대형 과목명 + 교사/교실 정보 (과목명을 크게 강조)
           Expanded(
-            flex: 4,
+            flex: 7,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -6459,24 +6531,32 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   child: Text(
                     subject,
                     style: GoogleFonts.notoSansKr(
-                      fontSize: 32 * scale,
+                      fontSize: 42 * scale,
                       fontWeight: FontWeight.w900,
                       color: Colors.white,
                       letterSpacing: -0.5,
                       shadows: [
-                        Shadow(color: Colors.black.withOpacity(0.8), blurRadius: 8),
+                        Shadow(color: Colors.black.withOpacity(0.8), blurRadius: 10),
                       ],
                     ),
                   ),
                 ),
                 if (classroom.isNotEmpty || teacher.isNotEmpty) ...[
-                  SizedBox(height: 4 * scale),
-                  Text(
-                    classroom.isNotEmpty ? classroom : teacher,
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 12 * scale,
-                      color: Colors.white60,
-                      fontWeight: FontWeight.w600,
+                  SizedBox(height: 6 * scale),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 3 * scale),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00F5D4).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6 * scale),
+                      border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.25)),
+                    ),
+                    child: Text(
+                      [if (teacher.isNotEmpty) teacher, if (classroom.isNotEmpty) classroom].join(' · '),
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 13 * scale,
+                        color: const Color(0xFF00F5D4),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -6834,7 +6914,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
     final tools = [
       {'name': '플러그인', 'icon': Icons.extension_rounded, 'action': null, 'disabled': true},
-      {'name': '클라우드', 'icon': Icons.cloud_queue, 'action': _openBstCloud, 'disabled': false},
+      {'name': '클라우드', 'icon': Icons.cloud_off_rounded, 'action': _openBstCloud, 'disabled': true},
       {'name': '계산기', 'icon': Icons.calculate, 'action': _openCalculator, 'disabled': false},
       {'name': '설정', 'icon': Icons.settings, 'action': _openSettingsWizard, 'disabled': false},
     ];
@@ -6843,7 +6923,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       return Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: disabled ? null : onTap,
+          onTap: (disabled && label == '클라우드') ? _openBstCloud : (disabled ? null : onTap),
           borderRadius: BorderRadius.circular(12 * scale),
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: 10 * scale),
@@ -10042,24 +10122,12 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
-  // Context-aware ad banner / USB / OTP / lesson card widget inside Col 1 rows 4-7
+  // Context-aware USB / Meal card widget inside Col 1 rows 4-7
   Widget _buildAdBannerOrContextCard(double scale) {
-    final isCloudActive = BstCloudService.instance.activeToken != null;
-    final isClassNow = _currentPeriod != null && _currentPeriod!.isClass;
-    final isManualSelected = _currentLesson != null && _currentLesson!.subject.isNotEmpty;
-    final bool isLiveLesson = isManualSelected || isClassNow;
-
     if (_isUsbConnected) {
       return _buildCompactUsbExplorer(scale);
     }
-    if (isLiveLesson) {
-      if (isCloudActive) {
-        return _buildCompactCurrentLessonCard(_currentLesson, scale);
-      } else {
-        return _buildCloudOtpKeypadPanel(scale);
-      }
-    }
-    return _buildPptAdBannerCard();
+    return _buildNeisMealCard(scale);
   }
 
   Widget _buildEmptySlot(double scale, int slotIndex) {
@@ -11844,6 +11912,25 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   }
 
   void _openBstCloud() {
+    if (BstCloudService.isCloudFeatureDisabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '클라우드 기능이 일시 비활성화되었습니다. 수업 자료는 USB를 연결하여 이용해 주세요.',
+            style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: const Color(0xFF1E293B),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12 * _settings.scaleFactor),
+            side: const BorderSide(color: Color(0xFF2EC4B6), width: 1.5),
+          ),
+          margin: const EdgeInsets.all(20),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
     showDialog(
       context: context,
       builder: (context) => BstCloudModal(scaleFactor: _settings.scaleFactor),
