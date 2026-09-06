@@ -922,6 +922,20 @@
       }
     }
 
+    function matchesSchool(docSchoolCode, docName, docSchoolName) {
+      if (!docSchoolCode && !docName) return false;
+      const sCode = (schoolCode || '').toLowerCase();
+      const dCode = (docSchoolCode || '').toLowerCase();
+      const dName = (docName || '').toLowerCase();
+      const dSchool = (docSchoolName || '').toLowerCase();
+
+      if (dCode === sCode || dName.startsWith(sCode + '_')) return true;
+      if (sCode === 'ydm' && (dCode === 'my' || dName.startsWith('my_') || dSchool.includes('양동') || dCode.includes('양동'))) return true;
+      if (sCode === 'my' && (dCode === 'ydm' || dName.startsWith('ydm_') || dSchool.includes('양동'))) return true;
+      if (schoolName && (dSchool.includes(schoolName.toLowerCase()) || dCode === schoolName.toLowerCase())) return true;
+      return false;
+    }
+
     async function fetchData() {
       if (!schoolCode) return;
 
@@ -936,12 +950,13 @@
             Object.entries(rtdbData).forEach(([docName, c]) => {
               if (!c || typeof c !== 'object') return;
               const docSchoolCode = (c.schoolCode || '').trim().toLowerCase();
-              if (docSchoolCode === schoolCode || docName.startsWith(schoolCode + '_')) {
+              const docSchoolName = c.schoolName || '';
+              if (matchesSchool(docSchoolCode, docName, docSchoolName)) {
                 const isCalled = c.called === true;
                 rawList.push({
                   docId: docName,
                   schoolCode: docSchoolCode,
-                  schoolName: c.schoolName || '',
+                  schoolName: docSchoolName,
                   cafeteria: String(c.cafeteriaNum || c.cafeteria || '1'),
                   grade: c.grade || (docName.split('_')[2] || '1'),
                   classNum: c.classNum || (docName.split('_')[3] || '1'),
@@ -958,7 +973,39 @@
         console.warn('RTDB presence lookup error:', re);
       }
 
-      // 2. Worker / Firestore 안전망 (RTDB에 데이터가 없을 때만 폴백)
+      // 2. Firestore 직접 폴백 (RTDB에 데이터가 없을 때 백업)
+      if (!rawList || rawList.length === 0) {
+        try {
+          const fsRes = await fetch(`${FIRESTORE_BASE}/eat_calls?pageSize=50`, { cache: 'no-store' });
+          if (fsRes.ok) {
+            const fsData = await fsRes.json();
+            const docs = fsData.documents || [];
+            docs.forEach(doc => {
+              const docName = doc.name ? doc.name.split('/').pop() : '';
+              const f = doc.fields || {};
+              const dSchoolCode = (f.schoolCode?.stringValue || '').trim().toLowerCase();
+              const dSchoolName = f.schoolName?.stringValue || '';
+              if (matchesSchool(dSchoolCode, docName, dSchoolName)) {
+                const isCalled = f.called?.booleanValue === true;
+                rawList.push({
+                  docId: docName,
+                  schoolCode: dSchoolCode,
+                  schoolName: dSchoolName,
+                  cafeteria: String(f.cafeteriaNum?.stringValue || '1'),
+                  grade: f.grade?.integerValue ? String(f.grade.integerValue) : (docName.split('_')[2] || '1'),
+                  classNum: f.classNum?.integerValue ? String(f.classNum.integerValue) : (docName.split('_')[3] || '1'),
+                  nickname: f.classNickname?.stringValue || '',
+                  lastActive: f.lastActive?.timestampValue || null,
+                  isOnline: true,
+                  called: isCalled
+                });
+              }
+            });
+          }
+        } catch (_) {}
+      }
+
+      // 3. Worker 안전망 (최후의 폴백)
       if (!rawList || rawList.length === 0) {
         try {
           const workerUrl = `https://boardest-cloud-token.jiwho.workers.dev/api/classrooms?schoolCode=${encodeURIComponent(schoolCode)}`;
@@ -977,8 +1024,8 @@
         if (c.lastActive) {
           const lastMs = typeof c.lastActive === 'number' ? c.lastActive : new Date(c.lastActive).getTime();
           const diffMin = (nowMs - lastMs) / (1000 * 60);
-          // 시계 오차 허용 (-5분 ~ 30분 이내 활성)
-          if (!isNaN(diffMin) && diffMin >= -5 && diffMin <= 30) {
+          // 시계 오차 허용 (-5분 ~ 60분 이내 활성)
+          if (!isNaN(diffMin) && diffMin >= -5 && diffMin <= 60) {
             isOnline = true;
           } else {
             isOnline = false;
@@ -1205,6 +1252,23 @@
     // ─── Neis Meal Menu API ───
     async function loadNeisMealMenu() {
       const container = document.getElementById('mealChipsContainer');
+
+      // 1. 영문 schoolCode(예: ydm)일 경우 한글 공식 학교명으로 사전 매핑/조회
+      if (!schoolName || schoolName.toLowerCase() === (schoolCode || '').toLowerCase()) {
+        if ((schoolCode || '').toLowerCase() === 'ydm' || (schoolCode || '').toLowerCase() === 'my') {
+          schoolName = '양동중학교';
+        } else if (schoolCode) {
+          try {
+            const cfgRes = await fetch(`${FIRESTORE_BASE}/control_configs/${encodeURIComponent(schoolCode)}`);
+            if (cfgRes.ok) {
+              const cfgData = await cfgRes.json();
+              const sn = cfgData.fields?.schoolName?.stringValue;
+              if (sn) schoolName = sn;
+            }
+          } catch (_) {}
+        }
+      }
+
       const queryName = schoolName || schoolCode;
 
       try {
@@ -1214,7 +1278,7 @@
         const sData = await sRes.json();
         
         if (!sData.schoolInfo || sData.schoolInfo.length < 2) {
-          throw new Error('School not found');
+          throw new Error('School not found for query: ' + queryName);
         }
         const row = sData.schoolInfo[1].row[0];
         const officeCode = row.ATPT_OFCDC_SC_CODE;
@@ -1223,15 +1287,31 @@
         updateHeaderInfo();
 
         const now = new Date();
-        const ymd = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+        // 주말(토=6, 일=0)인 경우 다가오는 월요일 식단을 기본 조회
+        let targetDate = new Date(now);
+        if (now.getDay() === 0) { // 일요일 -> 월요일 (+1일)
+          targetDate.setDate(now.getDate() + 1);
+        } else if (now.getDay() === 6) { // 토요일 -> 월요일 (+2일)
+          targetDate.setDate(now.getDate() + 2);
+        }
+
+        const ymd = `${targetDate.getFullYear()}${String(targetDate.getMonth()+1).padStart(2,'0')}${String(targetDate.getDate()).padStart(2,'0')}`;
+        const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+        const targetDayName = dayNames[targetDate.getDay()];
+        const isFuture = (targetDate.getDate() !== now.getDate());
+
         const mealUrl = `https://open.neis.go.kr/hub/mealServiceDietInfo?KEY=${NEIS_KEY}&Type=json&ATPT_OFCDC_SC_CODE=${officeCode}&SD_SCHUL_CODE=${sCode}&MLSV_YMD=${ymd}&MMEAL_SC_CODE=2`;
 
         const mRes = await fetch(mealUrl);
         if (!mRes.ok) throw new Error('Neis meal HTTP ' + mRes.status);
         const mData = await mRes.json();
 
+        const dispSchool = schoolName || (schoolCode ? schoolCode.toUpperCase() : '급식실');
+        const mealTitlePrefix = isFuture ? `[${targetDayName}요일 식단 미리보기]` : '';
+        document.getElementById('mealDateTitle').innerText = `${mealTitlePrefix} ${targetDate.getMonth() + 1}월 ${targetDate.getDate()}일(${targetDayName}) 급식 식단 (${dispSchool})`;
+
         if (!mData.mealServiceDietInfo || mData.mealServiceDietInfo.length < 2) {
-          container.innerHTML = '<div class="meal-dish-chip">오늘 등록된 급식 메뉴가 없습니다.</div>';
+          container.innerHTML = `<div class="meal-dish-chip">${isFuture ? `${targetDayName}요일` : '오늘'} 등록된 급식 메뉴가 없습니다.</div>`;
           return;
         }
 
@@ -1242,14 +1322,14 @@
 
         const dishes = raw.split('\n').map(s => s.trim()).filter(s => s.length > 0);
         if (dishes.length === 0) {
-          container.innerHTML = '<div class="meal-dish-chip">오늘 등록된 급식 메뉴가 없습니다.</div>';
+          container.innerHTML = `<div class="meal-dish-chip">${isFuture ? `${targetDayName}요일` : '오늘'} 등록된 급식 메뉴가 없습니다.</div>`;
           return;
         }
 
         container.innerHTML = dishes.map(d => `<div class="meal-dish-chip">${d}</div>`).join('');
       } catch (err) {
         console.warn('Neis meal fallback:', err);
-        container.innerHTML = '<div class="meal-dish-chip">오늘 등록된 급식 메뉴가 없습니다.</div>';
+        container.innerHTML = '<div class="meal-dish-chip">급식 식단을 불러올 수 없습니다.</div>';
       }
     }
 
