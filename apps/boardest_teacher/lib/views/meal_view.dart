@@ -288,6 +288,19 @@ class _MealViewState extends State<MealView> {
         body: json.encode(payload),
       ).timeout(const Duration(seconds: 4));
 
+      // 2. RTDB 실시간 전송 (0.1초 즉시 전달, Firestore 읽기 0 소모)
+      try {
+        final rtdbUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/$docId.json';
+        await http.patch(
+          Uri.parse(rtdbUrl),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({
+            'called': call,
+            'lastCalledAt': DateTime.now().toIso8601String(),
+          }),
+        ).timeout(const Duration(seconds: 4));
+      } catch (_) {}
+
       await _fetchOnlineClassrooms();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -319,6 +332,7 @@ class _MealViewState extends State<MealView> {
 
     setState(() => _isCalling = true);
     int count = 0;
+    final nowIso = DateTime.now().toIso8601String();
     for (final t in targets) {
       final docId = t['docId'] as String;
       try {
@@ -330,10 +344,23 @@ class _MealViewState extends State<MealView> {
           body: json.encode({
             'fields': {
               'called': {'booleanValue': true},
-              'lastCalledAt': {'stringValue': DateTime.now().toIso8601String()},
+              'lastCalledAt': {'stringValue': nowIso},
             }
           }),
         );
+
+        // RTDB 실시간 전송
+        try {
+          final rtdbUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/$docId.json';
+          await http.patch(
+            Uri.parse(rtdbUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({
+              'called': true,
+              'lastCalledAt': nowIso,
+            }),
+          ).timeout(const Duration(seconds: 4));
+        } catch (_) {}
         count++;
       } catch (_) {}
     }

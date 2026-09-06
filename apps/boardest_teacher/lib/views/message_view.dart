@@ -278,7 +278,21 @@ class _MessageViewState extends State<MessageView> {
           successCount++;
         }
 
-        // 2. Worker FCM Push 동시 발송 (High-Priority Push)
+        // 2. RTDB 실시간 쪽지 전송 (0.1초 즉시 전달, Firestore 읽기 0 소모)
+        try {
+          final rtdbUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/$docId.json';
+          await http.patch(
+            Uri.parse(rtdbUrl),
+            headers: {"Content-Type": "application/json"},
+            body: json.encode({
+              'message': text,
+              'messageFrom': senderName,
+              'messageSentAt': nowIso,
+            }),
+          ).timeout(const Duration(seconds: 4));
+        } catch (_) {}
+
+        // 3. Worker FCM Push 동시 발송 (High-Priority Push)
         try {
           await http.post(
             Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/push/send'),

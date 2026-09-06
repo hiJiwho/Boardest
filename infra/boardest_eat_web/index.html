@@ -684,6 +684,7 @@
     // ─── Constants ───
     const NEIS_KEY = '821179541cf54b6288d51741f30e1c90';
     const FIRESTORE_BASE = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents';
+    const RTDB_BASE = 'https://jiwhosboardest-default-rtdb.firebaseio.com';
 
     // Parse URL Query Strings (Supports schoolId, schoolCode, cafeteria, caf, callerName, teacherName)
     const urlParams = new URLSearchParams(window.location.search);
@@ -901,65 +902,86 @@
       container.innerHTML = html;
     }
 
-    // ─── Realtime Presence Polling (온라인 엄격 판정 + 시계 오차 허용 + Firestore fallback) ───
+    // ─── Realtime Presence & SSE Streaming (Firebase Realtime Database) ───
+    let rtdbEventSource = null;
+
+    function startRtdbStream() {
+      if (rtdbEventSource) {
+        try { rtdbEventSource.close(); } catch (_) {}
+        rtdbEventSource = null;
+      }
+      try {
+        rtdbEventSource = new EventSource(`${RTDB_BASE}/eat_calls.json`);
+        rtdbEventSource.addEventListener('put', () => fetchData());
+        rtdbEventSource.addEventListener('patch', () => fetchData());
+        rtdbEventSource.onerror = () => {
+          // EventSource automatically handles reconnection
+        };
+      } catch (e) {
+        console.warn('RTDB SSE stream error:', e);
+      }
+    }
+
     async function fetchData() {
       if (!schoolCode) return;
 
       let rawList = [];
+      // 1. Firebase Realtime Database (RTDB) 실시간 데이터 직접 조회 (0 Firestore Reads)
       try {
-        const workerUrl = `https://boardest-cloud-token.jiwho.workers.dev/api/classrooms?schoolCode=${encodeURIComponent(schoolCode)}`;
-        const res = await fetch(workerUrl, { cache: 'no-store' });
-        if (res.ok) {
-          const data = await res.json();
-          rawList = data.classrooms || [];
-        }
-      } catch (e) {
-        console.warn('Worker presence lookup error:', e);
-      }
-
-      // Worker에 데이터가 없거나 실패한 경우, Firestore eat_calls 컬렉션 직접 조회 (안전망)
-      if (!rawList || rawList.length === 0) {
-        try {
-          const fsRes = await fetch(`${FIRESTORE_BASE}/eat_calls?pageSize=100`, { cache: 'no-store' });
-          if (fsRes.ok) {
-            const fsData = await fsRes.json();
-            const docs = fsData.documents || [];
+        const rtdbRes = await fetch(`${RTDB_BASE}/eat_calls.json`, { cache: 'no-store' });
+        if (rtdbRes.ok) {
+          const rtdbData = await rtdbRes.json();
+          if (rtdbData && typeof rtdbData === 'object') {
             rawList = [];
-            docs.forEach(d => {
-              const f = d.fields || {};
-              const docSchoolCode = (f.schoolCode?.stringValue || '').trim().toLowerCase();
-              const docName = d.name ? d.name.split('/').pop() : '';
+            Object.entries(rtdbData).forEach(([docName, c]) => {
+              if (!c || typeof c !== 'object') return;
+              const docSchoolCode = (c.schoolCode || '').trim().toLowerCase();
               if (docSchoolCode === schoolCode || docName.startsWith(schoolCode + '_')) {
-                const isCalled = f.called?.booleanValue || false;
+                const isCalled = c.called === true;
                 rawList.push({
                   docId: docName,
                   schoolCode: docSchoolCode,
-                  schoolName: f.schoolName?.stringValue || '',
-                  cafeteria: f.cafeteriaNum?.stringValue || '1',
-                  grade: f.grade?.integerValue || (docName.split('_')[2] || '1'),
-                  classNum: f.classNum?.integerValue || (docName.split('_')[3] || '1'),
-                  nickname: f.classNickname?.stringValue || '',
-                  lastActive: f.lastActive?.timestampValue || null,
+                  schoolName: c.schoolName || '',
+                  cafeteria: String(c.cafeteriaNum || c.cafeteria || '1'),
+                  grade: c.grade || (docName.split('_')[2] || '1'),
+                  classNum: c.classNum || (docName.split('_')[3] || '1'),
+                  nickname: c.classNickname || c.nickname || '',
+                  lastActive: c.lastActive || null,
+                  isOnline: c.isOnline !== false,
                   called: isCalled
                 });
               }
             });
           }
-        } catch (fe) {
-          console.warn('Firestore fallback lookup error:', fe);
         }
+      } catch (re) {
+        console.warn('RTDB presence lookup error:', re);
+      }
+
+      // 2. Worker / Firestore 안전망 (RTDB에 데이터가 없을 때만 폴백)
+      if (!rawList || rawList.length === 0) {
+        try {
+          const workerUrl = `https://boardest-cloud-token.jiwho.workers.dev/api/classrooms?schoolCode=${encodeURIComponent(schoolCode)}`;
+          const res = await fetch(workerUrl, { cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            rawList = data.classrooms || [];
+          }
+        } catch (_) {}
       }
 
       const nowMs = Date.now();
       onlineClassrooms = [];
       rawList.forEach(c => {
-        let isOnline = false;
+        let isOnline = c.isOnline !== false;
         if (c.lastActive) {
-          const lastMs = new Date(c.lastActive).getTime();
+          const lastMs = typeof c.lastActive === 'number' ? c.lastActive : new Date(c.lastActive).getTime();
           const diffMin = (nowMs - lastMs) / (1000 * 60);
           // 시계 오차 허용 (-5분 ~ 30분 이내 활성)
           if (!isNaN(diffMin) && diffMin >= -5 && diffMin <= 30) {
             isOnline = true;
+          } else {
+            isOnline = false;
           }
         }
 
@@ -998,7 +1020,25 @@
       const nowIso = new Date().toISOString();
       const caller = callerName || '급식지도교사';
 
-      // 1. 해당 학급 전자칠판 전용 문서 직접 업데이트 (칠판 MealCallService가 즉시 감지하여 팝업 트리거)
+      // 1. Firebase Realtime Database (RTDB) 실시간 호출 발송 (0.1초 즉시 칠판 전달!)
+      try {
+        const rtdbUrl = `${RTDB_BASE}/eat_calls/${encodeURIComponent(docId)}.json`;
+        await fetch(rtdbUrl, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            called: true,
+            lastCalledAt: nowIso,
+            calledAt: nowIso,
+            calledBy: caller,
+            message: `${grade}학년 ${classNum}반 급식실로 이동하세요`
+          })
+        });
+      } catch (re) {
+        console.error('RTDB sendCall error:', re);
+      }
+
+      // 2. 해당 학급 전자칠판 Firestore 전용 문서 업데이트 (기존 레거시 백업)
       try {
         const updateMask = 'updateMask.fieldPaths=called&updateMask.fieldPaths=lastCalledAt&updateMask.fieldPaths=calledAt&updateMask.fieldPaths=calledBy&updateMask.fieldPaths=message';
         const url = `${FIRESTORE_BASE}/eat_calls/${encodeURIComponent(docId)}?${updateMask}`;
@@ -1015,11 +1055,9 @@
             }
           })
         });
-      } catch (e) {
-        console.error('Direct classroom call error:', e);
-      }
+      } catch (_) {}
 
-      // 2. 학교 공통 브로드캐스트 문서 동기화 (기존 호환성 유지)
+      // 3. 학교 공통 브로드캐스트 문서 동기화
       try {
         const url = `${FIRESTORE_BASE}/eat_calls/${encodeURIComponent(schoolCode)}`;
         await fetch(url, {
@@ -1036,9 +1074,7 @@
             }
           })
         });
-      } catch (e) {
-        console.error('Call error:', e);
-      }
+      } catch (_) {}
     }
 
     async function cancelCall(docId) {
@@ -1046,7 +1082,21 @@
       renderClassrooms();
       showToast(`호출이 취소되었습니다.`);
 
-      // 1. 해당 학급 전자칠판 전용 문서의 called 해제
+      // 1. RTDB 호출 즉시 취소 (0.1초 동기화)
+      try {
+        const rtdbUrl = `${RTDB_BASE}/eat_calls/${encodeURIComponent(docId)}.json`;
+        await fetch(rtdbUrl, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            called: false
+          })
+        });
+      } catch (re) {
+        console.error('RTDB cancelCall error:', re);
+      }
+
+      // 2. Firestore 학급 문서 해제 (레거시)
       try {
         const updateMask = 'updateMask.fieldPaths=called';
         const url = `${FIRESTORE_BASE}/eat_calls/${encodeURIComponent(docId)}?${updateMask}`;
@@ -1059,11 +1109,9 @@
             }
           })
         });
-      } catch (e) {
-        console.error('Cancel classroom call error:', e);
-      }
+      } catch (_) {}
 
-      // 2. 학교 공통 브로드캐스트 문서 해제
+      // 3. 학교 공통 브로드캐스트 문서 해제
       try {
         const url = `${FIRESTORE_BASE}/eat_calls/${encodeURIComponent(schoolCode)}`;
         await fetch(url, {
@@ -1077,9 +1125,7 @@
             }
           })
         });
-      } catch (e) {
-        console.error('Cancel error:', e);
-      }
+      } catch (_) {}
     }
 
     async function callAllFilteredClassrooms() {
@@ -1102,7 +1148,23 @@
       const nowIso = new Date().toISOString();
       const caller = callerName || '급식지도교사';
 
-      // 1. 각 온라인 학급 문서에 각각 called: true 전송
+      // 1. RTDB로 각 온라인 학급에 즉시 called: true 병렬 발송
+      await Promise.allSettled(filtered.map(c => {
+        const rtdbUrl = `${RTDB_BASE}/eat_calls/${encodeURIComponent(c.docId)}.json`;
+        return fetch(rtdbUrl, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            called: true,
+            lastCalledAt: nowIso,
+            calledAt: nowIso,
+            calledBy: caller,
+            message: `${c.grade}학년 ${c.classNum}반 급식실로 이동하세요`
+          })
+        });
+      }));
+
+      // 2. Firestore 동기화 (레거시)
       await Promise.allSettled(filtered.map(c => {
         const updateMask = 'updateMask.fieldPaths=called&updateMask.fieldPaths=lastCalledAt&updateMask.fieldPaths=calledAt&updateMask.fieldPaths=calledBy&updateMask.fieldPaths=message';
         const url = `${FIRESTORE_BASE}/eat_calls/${encodeURIComponent(c.docId)}?${updateMask}`;
@@ -1121,7 +1183,7 @@
         });
       }));
 
-      // 2. 학교 공통 브로드캐스트 문서 동기화
+      // 3. 학교 공통 브로드캐스트 문서 동기화
       try {
         const url = `${FIRESTORE_BASE}/eat_calls/${encodeURIComponent(schoolCode)}`;
         await fetch(url, {
@@ -1137,9 +1199,7 @@
             }
           })
         });
-      } catch (e) {
-        console.error('All call error:', e);
-      }
+      } catch (_) {}
     }
 
     // ─── Neis Meal Menu API ───
@@ -1209,6 +1269,7 @@
     updateHeaderInfo();
     renderCafeteriaChips();
     openEntryModal(true); // ★ 무조건 학교 ID, 급식실, 교사명 확인 모달 노출!
+    startRtdbStream();    // ★ Firebase Realtime Database 실시간 SSE 스트림 가동
     setInterval(fetchData, 10000);
   </script>
 </body>

@@ -1,0 +1,11 @@
+{
+  "rules": {
+    "eat_calls": {
+      ".read": true,
+      ".write": true,
+      "$doc_id": {
+        ".indexOn": ["schoolCode", "cafeteriaNum", "isOnline", "lastActive"]
+      }
+    }
+  }
+}

@@ -948,6 +948,21 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
         ).timeout(const Duration(seconds: 5));
       }
 
+      // RTDB 실시간 전송 (0.1초 즉시 전달)
+      try {
+        final rtdbUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/$docId.json';
+        await http.patch(
+          Uri.parse(rtdbUrl),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'called': true,
+            'calledBy': _teacherName.trim().endsWith('선생님') ? _teacherName.trim() : '$_teacherName 선생님',
+            'calledAt': DateTime.now().toIso8601String(),
+            'message': '$grade학년 $classNum반 급식실로 이동하세요 ($label)',
+          }),
+        ).timeout(const Duration(seconds: 4));
+      } catch (_) {}
+
       setState(() {
         _mealCallStatus = '🎉 $grade학년 $classNum반 급식 호출 신호가 전송되었습니다!';
       });
@@ -984,6 +999,16 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
       );
+
+      // RTDB 호출 취소
+      try {
+        final rtdbUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/$docId.json';
+        await http.patch(
+          Uri.parse(rtdbUrl),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'called': false}),
+        ).timeout(const Duration(seconds: 4));
+      } catch (_) {}
 
       _fetchOnlineClassrooms();
     } catch (_) {}
@@ -1072,6 +1097,20 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
             ).timeout(const Duration(seconds: 4));
             successCount++;
           }
+
+          // RTDB 실시간 쪽지 전송 (0.1초 즉시 전달)
+          try {
+            final rtdbUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/$docId.json';
+            await http.patch(
+              Uri.parse(rtdbUrl),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'message': msg,
+                'messageFrom': senderTitle,
+                'messageSentAt': nowIso,
+              }),
+            ).timeout(const Duration(seconds: 4));
+          } catch (_) {}
         } catch (_) {}
       }
 
