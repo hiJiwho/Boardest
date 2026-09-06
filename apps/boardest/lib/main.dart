@@ -11,6 +11,7 @@ import 'package:boardest/services/fcm_token_service.dart';
 import 'package:boardest/services/comcigan_service.dart';
 import 'models/school.dart';
 import 'models/app_settings.dart';
+import 'package:universal_io/io.dart';
 import 'services/app_paths.dart';
 import 'services/storage_service.dart';
 import 'services/bst_save_service.dart';
@@ -172,7 +173,7 @@ void main(List<String> args) async {
     if (currentUser == null) {
       debugPrint('[Boardest Startup] Not logged in. Purging sandbox data and prompting login...');
       try {
-        final tempDir = Directory(AppPaths.bstCldTempRootSync);
+        final tempDir = Directory(AppPaths.bstCldTempDirSync);
         if (tempDir.existsSync()) {
           tempDir.deleteSync(recursive: true);
           tempDir.createSync(recursive: true);

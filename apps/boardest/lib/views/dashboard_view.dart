@@ -5442,6 +5442,41 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
+  void _showMealInfoDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161F2E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: const Color(0xFF00F5D4).withValues(alpha: 0.3)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.restaurant_rounded, color: Color(0xFF00F5D4)),
+            const SizedBox(width: 8),
+            Text(
+              '오늘의 급식 식단',
+              style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            _mealInfo.isNotEmpty ? _mealInfo : '급식 정보가 없습니다.',
+            style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 15, height: 1.6),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('확인', style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// [신규] Cloud 연결 시 1:3 좁은 폭을 위한 세로형 지금 수업 카드 (상단 교과서, 하단 과목명)
   Widget _buildVerticalPptSubjectCard(List<Lesson> todayLessons, double scale) {
     Lesson? liveLesson = _currentLesson;
