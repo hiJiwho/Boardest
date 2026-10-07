@@ -64,8 +64,8 @@ class UpdateService {
   static const String githubRepoUrl = 'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String githubReleasesListUrl = 'https://api.github.com/repos/hiJiwho/Boardest/releases';
   static const String verificationServerUrl = 'https://boardest-update-work.firebaseapp.com';
-  static const String appInstallerManifestUrl = 'https://download-boardest.web.app/bst-teacher.appinstaller';
-  static const String appInstallerBetaManifestUrl = 'https://download-boardest.web.app/bst-teacher-beta.appinstaller';
+  static const String appInstallerManifestUrl = 'https://bst-installer.web.app/bst-teacher.appinstaller';
+  static const String appInstallerBetaManifestUrl = 'https://bst-installer.web.app/bst-teacher-beta.appinstaller';
 
   // 중복 동시 업데이트 체크 방지 플래그
   static bool _isChecking = false;
@@ -349,7 +349,7 @@ try {
   }
 }
 
-if (-\$updateSuccess) {
+if (-not \$updateSuccess) {
   try {
     \$tempAppx = Join-Path \$env:TEMP 'bst_teacher_update.appx'
     Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx' -OutFile \$tempAppx -UseBasicParsing

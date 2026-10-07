@@ -72,43 +72,43 @@ function Generate-AppInstallerXml([string]$Uri, [string]$PkgName, [string]$PkgUr
 }
 
 # 2.1 boardest.appinstaller & bst.appinstaller (Normal)
-$boardestAppinstaller = Generate-AppInstallerXml "https://download-boardest.web.app/boardest.appinstaller" "jiwho.boardest.bst" "https://download-boardest.web.app/boardest.appx" $AppVersion
+$boardestAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/boardest.appinstaller" "jiwho.boardest.bst" "https://bst-installer.web.app/boardest.appx" $AppVersion
 $boardestAppinstallerPath = Join-Path $AppxOutDir "boardest.appinstaller"
 [System.IO.File]::WriteAllText($boardestAppinstallerPath, $boardestAppinstaller, $utf8NoBom)
 
-$bstAppinstaller = Generate-AppInstallerXml "https://download-boardest.web.app/bst.appinstaller" "jiwho.boardest.bst" "https://download-boardest.web.app/boardest.appx" $AppVersion
+$bstAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/bst.appinstaller" "jiwho.boardest.bst" "https://bst-installer.web.app/boardest.appx" $AppVersion
 $bstAppinstallerPath = Join-Path $AppxOutDir "bst.appinstaller"
 [System.IO.File]::WriteAllText($bstAppinstallerPath, $bstAppinstaller, $utf8NoBom)
 Write-Host "Created: boardest.appinstaller and bst.appinstaller" -ForegroundColor Green
 
 # 2.1-B boardest-beta.appinstaller & bst-beta.appinstaller (Beta)
-$boardestBetaAppinstaller = Generate-AppInstallerXml "https://download-boardest.web.app/boardest-beta.appinstaller" "jiwho.boardest.bst.beta" "https://download-boardest.web.app/boardest-beta.appx" $AppVersion
+$boardestBetaAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/boardest-beta.appinstaller" "jiwho.boardest.bst.beta" "https://bst-installer.web.app/boardest-beta.appx" $AppVersion
 $boardestBetaAppinstallerPath = Join-Path $AppxOutDir "boardest-beta.appinstaller"
 [System.IO.File]::WriteAllText($boardestBetaAppinstallerPath, $boardestBetaAppinstaller, $utf8NoBom)
 
-$bstBetaAppinstaller = Generate-AppInstallerXml "https://download-boardest.web.app/bst-beta.appinstaller" "jiwho.boardest.bst.beta" "https://download-boardest.web.app/boardest-beta.appx" $AppVersion
+$bstBetaAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/bst-beta.appinstaller" "jiwho.boardest.bst.beta" "https://bst-installer.web.app/boardest-beta.appx" $AppVersion
 $bstBetaAppinstallerPath = Join-Path $AppxOutDir "bst-beta.appinstaller"
 [System.IO.File]::WriteAllText($bstBetaAppinstallerPath, $bstBetaAppinstaller, $utf8NoBom)
 Write-Host "Created: boardest-beta.appinstaller and bst-beta.appinstaller" -ForegroundColor Green
 
 # 2.2 bst-teacher.appinstaller & teacher.appinstaller (Normal)
-$teacherAppinstaller = Generate-AppInstallerXml "https://download-boardest.web.app/bst-teacher.appinstaller" "jiwho.boardest.teacher" "https://download-boardest.web.app/bst-teacher.appx" $AppVersion
+$teacherAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/bst-teacher.appinstaller" "jiwho.boardest.teacher" "https://bst-installer.web.app/bst-teacher.appx" $AppVersion
 $teacherAppinstallerPath = Join-Path $AppxOutDir "bst-teacher.appinstaller"
 [System.IO.File]::WriteAllText($teacherAppinstallerPath, $teacherAppinstaller, $utf8NoBom)
 
-$teacherAliasAppinstaller = Generate-AppInstallerXml "https://download-boardest.web.app/teacher.appinstaller" "jiwho.boardest.teacher" "https://download-boardest.web.app/bst-teacher.appx" $AppVersion
+$teacherAliasAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/teacher.appinstaller" "jiwho.boardest.teacher" "https://bst-installer.web.app/bst-teacher.appx" $AppVersion
 $teacherAliasAppinstallerPath = Join-Path $AppxOutDir "teacher.appinstaller"
 [System.IO.File]::WriteAllText($teacherAliasAppinstallerPath, $teacherAliasAppinstaller, $utf8NoBom)
 Write-Host "Created: bst-teacher.appinstaller and teacher.appinstaller" -ForegroundColor Green
 
 # 2.2-B bst-teacher-beta.appinstaller (Beta)
-$teacherBetaAppinstaller = Generate-AppInstallerXml "https://download-boardest.web.app/bst-teacher-beta.appinstaller" "jiwho.boardest.teacher.beta" "https://download-boardest.web.app/bst-teacher-beta.appx" $AppVersion
+$teacherBetaAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/bst-teacher-beta.appinstaller" "jiwho.boardest.teacher.beta" "https://bst-installer.web.app/bst-teacher-beta.appx" $AppVersion
 $teacherBetaAppinstallerPath = Join-Path $AppxOutDir "bst-teacher-beta.appinstaller"
 [System.IO.File]::WriteAllText($teacherBetaAppinstallerPath, $teacherBetaAppinstaller, $utf8NoBom)
 Write-Host "Created: bst-teacher-beta.appinstaller" -ForegroundColor Green
 
 # 2.3 bst-overlay-panser.appinstaller
-$panserAppinstaller = Generate-AppInstallerXml "https://download-boardest.web.app/bst-overlay-panser.appinstaller" "jiwho.boardest.plugin.overlaypanser" "https://download-boardest.web.app/bst-overlay-panser.appx" $AppVersion
+$panserAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/bst-overlay-panser.appinstaller" "jiwho.boardest.plugin.overlaypanser" "https://bst-installer.web.app/bst-overlay-panser.appx" $AppVersion
 $panserAppinstallerPath = Join-Path $AppxOutDir "bst-overlay-panser.appinstaller"
 [System.IO.File]::WriteAllText($panserAppinstallerPath, $panserAppinstaller, $utf8NoBom)
 Write-Host "Created: bst-overlay-panser.appinstaller" -ForegroundColor Green
@@ -275,7 +275,15 @@ if (Test-Path $DownloadWebDir) {
     Copy-Item $teacherAliasAppinstallerPath (Join-Path $DownloadWebDir "teacher.appinstaller") -Force
     Copy-Item $teacherBetaAppinstallerPath (Join-Path $DownloadWebDir "bst-teacher-beta.appinstaller") -Force
     Copy-Item $panserAppinstallerPath (Join-Path $DownloadWebDir "bst-overlay-panser.appinstaller") -Force
-    Write-Host "-> Synchronized all manifests to infra/download_web" -ForegroundColor Green
+
+    # Copy actual .appx packages and cert for direct web downloading
+    Copy-Item (Join-Path $AppxOutDir "boardest.appx") (Join-Path $DownloadWebDir "boardest.appx") -Force
+    Copy-Item (Join-Path $AppxOutDir "boardest-beta.appx") (Join-Path $DownloadWebDir "boardest-beta.appx") -Force
+    Copy-Item (Join-Path $AppxOutDir "bst-teacher.appx") (Join-Path $DownloadWebDir "bst-teacher.appx") -Force
+    Copy-Item (Join-Path $AppxOutDir "bst-teacher-beta.appx") (Join-Path $DownloadWebDir "bst-teacher-beta.appx") -Force
+    Copy-Item (Join-Path $AppxOutDir "bst-overlay-panser.appx") (Join-Path $DownloadWebDir "bst-overlay-panser.appx") -Force
+    Copy-Item (Join-Path $AppxOutDir "BoardestCert.cer") (Join-Path $DownloadWebDir "BoardestCert.cer") -Force
+    Write-Host "-> Synchronized all manifests and appx packages to infra/download_web" -ForegroundColor Green
 }
 
 if (Test-Path $WelcomeWebDir) {

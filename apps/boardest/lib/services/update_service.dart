@@ -44,8 +44,8 @@ class UpdateService {
 
   static const String repoOwner = 'hiJiwho';
   static const String repoName = 'Boardest';
-  static const String appInstallerManifestUrl = 'https://download-boardest.web.app/boardest.appinstaller';
-  static const String appInstallerBetaManifestUrl = 'https://download-boardest.web.app/boardest-beta.appinstaller';
+  static const String appInstallerManifestUrl = 'https://bst-installer.web.app/boardest.appinstaller';
+  static const String appInstallerBetaManifestUrl = 'https://bst-installer.web.app/boardest-beta.appinstaller';
 
   // 동시 실행 방지 플래그
   static bool _isChecking = false;
@@ -357,7 +357,7 @@ try {
   }
 }
 
-if (-\$updateSuccess) {
+if (-not \$updateSuccess) {
   try {
     \$tempAppx = Join-Path \$env:TEMP 'boardest_update.appx'
     Invoke-WebRequest -Uri 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx' -OutFile \$tempAppx -UseBasicParsing
