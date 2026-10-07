@@ -2307,8 +2307,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             lesson.weekday == day;
       }).toList();
 
-      debugPrint('[Dashboard] _getLessonsForDay(day: $day): rawLessons=${rawLessons.length} for Grade ${_settings.selectedGrade}, Class ${_settings.selectedClass}');
-
       if (rawLessons.isEmpty) return [];
 
       int maxPeriod = 0;
