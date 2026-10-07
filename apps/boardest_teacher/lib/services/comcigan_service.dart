@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cp949_codec/cp949_codec.dart';
@@ -20,6 +21,46 @@ class TimetableResult {
     required this.lessons,
     required this.homeroomTeachers,
   });
+
+  /// 데모 교사 전용 현실적인 시간표 생성 (1학년 4반 등, 과목 랜덤)
+  static TimetableResult generateDemo(String teacherName) {
+    final effectiveName = teacherName.isNotEmpty ? teacherName : '김교사';
+    final subjects = ['국어', '수학', '영어', '과학', '사회', '역사', '도덕', '체육', '음악', '미술', '정보'];
+    final rnd = Random(effectiveName.hashCode);
+    final subject1 = subjects[rnd.nextInt(subjects.length)];
+    final subject2 = subjects[(rnd.nextInt(subjects.length) + 1) % subjects.length];
+
+    final lessons = <Lesson>[];
+    for (int day = 1; day <= 5; day++) {
+      for (int period = 1; period <= 6; period++) {
+        final isFreePeriod = ((day * 2 + period) % 3 == 0);
+        if (isFreePeriod) continue;
+
+        final grade = 1 + ((day + period) % 3);
+        final classNum = 1 + ((day * 3 + period) % 5);
+        final subj = (period % 2 == 0) ? subject1 : subject2;
+
+        lessons.add(Lesson(
+          grade: grade,
+          classNum: classNum,
+          weekday: day,
+          classTime: period,
+          teacher: effectiveName,
+          subject: subj,
+          classroom: '$grade-$classNum',
+          isChanged: false,
+        ));
+      }
+    }
+
+    return TimetableResult(
+      schoolName: 'Boardest 데모 중학교',
+      periodTimes: ['09:00', '09:50', '10:40', '11:30', '13:10', '14:00', '14:50'],
+      classCounts: {1: 5, 2: 5, 3: 5},
+      lessons: lessons,
+      homeroomTeachers: {1: {4: effectiveName}},
+    );
+  }
 
   /// 교사명 자동 매핑 (예: 3글자 "임채훈" 입력시 -> 컴시간 1~2글자 약칭 "임채", "채훈", "임" 자동 맵핑)
   String matchComciganTeacherName(String fullInputName) {

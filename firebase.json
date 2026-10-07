@@ -14,6 +14,7 @@
         "**/.*",
         "**/node_modules/**"
       ],
+      "cleanUrls": true,
       "headers": [
         {
           "source": "**",
@@ -23,6 +24,30 @@
         }
       ],
       "rewrites": [
+        { "source": "/web", "destination": "/web/index.html" },
+        { "source": "**", "destination": "/index.html" }
+      ]
+    },
+    {
+      "target": "boardest-downloads",
+      "public": "infra/downloads_hub_web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "cleanUrls": true,
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+          ]
+        }
+      ],
+      "rewrites": [
+        { "source": "/Class-Win-Guide", "destination": "/Class-Win-Guide/index.html" },
+        { "source": "/Teacher-PRO-Guide", "destination": "/Teacher-PRO-Guide/index.html" },
         { "source": "**", "destination": "/index.html" }
       ]
     },
@@ -44,7 +69,7 @@
         {
           "source": "**/*.@(wasm|js|otf|ttf|woff|woff2|png|jpg|jpeg|gif|svg|ico)",
           "headers": [
-            { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
           ]
         }
       ],
@@ -68,9 +93,12 @@
           ]
         }
       ],
+      "cleanUrls": true,
       "rewrites": [
-        { "source": "/class", "destination": "/index.html" },
-        { "source": "/teacher", "destination": "/index.html" },
+        { "source": "/class", "destination": "/class/index.html" },
+        { "source": "/class/**", "destination": "/class/index.html" },
+        { "source": "/teacher", "destination": "/teacher/index.html" },
+        { "source": "/teacher/**", "destination": "/teacher/index.html" },
         { "source": "**", "destination": "/index.html" }
       ]
     },
@@ -92,7 +120,7 @@
         {
           "source": "**/*.@(wasm|js|otf|ttf|woff|woff2|png|jpg|jpeg|gif|svg|ico)",
           "headers": [
-            { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
           ]
         }
       ],
@@ -108,8 +136,17 @@
         "**/.*",
         "**/node_modules/**"
       ],
-      "rewrites": [
-        { "source": "**", "destination": "/index.html" }
+      "redirects": [
+        {
+          "source": "/",
+          "destination": "https://boardest-downloads.web.app",
+          "type": 302
+        },
+        {
+          "source": "/:path*",
+          "destination": "https://bst-installer.web.app/:path*",
+          "type": 302
+        }
       ]
     },
     {
@@ -173,7 +210,7 @@
       ]
     },
     {
-      "target": "download-boardest",
+      "target": "bst-installer",
       "public": "infra/download_web",
       "ignore": [
         "firebase.json",
@@ -236,23 +273,13 @@
           "type": 302
         },
         {
-          "source": "/boardest.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "source": "/bst-teacher.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.apk",
           "type": 302
         },
         {
-          "source": "/teacher.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx",
-          "type": 302
-        },
-        {
-          "source": "/bst-teacher.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx",
-          "type": 302
-        },
-        {
-          "source": "/appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "source": "/teacher.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.apk",
           "type": 302
         },
         {

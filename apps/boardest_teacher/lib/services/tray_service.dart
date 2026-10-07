@@ -24,10 +24,13 @@ class TrayService {
   String _currentClassLabel = '';
 
   static String get _iconPath {
+    if (kIsWeb || !Platform.isWindows) return 'assets/app_icon.ico';
     // 실행 파일 옆에 있는 아이콘 우선, 없으면 assets 경로
-    final exeDir = File(Platform.resolvedExecutable).parent.path;
-    final ico = '$exeDir\\data\\flutter_assets\\assets\\app_icon.ico';
-    if (File(ico).existsSync()) return ico;
+    try {
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      final ico = '$exeDir\\data\\flutter_assets\\assets\\app_icon.ico';
+      if (File(ico).existsSync()) return ico;
+    } catch (_) {}
     return 'assets/app_icon.ico';
   }
 
@@ -36,7 +39,7 @@ class TrayService {
     VoidCallback? onRestore,
     VoidCallback? onQuit,
   }) async {
-    if (!Platform.isWindows) return;
+    if (kIsWeb || !Platform.isWindows) return;
     if (_initialized) return;
 
     _onRestore = onRestore;
@@ -116,7 +119,7 @@ class TrayService {
     required String periodLabel,   // 예: "3교시 진행 중"
     required String classLabel,    // 예: "2학년 3반"
   }) async {
-    if (!Platform.isWindows || !_initialized) return;
+    if (kIsWeb || !Platform.isWindows || !_initialized) return;
     if (_currentPeriodLabel == periodLabel && _currentClassLabel == classLabel) return;
 
     _currentPeriodLabel = periodLabel;
@@ -136,7 +139,7 @@ class TrayService {
 
   /// 트레이로 최소화 (창 숨기기)
   Future<void> minimizeToTray() async {
-    if (!Platform.isWindows || !_initialized) return;
+    if (kIsWeb || !Platform.isWindows || !_initialized) return;
     try {
       await _appWindow.hide();
     } catch (e) {
@@ -146,7 +149,7 @@ class TrayService {
 
   /// 창 복원
   Future<void> restoreWindow() async {
-    if (!Platform.isWindows) return;
+    if (kIsWeb || !Platform.isWindows) return;
     try {
       await _appWindow.show();
     } catch (e) {

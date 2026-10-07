@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -54,7 +55,7 @@ class _HwpOverlayViewState extends State<HwpOverlayView> {
   }
 
   Future<void> _startNativeOverlay() async {
-    if (!Platform.isWindows) {
+    if (kIsWeb || !Platform.isWindows) {
       Future.microtask(() async {
         if (!mounted) return;
         try {

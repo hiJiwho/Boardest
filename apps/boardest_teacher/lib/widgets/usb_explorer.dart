@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:path/path.dart' as p;
@@ -180,7 +181,7 @@ class _UsbExplorerState extends State<UsbExplorer> {
         return;
       }
 
-      if (Platform.isWindows) {
+      if (!kIsWeb && Platform.isWindows) {
         // Open natively with Windows shell explorer (which launches the default app associate)
         await Process.run('explorer.exe', [path]);
       }
@@ -193,7 +194,7 @@ class _UsbExplorerState extends State<UsbExplorer> {
   }
 
   Future<void> _revealInExplorer(String path) async {
-    if (Platform.isWindows) {
+    if (!kIsWeb && Platform.isWindows) {
       try {
         await Process.run('explorer.exe', ['/select,', path]);
       } catch (_) {}
@@ -423,7 +424,7 @@ class _UsbExplorerState extends State<UsbExplorer> {
                             itemBuilder: (context, index) {
                               final item = _items[index];
                               final isDir = item is Directory;
-                              final name = item.path.split(Platform.pathSeparator).last;
+                              final name = p.basename(item.path);
 
                               return InkWell(
                                 onTap: () {

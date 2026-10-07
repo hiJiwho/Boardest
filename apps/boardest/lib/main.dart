@@ -22,6 +22,7 @@ import 'views/setup_wizard_view.dart';
 import 'views/dashboard_view.dart';
 import 'services/demo_class_allocator_service.dart';
 import 'helpers/startup_helper.dart';
+import 'package:window_manager/window_manager.dart';
 
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -64,6 +65,11 @@ void main(List<String> args) async {
     debugPrint('[Pdfrx] initialization notice: $e');
   }
   if (!kIsWeb) {
+    if (Platform.isWindows) {
+      try {
+        await windowManager.ensureInitialized();
+      } catch (_) {}
+    }
     await AppPaths.init();
     await BstSaveService.instance.ensureStructure();
     NativeStartupHelper.runWindowsStartupTasks();

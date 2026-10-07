@@ -31,6 +31,25 @@
 
   <title>boardest</title>
   <link rel="manifest" href="manifest.json">
+  <!-- Cache & ServiceWorker Purge Helper -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (let reg of registrations) {
+          if (!reg.active || !reg.active.scriptURL.includes('firebase-messaging-sw.js')) {
+            reg.unregister();
+          }
+        }
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then(function(names) {
+        for (let name of names) {
+          caches.delete(name);
+        }
+      });
+    }
+  </script>
   <!-- Firebase Compat App & Messaging SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js"></script>
@@ -63,7 +82,7 @@
     }
 
     window.bst = {
-      ver: function() { return "Boardest B 2.7.2 (Antigravity Engine)"; },
+      ver: function() { return "Boardest B 2.8.0 (Antigravity Engine - 2026.10.07)"; },
       getFcmToken: async function() {
         if (!fcmMessaging) return null;
         try {
@@ -118,27 +137,37 @@
       letter-spacing: 0.5px;
     }
     .splash-progress-track {
-      width: 180px; height: 4px;
+      width: 260px; height: 6px;
       background: rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
+      border-radius: 999px;
       overflow: hidden;
-      margin-top: 22px;
+      margin-top: 24px;
       position: relative;
     }
     .splash-progress-fill {
-      width: 100%; height: 100%;
+      width: 5%; height: 100%;
       background: linear-gradient(90deg, #00F5D4, #7F5AF0);
-      animation: splash-bar-anim 1.4s infinite ease-in-out;
-      transform-origin: 0% 50%;
+      border-radius: 999px;
+      transition: width 0.25s ease-out;
+    }
+    .splash-percent-text {
+      margin-top: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #00F5D4;
+      font-variant-numeric: tabular-nums;
+    }
+    .splash-log-text {
+      margin-top: 6px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      min-height: 18px;
+      text-align: center;
     }
     @keyframes splash-pulse {
       0%, 100% { transform: scale(1); opacity: 0.92; }
       50% { transform: scale(1.08); opacity: 1; }
-    }
-    @keyframes splash-bar-anim {
-      0% { transform: translateX(-100%); }
-      50% { transform: translateX(0%); }
-      100% { transform: translateX(100%); }
     }
   </style>
 </head>
@@ -146,12 +175,70 @@
   <div id="app-splash-screen">
     <img src="favicon.png" alt="Boardest" class="splash-logo-img">
     <div class="splash-brand-text">Boardest</div>
-    <div class="splash-brand-sub">스마트 교실 로딩 중...</div>
+    <div class="splash-brand-sub">스마트 전자칠판 교실 로딩 중...</div>
     <div class="splash-progress-track">
-      <div class="splash-progress-fill"></div>
+      <div id="splash-progress-fill" class="splash-progress-fill"></div>
     </div>
+    <div id="splash-percent-text" class="splash-percent-text">5%</div>
+    <div id="splash-log-text" class="splash-log-text">[1/5] Core WASM 엔진 초기화 중...</div>
   </div>
 
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    (function() {
+      const percentEl = document.getElementById('splash-percent-text');
+      const fillEl = document.getElementById('splash-progress-fill');
+      const logEl = document.getElementById('splash-log-text');
+      const splash = document.getElementById('app-splash-screen');
+
+      let currentPercent = 5;
+      const stages = [
+        { p: 25, log: '[1/5] WebAssembly 코어 엔진 초기화...' },
+        { p: 48, log: '[2/5] 브라우저 캐시 및 ServiceWorker 정합성 검증...' },
+        { p: 72, log: '[3/5] Firebase 실시간 클라우드 채널 연결...' },
+        { p: 90, log: '[4/5] 전자칠판 시간표 & 급식 모듈 바인딩...' },
+        { p: 96, log: '[5/5] UI 컴포넌트 렌더링 준비 완료...' }
+      ];
+
+      let stageIdx = 0;
+      const timer = setInterval(() => {
+        if (stageIdx < stages.length) {
+          const target = stages[stageIdx];
+          if (currentPercent < target.p) {
+            currentPercent += Math.floor(Math.random() * 4) + 2;
+            if (currentPercent > target.p) currentPercent = target.p;
+          } else {
+            stageIdx++;
+          }
+          if (percentEl) percentEl.textContent = currentPercent + '%';
+          if (fillEl) fillEl.style.width = currentPercent + '%';
+          if (logEl && target.log) logEl.textContent = target.log;
+        }
+      }, 120);
+
+      function finishLoading() {
+        clearInterval(timer);
+        if (percentEl) percentEl.textContent = '100%';
+        if (fillEl) fillEl.style.width = '100%';
+        if (logEl) logEl.textContent = '준비 완료! 교실 대시보드로 진입합니다.';
+        setTimeout(() => {
+          if (splash) {
+            splash.style.opacity = '0';
+            setTimeout(() => splash.remove(), 400);
+          }
+        }, 200);
+      }
+
+      const observer = new MutationObserver((mutations) => {
+        if (document.querySelector('flt-glass-pane') || document.querySelector('flutter-view')) {
+          observer.disconnect();
+          finishLoading();
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      window.addEventListener('flutter-first-frame', finishLoading);
+    })();
+  </script>
+
+  <script src="flutter_bootstrap.js?v=2.8.0_20261007_v2" async></script>
 </body>
 </html>

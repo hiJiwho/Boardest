@@ -5,7 +5,7 @@ import 'dart:js' as js;
 class WebPipService {
   static dynamic _pipWindow;
 
-  static bool get isSupported => true;
+  static bool get isSupported => js.context.hasProperty('documentPictureInPicture');
 
   static Future<void> openMiniPipWindow({
     required String periodText,
@@ -19,35 +19,44 @@ class WebPipService {
     String cloudId = '12',
     int remainingSeconds = 60,
   }) async {
+    dynamic pipWin;
     try {
       final docPip = js.context['documentPictureInPicture'];
       if (docPip != null) {
-        final promise = (docPip as dynamic).requestWindow(js.JsObject.jsify({
+        final completer = Completer<dynamic>();
+        final options = js.JsObject.jsify({
           'width': 360,
           'height': 160,
-        }));
-        final pipWin = await js.context['Promise'].callMethod('resolve', [promise]);
-        if (pipWin != null) {
-          _pipWindow = pipWin;
-          final doc = (pipWin as dynamic)['document'];
-          _injectPipContent(doc, periodText, teacherClass, teacherSubject, classroomSubject, classroomTeacher, schoolName, isDark, otpCode, cloudId, remainingSeconds);
-          return;
-        }
+        });
+
+        final promise = (docPip as dynamic).callMethod('requestWindow', [options]);
+        promise.callMethod('then', [
+          js.allowInterop((win) {
+            completer.complete(win);
+          }),
+          js.allowInterop((error) {
+            completer.complete(null);
+          }),
+        ]);
+        pipWin = await completer.future.timeout(const Duration(seconds: 2), onTimeout: () => null);
       }
-    } catch (e) {
-      // Fallback to popup window
+    } catch (_) {
+      pipWin = null;
     }
 
-    final width = 360;
-    final height = 180;
-    final left = (html.window.screen?.width != null) ? html.window.screen!.width! - width - 20 : 100;
-    final top = 80;
-    final features = 'width=$width,height=$height,left=$left,top=$top,menubar=no,toolbar=no,location=no,status=no,resizable=yes';
+    // iframe 환경이거나 Document PiP가 차단된 경우 팝업 윈도우로 완벽 폴백
+    if (pipWin == null) {
+      try {
+        final popup = html.window.open('', 'boardest_pip', 'width=380,height=180,menubar=no,toolbar=no,location=no,status=no,resizable=yes');
+        pipWin = popup;
+      } catch (e) {
+        throw UnsupportedError('PiP 및 팝업 창을 열 수 없습니다: $e');
+      }
+    }
 
-    final win = js.context.callMethod('open', ['', 'boardest_mini_pip', features]);
-    if (win != null) {
-      _pipWindow = win;
-      final doc = win['document'];
+    if (pipWin != null) {
+      _pipWindow = pipWin;
+      final doc = pipWin['document'];
       _injectPipContent(doc, periodText, teacherClass, teacherSubject, classroomSubject, classroomTeacher, schoolName, isDark, otpCode, cloudId, remainingSeconds);
     }
   }

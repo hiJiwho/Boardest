@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -37,9 +38,9 @@ class _BrowserBoardViewState extends State<BrowserBoardView> {
       text: widget.initialUrl ?? _defaultUrl,
     );
 
-    if (Platform.isWindows) {
+    if (!kIsWeb && Platform.isWindows) {
       _initWindowsWebview();
-    } else if (Platform.isAndroid) {
+    } else if (!kIsWeb && Platform.isAndroid) {
       _initAndroidWebview();
     }
   }
@@ -90,9 +91,9 @@ class _BrowserBoardViewState extends State<BrowserBoardView> {
     if (url.isEmpty) return;
     if (!url.startsWith('http')) url = 'https://$url';
 
-    if (Platform.isWindows && _winWebviewController != null) {
+    if (!kIsWeb && Platform.isWindows && _winWebviewController != null) {
       _winWebviewController!.loadUrl(url);
-    } else if (Platform.isAndroid && _androidWebController != null) {
+    } else if (!kIsWeb && Platform.isAndroid && _androidWebController != null) {
       _androidWebController!.loadRequest(Uri.parse(url));
     }
   }
@@ -139,9 +140,9 @@ class _BrowserBoardViewState extends State<BrowserBoardView> {
                       color: Colors.white70,
                     ),
                     onPressed: () {
-                      if (Platform.isWindows && _winWebviewController != null) {
+                      if (!kIsWeb && Platform.isWindows && _winWebviewController != null) {
                         _winWebviewController!.reload();
-                      } else if (Platform.isAndroid &&
+                      } else if (!kIsWeb && Platform.isAndroid &&
                           _androidWebController != null) {
                         _androidWebController!.reload();
                       }
@@ -226,11 +227,12 @@ class _BrowserBoardViewState extends State<BrowserBoardView> {
   }
 
   Widget _buildWebView() {
-    if (Platform.isWindows &&
+    if (!kIsWeb &&
+        Platform.isWindows &&
         _isWebviewInitialized &&
         _winWebviewController != null) {
       return Webview(_winWebviewController!);
-    } else if (Platform.isAndroid && _androidWebController != null) {
+    } else if (!kIsWeb && Platform.isAndroid && _androidWebController != null) {
       return WebViewWidget(controller: _androidWebController!);
     } else {
       return Center(

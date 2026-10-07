@@ -6,6 +6,14 @@
       "$doc_id": {
         ".indexOn": ["schoolCode", "cafeteriaNum", "isOnline", "lastActive"]
       }
+    },
+    "demo_active_devices": {
+      ".read": true,
+      ".write": true
+    },
+    "meal_votes": {
+      ".read": true,
+      ".write": true
     }
   }
 }

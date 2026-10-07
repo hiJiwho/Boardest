@@ -312,4 +312,17 @@ if (-not $SkipApk) {
     Write-Host "`n[6/6] Skipping Android APK build (-SkipApk specified)..." -ForegroundColor Yellow
 }
 
-Write-Host "`n=== All AppX Packages, APK and AppInstaller files built and signed successfully! ===" -ForegroundColor Cyan
+# 8. Create ZIP distributions for Windows
+Write-Host "`n[7/7] Creating Windows standalone ZIP archives..." -ForegroundColor Yellow
+if (Test-Path $BoardestReleaseDir) {
+    $BoardestZip = Join-Path $AppxOutDir "boardest_windows.zip"
+    Compress-Archive -Path "$BoardestReleaseDir\*" -DestinationPath $BoardestZip -Force
+    Write-Host "-> Created boardest_windows.zip" -ForegroundColor Green
+}
+if (Test-Path $TeacherReleaseDir) {
+    $TeacherZip = Join-Path $AppxOutDir "boardest_teacher_windows.zip"
+    Compress-Archive -Path "$TeacherReleaseDir\*" -DestinationPath $TeacherZip -Force
+    Write-Host "-> Created boardest_teacher_windows.zip" -ForegroundColor Green
+}
+
+Write-Host "`n=== All AppX Packages, APK, ZIP and AppInstaller files built and signed successfully! ===" -ForegroundColor Cyan

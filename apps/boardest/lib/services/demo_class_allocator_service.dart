@@ -91,8 +91,7 @@ class DemoClassAllocatorService {
       classNickname: _assignedClassId,
       isSetupComplete: true,
     );
-
-    await StorageService().saveSettings(newSettings);
+    // 데모 설정은 메모리 상에서만 유지하여 실제 학교 설정이 덮어써지지 않도록 보호
     return newSettings;
   }
 

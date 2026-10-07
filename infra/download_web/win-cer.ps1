@@ -1,6 +1,6 @@
-# ==============================================================================
+﻿# ==============================================================================
 # Boardest 영구 인증서(2999년 만료) 원클릭 자동 설치 스크립트
-# 실행: irm https://download-boardest.web.app/win-cer.ps1 | iex
+# 실행: irm https://bst-installer.web.app/win-cer.ps1 | iex
 # ==============================================================================
 
 $ErrorActionPreference = "Continue"
@@ -13,7 +13,7 @@ if (-not $isAdmin) {
     Write-Host "[Boardest Installer] 관리자 권한이 필요합니다." -ForegroundColor Yellow
     Write-Host "UAC 관리자 승격 창이 뜨면 '예'를 눌러주세요..." -ForegroundColor Cyan
     Write-Host ""
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"irm https://download-boardest.web.app/win-cer.ps1 | iex`"" -Verb RunAs
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"irm https://bst-installer.web.app/win-cer.ps1 | iex`"" -Verb RunAs
     exit 0
 }
 
@@ -32,8 +32,8 @@ $downloadSuccess = $false
 Write-Host "[1/3] 최신 Boardest 영구 인증서 다운로드 중..." -ForegroundColor Yellow
 
 $sources = @(
-    "https://download-boardest.web.app/BoardestCert.cer",
-    "https://welcome-to-boardest.web.app/BoardestCert.cer",
+    "https://bst-installer.web.app/BoardestCert.cer",
+    "https://bst-installer.web.app/BoardestCert.cer",
     "https://github.com/hiJiwho/Boardest/releases/latest/download/BoardestCert.cer"
 )
 
@@ -105,3 +105,4 @@ if (Test-Path $tempCerPath) {
 Write-Host "인증서 설치가 완료되었습니다! 이제 웹사이트에서 원하는 앱을 설치하세요." -ForegroundColor Cyan
 Write-Host "창을 닫으려면 엔터 키를 누르세요..." -ForegroundColor DarkGray
 Read-Host
+

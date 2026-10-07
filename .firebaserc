@@ -14,9 +14,6 @@
         "boardest-demo": [
           "boardest-demo"
         ],
-        "bst-cld": [
-          "bst-cld"
-        ],
         "boardest-teacher": [
           "boardest-teacher"
         ],
@@ -32,8 +29,11 @@
         "boardest-eat": [
           "boardest-eat"
         ],
-        "download-boardest": [
-          "download-boardest"
+        "boardest-downloads": [
+          "boardest-downloads"
+        ],
+        "bst-installer": [
+          "bst-installer"
         ]
       }
     },

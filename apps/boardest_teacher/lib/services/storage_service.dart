@@ -298,35 +298,39 @@ class StorageService {
     final jsonStr = json.encode(configs);
     await prefs.setString(_keyFolderSyncConfigs, jsonStr);
 
-    try {
-      final configJson = const JsonEncoder.withIndent('  ').convert(configs);
-      final appDataFile = File(p.join(AppPaths.dataRootSync, 'config', 'sync_configs.json'));
-      await appDataFile.parent.create(recursive: true);
-      await appDataFile.writeAsString(configJson);
+    if (!kIsWeb) {
+      try {
+        final configJson = const JsonEncoder.withIndent('  ').convert(configs);
+        final appDataFile = File(p.join(AppPaths.dataRootSync, 'config', 'sync_configs.json'));
+        await appDataFile.parent.create(recursive: true);
+        await appDataFile.writeAsString(configJson);
 
-      final exeDir = File(Platform.resolvedExecutable).parent.path;
-      final exeFile = File(p.join(exeDir, 'sync_configs.json'));
-      await exeFile.writeAsString(configJson);
-    } catch (_) {}
+        final exeDir = File(Platform.resolvedExecutable).parent.path;
+        final exeFile = File(p.join(exeDir, 'sync_configs.json'));
+        await exeFile.writeAsString(configJson);
+      } catch (_) {}
+    }
   }
 
   Future<List<Map<String, String>>> getSyncConfigs() async {
     // Try to load from json file first (ensures synchronization with external processes)
-    try {
-      final exeDir = File(Platform.resolvedExecutable).parent.path;
-      final exeFile = File(p.join(exeDir, 'sync_configs.json'));
-      if (await exeFile.exists()) {
-        final content = await exeFile.readAsString();
-        final decoded = json.decode(content) as List<dynamic>;
-        return decoded.map((e) => (e as Map).map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''))).toList();
-      }
-      final appDataFile = File(p.join(AppPaths.dataRootSync, 'config', 'sync_configs.json'));
-      if (await appDataFile.exists()) {
-        final content = await appDataFile.readAsString();
-        final decoded = json.decode(content) as List<dynamic>;
-        return decoded.map((e) => (e as Map).map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''))).toList();
-      }
-    } catch (_) {}
+    if (!kIsWeb) {
+      try {
+        final exeDir = File(Platform.resolvedExecutable).parent.path;
+        final exeFile = File(p.join(exeDir, 'sync_configs.json'));
+        if (await exeFile.exists()) {
+          final content = await exeFile.readAsString();
+          final decoded = json.decode(content) as List<dynamic>;
+          return decoded.map((e) => (e as Map).map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''))).toList();
+        }
+        final appDataFile = File(p.join(AppPaths.dataRootSync, 'config', 'sync_configs.json'));
+        if (await appDataFile.exists()) {
+          final content = await appDataFile.readAsString();
+          final decoded = json.decode(content) as List<dynamic>;
+          return decoded.map((e) => (e as Map).map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''))).toList();
+        }
+      } catch (_) {}
+    }
 
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString(_keyFolderSyncConfigs);

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'storage_service.dart';
 
 /// Boardest USB 형식 서비스
@@ -12,19 +13,20 @@ class UsbFormatService {
   /// USB 루트에서 현재 포맷 타입을 읽어옴
   /// 반환값: 'Plus' | 'Pro'
   static Future<String> readCurrentType(String usbRoot) async {
+    if (kIsWeb) return 'Plus';
     final normalized = _normalizePath(usbRoot);
     final jsonFile = File('$normalized$_configFileName');
 
     if (!jsonFile.existsSync()) return 'Plus';
 
     try {
-      if (Platform.isWindows) {
+      if (!kIsWeb && Platform.isWindows) {
         await _runAttrib('-h', jsonFile.path);
       }
       final content = jsonFile.readAsStringSync();
       final config = jsonDecode(content) as Map<String, dynamic>;
       final t = config['type'] as String? ?? '';
-      if (Platform.isWindows) {
+      if (!kIsWeb && Platform.isWindows) {
         await _runAttrib('+h', jsonFile.path);
       }
       if (t == 'Lite') return 'Pro';
@@ -38,6 +40,7 @@ class UsbFormatService {
   /// [usbRoot]: USB 루트 경로 (ex. "E:\\")
   /// [type]: 'Plus' | 'Pro'
   static Future<void> applyFormat(String usbRoot, String type) async {
+    if (kIsWeb) return;
     final normalized = _normalizePath(usbRoot);
     final jsonPath = '$normalized$_configFileName';
     final jsonFile = File(jsonPath);
@@ -109,7 +112,7 @@ class UsbFormatService {
 
   /// Windows attrib 명령 실행
   static Future<void> _runAttrib(String flags, String path, {bool recursive = false}) async {
-    if (!Platform.isWindows) return;
+    if (kIsWeb || !Platform.isWindows) return;
     try {
       final args = ['attrib', flags, '"$path"'];
       if (recursive) args.addAll(['/s', '/d']);
@@ -124,12 +127,14 @@ class UsbFormatService {
 
   /// USB 내 /bst 폴더가 존재하는지 확인 (구버전 호환)
   static bool hasBstFolder(String usbRoot) {
+    if (kIsWeb) return false;
     final normalized = _normalizePath(usbRoot);
     return Directory('$normalized$_bstFolderName').existsSync();
   }
 
   /// USB 내 /bst-old 폴더가 존재하는지 확인
   static bool hasBstOldFolder(String usbRoot) {
+    if (kIsWeb) return false;
     final normalized = _normalizePath(usbRoot);
     return Directory('$normalized$_bstOldFolderName').existsSync();
   }

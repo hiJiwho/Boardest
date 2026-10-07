@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 import '../models/meal_models.dart';
 
 class NeisService {
@@ -50,7 +51,7 @@ class NeisService {
 
   /// Fetches lunch meal menu as structured MealDayInfo with allergy annotations
   Future<MealDayInfo> fetchMealDayInfo(String schoolName, DateTime date) async {
-    if (schoolName == 'Demo' || schoolName.toLowerCase() == 'demo') {
+    if (AppConfig.isDemoMode || schoolName == 'Demo' || schoolName.toLowerCase().contains('demo') || schoolName.contains('데모')) {
       return MealDayInfo.generateDemo(date);
     }
 
@@ -102,7 +103,7 @@ class NeisService {
 
   /// Fetches lunch meals for an entire month
   Future<Map<int, MealDayInfo>> fetchMonthMeals(String schoolName, int year, int month) async {
-    if (schoolName == 'Demo' || schoolName.toLowerCase() == 'demo') {
+    if (AppConfig.isDemoMode || schoolName == 'Demo' || schoolName.toLowerCase().contains('demo') || schoolName.contains('데모')) {
       final Map<int, MealDayInfo> map = {};
       final daysInMonth = DateTime(year, month + 1, 0).day;
       for (int d = 1; d <= daysInMonth; d++) {

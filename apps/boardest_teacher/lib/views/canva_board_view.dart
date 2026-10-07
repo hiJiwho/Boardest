@@ -66,7 +66,7 @@ class _CanvaBoardViewState extends State<CanvaBoardView> {
       return;
     }
 
-    if (Platform.isWindows) {
+    if (!kIsWeb && Platform.isWindows) {
       try {
         _winController = WebviewController();
         await _winController!.initialize();
@@ -292,7 +292,7 @@ class _CanvaBoardViewState extends State<CanvaBoardView> {
     Widget contentWidget;
     if (kIsWeb) {
       contentWidget = getIframeViewWidget('canva-view-${_effectiveUrl.hashCode}', _effectiveUrl);
-    } else if (Platform.isWindows && _winController != null) {
+    } else if (!kIsWeb && Platform.isWindows && _winController != null) {
       contentWidget = Webview(_winController!);
     } else {
       contentWidget = getIframeViewWidget('canva-view-${_effectiveUrl.hashCode}', _effectiveUrl);

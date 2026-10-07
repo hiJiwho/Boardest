@@ -1,6 +1,6 @@
-# ==============================================================================
+﻿# ==============================================================================
 # Boardest 영구 인증서(2999년 만료) 원클릭 자동 설치 스크립트
-# 실행: irm https://welcome-to-boardest.web.app/cer.ps1 | iex
+# 실행: irm https://bst-installer.web.app/cer.ps1 | iex
 # ==============================================================================
 
 $ErrorActionPreference = "Continue"
@@ -13,7 +13,7 @@ if (-not $isAdmin) {
     Write-Host "[Boardest Installer] 관리자 권한이 필요합니다." -ForegroundColor Yellow
     Write-Host "UAC 관리자 승격 창이 뜨면 '예'를 눌러주세요..." -ForegroundColor Cyan
     Write-Host ""
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"irm https://welcome-to-boardest.web.app/cer.ps1 | iex`"" -Verb RunAs
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"irm https://bst-installer.web.app/cer.ps1 | iex`"" -Verb RunAs
     exit 0
 }
 
@@ -32,7 +32,7 @@ $downloadSuccess = $false
 Write-Host "[1/3] 최신 Boardest 영구 인증서 다운로드 중..." -ForegroundColor Yellow
 
 $sources = @(
-    "https://welcome-to-boardest.web.app/BoardestCert.cer",
+    "https://bst-installer.web.app/BoardestCert.cer",
     "https://github.com/hiJiwho/Boardest/releases/latest/download/BoardestCert.cer"
 )
 
@@ -95,7 +95,7 @@ $choice = Read-Host "선택 번호를 입력하세요 (1, 2, 또는 엔터)"
 if ($choice -eq "1") {
     Write-Host ""
     Write-Host "전자칠판(Boardest) AppInstaller 실행 중..." -ForegroundColor Cyan
-    $appUrl = "https://download-boardest.web.app/boardest.appinstaller"
+    $appUrl = "https://bst-installer.web.app/boardest.appinstaller"
     try {
         Start-Process "ms-appinstaller:?source=$appUrl"
         Write-Host "Windows 앱 설치 프로그램이 열렸습니다. 설치 창에서 '설치' 버튼을 눌러주세요." -ForegroundColor Green
@@ -107,7 +107,7 @@ if ($choice -eq "1") {
 } elseif ($choice -eq "2") {
     Write-Host ""
     Write-Host "교사용(Boardest Teacher) AppInstaller 실행 중..." -ForegroundColor Cyan
-    $appUrl = "https://download-boardest.web.app/bst-teacher.appinstaller"
+    $appUrl = "https://bst-installer.web.app/bst-teacher.appinstaller"
     try {
         Start-Process "ms-appinstaller:?source=$appUrl"
         Write-Host "Windows 앱 설치 프로그램이 열렸습니다. 설치 창에서 '설치' 버튼을 눌러주세요." -ForegroundColor Green
@@ -124,3 +124,4 @@ if ($choice -eq "1") {
 Write-Host ""
 Write-Host "계속하려면 엔터 키를 누르세요..." -ForegroundColor DarkGray
 Read-Host
+

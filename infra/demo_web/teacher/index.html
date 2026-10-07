@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Boardest Teacher — 가상 교사용 도구 체험관</title>
+  <link rel="icon" type="image/png" href="https://boardest-teacher.web.app/favicon.png">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #000;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .demo-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 34px;
+      background: rgba(13, 17, 23, 0.92);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      color: #94A1B2;
+      font-size: 12px;
+      z-index: 99999;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      transition: transform 0.3s ease;
+    }
+    .demo-bar.hidden {
+      transform: translateY(-100%);
+    }
+    .demo-pill {
+      background: rgba(127, 90, 240, 0.2);
+      color: #B8A2FF;
+      border: 1px solid rgba(127, 90, 240, 0.4);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 11px;
+    }
+    .demo-nav-link {
+      color: #00BAF2;
+      text-decoration: none;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+    .demo-nav-link:hover {
+      text-decoration: underline;
+    }
+    .toggle-bar-btn {
+      position: fixed;
+      top: 4px;
+      right: 12px;
+      z-index: 100000;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #FFF;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    iframe {
+      width: 100vw;
+      height: calc(100vh - 34px);
+      margin-top: 34px;
+      border: none;
+      display: block;
+    }
+    body.bar-collapsed iframe {
+      height: 100vh;
+      margin-top: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-bar" id="demoBar">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span class="demo-pill">DEMO</span>
+      <span style="color: #FFF; font-weight: 600;">Boardest Teacher (가상 교사용 도구)</span>
+      <span>• 가상 교사 계정 또는 Google 로그인(시연용) 지원</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <a href="https://boardest-demo.web.app" class="demo-nav-link">← 데모 홈</a>
+      <button class="toggle-bar-btn" onclick="toggleBar()">바 숨기기 ▲</button>
+    </div>
+  </div>
+
+  <iframe src="https://boardest-teacher.web.app?Demo=yes" allow="document-picture-in-picture; picture-in-picture; fullscreen; camera; microphone; clipboard-read; clipboard-write;" title="Boardest Teacher Demo"></iframe>
+
+  <script>
+    function toggleBar() {
+      const bar = document.getElementById('demoBar');
+      const isHidden = bar.classList.toggle('hidden');
+      document.body.classList.toggle('bar-collapsed', isHidden);
+      const btn = document.querySelector('.toggle-bar-btn');
+      if (isHidden) {
+        btn.innerText = '바 보이기 ▼';
+      } else {
+        btn.innerText = '바 숨기기 ▲';
+      }
+    }
+  </script>
+</body>
+</html>

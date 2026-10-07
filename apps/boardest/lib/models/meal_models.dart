@@ -156,10 +156,8 @@ class MealDayInfo {
     final daySeed = date.year * 10000 + date.month * 100 + date.day;
     final weekday = date.weekday;
 
-    // Weekend has no meal
-    if (weekday == 6 || weekday == 7) {
-      return MealDayInfo(date: date, dishes: [], footnotes: []);
-    }
+    // In Demo mode, always provide demo meal for evaluation even on weekends
+    final effectiveSeed = daySeed;
 
     final menuPools = [
       [

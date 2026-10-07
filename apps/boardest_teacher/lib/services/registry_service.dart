@@ -16,7 +16,7 @@ class RegistryService {
 
   /// Windows 레지스트리에 BST 전용 확장자 자동 등록 (HKCU\Software\Classes)
   Future<void> registerFileAssociations() async {
-    if (!Platform.isWindows) return;
+    if (kIsWeb || !Platform.isWindows) return;
 
     try {
       final exePath = Platform.resolvedExecutable;
@@ -62,7 +62,7 @@ class RegistryService {
 
   /// Windows 앱 설치 관리자(AppInstaller)가 매번 실행 시 GitHub/서버에 업데이트가 있는지 확인하도록 OS 설정 보장
   Future<void> ensureAppInstallerAutoUpdateSettings() async {
-    if (!Platform.isWindows) return;
+    if (kIsWeb || !Platform.isWindows) return;
     try {
       final exePath = Platform.resolvedExecutable;
       if (exePath.contains('WindowsApps')) {
@@ -80,7 +80,7 @@ class RegistryService {
 
   /// 과거 버전에서 등록되었던 탐색기 우클릭 교안/반 매핑 레지스트리 키 자동 정리
   Future<void> cleanupLegacyContextMenu() async {
-    if (!Platform.isWindows) return;
+    if (kIsWeb || !Platform.isWindows) return;
     try {
       await Process.run('reg', ['delete', r'HKCU\Software\Classes\Directory\shell\BoardestMap', '/f']);
       await Process.run('reg', ['delete', r'HKCU\Software\Classes\Drive\shell\BoardestMap', '/f']);

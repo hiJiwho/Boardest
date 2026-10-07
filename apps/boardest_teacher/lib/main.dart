@@ -98,6 +98,22 @@ void main(List<String> args) async {
     }
 
     final prefs = await SharedPreferences.getInstance();
+
+    // 일반 모드에서는 이전 데모 방문으로 남은 가짜 토큰 및 데모 계정 자동 정리 (401/404 방지)
+    if (!AppConfig.isDemoMode) {
+      final oldEmail = prefs.getString('bst_google_user_email') ?? prefs.getString('bst_user_email') ?? '';
+      final oldToken = prefs.getString('bst_cld_access_token') ?? prefs.getString('bst_google_access_token') ?? prefs.getString('bst_token') ?? '';
+      if (oldEmail.toLowerCase().contains('demo') || oldToken.startsWith('demo_token')) {
+        await prefs.remove('bst_cld_access_token');
+        await prefs.remove('bst_google_access_token');
+        await prefs.remove('bst_token');
+        await prefs.remove('bst_google_user_email');
+        await prefs.remove('bst_user_email');
+        await prefs.remove('bst_google_user_name');
+        await prefs.remove('bst_user_name');
+      }
+    }
+
     final cachedToken = prefs.getString('bst_cld_access_token') ?? prefs.getString('bst_google_access_token') ?? prefs.getString('bst_token') ?? '';
     final cachedEmail = prefs.getString('bst_google_user_email') ?? prefs.getString('bst_user_email') ?? '';
 

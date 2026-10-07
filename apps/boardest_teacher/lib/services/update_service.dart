@@ -28,11 +28,11 @@ class UpdateService {
   static final UpdateService instance = UpdateService._internal();
   UpdateService._internal();
 
-  static const String defaultVersion = '3.0.3';
+  static const String defaultVersion = '3.0.5';
 
   /// Dynamically detect installed MSIX/AppX version from WindowsApps folder, or fallback to defaultVersion
   static String get currentVersion {
-    if (Platform.isWindows) {
+    if (!kIsWeb && Platform.isWindows) {
       try {
         final exePath = Platform.resolvedExecutable;
         final match = RegExp(r'jiwho\.boardest\.(?:teacher|bst)_([0-9.]+)_', caseSensitive: false).firstMatch(exePath);
@@ -46,7 +46,7 @@ class UpdateService {
 
   /// Windows 앱 설치 관리자(AppInstaller) 설정: 앱 실행 시 OS 창 팝업 차단 (인앱 백그라운드 체크 전담)
   static Future<void> ensureNativeAppInstallerSettings({String channel = 'beta'}) async {
-    if (!Platform.isWindows) return;
+    if (kIsWeb || !Platform.isWindows) return;
     try {
       final exePath = Platform.resolvedExecutable;
       if (exePath.contains('WindowsApps')) {
@@ -126,7 +126,7 @@ class UpdateService {
     String latestVersion = '';
     String notes = '';
     final activeManifestUrl = channel == 'beta' ? appInstallerBetaManifestUrl : appInstallerManifestUrl;
-    String downloadUrl = Platform.isWindows ? activeManifestUrl : '';
+    String downloadUrl = (!kIsWeb && Platform.isWindows) ? activeManifestUrl : '';
 
     try {
       // 1. First attempt: GitHub Releases API
@@ -154,7 +154,7 @@ class UpdateService {
               notes = (data['body'] ?? '').toString();
               final List assets = data['assets'] ?? [];
 
-              if (Platform.isAndroid) {
+              if (!kIsWeb && Platform.isAndroid) {
                 for (var asset in assets) {
                   String name = asset['name'].toString().toLowerCase();
                   if (name.endsWith('.apk')) {
@@ -171,7 +171,7 @@ class UpdateService {
             notes = (data['body'] ?? '').toString();
             final List assets = data['assets'] ?? [];
 
-            if (Platform.isAndroid) {
+            if (!kIsWeb && Platform.isAndroid) {
               for (var asset in assets) {
                 String name = asset['name'].toString().toLowerCase();
                 if (name.endsWith('.apk')) {
@@ -190,7 +190,7 @@ class UpdateService {
       }
 
       // 2. Fallback attempt: Hosted AppInstaller XML manifest on Firebase Hosting (zero rate limits, cache-busting)
-      if (latestVersion.isEmpty && Platform.isWindows) {
+      if (latestVersion.isEmpty && !kIsWeb && Platform.isWindows) {
         try {
           final cacheBustedUrl = '$activeManifestUrl?t=${DateTime.now().millisecondsSinceEpoch}';
           debugPrint('[UpdateService] 🌐 Fetching manifest from $cacheBustedUrl ...');
@@ -292,7 +292,7 @@ class UpdateService {
 
       final tempDir = await getTemporaryDirectory();
       final isExe = url.toLowerCase().contains('.exe');
-      final filename = Platform.isWindows ? (isExe ? 'Boardest_Teacher_Setup_Update.exe' : 'boardest_teacher_update.zip') : 'boardest_teacher_update.apk';
+      final filename = (!kIsWeb && Platform.isWindows) ? (isExe ? 'Boardest_Teacher_Setup_Update.exe' : 'boardest_teacher_update.zip') : 'boardest_teacher_update.apk';
       final saveFile = File(p.join(tempDir.path, filename));
 
       final totalBytes = response.contentLength ?? 0;
@@ -318,6 +318,7 @@ class UpdateService {
   /// Windows AppInstaller / AppX 전용 자동 업데이트 (Setup.exe 완전 배제)
   /// 앱을 즉시 닫고(exit) PowerShell Add-AppxPackage를 통해 bst-teacher.appx를 안전 갱신 후 재실행
   Future<void> executeAppInstallerUpdate(String appInstallerUrl) async {
+    if (kIsWeb || !Platform.isWindows) return;
     try {
       final safeInstallerUrl = appInstallerUrl.isNotEmpty ? appInstallerUrl : appInstallerManifestUrl;
       debugPrint('[UpdateService] 🚀 Launching Windows AppInstaller update via PowerShell: $safeInstallerUrl');

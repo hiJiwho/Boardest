@@ -16,6 +16,7 @@ import 'package:bst_core/bst_core.dart' show PanserPluginService;
 import '../models/lesson.dart';
 import '../models/app_settings.dart';
 import '../models/school.dart';
+import '../config/app_config.dart';
 import '../services/comcigan_service.dart';
 import '../services/storage_service.dart';
 import '../services/usb_format_service.dart';
@@ -343,7 +344,15 @@ class _TeacherViewState extends State<TeacherView> {
           _settings = s;
         });
         _refreshDriveFiles();
-        if (_settings.schoolId.isNotEmpty || _settings.selectedSchool != null) {
+        if (AppConfig.isDemoMode || _settings.schoolId.toLowerCase() == 'demo' || _settings.selectedTeacher.contains('데모')) {
+          final demoResult = TimetableResult.generateDemo(_settings.selectedTeacher.isNotEmpty ? _settings.selectedTeacher : '김교사');
+          if (mounted) {
+            setState(() {
+              _timetableResult = demoResult;
+              _isLoading = false;
+            });
+          }
+        } else if (_settings.schoolId.isNotEmpty || _settings.selectedSchool != null) {
           try {
             final sId = _settings.schoolId.isNotEmpty ? _settings.schoolId : 'ydm';
             final schoolCfg = await ComciganService.fetchSchoolConfig(sId);
@@ -400,7 +409,15 @@ class _TeacherViewState extends State<TeacherView> {
         await _storageService.saveSettings(_settings);
       }
 
-      if (_settings.selectedSchool != null) {
+      if (AppConfig.isDemoMode || _settings.schoolId.toLowerCase() == 'demo' || _settings.selectedTeacher.contains('데모')) {
+        final demoResult = TimetableResult.generateDemo(_settings.selectedTeacher.isNotEmpty ? _settings.selectedTeacher : '김교사');
+        if (mounted) {
+          setState(() {
+            _timetableResult = demoResult;
+            _isLoading = false;
+          });
+        }
+      } else if (_settings.selectedSchool != null) {
         _fetchCalendarEvents();
         final rawData = await _comciganService.fetchTimetableRaw(
           resolvedCode,
@@ -1334,7 +1351,7 @@ class _TeacherViewState extends State<TeacherView> {
         channel: _settings.updateChannel,
       );
       if (updateInfo != null && updateInfo.hasUpdate && mounted) {
-        if (silent && Platform.isWindows) {
+        if (!kIsWeb && silent && Platform.isWindows) {
           debugPrint('[TeacherView] 🚀 Background update found on launch. Executing quiet updater and terminating.');
           UpdateService.instance.executeAppInstallerUpdate(updateInfo.downloadUrl);
         } else {
@@ -1358,6 +1375,15 @@ class _TeacherViewState extends State<TeacherView> {
     }
   }
   void _openSettings() async {
+    if (AppConfig.isDemoMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🔒 데모 모드에서는 설정을 변경할 수 없습니다.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     final updated = await showDialog<bool>(
       context: context,
       builder: (context) => TeacherSettingsDialog(scaleFactor: _settings.scaleFactor),
@@ -1384,7 +1410,7 @@ class _TeacherViewState extends State<TeacherView> {
       return;
     }
     try {
-      if (Platform.isWindows) {
+      if (!kIsWeb && Platform.isWindows) {
         _preMiniWindowSize = await windowManager.getSize();
         _preMiniWindowPos = await windowManager.getPosition();
         await windowManager.setSize(const Size(430, 56));
@@ -1407,7 +1433,7 @@ class _TeacherViewState extends State<TeacherView> {
       return;
     }
     try {
-      if (Platform.isWindows) {
+      if (!kIsWeb && Platform.isWindows) {
         await windowManager.setSize(_preMiniWindowSize);
         await windowManager.setPosition(_preMiniWindowPos);
         await windowManager.setAlwaysOnTop(_isAlwaysOnTop);
@@ -1423,7 +1449,7 @@ class _TeacherViewState extends State<TeacherView> {
     }
   }
 
-  void _triggerWebPip() {
+  Future<void> _triggerWebPip() async {
     if (!kIsWeb) {
       _enterMiniMode();
       return;
@@ -1469,22 +1495,34 @@ class _TeacherViewState extends State<TeacherView> {
         ? '현재 $_currentPeriod교시 ➔ 다음 ${targetPeriod}교시'
         : '다음 ${targetPeriod}교시';
 
-    WebPipService.openMiniPipWindow(
-      periodText: periodLabel,
-      teacherClass: teacherLesson.subject.isNotEmpty
-          ? '${teacherLesson.grade}학년 ${teacherLesson.classNum}반'
-          : '수업 없음',
-      teacherSubject: teacherLesson.subject.replaceAll('*', ''),
-      classroomSubject: classLesson.subject.isNotEmpty
-          ? classLesson.subject.replaceAll('*', '')
-          : '수업 없음',
-      classroomTeacher: classLesson.teacher.replaceAll('*', ''),
-      schoolName: _settings.selectedSchool?.name ?? 'Boardest Teacher',
-      isDark: true,
-      otpCode: _currentOtp,
-      cloudId: _settings.schoolId.isNotEmpty ? _settings.schoolId : 'ydm',
-      remainingSeconds: _remainingSeconds,
-    );
+    try {
+      await WebPipService.openMiniPipWindow(
+        periodText: periodLabel,
+        teacherClass: teacherLesson.subject.isNotEmpty
+            ? '${teacherLesson.grade}학년 ${teacherLesson.classNum}반'
+            : '수업 없음',
+        teacherSubject: teacherLesson.subject.replaceAll('*', ''),
+        classroomSubject: classLesson.subject.isNotEmpty
+            ? classLesson.subject.replaceAll('*', '')
+            : '수업 없음',
+        classroomTeacher: classLesson.teacher.replaceAll('*', ''),
+        schoolName: _settings.selectedSchool?.name ?? 'Boardest Teacher',
+        isDark: true,
+        otpCode: _currentOtp,
+        cloudId: _settings.schoolId.isNotEmpty ? _settings.schoolId : 'ydm',
+        remainingSeconds: _remainingSeconds,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ Document PiP 실행 안내: $e'),
+            backgroundColor: const Color(0xFFEF4565),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
   }
 
   void _openBillboardManagement() {
@@ -4084,6 +4122,15 @@ class _TeacherViewState extends State<TeacherView> {
     final color = isSelected ? const Color(0xFF2EC4B6) : _textColor54;
     return InkWell(
       onTap: () {
+        if (index == 4 && AppConfig.isDemoMode) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🔒 데모 모드에서는 설정을 변경할 수 없습니다.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          return;
+        }
         setState(() {
           _mobileTabIndex = index;
         });
@@ -4955,6 +5002,17 @@ class _TeacherViewState extends State<TeacherView> {
   VoidCallback _getToolOnTap(String id) {
     switch (id) {
       case 'cloud_settings':
+      case 'auth_management':
+        if (AppConfig.isDemoMode) {
+          return () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('🔒 데모 모드에서는 Cloud 설정을 변경할 수 없습니다.'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          };
+        }
         return _openAuthManagement;
       case 'bst_cloud':
         return _openBstCloud;
@@ -4990,8 +5048,6 @@ class _TeacherViewState extends State<TeacherView> {
         return _openBoardBookEditor;
       case 'usb_explorer':
         return _openBstCloud;
-      case 'auth_management':
-        return _openAuthManagement;
       case 'meal_call':
         return _openMealCall;
       case 'message_box':
@@ -4999,6 +5055,16 @@ class _TeacherViewState extends State<TeacherView> {
       case 'app_drawer':
         return _openAppDrawer;
       case 'settings':
+        if (AppConfig.isDemoMode) {
+          return () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('🔒 데모 모드에서는 설정을 변경할 수 없습니다.'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          };
+        }
         return _openSettings;
       default:
         return () {};
@@ -5879,6 +5945,8 @@ class _TeacherViewState extends State<TeacherView> {
     final IconData icon = _getToolIcon(id);
     final VoidCallback onTap = _getToolOnTap(id);
 
+    final isLockedInDemo = AppConfig.isDemoMode && (id == 'settings' || id == 'cloud_settings' || id == 'auth_management');
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -5886,9 +5954,9 @@ class _TeacherViewState extends State<TeacherView> {
         borderRadius: BorderRadius.circular(10 * scale),
         child: Container(
           decoration: BoxDecoration(
-            color: _cardColor,
+            color: isLockedInDemo ? _cardColor.withOpacity(0.5) : _cardColor,
             borderRadius: BorderRadius.circular(10 * scale),
-            border: Border.all(color: _borderColor),
+            border: Border.all(color: isLockedInDemo ? Colors.orange.withOpacity(0.3) : _borderColor),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -5898,25 +5966,29 @@ class _TeacherViewState extends State<TeacherView> {
                   width: 22 * scale,
                   height: 22 * scale,
                   decoration: BoxDecoration(
-                    color: accentColor.withOpacity(0.18),
+                    color: isLockedInDemo ? Colors.orange.withOpacity(0.15) : accentColor.withOpacity(0.18),
                     borderRadius: BorderRadius.circular(6 * scale),
                     border: Border.all(
-                      color: accentColor.withOpacity(0.5),
+                      color: isLockedInDemo ? Colors.orange.withOpacity(0.4) : accentColor.withOpacity(0.5),
                       width: 1,
                     ),
                   ),
                   child: Center(
-                    child: Icon(icon, color: accentColor, size: 12 * scale),
+                    child: Icon(
+                      isLockedInDemo ? Icons.lock_rounded : icon,
+                      color: isLockedInDemo ? Colors.orange : accentColor,
+                      size: 12 * scale,
+                    ),
                   ),
                 ),
               ),
               SizedBox(height: 3 * scale),
               Text(
-                name,
+                isLockedInDemo ? '$name (잠김)' : name,
                 style: GoogleFonts.notoSansKr(
                   fontSize: 8.5 * scale,
                   fontWeight: FontWeight.w600,
-                  color: _textColor54,
+                  color: isLockedInDemo ? Colors.orange.withOpacity(0.8) : _textColor54,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

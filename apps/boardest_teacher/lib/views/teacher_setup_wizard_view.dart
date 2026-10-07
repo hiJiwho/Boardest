@@ -127,18 +127,30 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
       final cafeteria = params['cafeteriaNum'] ?? '1';
 
       if (isAuthSuccess || (token != null && token.isNotEmpty) || schoolName.isNotEmpty) {
-        // 데모 모드 상호 배제 검증
-        if (AppConfig.isDemoMode) {
-          if (!email.toLowerCase().contains('demo') && schoolId.toLowerCase() != 'demo') {
+        // 데모 모드 및 일반 모드 계정 제약 검증
+        final isDemoReq = AppConfig.isDemoMode ||
+            params.containsKey('Demo') ||
+            params.containsKey('demo') ||
+            Uri.base.queryParameters.containsKey('Demo') ||
+            Uri.base.queryParameters.containsKey('demo');
+
+        if (isDemoReq) {
+          final isDemoAccount = email.toLowerCase().contains('demo') ||
+              name.toLowerCase().contains('데모') ||
+              schoolId.toLowerCase().contains('demo');
+          if (!isDemoAccount) {
             setState(() {
               _isLoading = false;
-              _errorMessage = '❌ 데모 모드에서는 일반 계정으로 로그인할 수 없습니다.\n데모 교사 계정을 이용해 주세요.';
+              _errorMessage = '❌ 데모 체험 버전에서는 데모 Google 계정만 로그인할 수 있습니다.\n(demo 계정으로 로그인해 주세요)';
             });
             await CloudDriveService.instance.logout();
             return;
           }
         } else {
-          if (email.toLowerCase().contains('demo') || schoolId.toLowerCase() == 'demo' || name.toLowerCase().contains('데모')) {
+          // 일반 모드에서는 데모 계정 사용 방지
+          if (email.toLowerCase().contains('demo') ||
+              schoolId.toLowerCase() == 'demo' ||
+              name.toLowerCase().contains('데모')) {
             setState(() {
               _isLoading = false;
               _errorMessage = '❌ 일반 버전에서는 데모 계정을 사용할 수 없습니다.\n선생님의 정식 Google 계정으로 로그인해 주세요.';
@@ -217,17 +229,24 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
 
   /// 구글 로그인 성공 후 Firestore 프로필 자동 조회
   Future<void> _onLoggedInSuccess(String email, String name) async {
-    // 데모 모드 상호 배제 검증
-    if (AppConfig.isDemoMode) {
-      if (!email.toLowerCase().contains('demo')) {
+    // 데모 모드 및 일반 모드 계정 제약 검증
+    final isDemoReq = AppConfig.isDemoMode ||
+        Uri.base.queryParameters.containsKey('Demo') ||
+        Uri.base.queryParameters.containsKey('demo');
+
+    if (isDemoReq) {
+      final isDemoAccount = email.toLowerCase().contains('demo') ||
+          name.toLowerCase().contains('데모');
+      if (!isDemoAccount) {
         setState(() {
           _isLoading = false;
-          _errorMessage = '❌ 데모 모드에서는 일반 계정으로 로그인할 수 없습니다.\n데모 교사 계정을 이용해 주세요.';
+          _errorMessage = '❌ 데모 체험 버전에서는 데모 Google 계정만 로그인할 수 있습니다.\n(demo 계정으로 로그인해 주세요)';
         });
         await CloudDriveService.instance.logout();
         return;
       }
     } else {
+      // 일반 모드에서는 데모 계정 사용 방지
       if (email.toLowerCase().contains('demo') || name.toLowerCase().contains('데모')) {
         setState(() {
           _isLoading = false;
@@ -434,10 +453,10 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
 
   /// 구글 로그인 버튼 클릭
   Future<void> _startGoogleLogin() async {
-    if (AppConfig.isDemoMode) {
-      await _loginAsDemoTeacher();
-      return;
-    }
+    final isDemo = AppConfig.isDemoMode ||
+        Uri.base.queryParameters.containsKey('Demo') ||
+        Uri.base.queryParameters.containsKey('demo');
+    final demoParam = isDemo ? '&Demo=yes' : '';
 
     setState(() {
       _isLoading = true;
@@ -447,7 +466,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
 
     if (kIsWeb) {
       // Web: OAuth 포털 리다이렉션 (/helper?web)
-      const portalUrl = 'https://boardest-teacher-oauth.web.app/helper?web';
+      final portalUrl = 'https://boardest-teacher-oauth.web.app/helper?web$demoParam';
       try {
         await launchUrl(Uri.parse(portalUrl), webOnlyWindowName: '_self');
       } catch (e) {
@@ -458,7 +477,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
       }
     } else {
       // Windows / Desktop: 외부 브라우저(Chrome)로 OAuth 포털 실행 (/helper?win) -> 127.0.0.1:1217 루프백 수신
-      const url = 'https://boardest-teacher-oauth.web.app/helper?win';
+      final url = 'https://boardest-teacher-oauth.web.app/helper?win$demoParam';
       try {
         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       } catch (e) {
@@ -768,7 +787,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                         const SizedBox(height: 8),
                         Text(
                           AppConfig.isDemoMode
-                              ? '가상 데모 환경입니다. 사전 생성된 데모 교사 계정으로 즉시 체험하세요.\n(일반 Google 계정 로그인은 차단됩니다)'
+                              ? '가상 데모 환경입니다. 데모 교사 계정으로 즉시 체험하거나,\nGoogle Drive 연동 시연을 위해 Google 계정으로 로그인할 수 있습니다.'
                               : 'Google 계정으로 로그인하면 등록된 시간표와 교안이 자동으로 동기화됩니다.',
                           style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 12.5),
                         ),
@@ -778,11 +797,26 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                             onPressed: _loginAsDemoTeacher,
                             icon: const Icon(Icons.play_arrow_rounded, color: Colors.black87),
                             label: Text(
-                              '데모 교사 계정으로 로그인',
+                              '데모 교사 계정으로 즉시 체험',
                               style: GoogleFonts.notoSansKr(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
                             ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF00F5D4),
+                              foregroundColor: Colors.black87,
+                              minimumSize: const Size(double.infinity, 48),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          ElevatedButton.icon(
+                            onPressed: _startGoogleLogin,
+                            icon: const Icon(Icons.account_circle_rounded, color: Colors.black87),
+                            label: Text(
+                              'Google 계정으로 로그인 (Drive 연동 시연)',
+                              style: GoogleFonts.notoSansKr(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
                               foregroundColor: Colors.black87,
                               minimumSize: const Size(double.infinity, 48),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

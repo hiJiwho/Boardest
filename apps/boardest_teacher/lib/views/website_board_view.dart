@@ -218,9 +218,9 @@ class _WebsiteBoardViewState extends State<WebsiteBoardView> {
     if (!mounted) return;
     if (kIsWeb) {
       setState(() => _isWebviewInitialized = true);
-    } else if (Platform.isWindows) {
+    } else if (!kIsWeb && Platform.isWindows) {
       _initWindowsWebview();
-    } else if (Platform.isAndroid) {
+    } else if (!kIsWeb && Platform.isAndroid) {
       _initAndroidWebview();
     }
   }
@@ -488,9 +488,9 @@ class _WebsiteBoardViewState extends State<WebsiteBoardView> {
     final js = next
         ? "document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight', keyCode: 39, bubbles: true})); window.history.forward();"
         : "document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowLeft', keyCode: 37, bubbles: true})); window.history.back();";
-    if (Platform.isWindows && _winWebviewController != null) {
+    if (!kIsWeb && Platform.isWindows && _winWebviewController != null) {
       _winWebviewController!.executeScript(js);
-    } else if (Platform.isAndroid && _androidWebController != null) {
+    } else if (!kIsWeb && Platform.isAndroid && _androidWebController != null) {
       _androidWebController!.runJavaScript(js);
     }
     _checkDHashAndSwitchPage();
@@ -777,11 +777,12 @@ class _WebsiteBoardViewState extends State<WebsiteBoardView> {
         _navigateToUrl();
       },
       onUrlRefresh: () {
-        if (Platform.isWindows &&
+        if (!kIsWeb &&
+            Platform.isWindows &&
             _isWebviewInitialized &&
             _winWebviewController != null) {
           _winWebviewController!.reload();
-        } else if (Platform.isAndroid && _androidWebController != null) {
+        } else if (!kIsWeb && Platform.isAndroid && _androidWebController != null) {
           _androidWebController!.reload();
         } else {
           _navigateToUrl();

@@ -15,7 +15,7 @@ class PanserPluginService {
 
   /// Check if the AppX package is installed on the system.
   static Future<bool> isInstalled() async {
-    if (!Platform.isWindows) return false;
+    if (kIsWeb || !Platform.isWindows) return false;
     try {
       final res = await Process.run('powershell.exe', [
         '-NoProfile',
@@ -32,7 +32,7 @@ class PanserPluginService {
 
   /// Get the installation directory of the AppX package.
   static Future<String?> getInstallLocation() async {
-    if (!Platform.isWindows) return null;
+    if (kIsWeb || !Platform.isWindows) return null;
     try {
       final res = await Process.run('powershell.exe', [
         '-NoProfile',
@@ -51,7 +51,7 @@ class PanserPluginService {
 
   /// Locate a specific helper executable inside the package or local app directory.
   static Future<String?> findExecutable(String exeName) async {
-    if (!Platform.isWindows) return null;
+    if (kIsWeb || !Platform.isWindows) return null;
 
     // 1. Check AppX installed package directory
     final appxDir = await getInstallLocation();
@@ -74,7 +74,7 @@ class PanserPluginService {
 
   /// Download and install the package from GitHub Releases on first launch.
   static Future<bool> installFromGithub({void Function(double progress)? onProgress}) async {
-    if (!Platform.isWindows) return false;
+    if (kIsWeb || !Platform.isWindows) return false;
 
     try {
       debugPrint('[PanserPlugin] Downloading $downloadUrl...');
@@ -147,7 +147,7 @@ class PanserPluginService {
 
   /// Check if the addon is installed on app startup; if not, automatically download and install it.
   static Future<void> checkAndAutoInstallOnStartup({void Function(String message)? onStatus}) async {
-    if (!Platform.isWindows) return;
+    if (kIsWeb || !Platform.isWindows) return;
     if (_autoInstallStarted) return;
     _autoInstallStarted = true;
 

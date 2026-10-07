@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../helpers/fullscreen_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart';
@@ -1384,8 +1385,13 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   ) async {
     try {
       final todayInfo = await _neisService.fetchMealDayInfo(schoolName, targetDate);
-      final tomorrow = targetDate.add(const Duration(days: 1));
-      final tomorrowInfo = await _neisService.fetchMealDayInfo(schoolName, tomorrow);
+      DateTime nextDate = targetDate.add(const Duration(days: 1));
+      if (nextDate.weekday == DateTime.saturday) {
+        nextDate = nextDate.add(const Duration(days: 2));
+      } else if (nextDate.weekday == DateTime.sunday) {
+        nextDate = nextDate.add(const Duration(days: 1));
+      }
+      final tomorrowInfo = await _neisService.fetchMealDayInfo(schoolName, nextDate);
 
       final prefs = await SharedPreferences.getInstance();
       final dateKey = '${targetDate.year}${targetDate.month.toString().padLeft(2, '0')}${targetDate.day.toString().padLeft(2, '0')}';
@@ -1641,15 +1647,33 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
       // 1. Fetch Timetable with Offline Cache Fallback
       try {
-        final weekOffset = _getWeekOffset(targetDate, DateTime.now());
-        final cacheKey = 'cached_timetable_${schoolCode}_$weekOffset';
-
-        try {
-          final rawData = await _comciganService.fetchTimetableRaw(
-            schoolCode,
-            weekOffset: weekOffset,
+        final isDemo = AppConfig.isDemoMode || _settings.schoolId.toLowerCase() == 'demo' || _settings.selectedSchool?.name.contains('데모') == true;
+        if (isDemo) {
+          final classKey = _settings.classNickname.isNotEmpty ? _settings.classNickname : 'Demo-class1';
+          final lessons = DemoTimetableService.getAllDemoLessons(classKey);
+          final demoResult = TimetableResult(
+            schoolName: '데모 중학교',
+            periodTimes: ['09:00', '09:50', '10:40', '11:30', '12:20', '13:50', '14:40'],
+            classCounts: {1: 10, 2: 10, 3: 10},
+            lessons: lessons,
+            homeroomTeachers: {},
           );
-          final result = _comciganService.parseTimetable(rawData);
+          if (mounted) {
+            setState(() {
+              _timetableResult = demoResult;
+            });
+            _updateLiveSchedule();
+          }
+        } else {
+          final weekOffset = _getWeekOffset(targetDate, DateTime.now());
+          final cacheKey = 'cached_timetable_${schoolCode}_$weekOffset';
+
+          try {
+            final rawData = await _comciganService.fetchTimetableRaw(
+              schoolCode,
+              weekOffset: weekOffset,
+            );
+            final result = _comciganService.parseTimetable(rawData);
 
           // Save to persistent cache
           final prefs = await SharedPreferences.getInstance();
@@ -1701,6 +1725,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               );
             }
           }
+        }
         }
       } catch (outerErr) {
         debugPrint('Fatal error in timetable section: $outerErr');
@@ -2167,8 +2192,13 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     });
     try {
       final todayInfo = await _neisService.fetchMealDayInfo(schoolName, date);
-      final tomorrow = date.add(const Duration(days: 1));
-      final tomorrowInfo = await _neisService.fetchMealDayInfo(schoolName, tomorrow);
+      DateTime nextDate = date.add(const Duration(days: 1));
+      if (nextDate.weekday == DateTime.saturday) {
+        nextDate = nextDate.add(const Duration(days: 2));
+      } else if (nextDate.weekday == DateTime.sunday) {
+        nextDate = nextDate.add(const Duration(days: 1));
+      }
+      final tomorrowInfo = await _neisService.fetchMealDayInfo(schoolName, nextDate);
       
       // Load saved highlights
       final prefs = await SharedPreferences.getInstance();
@@ -3380,6 +3410,15 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   }
 
   void _openSettingsWizard() async {
+    if (AppConfig.isDemoMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🔒 데모 모드에서는 설정을 변경할 수 없습니다.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     // 설정 메뉴 바텀 시트 (설정 / 로그아웃 / 탈퇴)
     final scale = _settings.scaleFactor;
     _pauseDashboardTimer();
@@ -5854,13 +5893,62 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
+  int _getLunchStartMinutes() {
+    try {
+      final ts = _settings.timeSettings;
+      final timeParts = ts.firstPeriodStart.split(':');
+      final firstPeriodH = int.tryParse(timeParts[0]) ?? 8;
+      final firstPeriodM = int.tryParse(timeParts.length > 1 ? timeParts[1] : '40') ?? 40;
+      int currentMinutes = firstPeriodH * 60 + firstPeriodM;
+      for (int p = 1; p <= ts.lunchAfterPeriod; p++) {
+        currentMinutes += ts.lessonDuration.toInt();
+        if (p < ts.lunchAfterPeriod) {
+          currentMinutes += ts.breakDuration.toInt();
+        }
+      }
+      return currentMinutes;
+    } catch (_) {
+      return 12 * 60; // 기본 12:00
+    }
+  }
+
+  int _getLunchEndMinutes() {
+    try {
+      final ts = _settings.timeSettings;
+      final startMin = _getLunchStartMinutes();
+      return startMin + ts.lunchDuration.toInt();
+    } catch (_) {
+      return 12 * 60 + 50; // 기본 12:50
+    }
+  }
+
   bool _isLunchTimeNow() {
     final now = _debugTimeOverride ?? DateTime.now();
     if (_currentPeriod != null && !_currentPeriod!.isClass && _currentPeriod!.label.contains('점심')) {
       return true;
     }
     final minutes = now.hour * 60 + now.minute;
-    return minutes >= (12 * 60) && minutes <= (13 * 60 + 40);
+    final start = _getLunchStartMinutes();
+    final end = _getLunchEndMinutes();
+    return minutes >= start && minutes <= end;
+  }
+
+  /// [신규] 급식 메뉴 투표 가능 시간: 점심시간 시작 ~ 점심시간 종료 10분 전
+  bool _isMealVoteTimeNow() {
+    final now = _debugTimeOverride ?? DateTime.now();
+    final minutes = now.hour * 60 + now.minute;
+    final start = _getLunchStartMinutes();
+    final end = _getLunchEndMinutes();
+    return minutes >= start && minutes < (end - 10);
+  }
+
+  /// [신규] 점심시간 끝나고 20분 뒤인지 판별 (20분 뒤면 다음날 급식으로 자동 전환)
+  bool _isAfterLunchPlus20Min() {
+    final now = _debugTimeOverride ?? DateTime.now();
+    final lunchEndMinutes = _getLunchEndMinutes();
+    final switchMinutes = lunchEndMinutes + 20; // 점심시간 끝나고 20분 뒤
+    final nowMinutes = now.hour * 60 + now.minute;
+    return nowMinutes >= switchMinutes;
   }
 
   Future<void> _toggleDishHighlight(String dishName) async {
@@ -5877,27 +5965,177 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     await prefs.setStringList('meal_highlights_$dateKey', _highlightedDishes.toList());
   }
 
+  /// [신규] 음식 꾹 누르면 알레르기 정보가 먼저 뜨고 형광펜 토글도 가능한 다이얼로그
+  void _showDishAllergyDialog(MealDishItem dish) {
+    final scale = _settings.scaleFactor;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final highlighted = _highlightedDishes.contains(dish.name);
+            return AlertDialog(
+              backgroundColor: const Color(0xFF161F2E),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18 * scale),
+                side: BorderSide(color: const Color(0xFF00F5D4).withValues(alpha: 0.35)),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(6 * scale),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8 * scale),
+                    ),
+                    child: Icon(Icons.shield_outlined, color: const Color(0xFF00F5D4), size: 22 * scale),
+                  ),
+                  SizedBox(width: 10 * scale),
+                  Expanded(
+                    child: Text(
+                      dish.name,
+                      style: GoogleFonts.notoSansKr(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18 * scale,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '알레르기 유발 식품 정보',
+                    style: GoogleFonts.notoSansKr(
+                      color: const Color(0xFF00F5D4),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14 * scale,
+                    ),
+                  ),
+                  SizedBox(height: 8 * scale),
+                  dish.allergies.isEmpty
+                      ? Container(
+                          width: double.infinity,
+                          padding: EdgeInsets.all(12 * scale),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.04),
+                            borderRadius: BorderRadius.circular(8 * scale),
+                          ),
+                          child: Text(
+                            '표시된 알레르기 유발 성분이 없습니다. 안심하고 드셔도 됩니다! 🥗',
+                            style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13 * scale),
+                          ),
+                        )
+                      : Wrap(
+                          spacing: 6 * scale,
+                          runSpacing: 6 * scale,
+                          children: dish.allergies.map((allergy) {
+                            return Container(
+                              padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 5 * scale),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFB703).withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(20 * scale),
+                                border: Border.all(color: const Color(0xFFFFB703).withValues(alpha: 0.6)),
+                              ),
+                              child: Text(
+                                '⚠️ $allergy',
+                                style: GoogleFonts.notoSansKr(
+                                  color: const Color(0xFFFFD166),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13 * scale,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                  SizedBox(height: 16 * scale),
+                  Divider(color: Colors.white12, height: 1),
+                  SizedBox(height: 12 * scale),
+                  InkWell(
+                    onTap: () async {
+                      await _toggleDishHighlight(dish.name);
+                      setDialogState(() {});
+                    },
+                    borderRadius: BorderRadius.circular(10 * scale),
+                    child: Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(vertical: 10 * scale, horizontal: 12 * scale),
+                      decoration: BoxDecoration(
+                        color: highlighted
+                            ? const Color(0xFFFFEE58).withValues(alpha: 0.25)
+                            : Colors.white.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(10 * scale),
+                        border: Border.all(
+                          color: highlighted
+                              ? const Color(0xFFFFEE58)
+                              : Colors.white24,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            highlighted ? Icons.brush : Icons.brush_outlined,
+                            size: 16 * scale,
+                            color: highlighted ? const Color(0xFFFFF176) : Colors.white70,
+                          ),
+                          SizedBox(width: 8 * scale),
+                          Text(
+                            highlighted ? '형광펜 해제하기' : '이 메뉴 형광펜으로 칠하기',
+                            style: GoogleFonts.notoSansKr(
+                              color: highlighted ? const Color(0xFFFFF176) : Colors.white70,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13 * scale,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('닫기', style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _handleDishVote(String dishName) async {
-    if (!_isLunchTimeNow()) {
+    if (!_isMealVoteTimeNow()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('🍽️ 점심시간에만 메뉴 투표가 가능합니다!'),
+          content: Text('🍽️ 메뉴 투표는 점심시간 시작부터 종료 10분 전까지만 가능합니다! (메뉴를 꾹 누르면 알레르기 정보 확인)'),
           backgroundColor: Color(0xFFE53935),
-          duration: Duration(seconds: 2),
+          duration: Duration(seconds: 3),
         ),
       );
       return;
     }
 
     final now = _debugTimeOverride ?? DateTime.now();
-    final currentSchoolId = _settings.schoolId.isNotEmpty ? _settings.schoolId : (_settings.selectedSchool?.name ?? 'Demo');
+    final voteDate = DateTime(now.year, now.month, now.day);
+    final currentSchoolId = _settings.schoolId.isNotEmpty
+        ? _settings.schoolId
+        : (_settings.selectedSchool?.name ?? 'Demo');
     final classKey = _settings.classNickname.isNotEmpty
         ? _settings.classNickname
         : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
 
-    await MealVoteService.instance.submitVote(
+    await MealVoteService.instance.recordLocalVote(
       schoolId: currentSchoolId,
-      date: now,
+      date: voteDate,
       dishName: dishName,
       classKey: classKey,
     );
@@ -5980,6 +6218,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     DateTime viewingMonth = _debugTimeOverride ?? DateTime.now();
     bool loadingMonth = true;
     List<MealDayInfo> monthMeals = [];
+    Map<String, Map<String, int>> monthHistoryVotes = {};
+    String? selectedAllergyFilter;
 
     await showDialog(
       context: context,
@@ -5991,11 +6231,21 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 loadingMonth = true;
                 viewingMonth = month;
               });
-              final schoolName = _settings.schoolId.isNotEmpty ? _settings.schoolId : (_settings.selectedSchool?.name ?? 'Demo');
+              // 학교명 정확히 전달 (schoolId 대신 selectedSchool?.name 우선)
+              final schoolName = _settings.selectedSchool?.name ?? (_settings.schoolId.isNotEmpty ? _settings.schoolId : '양동중학교');
               final mealMap = await _neisService.fetchMonthMeals(schoolName, month.year, month.month);
+              final sId = _settings.schoolId.isNotEmpty ? _settings.schoolId : (_settings.selectedSchool?.name ?? 'Demo');
+              final Map<String, Map<String, int>> historyVotes = {};
+              for (final m in mealMap.values) {
+                final hv = await MealVoteService.instance.getHistoricalVotes(sId, m.date);
+                if (hv.isNotEmpty) {
+                  historyVotes[MealVoteService.instance.getDateKey(m.date)] = hv;
+                }
+              }
               if (ctx.mounted) {
                 setDialogState(() {
                   monthMeals = mealMap.values.toList();
+                  monthHistoryVotes = historyVotes;
                   loadingMonth = false;
                 });
               }
@@ -6005,6 +6255,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               loadMonth(viewingMonth);
             }
 
+            final allergyOptions = [
+              '난류', '우유', '메밀', '땅콩', '대두', '밀', '고등어', '게', '새우',
+              '돼지', '복숭아', '토마토', '아황산', '호두', '닭고기', '소고기', '오징어', '조개', '잣'
+            ];
+
             return Dialog(
               backgroundColor: const Color(0xFF161F2E),
               shape: RoundedRectangleBorder(
@@ -6012,12 +6267,13 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 side: BorderSide(color: const Color(0xFF00F5D4).withValues(alpha: 0.3)),
               ),
               child: Container(
-                width: MediaQuery.of(context).size.width * 0.85,
-                height: MediaQuery.of(context).size.height * 0.82,
+                width: MediaQuery.of(context).size.width * 0.9,
+                height: MediaQuery.of(context).size.height * 0.85,
                 padding: EdgeInsets.all(20 * scale),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Top Bar
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -6060,12 +6316,118 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         ),
                       ],
                     ),
+                    SizedBox(height: 8 * scale),
+                    // 투표 가능 시간 안내 배너
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 7 * scale),
+                      decoration: BoxDecoration(
+                        color: _isMealVoteTimeNow()
+                            ? const Color(0xFF00F5D4).withValues(alpha: 0.12)
+                            : Colors.white.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(10 * scale),
+                        border: Border.all(
+                          color: _isMealVoteTimeNow()
+                              ? const Color(0xFF00F5D4).withValues(alpha: 0.4)
+                              : Colors.white12,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _isMealVoteTimeNow() ? Icons.how_to_vote_rounded : Icons.info_outline_rounded,
+                            color: _isMealVoteTimeNow() ? const Color(0xFF00F5D4) : Colors.white60,
+                            size: 16 * scale,
+                          ),
+                          SizedBox(width: 8 * scale),
+                          Expanded(
+                            child: Text(
+                              _isMealVoteTimeNow()
+                                  ? '🍽️ 지금은 메뉴 투표 가능 시간입니다! 오늘 식단을 탭하여 투표해보세요. (종료 10분 전 자동 마감)'
+                                  : '🍽️ 메뉴 투표는 점심시간 시작부터 종료 10분 전까지만 가능합니다. (이전 투표 결과 🔥도 함께 보실 수 있습니다)',
+                              style: GoogleFonts.notoSansKr(
+                                color: _isMealVoteTimeNow() ? const Color(0xFF00F5D4) : Colors.white70,
+                                fontSize: 11.5 * scale,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 8 * scale),
+                    // Allergy Filter Chips Bar
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 8 * scale),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(12 * scale),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            Text(
+                              '알레르기 강조: ',
+                              style: GoogleFonts.notoSansKr(
+                                color: const Color(0xFF00F5D4),
+                                fontSize: 13 * scale,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(width: 8 * scale),
+                            ChoiceChip(
+                              label: Text('전체', style: GoogleFonts.notoSansKr(fontSize: 12 * scale)),
+                              selected: selectedAllergyFilter == null,
+                              onSelected: (_) {
+                                setDialogState(() {
+                                  selectedAllergyFilter = null;
+                                });
+                              },
+                              selectedColor: const Color(0xFF00F5D4),
+                              labelStyle: TextStyle(
+                                color: selectedAllergyFilter == null ? Colors.black : Colors.white70,
+                                fontWeight: selectedAllergyFilter == null ? FontWeight.bold : FontWeight.normal,
+                              ),
+                              backgroundColor: Colors.white10,
+                            ),
+                            SizedBox(width: 6 * scale),
+                            ...allergyOptions.map((allergy) {
+                              final isSelected = selectedAllergyFilter == allergy;
+                              return Padding(
+                                padding: EdgeInsets.only(right: 6 * scale),
+                                child: ChoiceChip(
+                                  label: Text(allergy, style: GoogleFonts.notoSansKr(fontSize: 12 * scale)),
+                                  selected: isSelected,
+                                  onSelected: (selected) {
+                                    setDialogState(() {
+                                      selectedAllergyFilter = selected ? allergy : null;
+                                    });
+                                  },
+                                  selectedColor: const Color(0xFFFFB703),
+                                  labelStyle: TextStyle(
+                                    color: isSelected ? Colors.black : Colors.white70,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                  backgroundColor: Colors.white10,
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                    ),
                     Divider(color: Colors.white12, height: 20 * scale),
                     Expanded(
                       child: loadingMonth
                           ? const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)))
                           : monthMeals.isEmpty
-                              ? Center(child: Text('해당 월의 급식 정보가 없습니다.', style: GoogleFonts.notoSansKr(color: Colors.white60, fontSize: 16 * scale)))
+                              ? Center(
+                                  child: Text(
+                                    '해당 월의 급식 정보가 없습니다.',
+                                    style: GoogleFonts.notoSansKr(color: Colors.white60, fontSize: 16 * scale),
+                                  ),
+                                )
                               : GridView.builder(
                                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: 5,
@@ -6076,23 +6438,56 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                   itemCount: monthMeals.length,
                                   itemBuilder: (context, idx) {
                                     final meal = monthMeals[idx];
+                                    final now = _debugTimeOverride ?? DateTime.now();
+                                    final isToday = meal.date.year == now.year && meal.date.month == now.month && meal.date.day == now.day;
+                                    final dateKey = MealVoteService.instance.getDateKey(meal.date);
+                                    final pastDayVotes = monthHistoryVotes[dateKey] ?? {};
+
                                     return Container(
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF0F1722),
+                                        color: isToday
+                                            ? const Color(0xFF12222E)
+                                            : const Color(0xFF0F1722),
                                         borderRadius: BorderRadius.circular(12 * scale),
-                                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                                        border: Border.all(
+                                          color: isToday
+                                              ? const Color(0xFF00F5D4).withValues(alpha: 0.5)
+                                              : Colors.white.withValues(alpha: 0.08),
+                                          width: isToday ? 1.5 : 1.0,
+                                        ),
                                       ),
                                       padding: EdgeInsets.all(10 * scale),
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            '${meal.date.month}/${meal.date.day} (${['월','화','수','목','금','토','일'][meal.date.weekday - 1]})',
-                                            style: GoogleFonts.notoSansKr(
-                                              color: const Color(0xFF00F5D4),
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 13 * scale,
-                                            ),
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                '${meal.date.month}/${meal.date.day} (${['월','화','수','목','금','토','일'][meal.date.weekday - 1]})',
+                                                style: GoogleFonts.notoSansKr(
+                                                  color: isToday ? const Color(0xFF00F5D4) : Colors.white70,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13 * scale,
+                                                ),
+                                              ),
+                                              if (isToday)
+                                                Container(
+                                                  padding: EdgeInsets.symmetric(horizontal: 5 * scale, vertical: 1 * scale),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF00F5D4).withValues(alpha: 0.2),
+                                                    borderRadius: BorderRadius.circular(4 * scale),
+                                                  ),
+                                                  child: Text(
+                                                    '오늘',
+                                                    style: GoogleFonts.notoSansKr(
+                                                      color: const Color(0xFF00F5D4),
+                                                      fontSize: 10 * scale,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
                                           ),
                                           const SizedBox(height: 6),
                                           Expanded(
@@ -6100,11 +6495,72 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                               child: Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                 children: meal.dishes.map((d) {
-                                                  return Padding(
-                                                    padding: const EdgeInsets.only(bottom: 2),
-                                                    child: Text(
-                                                      '• ${d.name} ${d.allergyDisplay}',
-                                                      style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 11 * scale),
+                                                  final isFiltered = selectedAllergyFilter != null &&
+                                                      (d.allergies.any((a) => a.contains(selectedAllergyFilter!)) ||
+                                                          d.name.contains(selectedAllergyFilter!));
+                                                  final dKey = MealVoteService.instance.sanitizeKey(d.name);
+                                                  final int voteCount = isToday
+                                                      ? MealVoteService.instance.getTotalVotes(d.name)
+                                                      : (pastDayVotes[dKey] ?? 0);
+
+                                                  return InkWell(
+                                                    onTap: () async {
+                                                      if (isToday) {
+                                                        await _handleDishVote(d.name);
+                                                        setDialogState(() {});
+                                                      } else {
+                                                        _showDishAllergyDialog(d);
+                                                      }
+                                                    },
+                                                    onLongPress: () => _showDishAllergyDialog(d),
+                                                    borderRadius: BorderRadius.circular(4 * scale),
+                                                    child: Container(
+                                                      margin: const EdgeInsets.only(bottom: 3),
+                                                      padding: EdgeInsets.symmetric(
+                                                        horizontal: isFiltered ? 4 * scale : 2 * scale,
+                                                        vertical: 2 * scale,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color: isFiltered
+                                                            ? const Color(0xFFFFEE58).withValues(alpha: 0.35)
+                                                            : (isToday && _isMealVoteTimeNow() ? const Color(0xFF00F5D4).withValues(alpha: 0.08) : Colors.transparent),
+                                                        borderRadius: BorderRadius.circular(4 * scale),
+                                                        border: isFiltered
+                                                            ? Border.all(color: const Color(0xFFFFEE58).withValues(alpha: 0.8))
+                                                            : (isToday && _isMealVoteTimeNow() ? Border.all(color: const Color(0xFF00F5D4).withValues(alpha: 0.2)) : null),
+                                                      ),
+                                                      child: Row(
+                                                        children: [
+                                                          Expanded(
+                                                            child: Text(
+                                                              '• ${d.name}',
+                                                              style: GoogleFonts.notoSansKr(
+                                                                color: isFiltered ? const Color(0xFFFFF9C4) : Colors.white70,
+                                                                fontSize: 11 * scale,
+                                                                fontWeight: isFiltered ? FontWeight.bold : FontWeight.normal,
+                                                             ),
+                                                            ),
+                                                          ),
+                                                          if (voteCount > 0)
+                                                            Container(
+                                                              margin: EdgeInsets.only(left: 4 * scale),
+                                                              padding: EdgeInsets.symmetric(horizontal: 5 * scale, vertical: 1 * scale),
+                                                              decoration: BoxDecoration(
+                                                                color: const Color(0xFFFF7043).withValues(alpha: 0.25),
+                                                                borderRadius: BorderRadius.circular(6 * scale),
+                                                                border: Border.all(color: const Color(0xFFFF7043).withValues(alpha: 0.6)),
+                                                              ),
+                                                              child: Text(
+                                                                '🔥 $voteCount표',
+                                                                style: GoogleFonts.notoSansKr(
+                                                                  color: const Color(0xFFFFAB91),
+                                                                  fontSize: 9.5 * scale,
+                                                                  fontWeight: FontWeight.bold,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                        ],
+                                                      ),
                                                     ),
                                                   );
                                                 }).toList(),
@@ -6127,9 +6583,12 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
-  /// [신규] 2일치 지원 급식 카드 (알레르기 표기, 형광펜, 점심시간 투표, 꾹 누르면 한 달치 조회)
+  /// [신규 개편] 단일 일자 전면 급식 카드 (점심 20분 후 내일 급식 자동 전환, 알레르기 텍스트 완전 제거, 꾹 누르면 알레르기 팝업)
   Widget _buildNeisMealCard(double scale, {bool isCompact = false}) {
     final currentCafeteria = _settings.cafeteriaNum.isNotEmpty ? _settings.cafeteriaNum : '급식실1';
+    final showTomorrow = _isAfterLunchPlus20Min();
+    final displayMeal = (showTomorrow && _tomorrowMeal != null) ? _tomorrowMeal : _todayMeal;
+    final isDisplayingTomorrow = showTomorrow && _tomorrowMeal != null;
 
     return ValueListenableBuilder<Map<String, Map<String, int>>>(
       valueListenable: MealVoteService.instance.votesNotifier,
@@ -6138,7 +6597,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           color: Colors.transparent,
           child: InkWell(
             onTap: _showMealInfoDialog,
-            onLongPress: _showMonthlyMealsDialog, // 꾹 누르면 한달치 급식 모달
+            onLongPress: _showMonthlyMealsDialog, // 빈 공간 꾹 누르면 한달치 급식 모달
             borderRadius: BorderRadius.circular(24 * scale),
             child: Container(
               decoration: BoxDecoration(
@@ -6173,15 +6632,44 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       ),
                       SizedBox(width: 10 * scale),
                       Expanded(
-                        child: Text(
-                          '급식 식단 ($currentCafeteria)',
-                          style: GoogleFonts.notoSansKr(
-                            color: Colors.white,
-                            fontSize: 17 * scale,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.3,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                '급식 식단 ($currentCafeteria)',
+                                style: GoogleFonts.notoSansKr(
+                                  color: Colors.white,
+                                  fontSize: 17 * scale,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: -0.3,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            SizedBox(width: 8 * scale),
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 2 * scale),
+                              decoration: BoxDecoration(
+                                color: isDisplayingTomorrow
+                                    ? const Color(0xFFFFB703).withValues(alpha: 0.2)
+                                    : const Color(0xFF00F5D4).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6 * scale),
+                                border: Border.all(
+                                  color: isDisplayingTomorrow
+                                      ? const Color(0xFFFFB703).withValues(alpha: 0.5)
+                                      : const Color(0xFF00F5D4).withValues(alpha: 0.4),
+                                ),
+                              ),
+                              child: Text(
+                                isDisplayingTomorrow ? '내일 식단' : '오늘 식단',
+                                style: GoogleFonts.notoSansKr(
+                                  color: isDisplayingTomorrow ? const Color(0xFFFFD166) : const Color(0xFF00F5D4),
+                                  fontSize: 11 * scale,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       IconButton(
@@ -6205,51 +6693,12 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
                   SizedBox(height: 10 * scale),
 
-                  // Meal Content (2일치 또는 1일치 Compact)
+                  // Meal Content (단일 일자 100% 전면 표시)
                   Expanded(
                     child: _isLoadingMeal
                         ? const Center(child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF00F5D4)))
-                        : isCompact || _tomorrowMeal == null
-                            ? _buildSingleDayMealSection(_todayMeal, scale, isToday: true)
-                            : Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Expanded(
-                                    child: _buildSingleDayMealSection(_todayMeal, scale, isToday: true),
-                                  ),
-                                  VerticalDivider(
-                                    width: 16 * scale,
-                                    thickness: 1,
-                                    color: Colors.white.withValues(alpha: 0.08),
-                                  ),
-                                  Expanded(
-                                    child: _buildSingleDayMealSection(_tomorrowMeal, scale, isToday: false),
-                                  ),
-                                ],
-                              ),
+                        : _buildSingleDayMealSection(displayMeal, scale, isToday: !isDisplayingTomorrow),
                   ),
-
-                  // Bottom Allergy Footnotes (오늘 급식 기준)
-                  if (_todayMeal != null && _todayMeal!.footnotes.isNotEmpty) ...[
-                    SizedBox(height: 6 * scale),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 5 * scale),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(8 * scale),
-                      ),
-                      child: Text(
-                        _todayMeal!.footnotes.join('  |  '),
-                        style: GoogleFonts.notoSansKr(
-                          color: const Color(0xFFFFB703),
-                          fontSize: 11 * scale,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -6305,12 +6754,20 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 return Padding(
                   padding: EdgeInsets.only(bottom: 5 * scale),
                   child: InkWell(
-                    onTap: () => _handleDishVote(dish.name),
-                    onLongPress: () => _toggleDishHighlight(dish.name),
+                    // 탭: 점심시간이면 투표, 점심시간 아니면 알레르기 정보 다이얼로그
+                    onTap: () {
+                      if (_isMealVoteTimeNow()) {
+                        _handleDishVote(dish.name);
+                      } else {
+                        _showDishAllergyDialog(dish);
+                      }
+                    },
+                    // 꾹 누르면: 언제든 알레르기 정보 팝업이 먼저 뜸!
+                    onLongPress: () => _showDishAllergyDialog(dish),
                     borderRadius: BorderRadius.circular(6 * scale),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
-                      padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 4 * scale),
+                      padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 5 * scale),
                       decoration: BoxDecoration(
                         color: isHighlighted
                             ? const Color(0xFFFFF176).withValues(alpha: 0.28)
@@ -6323,29 +6780,14 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       child: Row(
                         children: [
                           Expanded(
-                            child: RichText(
+                            child: Text(
+                              dish.name, // 알레르기 괄호 완전 제거, 음식명만 깔끔하게 표시
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              text: TextSpan(
-                                children: [
-                                  TextSpan(
-                                    text: dish.name,
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 15 * scale,
-                                      fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w600,
-                                      color: isHighlighted ? const Color(0xFFFFF59D) : Colors.white,
-                                    ),
-                                  ),
-                                  if (dish.allergyDisplay.isNotEmpty)
-                                    TextSpan(
-                                      text: ' ${dish.allergyDisplay}',
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 10 * scale,
-                                        fontWeight: FontWeight.w400,
-                                        color: Colors.white54,
-                                      ),
-                                    ),
-                                ],
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 15 * scale,
+                                fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w600,
+                                color: isHighlighted ? const Color(0xFFFFF59D) : Colors.white,
                               ),
                             ),
                           ),
@@ -10378,6 +10820,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
   /// 학년별 교과서 ZIP 다운로드 및 압축 해제 (Firestore control_configs 또는 공식 GitHub 기본 저장소)
   Future<void> _syncSchoolTextbooksFromFirestore([Map<String, dynamic>? fields]) async {
+    // 데모 모드에서는 실제 학교 교과서 zip 다운로드를 차단
+    if (AppConfig.isDemoMode) {
+      debugPrint('[TextbookSync] 🛑 Demo mode active: skipping external textbook ZIP download.');
+      return;
+    }
     try {
       final grade = _settings.selectedGrade > 0 ? _settings.selectedGrade : 1;
       final zipKey = 'textbookZip$grade';
@@ -10398,8 +10845,18 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         }
       }
 
-      final defaultZipUrl = 'https://raw.githubusercontent.com/hiJiwho/TB22-ydms/main/${grade}%ED%95%99%EB%85%84.zip';
+      // 교과서는 학교마다 출판사가 모두 다르므로, 해당 학교(control_configs)에 등록된 zipUrl이 없으면 임의 다운로드 금지
+      // (기존 ydm 학교일 때만 하위 호환 유지)
+      final currentSchoolId = _settings.schoolId.toLowerCase();
+      final defaultZipUrl = (currentSchoolId == 'ydm' || currentSchoolId == '44134')
+          ? 'https://raw.githubusercontent.com/hiJiwho/TB22-ydms/main/${grade}%ED%95%99%EB%85%84.zip'
+          : '';
       final effectiveZipUrl = (zipUrl != null && zipUrl.isNotEmpty) ? zipUrl : defaultZipUrl;
+
+      if (effectiveZipUrl.isEmpty) {
+        debugPrint('[TextbookSync] ℹ️ 학교($currentSchoolId) 전용 교과서가 등록되지 않아 외부 다운로드를 건너뜁니다.');
+        return;
+      }
 
       // 로컬 디렉터리에 실제 파일들이 이미 존재하는지 확인
       Directory? localTextbookDir;
@@ -11088,12 +11545,31 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   ),
                 ),
 
-                // 3열 (Desktop 전용: 시스템 앱 등록 슬롯 7개, slots 14..20)
+                // 3열 (Desktop 전용: 시스템 앱 5개 + 최소화 1개 + 프로그램 닫기 1개)
                 if (!kIsWeb) ...[
                   SizedBox(width: 6 * scale),
                   Expanded(
                     child: Column(
                       children: List.generate(7, (index) {
+                        if (index == 5) {
+                          // 6행: 앱 최소화 (설정 버튼 바로 위 위치의 앱추가 슬롯을 앱 최소화로 할당)
+                          return Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.all(2.5 * scale),
+                              child: _buildMinimizeWindowSlot(scale),
+                            ),
+                          );
+                        } else if (index == 6) {
+                          // 7행: 프로그램 닫기 (설정 버튼 옆 맨 아래 슬롯)
+                          return Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.all(2.5 * scale),
+                              child: _buildCloseWindowSlot(scale),
+                            ),
+                          );
+                        }
+
+                        // 1~5행 (slots 14..18: 사용자 시스템 앱 등록 슬롯)
                         final slotIndex = 14 + index;
                         final slot = slotIndex < slots.length ? slots[slotIndex] : null;
                         return Expanded(
@@ -11135,6 +11611,198 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       return _buildCompactUsbExplorer(scale);
     }
     return _buildNeisMealCard(scale);
+  }
+
+  Widget _buildMinimizeWindowSlot(double scale) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () async {
+          if (!kIsWeb && Platform.isWindows) {
+            try {
+              await windowManager.minimize();
+            } catch (e) {
+              debugPrint('[WindowManager] minimize error: $e');
+            }
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('🖥️ 데스크톱 Windows 앱에서 창이 최소화됩니다.'),
+                duration: Duration(seconds: 1),
+              ),
+            );
+          }
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF2EC4B6).withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: const Color(0xFF2EC4B6).withValues(alpha: 0.4),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Center(
+                child: Container(
+                  width: 22 * scale,
+                  height: 22 * scale,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2EC4B6).withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(6 * scale),
+                    border: Border.all(
+                      color: const Color(0xFF00F5D4).withValues(alpha: 0.6),
+                      width: 1,
+                    ),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.remove_rounded,
+                      color: const Color(0xFF00F5D4),
+                      size: 14 * scale,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: 3 * scale),
+              Text(
+                '앱 최소화',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 8.5 * scale,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF00F5D4),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCloseWindowSlot(double scale) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () async {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: const Color(0xFF16161A),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16 * scale),
+                side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.5)),
+              ),
+              title: Row(
+                children: [
+                  Icon(Icons.power_settings_new_rounded, color: Colors.redAccent, size: 24 * scale),
+                  SizedBox(width: 8 * scale),
+                  Text(
+                    '프로그램 종료',
+                    style: GoogleFonts.notoSansKr(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16 * scale,
+                    ),
+                  ),
+                ],
+              ),
+              content: Text(
+                'Boardest 프로그램을 종료하시겠습니까?',
+                style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13 * scale),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text('취소', style: GoogleFonts.notoSansKr(color: Colors.white54)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8 * scale)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text('종료', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+
+          if (confirmed == true) {
+            if (!kIsWeb && Platform.isWindows) {
+              try {
+                await windowManager.close();
+              } catch (_) {
+                exit(0);
+              }
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('🖥️ 데스크톱 Windows 앱이 종료됩니다.'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            }
+          }
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF5376).withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: const Color(0xFFFF5376).withValues(alpha: 0.4),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Center(
+                child: Container(
+                  width: 22 * scale,
+                  height: 22 * scale,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF5376).withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(6 * scale),
+                    border: Border.all(
+                      color: const Color(0xFFFF5376).withValues(alpha: 0.6),
+                      width: 1,
+                    ),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.power_settings_new_rounded,
+                      color: const Color(0xFFFF5376),
+                      size: 13 * scale,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: 3 * scale),
+              Text(
+                '프로그램 닫기',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 8.5 * scale,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFFFF8BA7),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildEmptySlot(double scale, int slotIndex) {
@@ -11272,10 +11940,10 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
     // Boardest tool slot
     final isCloudTool = slot.id == 'bst_cloud';
-    final isDisabled = isUpcoming || isCloudTool;
-    accentColor = isCloudTool ? Colors.grey : colors[slot.id.hashCode.abs() % colors.length];
-    icon = isCloudTool ? Icons.cloud_off_rounded : _getToolIcon(slot.id);
-    final onTap = isCloudTool ? null : _getToolOnTap(slot.id);
+    final isDisabled = isUpcoming;
+    accentColor = colors[slot.id.hashCode.abs() % colors.length];
+    icon = _getToolIcon(slot.id);
+    final onTap = _getToolOnTap(slot.id);
 
     return Material(
       color: Colors.transparent,
@@ -11286,9 +11954,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             borderRadius: BorderRadius.circular(10),
             child: Container(
               decoration: BoxDecoration(
-                color: isCloudTool ? const Color(0xFF16191E) : Colors.white.withValues(alpha: 0.02),
+                color: Colors.white.withValues(alpha: 0.02),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: isCloudTool ? Colors.white10 : Colors.white.withValues(alpha: 0.05)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -11299,11 +11967,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       height: 22 * scale,
                       decoration: BoxDecoration(
                         color: (isDisabled ? Colors.grey : accentColor)
-                            .withValues(alpha: isCloudTool ? 0.1 : 0.18),
+                            .withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(6 * scale),
                         border: Border.all(
                           color: (isDisabled ? Colors.grey : accentColor)
-                              .withValues(alpha: isCloudTool ? 0.2 : 0.5),
+                              .withValues(alpha: 0.5),
                           width: 1,
                         ),
                       ),
@@ -11875,11 +12543,45 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       }
       _updateLiveSchedule();
 
+      // 급식 투표 스마트 파이프라인 (DB 누수 0, 서버 점유 0KB)
+      final now = _debugTimeOverride ?? DateTime.now();
+      if (now.second == 0) {
+        final nowMinutes = now.hour * 60 + now.minute;
+        final endMin = _getLunchEndMinutes();
+        final currentSchoolId = _settings.schoolId.isNotEmpty
+            ? _settings.schoolId
+            : (_settings.selectedSchool?.name ?? 'Demo');
+        final voteDate = DateTime(now.year, now.month, now.day);
+        final classKey = _settings.classNickname.isNotEmpty
+            ? _settings.classNickname
+            : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
+
+        if (nowMinutes == endMin - 10) {
+          // 종료 10분 전: 교실 투표 1회 서버 전송
+          MealVoteService.instance.syncClassVotesToServer(
+            schoolId: currentSchoolId,
+            date: voteDate,
+            classKey: classKey,
+          );
+        } else if (nowMinutes == endMin - 9) {
+          // 종료 9분 전 (1분 뒤): 전교 투표 1회 취합 및 전자칠판 로컬 영구 저장
+          MealVoteService.instance.fetchAndPersistFinalResults(
+            schoolId: currentSchoolId,
+            date: voteDate,
+          );
+        } else if (nowMinutes == endMin - 8) {
+          // 종료 8분 전 (2분 뒤): 서버 임시 노드 완전 삭제 (용량 0KB)
+          MealVoteService.instance.purgeServerVotes(
+            schoolId: currentSchoolId,
+            date: voteDate,
+          );
+        }
+      }
+
       // DB 사용량 최적화: 백그라운드 주기적 Firestore 호출(온라인 상태 쓰기, 배너 읽기, 시간표 폴링)을 전면 제거하고
       // 앱 실행 시(또는 설정 수동 저장 시) 1회만 호출하여 일일 DB 할당량 고갈을 원천 차단합니다.
 
       if (!kIsWeb && Platform.isWindows && _settings.autoSleepEnabled) {
-        final now = _debugTimeOverride ?? DateTime.now();
         final ranges = _scheduleRangesForSleep(now);
         _sleepScheduler.refreshRanges(ranges);
 

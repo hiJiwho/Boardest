@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/school.dart';
 import '../models/app_settings.dart';
+import '../config/app_config.dart';
 import 'comcigan_service.dart';
 import 'auth_service.dart';
 import 'app_paths.dart';
@@ -130,7 +131,16 @@ class StorageService {
     }
 
     try {
-      return AppSettings.fromJson(json.decode(jsonStr) as Map<String, dynamic>);
+      final settings = AppSettings.fromJson(json.decode(jsonStr) as Map<String, dynamic>);
+      if (!AppConfig.isDemoMode &&
+          (settings.schoolId.toLowerCase() == 'demo' ||
+           settings.classNickname?.startsWith('Demo-class') == true ||
+           settings.selectedSchool?.name.contains('데모') == true)) {
+        // 이전 데모 방문으로 인한 로컬 스토리지 오염 자동 정리
+        await prefs.remove(_keyAppSettings);
+        return AppSettings();
+      }
+      return settings;
     } catch (_) {
       return AppSettings();
     }

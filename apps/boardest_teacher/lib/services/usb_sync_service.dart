@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
@@ -105,7 +106,7 @@ class UsbSyncService {
   }
 
   Future<int?> getUsbFreeBytes(String usbRoot) async {
-    if (!Platform.isWindows) return null;
+    if (kIsWeb || !Platform.isWindows) return null;
     try {
       final drive = p.rootPrefix(usbRoot).replaceAll('\\', '').replaceAll(':', '');
       final result = await Process.run('powershell', [

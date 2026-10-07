@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:webview_windows/webview_windows.dart';
@@ -94,7 +95,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
 
       final targetUrl = _infoJson!['webUrl'] as String;
 
-      if (Platform.isWindows) {
+      if (!kIsWeb && Platform.isWindows) {
         await _initWindowsWebview(targetUrl);
       } else {
         _initAndroidWebview(targetUrl);
@@ -106,7 +107,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
 
       _dhashEngine.startTracker(
         _winWebviewInitialized ? _winWebview : null,
-        Platform.isWindows ? null : _androidWebview,
+        (!kIsWeb && Platform.isWindows) ? null : _androidWebview,
       );
     } catch (e) {
       setState(() {
@@ -316,7 +317,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                     children: [
                       // 1. Webview 메인 영역
                       Positioned.fill(
-                        child: Platform.isWindows
+                        child: (!kIsWeb && Platform.isWindows)
                             ? (_winWebviewInitialized
                                   ? Webview(_winWebview)
                                   : const SizedBox.shrink())
@@ -369,9 +370,9 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                               }
                             })();
                           ''';
-                            if (Platform.isWindows && _winWebviewInitialized) {
+                            if (!kIsWeb && Platform.isWindows && _winWebviewInitialized) {
                               _winWebview.executeScript(script);
-                            } else if (!Platform.isWindows) {
+                            } else if (kIsWeb || !Platform.isWindows) {
                               _androidWebview.runJavaScript(script);
                             }
                           },

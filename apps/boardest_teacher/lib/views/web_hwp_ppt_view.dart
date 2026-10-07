@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -49,7 +50,7 @@ class _WebHwpPptViewState extends State<WebHwpPptView> {
       targetUrl = 'about:blank';
     }
 
-    if (Platform.isWindows) {
+    if (!kIsWeb && Platform.isWindows) {
       try {
         _winWebviewController = WebviewController();
         await _winWebviewController!.initialize();
@@ -70,7 +71,7 @@ class _WebHwpPptViewState extends State<WebHwpPptView> {
     setState(() => _currentPage++);
     const js =
         "window.scrollBy({top: window.innerHeight * 0.9, behavior: 'smooth'});";
-    if (Platform.isWindows && _winWebviewController != null) {
+    if (!kIsWeb && Platform.isWindows && _winWebviewController != null) {
       _winWebviewController!.executeScript(js);
     } else {
       _mobileController.runJavaScript(js);
@@ -82,7 +83,7 @@ class _WebHwpPptViewState extends State<WebHwpPptView> {
       setState(() => _currentPage--);
       const js =
           "window.scrollBy({top: -window.innerHeight * 0.9, behavior: 'smooth'});";
-      if (Platform.isWindows && _winWebviewController != null) {
+      if (!kIsWeb && Platform.isWindows && _winWebviewController != null) {
         _winWebviewController!.executeScript(js);
       } else {
         _mobileController.runJavaScript(js);
@@ -193,7 +194,7 @@ class _WebHwpPptViewState extends State<WebHwpPptView> {
             // Main Web Viewer Body
             Expanded(
               child: _isWebviewInitialized
-                  ? (Platform.isWindows && _winWebviewController != null
+                  ? (!kIsWeb && Platform.isWindows && _winWebviewController != null
                         ? Webview(_winWebviewController!)
                         : WebViewWidget(controller: _mobileController))
                   : const Center(
