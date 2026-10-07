@@ -263,9 +263,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       WidgetsBinding.instance.addPostFrameCallback((_) {
         // Windows 환경에서는 OS 네이티브 팝업 대신 인앱 자동 확인 후 조용히 업데이트 실행
         if (Platform.isWindows) {
-          UpdateService.ensureNativeAppInstallerSettings();
+          UpdateService.ensureNativeAppInstallerSettings(channel: _settings.updateChannel);
         }
-        UpdateService.checkAndUpdate(context, silent: true);
+        UpdateService.checkAndUpdate(context, silent: true, channel: _settings.updateChannel);
         if (Platform.isAndroid) {
           _checkAndPromptHomeLauncher();
         }
@@ -1671,6 +1671,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         _fetchLunchMenu(schoolName, targetDate);
         _fetchSchoolSchedule(schoolName, targetDate);
         _loadAdBanners();
+        _updateOnlineStatusBackground();
       } catch (e) {
         debugPrint('Error fetching lunch or schedule: $e');
       }
@@ -1988,9 +1989,21 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
+  void _playMealCallChime() {
+    try {
+      SystemSound.play(SystemSoundType.alert);
+      Future.delayed(const Duration(milliseconds: 350), () {
+        SystemSound.play(SystemSoundType.alert);
+      });
+    } catch (e) {
+      debugPrint('[Boardest] Meal call chime error: $e');
+    }
+  }
+
   void _showMealCallNotificationAlert() {
     if (MealCallService.instance.isPopupShowing) return;
     MealCallService.instance.isPopupShowing = true;
+    _playMealCallChime();
 
     showGeneralDialog(
       context: context,
@@ -3207,7 +3220,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 icon: Icons.system_update_rounded,
                 color: const Color(0xFF2EC4B6),
                 label: '시스템 업데이트 확인',
-                subtitle: '현재 버전: v${UpdateService.currentVersion} (최신 버전 확인)',
+                subtitle: 'v${UpdateService.currentVersion} [채널: ${_settings.updateChannel.toUpperCase()}] — 클릭 시 최신 확인/채널 변경',
                 scale: scale,
                 onTap: () => Navigator.pop(sheetCtx, 'check_update'),
               ),
@@ -3445,12 +3458,181 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     } else if (choice == 'home_launcher') {
       _showHomeLauncherDialog();
     } else if (choice == 'check_update') {
-      UpdateService.checkAndUpdate(context, silent: false, force: true);
+      _showUpdateChannelDialog();
     } else if (choice == 'dpi_scale') {
       _showDpiScaleDialog();
     } else if (choice == 'withdraw') {
       await _showWithdrawDialog();
     }
+  }
+
+  void _showUpdateChannelDialog() {
+    final scale = _settings.scaleFactor;
+    String selectedChannel = _settings.updateChannel;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) => AlertDialog(
+          backgroundColor: const Color(0xFF16161A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20 * scale),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.system_update_rounded, color: const Color(0xFF00F5D4), size: 26 * scale),
+              SizedBox(width: 10 * scale),
+              Text(
+                '시스템 업데이트 & 채널 설정',
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white,
+                  fontSize: 18 * scale,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '현재 설치 버전: v${UpdateService.currentVersion}',
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white70,
+                  fontSize: 14 * scale,
+                ),
+              ),
+              SizedBox(height: 16 * scale),
+              Text(
+                '업데이트 채널 선택',
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white,
+                  fontSize: 15 * scale,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 8 * scale),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12 * scale),
+                      onTap: () => setDlgState(() => selectedChannel = 'beta'),
+                      child: Container(
+                        padding: EdgeInsets.all(12 * scale),
+                        decoration: BoxDecoration(
+                          color: selectedChannel == 'beta'
+                              ? const Color(0xFF7F5AF0).withValues(alpha: 0.2)
+                              : Colors.white.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(12 * scale),
+                          border: Border.all(
+                            color: selectedChannel == 'beta'
+                                ? const Color(0xFF7F5AF0)
+                                : Colors.white.withValues(alpha: 0.1),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              '🚀 Beta (체험판)',
+                              style: GoogleFonts.notoSansKr(
+                                color: selectedChannel == 'beta' ? const Color(0xFF7F5AF0) : Colors.white70,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13 * scale,
+                              ),
+                            ),
+                            SizedBox(height: 4 * scale),
+                            Text(
+                              '최신 신기능 우선 적용',
+                              style: TextStyle(color: Colors.white38, fontSize: 11 * scale),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 10 * scale),
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12 * scale),
+                      onTap: () => setDlgState(() => selectedChannel = 'normal'),
+                      child: Container(
+                        padding: EdgeInsets.all(12 * scale),
+                        decoration: BoxDecoration(
+                          color: selectedChannel == 'normal'
+                              ? const Color(0xFF00F5D4).withValues(alpha: 0.2)
+                              : Colors.white.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(12 * scale),
+                          border: Border.all(
+                            color: selectedChannel == 'normal'
+                                ? const Color(0xFF00F5D4)
+                                : Colors.white.withValues(alpha: 0.1),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              '🛡️ Normal (안정판)',
+                              style: GoogleFonts.notoSansKr(
+                                color: selectedChannel == 'normal' ? const Color(0xFF00F5D4) : Colors.white70,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13 * scale,
+                              ),
+                            ),
+                            SizedBox(height: 4 * scale),
+                            Text(
+                              '검증된 정식 버전만 수신',
+                              style: TextStyle(color: Colors.white38, fontSize: 11 * scale),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('닫기', style: TextStyle(color: Colors.white54, fontSize: 13 * scale)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00F5D4),
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * scale)),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                if (selectedChannel != _settings.updateChannel) {
+                  final updated = _settings.copyWith(updateChannel: selectedChannel);
+                  await _storageService.saveSettings(updated);
+                  if (mounted) {
+                    setState(() => _settings = updated);
+                  }
+                  if (Platform.isWindows) {
+                    UpdateService.ensureNativeAppInstallerSettings(channel: selectedChannel);
+                  }
+                }
+                UpdateService.checkAndUpdate(
+                  context,
+                  silent: false,
+                  force: true,
+                  channel: selectedChannel,
+                );
+              },
+              child: Text('업데이트 확인', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13 * scale)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _showWithdrawDialog() async {
@@ -10927,24 +11109,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       }
       _updateLiveSchedule();
 
-      // 시간표 변경 자동 실시간 감지 (매 10분마다 실행)
-      _timetableCheckCounter++;
-      if (_timetableCheckCounter >= 600) {
-        _timetableCheckCounter = 0;
-        _fetchTimetableBackground();
-      }
-
-      // 광고판 배너 실시간 갱신 (매 2분마다 자동 동기화)
-      if (_timetableCheckCounter % 120 == 0) {
-        _loadAdBanners();
-      }
-
-      // 매 60초마다 Class 계정 온라인 상태 Firestore 갱신
-      _onlineStatusCounter++;
-      if (_onlineStatusCounter >= 60) {
-        _onlineStatusCounter = 0;
-        _updateOnlineStatusBackground();
-      }
+      // DB 사용량 최적화: 백그라운드 주기적 Firestore 호출(온라인 상태 쓰기, 배너 읽기, 시간표 폴링)을 전면 제거하고
+      // 앱 실행 시(또는 설정 수동 저장 시) 1회만 호출하여 일일 DB 할당량 고갈을 원천 차단합니다.
 
       if (!kIsWeb && Platform.isWindows && _settings.autoSleepEnabled) {
         final now = _debugTimeOverride ?? DateTime.now();

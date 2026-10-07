@@ -999,20 +999,19 @@
           </div>
         </div>
 
-        <!-- Teacher 교사용 카드 (다운로드 비활성화) -->
-        <div id="card-teacher" class="product-card teacher" style="opacity: 0.65;" onclick="selectProduct('teacher')">
-          <div class="product-badge-selected" style="background: #ef4565;">다운로드 일시 중단</div>
-          <div class="product-icon-wrap teacher" style="filter: grayscale(0.5);">
-            <span class="material-icons-round">block</span>
+        <!-- Teacher 교사용 카드 -->
+        <div id="card-teacher" class="product-card teacher" onclick="selectProduct('teacher')">
+          <div class="product-badge-selected">선택됨</div>
+          <div class="product-icon-wrap teacher">
+            <span class="material-icons-round">laptop_chromebook</span>
           </div>
           <div class="product-info">
             <div class="product-name">
               <span>교사용 (Boardest Teacher)</span>
-              <span class="product-target-tag" style="background: rgba(239, 69, 101, 0.15); color: #ef4565; border-color: rgba(239, 69, 101, 0.4);">다운로드 일시 중단</span>
+              <span class="product-target-tag">교사용 PC / 노트북</span>
             </div>
             <p class="product-desc">
-              현재 교사용 앱의 다운로드 및 클라우드 연동 서비스가 일시 중단되었습니다.<br>
-              실시간 급식 지도 기능은 <strong><a href="https://boardest-eat.web.app" target="_blank" style="color: #00f5d4; text-decoration: underline;">Boardest Eat (급식 지도)</a></strong> 웹앱을 이용해 주세요.
+              교사용 2분할 통합 도구, Google Drive 수업 교안 관리, 판서 기록 연동, 주간 시간표 및 전자칠판 원격 연동.
             </p>
           </div>
         </div>
@@ -1632,10 +1631,11 @@
         winWebBtn.href = "https://boardest-eat.web.app";
         winWebText.innerText = "🍱 실시간 급식 지도 (Boardest Eat) 열기";
       } else {
-        winAppinstallerBtn.href = "javascript:alert('교사용(Boardest Teacher) 앱 다운로드는 현재 일시 중단되었습니다.\\n급식 지도는 Boardest Eat 웹앱을 이용해 주세요.');";
-        winAppinstallerBtn.style.opacity = "0.5";
-        winAppinstallerText.innerText = "교사용 앱 다운로드 일시 중단";
-        winCmdInstall.innerText = "# 교사용(Boardest Teacher) 앱 다운로드는 현재 비활성화되어 있습니다.";
+        winAppinstallerBtn.href = "https://download-boardest.web.app/bst-teacher.appinstaller";
+        winAppinstallerBtn.style.opacity = "1";
+        winAppinstallerBtn.style.pointerEvents = "auto";
+        winAppinstallerText.innerText = "bst-teacher.appinstaller 다운로드 및 실행";
+        winCmdInstall.innerText = "Add-AppxPackage -AppInstallerFile https://download-boardest.web.app/bst-teacher.appinstaller";
         winWebBtn.href = "https://boardest-eat.web.app";
         winWebText.innerText = "🍱 실시간 급식 지도 (Boardest Eat) 열기";
       }

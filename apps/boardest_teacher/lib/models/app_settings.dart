@@ -196,6 +196,7 @@ class AppSettings {
   final String themeColor; // "system", "purple", "green", "blue", "orange"
   final String windowFrameStyle; // "mac" (감각적인 디자인), "win7" (자주보던 Windows 7 Basic 디자인)
   final bool isHomeroom; // 담임 교사 여부
+  final String updateChannel; // "normal" | "beta"
 
   bool get specialClassroomMode => specialClassroomType > 0;
 
@@ -227,6 +228,7 @@ class AppSettings {
     this.themeMode = 'system',
     this.themeColor = 'system',
     this.windowFrameStyle = 'mac',
+    this.updateChannel = 'beta',
   })  : timeSettings = timeSettings ?? TimeSettings(),
         textbookImages = textbookImages ?? {},
         ddayEvents = ddayEvents ?? _getDefaultDDayEvents(),
@@ -404,6 +406,7 @@ class AppSettings {
       'themeColor': themeColor,
       'windowFrameStyle': windowFrameStyle,
       'isHomeroom': isHomeroom,
+      'updateChannel': updateChannel,
     };
   }
 
@@ -516,6 +519,7 @@ class AppSettings {
       themeMode: json['themeMode']?.toString() ?? 'system',
       themeColor: json['themeColor']?.toString() ?? 'system',
       windowFrameStyle: json['windowFrameStyle']?.toString() ?? 'mac',
+      updateChannel: json['updateChannel']?.toString() ?? 'beta',
     );
   }
 
@@ -549,6 +553,7 @@ class AppSettings {
     String? themeMode,
     String? themeColor,
     String? windowFrameStyle,
+    String? updateChannel,
   }) {
     return AppSettings(
       selectedSchool: selectedSchool ?? this.selectedSchool,
@@ -578,6 +583,7 @@ class AppSettings {
       themeMode: themeMode ?? this.themeMode,
       themeColor: themeColor ?? this.themeColor,
       windowFrameStyle: windowFrameStyle ?? this.windowFrameStyle,
+      updateChannel: updateChannel ?? this.updateChannel,
     );
   }
 

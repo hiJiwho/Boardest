@@ -1,7 +1,37 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v3.0.3** (App: v3.0.3 / Web: v3.0.3)  
+> **현재 시스템 버전**: **v3.0.5-beta** (App: v3.0.5 / Web: v3.0.5)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 v3.0.5-beta (2026-10-07) — 🚀 Boardest Beta Release & DB Quota Optimization
+
+### 1. ⚡ Firebase DB 사용량 고갈 원천 차단 (앱 실행 시 1회 조회로 전환)
+- **주기적 백그라운드 호출 전면 제거**:
+  - `_startDashboardTimer` 내 매 60초마다 Firestore `users/{email}`에 온라인 상태(`lastActive`)를 PATCH하던 반복 로직 제거.
+  - 매 120초(2분)마다 `_loadAdBanners`로 Firestore `control_configs`를 GET하던 반복 로직 제거.
+  - 매 600초(10분)마다 `_fetchTimetableBackground`로 시간표를 재폴링하던 로직 제거.
+- **앱 시작 시 1회성 로드 & 로컬 캐시 체계 확립**:
+  - 앱 시작 시(`initState` / `_loadPreferencesAndFetch`)에만 온라인 상태 및 배너를 1회 로드하고 메모리에 유지.
+  - 시간표는 SharedPreferences 캐시 우선 로드 및 1회성 페치로 동작하여, 전자칠판이 하루 종일 켜져 있어도 Firebase DB Read/Write 발생량을 0회로 억제.
+
+### 2. 👩‍🏫 교사 기능 복원 및 연동성 강화
+- **전자칠판 클라우드 기능 활성화**:
+  - `BstCloudService.isCloudFeatureDisabled = false` 적용.
+  - 교사 OTP 및 페어링을 통한 Google Drive `bst-save` 교안 보관함, Canva 링크 연동, 클라우드 판서 모달 정상 복원.
+- **공식 온보딩 포털(`welcome-to-boardest`) 교사용 앱 다운로드 복원**:
+  - 교사용 카드(`card-teacher`)의 "다운로드 일시 중단" 해제 및 정상 활성화.
+  - `bst-teacher.appinstaller` 및 PowerShell 명령어 다운로드 경로 복원.
+
+### 3. 🚀 업데이트 채널 분리 (Beta / Normal)
+- **앱 설정(`AppSettings`) 및 UI 연동**:
+  - `updateChannel`: `beta` (기본값) 및 `normal` 채널 분기 필드 추가.
+  - 전자칠판 [설정 > 시스템 업데이트 확인] 메뉴 클릭 시 **[시스템 업데이트 & 채널 설정]** 다이얼로그를 통해 채널(Beta 체험판 / Normal 안정판) 변경 및 즉시 업데이트 확인 지원.
+- **UpdateService 및 배포 인프라 분기**:
+  - Beta 채널: GitHub Releases 목록 중 최신 릴리즈(pre-release 포함) 감지 및 `download-boardest.web.app/boardest-beta.appinstaller` / `bst-teacher-beta.appinstaller` 매니페스트 확인.
+  - Normal 채널: GitHub Releases 안정 버전(`/releases/latest`) 및 `boardest.appinstaller` 확인.
+  - `build_all_appx.ps1` 패키징 파이프라인에서 `-Channel` 파라미터 지원 및 Beta/Normal 매니페스트 동시 생성/동기화 지원.
 
 ---
 

@@ -10,6 +10,7 @@ import '../services/usb_session_service.dart';
 import '../services/annotation_storage_service.dart';
 import '../services/app_paths.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:bst_core/bst_core.dart' show PanserPluginService;
 
 /// Windows 전용: 최첨단 C#/WPF 기반 PowerPoint 슬라이드쇼 판서 오버레이 연동 뷰
 class PptOverlayView extends StatefulWidget {
@@ -107,6 +108,19 @@ class _PptOverlayViewState extends State<PptOverlayView> {
             break;
           }
         }
+
+        // AppX 설치 패키지(bst-overlay-panser)에서 탐색
+        if (!File(exePath).existsSync()) {
+          final appxExe = await PanserPluginService.findExecutable('boardest_ppt_overlay.exe');
+          if (appxExe != null && File(appxExe).existsSync()) {
+            try {
+              File(appxExe).copySync(exePath);
+            } catch (_) {
+              // 샌드박스 제약으로 복사 불가 시 원본 경로 직접 사용
+              exePath = appxExe;
+            }
+          }
+        }
       }
 
       if (!File(exePath).existsSync()) {
@@ -147,11 +161,16 @@ class _PptOverlayViewState extends State<PptOverlayView> {
       debugPrint('[PptOverlayView] Launching native WPF overlay: $exePath');
       final pageArg = (startSlide + 1).toString(); // 0-based -> 1-based
 
+      final saveDir = p.join(AppPaths.bstPenRootSync, 'PPT');
+      try { Directory(saveDir).createSync(recursive: true); } catch (_) {}
+
       _process = await Process.start(exePath, [
         '--path',
         widget.initialFilePath,
         '--page',
         pageArg,
+        '--save-dir',
+        saveDir,
       ]);
 
       // Native WPF overlay runs as TopMost window above Flutter without minimizing Flutter window,

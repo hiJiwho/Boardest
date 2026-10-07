@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../models/app_settings.dart';
-import '../config/app_config.dart';
 import 'storage_service.dart';
 
 class MealCallService {
@@ -277,8 +276,8 @@ class MealCallService {
     _registerClassroom();
     _checkCallStatus();
 
-    // 3. 2분 간격으로 하트비트 전송 및 SSE 연결 상태 감시 (0 Firestore Reads)
-    _activeTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
+    // 3. 30초 간격으로 하트비트 전송 및 SSE 연결 상태 감시 (0 Firestore Reads)
+    _activeTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (_currentSettings == null) return;
       _registerClassroom();
       if (_sseSubscription == null || _sseClient == null) {
@@ -305,8 +304,15 @@ class MealCallService {
     final code = _currentSettings!.selectedSchool?.code.toString() ?? '';
     final schoolId = _currentSettings!.schoolId.trim();
     String connName = schoolId.isNotEmpty ? schoolId : _currentSettings!.connectionName;
-    if (connName.isEmpty || connName.toLowerCase() == 'my') {
-      connName = code.isNotEmpty ? code : 'school';
+    if (connName.isEmpty || connName.toLowerCase() == 'my' || connName.toLowerCase() == 'school') {
+      final sName = _currentSettings!.selectedSchool?.name ?? '';
+      if (sName.contains('양동')) {
+        connName = 'ydm';
+      } else if (code.isNotEmpty) {
+        connName = code;
+      } else {
+        connName = 'school';
+      }
     }
     connName = connName.toLowerCase();
     
@@ -332,8 +338,6 @@ class MealCallService {
     return '${connName}_${cafeteria}_${grade}_$classNum';
   }
 
-  static String get _apiKey => AppConfig.firebaseApiKey;
-
   Future<void> _registerClassroom() async {
     if (_currentSettings == null) return;
 
@@ -350,8 +354,15 @@ class MealCallService {
       final schoolId = _currentSettings!.schoolId.trim();
       final code = _currentSettings!.selectedSchool?.code.toString() ?? '';
       String connName = schoolId.isNotEmpty ? schoolId : _currentSettings!.connectionName;
-      if (connName.isEmpty || connName.toLowerCase() == 'my') {
-        connName = code.isNotEmpty ? code : 'school';
+      if (connName.isEmpty || connName.toLowerCase() == 'my' || connName.toLowerCase() == 'school') {
+        final sName = _currentSettings!.selectedSchool?.name ?? '';
+        if (sName.contains('양동')) {
+          connName = 'ydm';
+        } else if (code.isNotEmpty) {
+          connName = code;
+        } else {
+          connName = 'school';
+        }
       }
       connName = connName.toLowerCase();
 
@@ -386,47 +397,7 @@ class MealCallService {
         debugPrint('[MealCallService] RTDB heartbeat error: $re');
       }
 
-      // 2. Firestore 동기화 (기존 레거시 백업 유지)
-      try {
-        const updateMask = 'updateMask.fieldPaths=place&updateMask.fieldPaths=schoolName&updateMask.fieldPaths=schoolCode&updateMask.fieldPaths=cafeteriaNum&updateMask.fieldPaths=grade&updateMask.fieldPaths=classNum&updateMask.fieldPaths=classNickname&updateMask.fieldPaths=lastActive&updateMask.fieldPaths=classOrder';
-        final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls/$docId?$updateMask&key=$_apiKey';
-        final payload = {
-          'fields': {
-            'place': {'stringValue': place},
-            'schoolName': {'stringValue': schoolName},
-            'schoolCode': {'stringValue': schoolCode},
-            'cafeteriaNum': {'stringValue': cafeteria},
-            'grade': {'integerValue': '${_currentSettings!.selectedGrade}'},
-            'classNum': {'integerValue': '${_currentSettings!.selectedClass}'},
-            'classNickname': {'stringValue': classNickname},
-            'lastActive': {'timestampValue': DateTime.now().toUtc().toIso8601String()},
-            'classOrder': {'stringValue': _currentSettings!.mealCallClassOrder}
-          }
-        };
-
-        final response = await http.patch(
-          Uri.parse(firestoreUrl),
-          headers: {"Content-Type": "application/json"},
-          body: json.encode(payload),
-        );
-
-        if (response.statusCode >= 400) {
-          final createUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls?documentId=$docId&key=$_apiKey';
-          final initialPayload = {
-            'fields': {
-              ...payload['fields'] as Map<String, dynamic>,
-              'called': {'booleanValue': false},
-            }
-          };
-          await http.post(
-            Uri.parse(createUrl),
-            headers: {"Content-Type": "application/json"},
-            body: json.encode(initialPayload),
-          );
-        }
-      } catch (_) {}
-
-      // 3. Cloudflare Worker KV 동기화
+      // 2. Cloudflare Worker KV 동기화 (eat 웹 폴백 소스)
       try {
         await http.post(
           Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/classrooms/heartbeat'),
@@ -468,11 +439,6 @@ class MealCallService {
     }
   }
 
-  String get _endpointUrl {
-    final docId = _documentId;
-    return 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls/$docId?key=$_apiKey';
-  }
-
   Future<void> clearMealCall() async {
     if (_currentSettings == null || (_currentSettings!.connectionName.isEmpty && _currentSettings!.selectedSchool == null && !_currentSettings!.specialClassroomMode)) return;
 
@@ -489,24 +455,6 @@ class MealCallService {
         body: json.encode({'called': false}),
       ).timeout(const Duration(seconds: 4));
     } catch (_) {}
-
-    // 2. Firestore 해제 (레거시 동기화)
-    try {
-      final firestoreUrl = _endpointUrl;
-      final payload = {
-        'fields': {
-          'called': {'booleanValue': false}
-        }
-      };
-
-      await http.patch(
-        Uri.parse(firestoreUrl),
-        headers: {"Content-Type": "application/json"},
-        body: json.encode(payload),
-      );
-    } catch (e) {
-      debugPrint('Error clearing meal call: $e');
-    }
   }
 
   Future<void> clearMessage() async {
@@ -528,26 +476,6 @@ class MealCallService {
         }),
       ).timeout(const Duration(seconds: 4));
     } catch (_) {}
-
-    // 2. Firestore 쪽지 클리어
-    try {
-      final firestoreUrl = _endpointUrl;
-      final payload = {
-        'fields': {
-          'message': {'stringValue': ''},
-          'messageFrom': {'stringValue': ''},
-          'messageSentAt': {'stringValue': ''}
-        }
-      };
-
-      await http.patch(
-        Uri.parse(firestoreUrl),
-        headers: {"Content-Type": "application/json"},
-        body: json.encode(payload),
-      );
-    } catch (e) {
-      debugPrint('Error clearing message: $e');
-    }
   }
 
   Future<void> clearStudentCall() async {
@@ -569,26 +497,6 @@ class MealCallService {
         }),
       ).timeout(const Duration(seconds: 4));
     } catch (_) {}
-
-    // 2. Firestore 학생 호출 클리어
-    try {
-      final firestoreUrl = _endpointUrl;
-      final payload = {
-        'fields': {
-          'callMessage': {'stringValue': ''},
-          'callerName': {'stringValue': ''},
-          'callSentAt': {'stringValue': ''}
-        }
-      };
-
-      await http.patch(
-        Uri.parse(firestoreUrl),
-        headers: {"Content-Type": "application/json"},
-        body: json.encode(payload),
-      );
-    } catch (e) {
-      debugPrint('Error clearing student call: $e');
-    }
   }
 
   Future<void> deleteEatCallDocument({AppSettings? settings}) async {
@@ -598,8 +506,15 @@ class MealCallService {
     final schoolId = activeSettings.schoolId.trim();
     final code = activeSettings.selectedSchool?.code.toString() ?? '';
     String connName = schoolId.isNotEmpty ? schoolId : activeSettings.connectionName;
-    if (connName.isEmpty || connName.toLowerCase() == 'my') {
-      connName = code.isNotEmpty ? code : 'school';
+    if (connName.isEmpty || connName.toLowerCase() == 'my' || connName.toLowerCase() == 'school') {
+      final sName = activeSettings.selectedSchool?.name ?? '';
+      if (sName.contains('양동')) {
+        connName = 'ydm';
+      } else if (code.isNotEmpty) {
+        connName = code;
+      } else {
+        connName = 'school';
+      }
     }
     connName = connName.toLowerCase();
     
@@ -627,19 +542,6 @@ class MealCallService {
         }),
       ).timeout(const Duration(seconds: 4));
     } catch (_) {}
-
-    // 2. Firestore 문서 삭제
-    try {
-      final url = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls/$docId?key=$_apiKey';
-      final res = await http.delete(Uri.parse(url)).timeout(const Duration(seconds: 8));
-      if (res.statusCode == 200 || res.statusCode == 204) {
-        debugPrint('[MealCallService] eat_calls document $docId deleted successfully.');
-      } else {
-        debugPrint('[MealCallService] Error deleting eat_calls document $docId (status code: ${res.statusCode}).');
-      }
-    } catch (e) {
-      debugPrint('[MealCallService] Error deleting eat_calls document $docId: $e');
-    }
   }
 
   /// 로컬 서버로부터 직접 호출받았을 때 칠판에 즉시 팝업을 띄우기 위한 원격 호출 트리거

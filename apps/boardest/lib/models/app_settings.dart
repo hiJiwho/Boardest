@@ -202,6 +202,7 @@ class AppSettings {
   final String schoolId; // 학교 식별 ID
   final String windowFrameStyle; // "mac", "win7"
   final String aspectRatio; // "16:9", "4:3"
+  final String updateChannel; // "normal" | "beta"
 
   /// 가상 캔버스 화면 비율 헬퍼
   bool get is4by3Ratio => aspectRatio == '4:3';
@@ -241,6 +242,7 @@ class AppSettings {
     this.selectedTeacherName = '',
     this.windowFrameStyle = 'mac',
     this.aspectRatio = '16:9',
+    this.updateChannel = 'beta',
   }) : timeSettings = timeSettings ?? TimeSettings(),
        textbookImages = textbookImages ?? {},
        ddayEvents = ddayEvents ?? _getDefaultDDayEvents(),
@@ -556,6 +558,7 @@ class AppSettings {
       'selectedTeacherName': selectedTeacherName,
       'windowFrameStyle': windowFrameStyle,
       'aspectRatio': aspectRatio,
+      'updateChannel': updateChannel,
     };
   }
 
@@ -684,6 +687,7 @@ class AppSettings {
       selectedTeacherName: json['selectedTeacherName'] as String? ?? '',
       windowFrameStyle: json['windowFrameStyle'] as String? ?? 'mac',
       aspectRatio: json['aspectRatio'] as String? ?? '16:9',
+      updateChannel: json['updateChannel'] as String? ?? 'beta',
     );
   }
 
@@ -715,6 +719,7 @@ class AppSettings {
     String? selectedTeacherName,
     String? windowFrameStyle,
     String? aspectRatio,
+    String? updateChannel,
   }) {
     return AppSettings(
       selectedSchool: selectedSchool ?? this.selectedSchool,
@@ -746,6 +751,7 @@ class AppSettings {
       selectedTeacherName: selectedTeacherName ?? this.selectedTeacherName,
       windowFrameStyle: windowFrameStyle ?? this.windowFrameStyle,
       aspectRatio: aspectRatio ?? this.aspectRatio,
+      updateChannel: updateChannel ?? this.updateChannel,
     );
   }
 

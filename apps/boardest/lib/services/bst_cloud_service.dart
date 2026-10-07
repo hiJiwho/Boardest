@@ -117,10 +117,9 @@ class BstCloudService {
   static final BstCloudService instance = BstCloudService._();
   BstCloudService._();
 
-  /// [Cloud 기능 비활성화 플래그]
-  /// true일 경우 전자칠판 내 Cloud 접속 및 OTP 키패드가 비활성화되고,
-  /// 광고판/급식 식단 및 USB 탐색기가 해당 영역을 대체합니다.
-  static const bool isCloudFeatureDisabled = true;
+  /// [Cloud 기능 활성화 플래그]
+  /// 교사 로그인 및 Google Drive 연동(bst-save, OTP, Canva)을 활성화합니다.
+  static const bool isCloudFeatureDisabled = false;
 
   static final Map<String, Uint8List> webMemoryFiles = {};
 

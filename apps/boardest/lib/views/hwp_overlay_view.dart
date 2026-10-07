@@ -10,6 +10,7 @@ import '../services/usb_session_service.dart';
 import '../services/annotation_storage_service.dart';
 import '../services/app_paths.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:bst_core/bst_core.dart' show PanserPluginService;
 
 /// Windows 전용: 최첨단 C#/WPF 기반 한글(HWP) 판서 오버레이 연동 뷰
 class HwpOverlayView extends StatefulWidget {
@@ -107,6 +108,18 @@ class _HwpOverlayViewState extends State<HwpOverlayView> {
             break;
           }
         }
+
+        // AppX 설치 패키지(bst-overlay-panser)에서 탐색
+        if (!File(exePath).existsSync()) {
+          final appxExe = await PanserPluginService.findExecutable('boardest_hwp_overlay.exe');
+          if (appxExe != null && File(appxExe).existsSync()) {
+            try {
+              File(appxExe).copySync(exePath);
+            } catch (_) {
+              exePath = appxExe;
+            }
+          }
+        }
       }
 
       if (!File(exePath).existsSync()) {
@@ -147,11 +160,16 @@ class _HwpOverlayViewState extends State<HwpOverlayView> {
       debugPrint('[HwpOverlayView] Launching native WPF overlay: $exePath');
       final pageArg = (startPage + 1).toString(); // 0-based -> 1-based
 
+      final saveDir = p.join(AppPaths.bstPenRootSync, 'HWP');
+      try { Directory(saveDir).createSync(recursive: true); } catch (_) {}
+
       _process = await Process.start(exePath, [
         '--path',
         widget.initialFilePath,
         '--page',
         pageArg,
+        '--save-dir',
+        saveDir,
       ]);
 
       try {

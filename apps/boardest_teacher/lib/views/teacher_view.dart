@@ -1329,7 +1329,10 @@ class _TeacherViewState extends State<TeacherView> {
   void _checkForAppUpdates({bool silent = false}) async {
     if (kIsWeb) return;
     try {
-      final updateInfo = await UpdateService.instance.checkForUpdate(force: !silent);
+      final updateInfo = await UpdateService.instance.checkForUpdate(
+        force: !silent,
+        channel: _settings.updateChannel,
+      );
       if (updateInfo != null && updateInfo.hasUpdate && mounted) {
         if (silent && Platform.isWindows) {
           debugPrint('[TeacherView] 🚀 Background update found on launch. Executing quiet updater and terminating.');

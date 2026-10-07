@@ -18,3 +18,4 @@ dynamic TEXT(String s) => null;
 int GetDriveType(dynamic ptr) => 0;
 const int DRIVE_REMOVABLE = 2;
 void free(dynamic ptr) {}
+void MessageBeep(int uType) {}

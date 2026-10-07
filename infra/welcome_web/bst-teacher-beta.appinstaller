@@ -2,13 +2,13 @@
 <AppInstaller
     xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
     Version="3.0.5.0"
-    Uri="https://download-boardest.web.app/boardest.appinstaller">
+    Uri="https://download-boardest.web.app/bst-teacher-beta.appinstaller">
     <MainPackage
-        Name="jiwho.boardest.bst"
+        Name="jiwho.boardest.teacher.beta"
         Publisher="CN=jiwho"
         Version="3.0.5.0"
         ProcessorArchitecture="x64"
-        Uri="https://download-boardest.web.app/boardest.appx" />
+        Uri="https://download-boardest.web.app/bst-teacher-beta.appx" />
     <UpdateSettings>
         <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="true"/>
         <AutomaticBackgroundTask/>

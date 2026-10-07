@@ -161,11 +161,19 @@ class StorageService {
         final int grade = (jsonMap['grade'] as num? ?? 1).toInt();
         final int classNum = (jsonMap['classNum'] as num? ?? 1).toInt();
         
+        String resolvedSchoolId = (jsonMap['schoolId'] as String?) ?? settings.schoolId;
+        if (resolvedSchoolId.isEmpty && schoolName.contains('양동')) {
+          resolvedSchoolId = 'ydm';
+        }
+        final bool configIsComplete = (jsonMap['isSetupComplete'] as bool?) ?? settings.isSetupComplete;
+        
         if (settings.selectedSchool == null ||
             settings.selectedSchool!.region != region ||
             settings.selectedSchool!.name != schoolName ||
             settings.selectedGrade != grade ||
-            settings.selectedClass != classNum) {
+            settings.selectedClass != classNum ||
+            (resolvedSchoolId.isNotEmpty && settings.schoolId != resolvedSchoolId) ||
+            settings.isSetupComplete != configIsComplete) {
           
           final comcigan = ComciganService();
           final schools = await comcigan.searchSchool(schoolName);
@@ -173,9 +181,6 @@ class StorageService {
             (s) => s.region == region && s.name.contains(schoolName),
             orElse: () => schools.isNotEmpty ? schools.first : School(id: 0, region: region, name: schoolName, code: 31828),
           );
-          
-          final String resolvedSchoolId = (jsonMap['schoolId'] as String?) ?? settings.schoolId;
-          final bool configIsComplete = (jsonMap['isSetupComplete'] as bool?) ?? settings.isSetupComplete;
           
           final updated = settings.copyWith(
             selectedSchool: matched,

@@ -275,27 +275,47 @@
         },
         {
           "source": "/bst.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/boardest.appx",
           "type": 302
         },
         {
           "source": "/boardest.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/boardest.appx",
+          "type": 302
+        },
+        {
+          "source": "/boardest-beta.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/boardest-beta.appx",
+          "type": 302
+        },
+        {
+          "source": "/bst-beta.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/boardest-beta.appx",
+          "type": 302
+        },
+        {
+          "source": "/bst-teacher-beta.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/bst-teacher-beta.appx",
+          "type": 302
+        },
+        {
+          "source": "/bst-overlay-panser.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/bst-overlay-panser.appx",
           "type": 302
         },
         {
           "source": "/appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/boardest.appx",
           "type": 302
         },
         {
           "source": "/teacher.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/bst-teacher.appx",
           "type": 302
         },
         {
           "source": "/bst-teacher.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/bst-teacher.appx",
           "type": 302
         },
         {

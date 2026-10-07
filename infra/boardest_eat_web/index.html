@@ -939,21 +939,20 @@
     async function fetchData() {
       if (!schoolCode) return;
 
-      let rawList = [];
+      const roomMap = new Map();
+
       // 1. Firebase Realtime Database (RTDB) 실시간 데이터 직접 조회 (0 Firestore Reads)
       try {
         const rtdbRes = await fetch(`${RTDB_BASE}/eat_calls.json`, { cache: 'no-store' });
         if (rtdbRes.ok) {
           const rtdbData = await rtdbRes.json();
           if (rtdbData && typeof rtdbData === 'object') {
-            rawList = [];
             Object.entries(rtdbData).forEach(([docName, c]) => {
               if (!c || typeof c !== 'object') return;
               const docSchoolCode = (c.schoolCode || '').trim().toLowerCase();
               const docSchoolName = c.schoolName || '';
               if (matchesSchool(docSchoolCode, docName, docSchoolName)) {
-                const isCalled = c.called === true;
-                rawList.push({
+                roomMap.set(docName, {
                   docId: docName,
                   schoolCode: docSchoolCode,
                   schoolName: docSchoolName,
@@ -963,7 +962,7 @@
                   nickname: c.classNickname || c.nickname || '',
                   lastActive: c.lastActive || null,
                   isOnline: c.isOnline !== false,
-                  called: isCalled
+                  called: c.called === true
                 });
               }
             });
@@ -973,8 +972,39 @@
         console.warn('RTDB presence lookup error:', re);
       }
 
-      // 2. Firestore 직접 폴백 (RTDB에 데이터가 없을 때 백업)
-      if (!rawList || rawList.length === 0) {
+      // 2. Cloudflare Worker KV 보조 동기화 (최신 접속 정보 병합)
+      try {
+        const workerUrl = `https://boardest-cloud-token.jiwho.workers.dev/api/classrooms?schoolCode=${encodeURIComponent(schoolCode)}`;
+        const wRes = await fetch(workerUrl, { cache: 'no-store' });
+        if (wRes.ok) {
+          const wData = await wRes.json();
+          (wData.classrooms || []).forEach(wc => {
+            if (!wc.docId) return;
+            if (!roomMap.has(wc.docId)) {
+              roomMap.set(wc.docId, {
+                docId: wc.docId,
+                schoolCode: wc.schoolCode,
+                schoolName: wc.schoolName,
+                cafeteria: String(wc.cafeteria || '1'),
+                grade: wc.grade || (wc.docId.split('_')[2] || '1'),
+                classNum: wc.class || wc.classNum || (wc.docId.split('_')[3] || '1'),
+                nickname: wc.nickname || '',
+                lastActive: wc.lastActive || null,
+                isOnline: true,
+                called: false
+              });
+            } else {
+              const existing = roomMap.get(wc.docId);
+              if (!existing.lastActive && wc.lastActive) {
+                existing.lastActive = wc.lastActive;
+              }
+            }
+          });
+        }
+      } catch (_) {}
+
+      // 3. Firestore 직접 폴백 (RTDB/Worker 모두 비어있을 때만 최후의 안전망)
+      if (roomMap.size === 0) {
         try {
           const fsRes = await fetch(`${FIRESTORE_BASE}/eat_calls?pageSize=50`, { cache: 'no-store' });
           if (fsRes.ok) {
@@ -986,8 +1016,7 @@
               const dSchoolCode = (f.schoolCode?.stringValue || '').trim().toLowerCase();
               const dSchoolName = f.schoolName?.stringValue || '';
               if (matchesSchool(dSchoolCode, docName, dSchoolName)) {
-                const isCalled = f.called?.booleanValue === true;
-                rawList.push({
+                roomMap.set(docName, {
                   docId: docName,
                   schoolCode: dSchoolCode,
                   schoolName: dSchoolName,
@@ -997,7 +1026,7 @@
                   nickname: f.classNickname?.stringValue || '',
                   lastActive: f.lastActive?.timestampValue || null,
                   isOnline: true,
-                  called: isCalled
+                  called: f.called?.booleanValue === true
                 });
               }
             });
@@ -1005,30 +1034,19 @@
         } catch (_) {}
       }
 
-      // 3. Worker 안전망 (최후의 폴백)
-      if (!rawList || rawList.length === 0) {
-        try {
-          const workerUrl = `https://boardest-cloud-token.jiwho.workers.dev/api/classrooms?schoolCode=${encodeURIComponent(schoolCode)}`;
-          const res = await fetch(workerUrl, { cache: 'no-store' });
-          if (res.ok) {
-            const data = await res.json();
-            rawList = data.classrooms || [];
-          }
-        } catch (_) {}
-      }
-
       const nowMs = Date.now();
       onlineClassrooms = [];
-      rawList.forEach(c => {
-        let isOnline = c.isOnline !== false;
-        if (c.lastActive) {
+      roomMap.forEach(c => {
+        // ★ 엄격한 온라인 판정:
+        // 1) c.isOnline 이 명시적으로 false 이면 오프라인
+        // 2) c.lastActive 가 없는 과거 레거시 문서는 무조건 오프라인!
+        // 3) c.lastActive 가 최근 3분 (180초) 이내에 갱신된 학급만 진짜 온라인!
+        let isOnline = false;
+        if (c.isOnline !== false && c.lastActive) {
           const lastMs = typeof c.lastActive === 'number' ? c.lastActive : new Date(c.lastActive).getTime();
           const diffMin = (nowMs - lastMs) / (1000 * 60);
-          // 시계 오차 허용 (-5분 ~ 60분 이내 활성)
-          if (!isNaN(diffMin) && diffMin >= -5 && diffMin <= 60) {
+          if (!isNaN(diffMin) && diffMin >= -2 && diffMin <= 3.0) {
             isOnline = true;
-          } else {
-            isOnline = false;
           }
         }
 
@@ -1060,7 +1078,6 @@
     // ─── Call Actions ───
     async function sendCall(docId, grade, classNum) {
       calledRooms.add(docId);
-      playChime();
       renderClassrooms();
       showToast(`🔔 ${grade}학년 ${classNum}반에 급식 호출 신호를 전송했습니다!`);
 
@@ -1188,7 +1205,6 @@
       }
 
       filtered.forEach(c => calledRooms.add(c.docId));
-      playChime();
       renderClassrooms();
       showToast(`📢 총 ${filtered.length}개 학급에 급식실 이동 호출 신호를 발송했습니다!`);
 

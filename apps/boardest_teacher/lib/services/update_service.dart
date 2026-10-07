@@ -45,14 +45,15 @@ class UpdateService {
   }
 
   /// Windows 앱 설치 관리자(AppInstaller) 설정: 앱 실행 시 OS 창 팝업 차단 (인앱 백그라운드 체크 전담)
-  static Future<void> ensureNativeAppInstallerSettings() async {
+  static Future<void> ensureNativeAppInstallerSettings({String channel = 'beta'}) async {
     if (!Platform.isWindows) return;
     try {
       final exePath = Platform.resolvedExecutable;
       if (exePath.contains('WindowsApps')) {
+        final installerUrl = channel == 'beta' ? appInstallerBetaManifestUrl : appInstallerManifestUrl;
         final psCommand =
             'Set-AppxPackageAutoUpdateSettings -PackageFamilyName "jiwho.boardest.teacher_nmkn64tehfz7a" '
-            '-AppInstallerUri "https://download-boardest.web.app/bst-teacher.appinstaller" '
+            '-AppInstallerUri "$installerUrl" '
             '-CheckOnLaunch \$true -ShowPrompt \$false -UpdateBlocksActivation \$false '
             '-ForceUpdateFromAnyVersion \$true -HoursBetweenUpdateChecks 0 -ErrorAction SilentlyContinue';
         await Process.run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psCommand]);
@@ -61,8 +62,10 @@ class UpdateService {
   }
 
   static const String githubRepoUrl = 'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
+  static const String githubReleasesListUrl = 'https://api.github.com/repos/hiJiwho/Boardest/releases';
   static const String verificationServerUrl = 'https://boardest-update-work.firebaseapp.com';
   static const String appInstallerManifestUrl = 'https://download-boardest.web.app/bst-teacher.appinstaller';
+  static const String appInstallerBetaManifestUrl = 'https://download-boardest.web.app/bst-teacher-beta.appinstaller';
 
   // 중복 동시 업데이트 체크 방지 플래그
   static bool _isChecking = false;
@@ -101,7 +104,7 @@ class UpdateService {
   }
 
   /// Check for latest update from GitHub Releases (with AppInstaller XML fallback)
-  Future<UpdateInfo?> checkForUpdate({bool force = false}) async {
+  Future<UpdateInfo?> checkForUpdate({bool force = false, String channel = 'beta'}) async {
     // Web 환경에서는 브라우저 캐시 정책에 따름
     if (kIsWeb) return null;
     if (!Platform.isWindows && !Platform.isAndroid) return null;
@@ -118,11 +121,12 @@ class UpdateService {
 
     _isChecking = true;
     _lastSilentCheckTime = DateTime.now();
-    debugPrint('[UpdateService] 🔍 checkForUpdate started. Current Version: $currentVersion (force: $force)');
+    debugPrint('[UpdateService] 🔍 checkForUpdate started. Current Version: $currentVersion (channel: $channel, force: $force)');
 
     String latestVersion = '';
     String notes = '';
-    String downloadUrl = Platform.isWindows ? appInstallerManifestUrl : '';
+    final activeManifestUrl = channel == 'beta' ? appInstallerBetaManifestUrl : appInstallerManifestUrl;
+    String downloadUrl = Platform.isWindows ? activeManifestUrl : '';
 
     try {
       // 1. First attempt: GitHub Releases API
@@ -134,28 +138,50 @@ class UpdateService {
           if (token != null && token.isNotEmpty) 'Authorization': 'token $token',
         };
 
+        final endpoint = channel == 'beta' ? githubReleasesListUrl : githubRepoUrl;
         final response = await http.get(
-          Uri.parse(githubRepoUrl),
+          Uri.parse(endpoint),
           headers: headers,
         ).timeout(const Duration(seconds: 5));
 
         debugPrint('[UpdateService] 📡 GitHub API response status: ${response.statusCode}');
         if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-          latestVersion = (data['tag_name'] ?? '').toString().replaceAll('v', '').trim();
-          notes = (data['body'] ?? '').toString();
-          final List assets = data['assets'] ?? [];
+          if (channel == 'beta') {
+            final List releases = json.decode(response.body);
+            if (releases.isNotEmpty) {
+              final data = releases.first as Map<String, dynamic>;
+              latestVersion = (data['tag_name'] ?? '').toString().replaceAll('v', '').trim();
+              notes = (data['body'] ?? '').toString();
+              final List assets = data['assets'] ?? [];
 
-          if (Platform.isAndroid) {
-            for (var asset in assets) {
-              String name = asset['name'].toString().toLowerCase();
-              if (name.endsWith('.apk')) {
-                downloadUrl = asset['browser_download_url'] ?? '';
-                break;
+              if (Platform.isAndroid) {
+                for (var asset in assets) {
+                  String name = asset['name'].toString().toLowerCase();
+                  if (name.endsWith('.apk')) {
+                    downloadUrl = asset['browser_download_url'] ?? '';
+                    break;
+                  }
+                }
+              }
+              debugPrint('[UpdateService] ✅ GitHub beta release tag: $latestVersion');
+            }
+          } else {
+            final data = json.decode(response.body);
+            latestVersion = (data['tag_name'] ?? '').toString().replaceAll('v', '').trim();
+            notes = (data['body'] ?? '').toString();
+            final List assets = data['assets'] ?? [];
+
+            if (Platform.isAndroid) {
+              for (var asset in assets) {
+                String name = asset['name'].toString().toLowerCase();
+                if (name.endsWith('.apk')) {
+                  downloadUrl = asset['browser_download_url'] ?? '';
+                  break;
+                }
               }
             }
+            debugPrint('[UpdateService] ✅ GitHub latest release tag: $latestVersion');
           }
-          debugPrint('[UpdateService] ✅ GitHub latest release tag: $latestVersion');
         } else {
           debugPrint('[UpdateService] ⚠️ GitHub API returned status ${response.statusCode}. Falling back to hosted AppInstaller manifest...');
         }
@@ -166,7 +192,7 @@ class UpdateService {
       // 2. Fallback attempt: Hosted AppInstaller XML manifest on Firebase Hosting (zero rate limits, cache-busting)
       if (latestVersion.isEmpty && Platform.isWindows) {
         try {
-          final cacheBustedUrl = '$appInstallerManifestUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+          final cacheBustedUrl = '$activeManifestUrl?t=${DateTime.now().millisecondsSinceEpoch}';
           debugPrint('[UpdateService] 🌐 Fetching manifest from $cacheBustedUrl ...');
           final manifestRes = await http.get(Uri.parse(cacheBustedUrl)).timeout(const Duration(seconds: 5));
           if (manifestRes.statusCode == 200) {
@@ -175,7 +201,7 @@ class UpdateService {
             if (match != null) {
               latestVersion = match.group(1) ?? '';
               notes = '새로운 최신 버전(v$latestVersion)이 출시되었습니다.';
-              debugPrint('[UpdateService] ✅ Firebase AppInstaller manifest version: $latestVersion');
+              debugPrint('[UpdateService] ✅ Firebase AppInstaller manifest version: $latestVersion ($channel)');
             }
           } else {
             debugPrint('[UpdateService] ❌ Firebase manifest returned status: ${manifestRes.statusCode}');
