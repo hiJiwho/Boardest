@@ -1243,21 +1243,48 @@
           <div class="step-box highlight">
             <div class="step-header">
               <div class="step-title-row">
-                <span class="step-number">!</span>
-                <h3 class="step-title">교사용 웹 및 클라우드 서비스 일시 중단 안내</h3>
+                <span class="step-number">1</span>
+                <h3 class="step-title">스마트폰 최적화: 교사용 Lite 웹앱 (적극 권장 ⭐)</h3>
               </div>
-              <span class="step-badge" style="background: rgba(239, 69, 101, 0.15); color: #ef4565; border: 1px solid rgba(239, 69, 101, 0.4);">일시 중단</span>
+              <span class="step-badge recommended">Android / iPhone 최적화</span>
             </div>
             <p class="step-desc">
-              현재 교사용 웹 서비스 및 클라우드 연동이 점검으로 인해 일시 중단되었습니다.<br>
-              실시간 급식 지도 기능은 <strong>Boardest Eat</strong> 웹앱을 이용해 주시기 바랍니다.
+              <strong>선생님 스마트폰 화면에 완벽히 최적화된 Teacher Lite 웹앱</strong>입니다.<br>
+              별도 무거운 APK 설치 없이 <strong>급식 지도, 전자칠판 6자리 OTP 로그인, 구글 드라이브(bst-cld) 수업자료 연동</strong>을 가장 빠르고 안전하게 이용할 수 있습니다.
             </p>
 
             <div class="button-row">
-              <a href="https://boardest-eat.web.app" target="_blank" class="btn-action-primary" style="background: linear-gradient(135deg, #059669, #10B981);">
-                <span class="material-icons-round">restaurant</span>
-                <span>🍱 실시간 급식 지도 웹앱 (boardest-eat.web.app) 열기</span>
+              <a href="https://boardest-teacher-lite.web.app" target="_blank" class="btn-action-primary" style="background: linear-gradient(135deg, #059669, #10B981);">
+                <span class="material-icons-round">smartphone</span>
+                <span>교사용 Lite 웹앱 열기 (boardest-teacher-lite.web.app)</span>
               </a>
+              <a href="https://boardest-teacher.web.app" target="_blank" class="btn-action-secondary">
+                <span class="material-icons-round">laptop_mac</span>
+                <span>태블릿/PC용 전체 웹 열기 (boardest-teacher.web.app)</span>
+              </a>
+            </div>
+
+            <!-- 스마트폰 홈 화면 추가 PWA 가이드 -->
+            <div class="callout-box success" style="margin-top: 20px; flex-direction: column;">
+              <div style="font-weight: 800; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+                <span class="material-icons-round">add_to_home_screen</span>
+                <span>스마트폰(Android &amp; iPhone) 홈 화면에 앱처럼 1초 설치하기 (PWA):</span>
+              </div>
+              <div class="pwa-steps-list">
+                <div class="pwa-step-item">
+                  <span class="pwa-step-idx">1</span>
+                  <span>스마트폰 브라우저(Chrome, 삼성 인터넷 또는 Safari)로 <strong>boardest-teacher-lite.web.app</strong>에 접속합니다.</span>
+                </div>
+                <div class="pwa-step-item">
+                  <span class="pwa-step-idx">2</span>
+                  <span><strong>안드로이드 (Galaxy):</strong> 브라우저 우측 상단/하단 메뉴(<strong>⋮</strong> 또는 <strong>≡</strong>) ➔ <strong>[홈 화면에 추가]</strong> 또는 <strong>[현재 페이지 추가]</strong> 터치<br>
+                  <strong>아이폰/아이패드 (Apple):</strong> Safari 브라우저 하단 <strong>[공유]</strong> 버튼(네모 화살표) ➔ <strong>[홈 화면에 추가]</strong> 터치</span>
+                </div>
+                <div class="pwa-step-item">
+                  <span class="pwa-step-idx">3</span>
+                  <span>스마트폰 바탕화면에 Boardest 아이콘이 생성되며, 터치 시 주소창 없이 전체 화면 네이티브 앱으로 시원하게 실행됩니다!</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1628,16 +1655,16 @@
         winAppinstallerBtn.style.pointerEvents = "auto";
         winAppinstallerText.innerText = "boardest.appinstaller 다운로드 및 실행";
         winCmdInstall.innerText = "Add-AppxPackage -AppInstallerFile https://download-boardest.web.app/boardest.appinstaller";
-        winWebBtn.href = "https://boardest-eat.web.app";
-        winWebText.innerText = "🍱 실시간 급식 지도 (Boardest Eat) 열기";
+        winWebBtn.href = "https://boardest.web.app";
+        winWebText.innerText = "전자칠판 웹 버전 열기 (boardest.web.app)";
       } else {
         winAppinstallerBtn.href = "https://download-boardest.web.app/bst-teacher.appinstaller";
         winAppinstallerBtn.style.opacity = "1";
         winAppinstallerBtn.style.pointerEvents = "auto";
         winAppinstallerText.innerText = "bst-teacher.appinstaller 다운로드 및 실행";
         winCmdInstall.innerText = "Add-AppxPackage -AppInstallerFile https://download-boardest.web.app/bst-teacher.appinstaller";
-        winWebBtn.href = "https://boardest-eat.web.app";
-        winWebText.innerText = "🍱 실시간 급식 지도 (Boardest Eat) 열기";
+        winWebBtn.href = "https://boardest-teacher.web.app";
+        winWebText.innerText = "교사용 웹 버전 열기 (boardest-teacher.web.app)";
       }
 
       // Android View Updates

@@ -8,7 +8,7 @@
   "hosting": [
     {
       "target": "boardest-main",
-      "public": "infra/forbidden_403_web",
+      "public": "apps/boardest/build/web",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -28,7 +28,7 @@
     },
     {
       "target": "boardest-teacher",
-      "public": "infra/forbidden_403_web",
+      "public": "apps/boardest_teacher/build/web",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -48,7 +48,7 @@
     },
     {
       "target": "boardest-teacher-lite",
-      "public": "infra/forbidden_403_web",
+      "public": "apps/boardest_teacher_lite/build/web",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -109,7 +109,7 @@
     },
     {
       "target": "boardest-teacher-oauth",
-      "public": "infra/forbidden_403_web",
+      "public": "apps/boardest_teacher_oauth",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -255,6 +255,14 @@
             { "key": "Content-Type", "value": "application/x-x509-ca-cert" },
             { "key": "Access-Control-Allow-Origin", "value": "*" }
           ]
+        },
+        {
+          "source": "**/*.appx",
+          "headers": [
+            { "key": "Content-Type", "value": "application/appx" },
+            { "key": "Cache-Control", "value": "no-cache, max-age=0" },
+            { "key": "Access-Control-Allow-Origin", "value": "*" }
+          ]
         }
       ],
       "redirects": [
@@ -274,48 +282,8 @@
           "type": 302
         },
         {
-          "source": "/bst.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/boardest.appx",
-          "type": 302
-        },
-        {
-          "source": "/boardest.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/boardest.appx",
-          "type": 302
-        },
-        {
-          "source": "/boardest-beta.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/boardest-beta.appx",
-          "type": 302
-        },
-        {
-          "source": "/bst-beta.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/boardest-beta.appx",
-          "type": 302
-        },
-        {
-          "source": "/bst-teacher-beta.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/bst-teacher-beta.appx",
-          "type": 302
-        },
-        {
-          "source": "/bst-overlay-panser.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/bst-overlay-panser.appx",
-          "type": 302
-        },
-        {
           "source": "/appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/boardest.appx",
-          "type": 302
-        },
-        {
-          "source": "/teacher.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/bst-teacher.appx",
-          "type": 302
-        },
-        {
-          "source": "/bst-teacher.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/download/v3.0.5-beta/bst-teacher.appx",
+          "destination": "/boardest.appx",
           "type": 302
         },
         {
