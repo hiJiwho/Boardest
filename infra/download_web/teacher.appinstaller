@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppInstaller
+    xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
+    Version="3.0.5.0"
+    Uri="https://download-boardest.web.app/teacher.appinstaller">
+    <MainPackage
+        Name="jiwho.boardest.teacher"
+        Publisher="CN=jiwho"
+        Version="3.0.5.0"
+        ProcessorArchitecture="x64"
+        Uri="https://download-boardest.web.app/bst-teacher.appx" />
+    <UpdateSettings>
+        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="true"/>
+        <AutomaticBackgroundTask/>
+        <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
+    </UpdateSettings>
+</AppInstaller>

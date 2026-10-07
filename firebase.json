@@ -36,9 +36,15 @@
       ],
       "headers": [
         {
-          "source": "**",
+          "source": "**/index.html",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+          ]
+        },
+        {
+          "source": "**/*.@(wasm|js|otf|ttf|woff|woff2|png|jpg|jpeg|gif|svg|ico)",
+          "headers": [
+            { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
           ]
         }
       ],
@@ -63,6 +69,8 @@
         }
       ],
       "rewrites": [
+        { "source": "/class", "destination": "/index.html" },
+        { "source": "/teacher", "destination": "/index.html" },
         { "source": "**", "destination": "/index.html" }
       ]
     },
@@ -76,9 +84,15 @@
       ],
       "headers": [
         {
-          "source": "**",
+          "source": "**/index.html",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+          ]
+        },
+        {
+          "source": "**/*.@(wasm|js|otf|ttf|woff|woff2|png|jpg|jpeg|gif|svg|ico)",
+          "headers": [
+            { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
           ]
         }
       ],
@@ -159,77 +173,6 @@
       ]
     },
     {
-      "target": "welcome-to-boardest",
-      "public": "infra/welcome_web",
-      "ignore": [
-        "firebase.json",
-        "**/.*",
-        "**/node_modules/**"
-      ],
-      "headers": [
-        {
-          "source": "**",
-          "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" },
-            { "key": "Access-Control-Allow-Origin", "value": "*" }
-          ]
-        },
-        {
-          "source": "**/*.ps1",
-          "headers": [
-            { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
-            { "key": "Access-Control-Allow-Origin", "value": "*" }
-          ]
-        },
-        {
-          "source": "**/*.appinstaller",
-          "headers": [
-            { "key": "Content-Type", "value": "application/appinstaller" },
-            { "key": "Cache-Control", "value": "no-cache, max-age=0" },
-            { "key": "Access-Control-Allow-Origin", "value": "*" }
-          ]
-        }
-      ],
-      "redirects": [
-        {
-          "source": "/boardest.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
-          "type": 302
-        },
-        {
-          "source": "/teacher.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx",
-          "type": 302
-        },
-        {
-          "source": "/bst-teacher.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx",
-          "type": 302
-        },
-        {
-          "source": "/boardest.apk",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk",
-          "type": 302
-        },
-        {
-          "source": "/login",
-          "destination": "https://boardest-teacher-oauth.web.app",
-          "type": 302
-        },
-        {
-          "source": "/oauth",
-          "destination": "https://boardest-teacher-oauth.web.app",
-          "type": 302
-        },
-        {
-          "source": "/eat",
-          "destination": "https://boardest-eat.web.app",
-          "type": 302
-        }
-      ],
-      "cleanUrls": true
-    },
-    {
       "target": "download-boardest",
       "public": "infra/download_web",
       "ignore": [
@@ -293,8 +236,23 @@
           "type": 302
         },
         {
+          "source": "/boardest.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "type": 302
+        },
+        {
+          "source": "/teacher.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx",
+          "type": 302
+        },
+        {
+          "source": "/bst-teacher.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx",
+          "type": 302
+        },
+        {
           "source": "/appx",
-          "destination": "/boardest.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
           "type": 302
         },
         {

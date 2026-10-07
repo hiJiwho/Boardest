@@ -23,8 +23,8 @@ Boadest-Firebase.pub/
 apps/boardest_teacher_oauth/
 .firebase/
 infra/*
-!infra/welcome_web/
 !infra/forbidden_403_web/
 !infra/boardest_eat_web/
 !infra/hub_web/
 !infra/demo_web/
+!infra/download_web/

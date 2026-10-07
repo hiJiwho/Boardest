@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Boardest — 스마트 교실 전자칠판 & 교사용 통합 솔루션</title>
+  <title>Boardest — 차세대 스마트 교실 플랫폼</title>
   <link rel="icon" type="image/png" href="https://boardest-teacher.web.app/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,12 +11,12 @@
   <style>
     :root {
       --bg: #0D1117;
-      --card-bg: rgba(22, 27, 34, 0.75);
+      --card-bg: rgba(22, 27, 34, 0.78);
       --card-border: rgba(255, 255, 255, 0.08);
-      --card-hover: rgba(0, 245, 212, 0.12);
       --primary: #00F5D4;
       --secondary: #7F5AF0;
       --accent-orange: #FF8906;
+      --accent-pink: #FF5470;
       --text: #FFFFFF;
       --text-sub: #94A1B2;
       --font-brand: 'Outfit', sans-serif;
@@ -32,7 +32,7 @@
     body {
       background-color: var(--bg);
       background-image: 
-        radial-gradient(at 0% 0%, rgba(127, 90, 240, 0.15) 0px, transparent 50%),
+        radial-gradient(at 0% 0%, rgba(127, 90, 240, 0.16) 0px, transparent 50%),
         radial-gradient(at 100% 100%, rgba(0, 245, 212, 0.12) 0px, transparent 50%);
       color: var(--text);
       min-height: 100vh;
@@ -48,7 +48,7 @@
       margin: 0 auto;
     }
 
-    /* Header */
+    /* Hero */
     header {
       text-align: center;
       margin-bottom: 48px;
@@ -56,7 +56,7 @@
 
     .brand-title {
       font-family: var(--font-brand);
-      font-size: 54px;
+      font-size: 56px;
       font-weight: 900;
       letter-spacing: -1px;
       display: inline-flex;
@@ -83,17 +83,111 @@
       font-size: 17px;
       color: var(--text-sub);
       line-height: 1.6;
-      max-width: 680px;
+      max-width: 720px;
       margin-left: auto;
       margin-right: auto;
     }
 
-    /* Grid */
+    .hero-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 26px;
+    }
+
+    .btn-hero {
+      padding: 12px 22px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-hero-primary {
+      background: var(--primary);
+      color: #0D1117;
+    }
+
+    .btn-hero-primary:hover {
+      background: #33ffd9;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 245, 212, 0.3);
+    }
+
+    .btn-hero-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #FFFFFF;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .btn-hero-secondary:hover {
+      background: rgba(255, 255, 255, 0.16);
+      transform: translateY(-2px);
+    }
+
+    /* Section Headings */
+    .section-header {
+      margin: 48px 0 20px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 22px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* 4-Quadrant Feature Cards */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 20px;
+      backdrop-filter: blur(12px);
+    }
+
+    .feature-icon {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+
+    .feature-card h4 {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: #FFFFFF;
+    }
+
+    .feature-card p {
+      font-size: 13.5px;
+      color: var(--text-sub);
+      line-height: 1.55;
+    }
+
+    /* Web Service Cards */
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 22px;
-      margin-bottom: 40px;
+      grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
     }
 
     .card {
@@ -102,7 +196,7 @@
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border-radius: 20px;
-      padding: 26px;
+      padding: 24px;
       text-decoration: none;
       color: inherit;
       display: flex;
@@ -110,18 +204,6 @@
       justify-content: space-between;
       transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
       position: relative;
-      overflow: hidden;
-    }
-
-    .card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: transparent;
-      transition: background 0.25s ease;
     }
 
     .card:hover {
@@ -130,65 +212,46 @@
       box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
     }
 
-    .card:hover::before {
-      background: linear-gradient(90deg, var(--primary), var(--secondary));
-    }
-
     .card-top {
       display: flex;
       align-items: center;
-      gap: 16px;
-      margin-bottom: 14px;
+      gap: 14px;
+      margin-bottom: 12px;
     }
 
     .card-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 14px;
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
+      font-size: 22px;
       background: rgba(255, 255, 255, 0.05);
       border: 1px solid rgba(255, 255, 255, 0.1);
       flex-shrink: 0;
     }
 
     .card-title-group h3 {
-      font-size: 19px;
+      font-size: 18px;
       font-weight: 700;
-      letter-spacing: -0.3px;
       display: flex;
       align-items: center;
       gap: 8px;
     }
-
-    .badge {
-      font-size: 11px;
-      padding: 2px 7px;
-      border-radius: 6px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .badge-primary { background: rgba(0, 245, 212, 0.15); color: var(--primary); }
-    .badge-purple { background: rgba(127, 90, 240, 0.18); color: #B388FF; }
-    .badge-orange { background: rgba(255, 137, 6, 0.18); color: var(--accent-orange); }
 
     .card-domain {
       font-size: 12px;
       color: var(--primary);
       font-family: var(--font-brand);
       margin-top: 2px;
-      opacity: 0.85;
     }
 
     .card-desc {
-      font-size: 14px;
+      font-size: 13.5px;
       color: var(--text-sub);
       line-height: 1.55;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
     }
 
     .card-btn {
@@ -202,7 +265,7 @@
       background: rgba(255, 255, 255, 0.07);
       padding: 8px 14px;
       border-radius: 10px;
-      transition: background 0.2s ease, color 0.2s ease;
+      transition: all 0.2s ease;
     }
 
     .card:hover .card-btn {
@@ -210,7 +273,97 @@
       color: #0D1117;
     }
 
-    /* Footer */
+    /* Download Section Cards */
+    .download-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 22px;
+      margin-bottom: 30px;
+    }
+
+    .dl-card {
+      background: rgba(22, 27, 34, 0.9);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .dl-card-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .dl-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+
+    .badge-win { background: rgba(0, 186, 242, 0.15); color: #00BAF2; }
+    .badge-and { background: rgba(56, 239, 125, 0.15); color: #38EF7D; }
+
+    .dl-options {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .dl-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      color: #FFFFFF;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .dl-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: var(--primary);
+      transform: translateX(2px);
+    }
+
+    .dl-btn-primary {
+      background: var(--primary);
+      color: #0D1117;
+      border: none;
+    }
+
+    .dl-btn-primary:hover {
+      background: #33ffd9;
+      color: #0D1117;
+    }
+
+    /* Guide Box */
+    .guide-box {
+      background: rgba(127, 90, 240, 0.08);
+      border: 1px solid rgba(127, 90, 240, 0.25);
+      border-radius: 16px;
+      padding: 18px 22px;
+      font-size: 13.5px;
+      color: #D1D5DB;
+      line-height: 1.6;
+      margin-bottom: 40px;
+    }
+
+    .guide-box strong {
+      color: #B388FF;
+    }
+
     footer {
       margin-top: auto;
       text-align: center;
@@ -219,11 +372,6 @@
       padding-top: 30px;
       border-top: 1px solid var(--card-border);
       width: 100%;
-    }
-
-    footer a {
-      color: var(--primary);
-      text-decoration: none;
     }
   </style>
 </head>
@@ -235,113 +383,229 @@
         <span class="brand-sub">by Jiwho</span>
       </div>
       <p class="hero-desc">
-        스마트 교실 전자칠판 대시보드부터 선생님 수업 보조 도구까지.<br>
-        실시간 학교 시간표, 원격 전자칠판 미러링, 식단 투표 및 호출을 모두 연결하는 통합 교육 플랫폼입니다.
+        스마트폰처럼 연결되고, 칠판처럼 간편한 차세대 스마트 교실 플랫폼.<br>
+        전자칠판 대시보드, 교사용 원격 제어, 안심 급식 식단 투표까지 교실의 모든 흐름을 하나로 연결합니다.
       </p>
+      <div class="hero-buttons">
+        <a href="#services" class="btn-hero btn-hero-primary">웹 서비스 바로가기 ↓</a>
+        <a href="#download" class="btn-hero btn-hero-secondary">앱 다운로드 센터 ↓</a>
+        <a href="https://boardest-demo.web.app" class="btn-hero btn-hero-secondary" style="border-color: rgba(255,137,6,0.4); color: #FFA726;">🚀 가상 체험관</a>
+      </div>
     </header>
 
+    <!-- 1. 핵심 기능 4대 축 -->
+    <div class="section-header">
+      <div class="section-title">✨ Boardest 핵심 기능 4대 축</div>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🏫</div>
+        <h4>교실 측면</h4>
+        <p>올인원 대시보드, NEIS 실시간 시간표 자동 연동, 인터넷 끊김에도 정상 작동하는 오프라인-퍼스트 무중단 구동.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">👨‍🏫</div>
+        <h4>교사 측면</h4>
+        <p>단일 URL로 PC(Pro)와 모바일(Lite) 자동 최적화, 스마트폰으로 긴급 공지 송출 & 시간표 변경, 1:1 OTP 초고속 페어링.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📚</div>
+        <h4>수업 도구</h4>
+        <p>디지털 교과서 뷰어 퀵 런처, 모둠·시험용 원격 타이머 & 스톱워치, 저사양 전자칠판 PC에서도 버벅임 없는 초경량 구동.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🍱</div>
+        <h4>급식 도구</h4>
+        <p>오늘·내일 2일치 듀얼 식단, 알레르기 축약 태그 & 위험 각주 자동 표기, 형광펜 표시, 점심시간 실시간 투표 & 반별 통계 집계.</p>
+      </div>
+    </div>
+
+    <!-- 2. 라이브 웹 서비스 (Control 제외) -->
+    <div class="section-header" id="services">
+      <div class="section-title">🌐 라이브 웹 서비스 바로가기</div>
+    </div>
     <div class="grid">
-      <!-- 1. Boardest Class (교실용 전자칠판) -->
+      <!-- 1) Boardest Class -->
       <a href="https://boardest-class.web.app" class="card" target="_blank" rel="noopener">
         <div>
           <div class="card-top">
             <div class="card-icon" style="color: #00F5D4; border-color: rgba(0, 245, 212, 0.3);">🏫</div>
             <div class="card-title-group">
-              <h3>Boardest Class <span class="badge badge-primary">교실용</span></h3>
+              <h3>Boardest Class</h3>
               <div class="card-domain">boardest-class.web.app</div>
             </div>
           </div>
           <p class="card-desc">
-            교실 전자칠판 전용 대시보드. 실시간 컴시간 시간표, 2일치 급식 식단 & 투표, 스마트 판서 및 교사 수업 자료 클라우드 연동을 지원합니다.
+            교실 전자칠판 전용 대시보드. NEIS 시간표 자동 렌더링, 2일치 급식 식단, 메뉴 투표 및 판서·교과서 도구를 제공합니다.
           </p>
         </div>
-        <div class="card-btn">교실 앱 열기 →</div>
+        <div class="card-btn">교실 웹앱 열기 →</div>
       </a>
 
-      <!-- 2. Boardest Teacher (교사용) -->
+      <!-- 2) Boardest Teacher -->
       <a href="https://boardest-teacher.web.app" class="card" target="_blank" rel="noopener">
         <div>
           <div class="card-top">
             <div class="card-icon" style="color: #7F5AF0; border-color: rgba(127, 90, 240, 0.3);">👩‍🏫</div>
             <div class="card-title-group">
-              <h3>Boardest Teacher <span class="badge badge-purple">교사용</span></h3>
+              <h3>Boardest Teacher</h3>
               <div class="card-domain">boardest-teacher.web.app</div>
             </div>
           </div>
           <p class="card-desc">
-            선생님 전용 웹앱. PC 방문 시 <strong>PRO</strong>, 스마트폰 방문 시 <strong>Lite</strong>로 자동 감지되며, OTP 전송 및 원격 칠판 제어를 제공합니다.
+            선생님 전용 웹앱. PC 접속 시 <strong>Pro</strong>, 스마트폰 접속 시 <strong>Lite</strong>로 자동 최적화되며, 칠판 원격 제어를 지원합니다.
           </p>
         </div>
-        <div class="card-btn">교사 앱 열기 →</div>
+        <div class="card-btn">교사 웹앱 열기 →</div>
       </a>
 
-      <!-- 3. Boardest Demo (체험관) -->
+      <!-- 3) Boardest Demo -->
       <a href="https://boardest-demo.web.app" class="card" target="_blank" rel="noopener">
         <div>
           <div class="card-top">
             <div class="card-icon" style="color: #FF8906; border-color: rgba(255, 137, 6, 0.3);">🚀</div>
             <div class="card-title-group">
-              <h3>Boardest Demo <span class="badge badge-orange">체험관</span></h3>
+              <h3>Boardest Demo</h3>
               <div class="card-domain">boardest-demo.web.app</div>
             </div>
           </div>
           <p class="card-desc">
-            가입 및 설정 없이 즉시 체험할 수 있는 데모 환경. 비겹침 알고리즘 중학교 시간표, 데모 급식, 가상 교실(Demo-class1~6)을 체험하세요.
+            무설치 가상 체험관. 1~10번 가상 학급 비겹침 자동 배정, <strong>/class</strong> 및 <strong>/teacher</strong> 다이렉트 URL로 즉시 체험하세요.
           </p>
         </div>
         <div class="card-btn">데모 체험관 입장 →</div>
       </a>
 
-      <!-- 4. Boardest Eat (급식 지도) -->
+      <!-- 4) Boardest Eat -->
       <a href="https://boardest-eat.web.app" class="card" target="_blank" rel="noopener">
         <div>
           <div class="card-top">
             <div class="card-icon" style="color: #FF5470; border-color: rgba(255, 84, 112, 0.3);">🍽️</div>
             <div class="card-title-group">
-              <h3>Boardest Eat <span class="badge" style="background: rgba(255,84,112,0.18); color:#FF5470;">급식 호출</span></h3>
+              <h3>Boardest Eat</h3>
               <div class="card-domain">boardest-eat.web.app</div>
             </div>
           </div>
           <p class="card-desc">
-            급식실 실시간 학급 호출 및 급식 지도 포털. 반별 호출 알림, 학급별 점심 식단 투표 현황을 실시간으로 확인합니다.
+            급식실 및 복도 대형 전광판 모드. 현재 활성화된 교실 기기 현황과 학급별 급식 호출 및 식단 투표 결과를 실시간 모니터링합니다.
           </p>
         </div>
-        <div class="card-btn">급식 지도 열기 →</div>
+        <div class="card-btn">급식 현황판 열기 →</div>
       </a>
+    </div>
 
-      <!-- 5. Windows 앱 다운로드 -->
-      <a href="https://download-boardest.web.app" class="card" target="_blank" rel="noopener">
+    <!-- 3. 전용 앱 다운로드 센터 (윈도 / 안드, 교실 / 교사 분리) -->
+    <div class="section-header" id="download">
+      <div class="section-title">📥 앱 다운로드 센터 (기기 & 용도별)</div>
+    </div>
+    <div class="download-grid">
+      <!-- 교실용 Windows -->
+      <div class="dl-card">
         <div>
-          <div class="card-top">
-            <div class="card-icon" style="color: #38EF7D; border-color: rgba(56, 239, 125, 0.3);">💻</div>
-            <div class="card-title-group">
-              <h3>Windows 앱 설치 <span class="badge" style="background: rgba(56,239,125,0.18); color:#38EF7D;">데스크톱</span></h3>
-              <div class="card-domain">download-boardest.web.app</div>
+          <div class="dl-card-header">
+            <div class="card-icon" style="color: #00BAF2; border-color: rgba(0, 186, 242, 0.3);">🪟</div>
+            <div>
+              <h3 style="font-size: 17px; font-weight: 700;">교실용 전자칠판 앱</h3>
+              <span class="dl-badge badge-win">Windows 10/11</span>
             </div>
           </div>
           <p class="card-desc">
-            Windows 10/11 전자칠판 및 PC 전용 설치 패키지 (AppInstaller / Appx). 자동 업데이트 및 하드웨어 펜 가속을 완벽 지원합니다.
+            전자칠판 및 교실 PC 전용 네이티브 앱. 하드웨어 펜 가속 및 자동 업데이트를 완벽 지원합니다.
           </p>
         </div>
-        <div class="card-btn">다운로드 센터 →</div>
-      </a>
+        <div class="dl-options">
+          <a href="ms-appinstaller:?source=https://download-boardest.web.app/bst.appinstaller" class="dl-btn dl-btn-primary">
+            <span>⚡ 원클릭 설치 (AppInstaller)</span> <span>→</span>
+          </a>
+          <a href="https://download-boardest.web.app/boardest.appx" class="dl-btn">
+            <span>📦 수동 패키지 다운로드 (.appx)</span> <span>↓</span>
+          </a>
+          <a href="https://download-boardest.web.app/BoardestCert.cer" class="dl-btn">
+            <span>🔑 보안 인증서 받기 (.cer)</span> <span>↓</span>
+          </a>
+        </div>
+      </div>
 
-      <!-- 6. Boardest Control (관리자) -->
-      <a href="https://boardest-control.web.app" class="card" target="_blank" rel="noopener">
+      <!-- 교실용 Android -->
+      <div class="dl-card">
         <div>
-          <div class="card-top">
-            <div class="card-icon" style="color: #00BAF2; border-color: rgba(0, 186, 242, 0.3);">⚙️</div>
-            <div class="card-title-group">
-              <h3>Boardest Control <span class="badge" style="background: rgba(0,186,242,0.18); color:#00BAF2;">관리자</span></h3>
-              <div class="card-domain">boardest-control.web.app</div>
+          <div class="dl-card-header">
+            <div class="card-icon" style="color: #38EF7D; border-color: rgba(56, 239, 125, 0.3);">🤖</div>
+            <div>
+              <h3 style="font-size: 17px; font-weight: 700;">교실용 전자칠판 / 태블릿</h3>
+              <span class="dl-badge badge-and">Android OS</span>
             </div>
           </div>
           <p class="card-desc">
-            학교 관리자 웹 콘솔. 학교 ID 발급, 컴시간 코드 매핑, 시정표 및 공지사항을 클라우드에서 원격으로 일괄 제어합니다.
+            안드로이드 OS 기반 전자칠판(아하, 현대 등) 및 교실 비치용 학생 태블릿 전용 APK입니다.
           </p>
         </div>
-        <div class="card-btn">관리자 콘솔 →</div>
-      </a>
+        <div class="dl-options">
+          <a href="https://download-boardest.web.app/boardest.apk" class="dl-btn dl-btn-primary">
+            <span>📥 안드로이드 APK 다운로드 (.apk)</span> <span>↓</span>
+          </a>
+          <a href="https://boardest-class.web.app" class="dl-btn" target="_blank">
+            <span>🌐 교실 웹앱으로 바로 쓰기</span> <span>→</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- 교사용 Windows PRO -->
+      <div class="dl-card">
+        <div>
+          <div class="dl-card-header">
+            <div class="card-icon" style="color: #7F5AF0; border-color: rgba(127, 90, 240, 0.3);">👩‍🏫</div>
+            <div>
+              <h3 style="font-size: 17px; font-weight: 700;">선생님 PC 전용 (PRO)</h3>
+              <span class="dl-badge badge-win">Windows 10/11</span>
+            </div>
+          </div>
+          <p class="card-desc">
+            선생님 교무실 PC 전용 데스크톱 PRO 앱. 백그라운드 미니 위젯, 클라우드 수업 자료 동기화를 지원합니다.
+          </p>
+        </div>
+        <div class="dl-options">
+          <a href="ms-appinstaller:?source=https://download-boardest.web.app/bst-teacher.appinstaller" class="dl-btn dl-btn-primary">
+            <span>⚡ 선생님 PC 원클릭 설치</span> <span>→</span>
+          </a>
+          <a href="https://download-boardest.web.app/bst-teacher.appx" class="dl-btn">
+            <span>📦 수동 패키지 다운로드 (.appx)</span> <span>↓</span>
+          </a>
+          <a href="https://boardest-teacher.web.app/Pro" class="dl-btn" target="_blank">
+            <span>🌐 PRO 웹앱 바로 실행</span> <span>→</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- 교사용 Mobile Lite -->
+      <div class="dl-card">
+        <div>
+          <div class="dl-card-header">
+            <div class="card-icon" style="color: #FF8906; border-color: rgba(255, 137, 6, 0.3);">📱</div>
+            <div>
+              <h3 style="font-size: 17px; font-weight: 700;">선생님 스마트폰 (Lite)</h3>
+              <span class="dl-badge badge-and">Mobile Web / Android</span>
+            </div>
+          </div>
+          <p class="card-desc">
+            이동 중이나 수업 중 간편 제어를 위한 모바일 최적화 버전. 모바일 브라우저 홈 화면에 추가하여 앱처럼 구동됩니다.
+          </p>
+        </div>
+        <div class="dl-options">
+          <a href="https://boardest-teacher.web.app/Lite" class="dl-btn dl-btn-primary" target="_blank">
+            <span>🚀 모바일 Lite 웹앱 실행</span> <span>→</span>
+          </a>
+          <a href="https://download-boardest.web.app/boardest.apk" class="dl-btn">
+            <span>📥 모바일 전용 APK 다운로드</span> <span>↓</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 설치 팁 안내 -->
+    <div class="guide-box">
+      <strong>💡 Windows 앱 설치 가이드 (인증서 등록):</strong><br>
+      수동 설치 시 <code>BoardestCert.cer</code> 인증서를 다운로드한 후, <strong>'인증서 설치 → 로컬 컴퓨터 → 신뢰할 수 있는 루트 인증 기관'</strong>을 선택하여 등록하시면 즉시 안전하게 실행됩니다.
     </div>
 
     <footer>

@@ -79,16 +79,79 @@
       }
     };
   </script>
+  <style>
+    body {
+      background-color: #0D1117;
+      margin: 0;
+      padding: 0;
+    }
+    #app-splash-screen {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background-color: #0D1117;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 999999;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      transition: opacity 0.4s ease;
+    }
+    .splash-logo-img {
+      width: 80px; height: 80px;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0, 245, 212, 0.25);
+      animation: splash-pulse 1.8s infinite ease-in-out;
+    }
+    .splash-brand-text {
+      margin-top: 20px;
+      font-size: 24px;
+      font-weight: 800;
+      color: #FFFFFF;
+      letter-spacing: -0.5px;
+    }
+    .splash-brand-sub {
+      margin-top: 4px;
+      font-size: 13.5px;
+      color: #00F5D4;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .splash-progress-track {
+      width: 180px; height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 22px;
+      position: relative;
+    }
+    .splash-progress-fill {
+      width: 100%; height: 100%;
+      background: linear-gradient(90deg, #00F5D4, #7F5AF0);
+      animation: splash-bar-anim 1.4s infinite ease-in-out;
+      transform-origin: 0% 50%;
+    }
+    @keyframes splash-pulse {
+      0%, 100% { transform: scale(1); opacity: 0.92; }
+      50% { transform: scale(1.08); opacity: 1; }
+    }
+    @keyframes splash-bar-anim {
+      0% { transform: translateX(-100%); }
+      50% { transform: translateX(0%); }
+      100% { transform: translateX(100%); }
+    }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <div id="app-splash-screen">
+    <img src="favicon.png" alt="Boardest" class="splash-logo-img">
+    <div class="splash-brand-text">Boardest</div>
+    <div class="splash-brand-sub">스마트 교실 로딩 중...</div>
+    <div class="splash-progress-track">
+      <div class="splash-progress-fill"></div>
+    </div>
+  </div>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

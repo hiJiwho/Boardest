@@ -127,6 +127,27 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
       final cafeteria = params['cafeteriaNum'] ?? '1';
 
       if (isAuthSuccess || (token != null && token.isNotEmpty) || schoolName.isNotEmpty) {
+        // 데모 모드 상호 배제 검증
+        if (AppConfig.isDemoMode) {
+          if (!email.toLowerCase().contains('demo') && schoolId.toLowerCase() != 'demo') {
+            setState(() {
+              _isLoading = false;
+              _errorMessage = '❌ 데모 모드에서는 일반 계정으로 로그인할 수 없습니다.\n데모 교사 계정을 이용해 주세요.';
+            });
+            await CloudDriveService.instance.logout();
+            return;
+          }
+        } else {
+          if (email.toLowerCase().contains('demo') || schoolId.toLowerCase() == 'demo' || name.toLowerCase().contains('데모')) {
+            setState(() {
+              _isLoading = false;
+              _errorMessage = '❌ 일반 버전에서는 데모 계정을 사용할 수 없습니다.\n선생님의 정식 Google 계정으로 로그인해 주세요.';
+            });
+            await CloudDriveService.instance.logout();
+            return;
+          }
+        }
+
         setState(() {
           _isLoading = true;
           _loadingStatus = '선생님 프로필 및 세션을 연동하고 있습니다...';
@@ -196,6 +217,27 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
 
   /// 구글 로그인 성공 후 Firestore 프로필 자동 조회
   Future<void> _onLoggedInSuccess(String email, String name) async {
+    // 데모 모드 상호 배제 검증
+    if (AppConfig.isDemoMode) {
+      if (!email.toLowerCase().contains('demo')) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = '❌ 데모 모드에서는 일반 계정으로 로그인할 수 없습니다.\n데모 교사 계정을 이용해 주세요.';
+        });
+        await CloudDriveService.instance.logout();
+        return;
+      }
+    } else {
+      if (email.toLowerCase().contains('demo') || name.toLowerCase().contains('데모')) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = '❌ 일반 버전에서는 데모 계정을 사용할 수 없습니다.\n선생님의 정식 Google 계정으로 로그인해 주세요.';
+        });
+        await CloudDriveService.instance.logout();
+        return;
+      }
+    }
+
     setState(() {
       _isLoggedIn = true;
       _userEmail = email;
@@ -346,8 +388,57 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
     }
   }
 
+  /// 데모 교사 계정 원클릭 로그인
+  Future<void> _loginAsDemoTeacher() async {
+    setState(() {
+      _isLoading = true;
+      _loadingStatus = '데모 교사 계정으로 로그인하고 있습니다...';
+      _errorMessage = null;
+    });
+
+    await CloudDriveService.instance.setSession(
+      accessToken: 'demo_token_${DateTime.now().millisecondsSinceEpoch}',
+      bstCldToken: 'demo_bst_token',
+      email: 'demo@boardest.org',
+      name: '데모교사',
+      school: 'Boardest 데모 중학교',
+    );
+
+    final school = School(
+      id: 11111,
+      code: 11111,
+      name: 'Boardest 데모 중학교',
+      region: '서울',
+    );
+
+    final settings = AppSettings(
+      selectedSchool: school,
+      schoolId: 'Demo',
+      selectedGrade: 1,
+      selectedClass: 1,
+      selectedTeacher: '데모교사',
+      selectedTeacherId: '데모',
+      selectedTeacherName: '데모교사',
+      cafeteriaNum: '1',
+      isSetupComplete: true,
+    );
+
+    await _storage.saveSettings(settings);
+
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const TeacherView()),
+      );
+    }
+  }
+
   /// 구글 로그인 버튼 클릭
   Future<void> _startGoogleLogin() async {
+    if (AppConfig.isDemoMode) {
+      await _loginAsDemoTeacher();
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _loadingStatus = '구글 로그인 브라우저를 실행합니다...';
@@ -666,47 +757,66 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.lock_rounded, color: Color(0xFF7F5AF0), size: 20),
+                            Icon(AppConfig.isDemoMode ? Icons.science_rounded : Icons.lock_rounded, color: AppConfig.isDemoMode ? const Color(0xFF00F5D4) : const Color(0xFF7F5AF0), size: 20),
                             const SizedBox(width: 8),
                             Text(
-                              '교사 구글 계정 인증',
+                              AppConfig.isDemoMode ? 'Boardest Teacher (데모 모드)' : '교사 구글 계정 인증',
                               style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Google 계정으로 로그인하면 등록된 시간표와 교안이 자동으로 동기화됩니다.',
+                          AppConfig.isDemoMode
+                              ? '가상 데모 환경입니다. 사전 생성된 데모 교사 계정으로 즉시 체험하세요.\n(일반 Google 계정 로그인은 차단됩니다)'
+                              : 'Google 계정으로 로그인하면 등록된 시간표와 교안이 자동으로 동기화됩니다.',
                           style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 12.5),
                         ),
                         const SizedBox(height: 18),
-                        ElevatedButton.icon(
-                          onPressed: _startGoogleLogin,
-                          icon: const Icon(Icons.account_circle_rounded, color: Colors.black87),
-                          label: Text(
-                            'Google 계정으로 로그인',
-                            style: GoogleFonts.notoSansKr(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
+                        if (AppConfig.isDemoMode) ...[
+                          ElevatedButton.icon(
+                            onPressed: _loginAsDemoTeacher,
+                            icon: const Icon(Icons.play_arrow_rounded, color: Colors.black87),
+                            label: Text(
+                              '데모 교사 계정으로 로그인',
+                              style: GoogleFonts.notoSansKr(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00F5D4),
+                              foregroundColor: Colors.black87,
+                              minimumSize: const Size(double.infinity, 48),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
                           ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Colors.black87,
-                            minimumSize: const Size(double.infinity, 48),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ] else ...[
+                          ElevatedButton.icon(
+                            onPressed: _startGoogleLogin,
+                            icon: const Icon(Icons.account_circle_rounded, color: Colors.black87),
+                            label: Text(
+                              'Google 계정으로 로그인',
+                              style: GoogleFonts.notoSansKr(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.black87,
+                              minimumSize: const Size(double.infinity, 48),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        OutlinedButton.icon(
-                          onPressed: () => launchUrl(Uri.parse(kIsWeb ? 'https://boardest-teacher-oauth.web.app?web' : 'https://boardest-teacher-oauth.web.app?win')),
-                          icon: const Icon(Icons.open_in_new_rounded, color: Color(0xFF2EC4B6), size: 16),
-                          label: Text(
-                            '교사 OAuth 등록 포털 바로가기',
-                            style: GoogleFonts.notoSansKr(color: const Color(0xFF2EC4B6), fontSize: 12.5),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: () => launchUrl(Uri.parse(kIsWeb ? 'https://boardest-teacher-oauth.web.app?web' : 'https://boardest-teacher-oauth.web.app?win')),
+                            icon: const Icon(Icons.open_in_new_rounded, color: Color(0xFF2EC4B6), size: 16),
+                            label: Text(
+                              '교사 OAuth 등록 포털 바로가기',
+                              style: GoogleFonts.notoSansKr(color: const Color(0xFF2EC4B6), fontSize: 12.5),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Color(0xFF2EC4B6)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
                           ),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFF2EC4B6)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
+                        ],
                       ],
                     ),
                   ),

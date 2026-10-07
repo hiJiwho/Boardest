@@ -8,6 +8,19 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+  
+  <script>
+    // ─── Direct URL 체험 라우팅 (/class, /teacher) ───
+    (function() {
+      const path = window.location.pathname.toLowerCase();
+      if (path === '/class' || path.startsWith('/class/')) {
+        window.location.replace("https://boardest-class.web.app?Demo=yes");
+      } else if (path === '/teacher' || path.startsWith('/teacher/')) {
+        window.location.replace("https://boardest-teacher.web.app?Demo=yes");
+      }
+    })();
+  </script>
+
   <style>
     :root {
       --bg: #0C0F17;
@@ -50,7 +63,7 @@
 
     header {
       text-align: center;
-      margin-bottom: 40px;
+      margin-bottom: 36px;
     }
 
     .demo-pill {
@@ -69,7 +82,7 @@
 
     .brand-title {
       font-family: var(--font-brand);
-      font-size: 50px;
+      font-size: 48px;
       font-weight: 900;
       letter-spacing: -1px;
       line-height: 1.1;
@@ -88,7 +101,6 @@
       line-height: 1.6;
     }
 
-    /* Section */
     .section-title {
       font-size: 20px;
       font-weight: 800;
@@ -157,6 +169,16 @@
       margin-bottom: 20px;
     }
 
+    .url-tag {
+      display: inline-block;
+      font-size: 12px;
+      font-family: monospace;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.07);
+      margin-top: 4px;
+    }
+
     .btn-group {
       display: flex;
       gap: 10px;
@@ -187,21 +209,12 @@
       transform: scale(1.02);
     }
 
-    .btn-secondary {
-      background: rgba(255, 255, 255, 0.08);
-      color: #fff;
-    }
-
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.16);
-    }
-
     .notice-box {
       background: rgba(255, 137, 6, 0.08);
       border: 1px solid rgba(255, 137, 6, 0.3);
       border-radius: 16px;
       padding: 20px;
-      margin-bottom: 40px;
+      margin-bottom: 36px;
       font-size: 14px;
       line-height: 1.6;
       color: #FFD180;
@@ -235,121 +248,78 @@
         <div class="brand-sub">by Jiwho</div>
       </div>
       <p class="hero-desc">
-        별도의 학교 코드나 가입 절차 없이 모든 기능을 브라우저 및 윈도우 앱으로 즉시 테스트할 수 있는 가상 체험관입니다.
+        별도 가입 없이 URL 접속만으로 즉시 실행되는 가상 체험관입니다.<br>
+        <strong>/class</strong> 와 <strong>/teacher</strong> 로 바로 이동하여 체험할 수 있습니다.
       </p>
     </header>
 
     <div class="notice-box">
-      <strong>💡 데모 모드 안내 사항</strong>
+      <strong>💡 데모 환경 핵심 안내</strong>
       <ul>
-        <li><strong>데모 환경 연동:</strong> 모든 데모 기기는 가상 학교 <code>Demo</code>에 연결되며, OTP 및 식단 투표를 실시간 공유합니다.</li>
-        <li><strong>가상 학급 ID:</strong> 학년-반 대신 <code>Demo-class1</code> ~ <code>Demo-class6</code> 형식으로 작동합니다.</li>
-        <li><strong>비겹침 시간표:</strong> 라틴 방진 알고리즘을 통해 같은 교시에 기기 간 과목이 겹치지 않도록 자동 배정됩니다.</li>
+        <li><strong>교실용 자동 배정:</strong> 접속 시 <code>Demo-class1</code> ~ <code>Demo-class10</code> 중 현재 비어있는 교실로 비겹침 배정됩니다. (10대 이하 동시 접속 시 절대 미겹침)</li>
+        <li><strong>교사용 전용 로그인:</strong> 데모 모드에서는 사전 생성된 <code>데모 교사 계정</code>으로 원클릭 로그인됩니다. (일반 Google 계정 로그인 차단)</li>
+        <li><strong>비겹침 시간표 엔진:</strong> 라틴 방진 알고리즘을 통해 같은 교시라도 다른 기기와 과목이 겹치지 않도록 자동 분산됩니다.</li>
         <li><strong>비밀 데모 제어판:</strong> 설정 화면에서 <code>Boardest Demo 버전입니다.</code> 문구를 <strong>길게 누르면(Long Press)</strong> 시간/과목/교실을 자유롭게 변경할 수 있습니다.</li>
-        <li><strong>설치 안내:</strong> 윈도우는 데모 인스톨러 프로토콜로 직접 설치되며, 모바일(Android)은 보안 정책상 인스톨러가 지원되지 않습니다.</li>
       </ul>
     </div>
 
-    <!-- 1. 웹 브라우저 즉시 체험 -->
-    <div class="section-title">🌐 브라우저 즉시 체험</div>
+    <!-- 1. URL 기반 다이렉트 데모 체험 -->
+    <div class="section-title">🚀 다이렉트 URL 가상 체험</div>
     <div class="grid">
-      <!-- 교실용 데모 -->
+      <!-- 1) 교실용 데모 (/class) -->
       <div class="card">
         <div>
           <div class="card-top">
             <div class="card-icon" style="color: #00F5D4; border-color: rgba(0, 245, 212, 0.3);">🏫</div>
             <div>
               <div class="card-title">교실용 전자칠판 데모</div>
-              <div style="font-size: 12px; color: #00F5D4;">boardest-class.web.app?Demo=yes</div>
+              <div class="url-tag" style="color: #00F5D4;">boardest-demo.web.app/class</div>
             </div>
           </div>
           <p class="card-desc">
-            가상 교실(Demo-class1) 전자칠판을 브라우저에서 실행합니다. 컴시간 없는 자동 시간표, 2일치 식단, 판서 도구를 체험하세요.
+            가상 교실 전자칠판을 브라우저에서 즉시 체험합니다. 1~10번 가상 학급 중 비어있는 교실에 자동 배정되며, 비겹침 시간표, 2일치 식단, 판서 도구를 제공합니다.
           </p>
         </div>
         <div class="btn-group">
-          <a href="https://boardest-class.web.app?Demo=yes" class="btn btn-primary" target="_blank">교실 데모 열기 →</a>
+          <a href="/class" class="btn btn-primary">/class 체험 바로가기 →</a>
         </div>
       </div>
 
-      <!-- 교사용 데모 -->
+      <!-- 2) 교사용 데모 (/teacher) -->
       <div class="card">
         <div>
           <div class="card-top">
             <div class="card-icon" style="color: #7F5AF0; border-color: rgba(127, 90, 240, 0.3);">👩‍🏫</div>
             <div>
               <div class="card-title">교사용 웹앱 데모</div>
-              <div style="font-size: 12px; color: #7F5AF0;">boardest-teacher.web.app?Demo=yes</div>
+              <div class="url-tag" style="color: #7F5AF0;">boardest-demo.web.app/teacher</div>
             </div>
           </div>
           <p class="card-desc">
-            선생님 전용 웹앱을 데모 모드로 체험합니다. 가상 교실에 OTP 전송, 파일 공유 및 칠판 연동을 직접 테스트할 수 있습니다.
+            선생님 웹앱을 데모 모드로 체험합니다. 미리 생성된 데모 교사 계정으로 원클릭 로그인하여 가상 교실에 OTP 전송, 파일 공유 및 원격 제어를 테스트하세요.
           </p>
         </div>
         <div class="btn-group">
-          <a href="https://boardest-teacher.web.app?Demo=yes" class="btn btn-primary" target="_blank">교사 데모 열기 →</a>
-          <a href="https://boardest-teacher-oauth.web.app?Demo=yes" class="btn btn-secondary" target="_blank">데모 계정 생성</a>
+          <a href="/teacher" class="btn btn-primary">/teacher 체험 바로가기 →</a>
         </div>
       </div>
 
-      <!-- 급식실 데모 -->
+      <!-- 3) 급식실 데모 -->
       <div class="card">
         <div>
           <div class="card-top">
             <div class="card-icon" style="color: #FF5470; border-color: rgba(255, 84, 112, 0.3);">🍽️</div>
             <div>
-              <div class="card-title">급식 지도 데모</div>
-              <div style="font-size: 12px; color: #FF5470;">boardest-eat.web.app?Demo=yes</div>
+              <div class="card-title">급식 지도 & 호출 데모</div>
+              <div class="url-tag" style="color: #FF5470;">boardest-eat.web.app?Demo=yes</div>
             </div>
           </div>
           <p class="card-desc">
-            데모 기기들과 연동된 실시간 급식 호출 및 식단 투표 현황 지도입니다. 현재 접속 중인 데모 반만 표시됩니다.
+            데모 기기들과 연동된 실시간 급식 호출 및 식단 투표 현황 지도입니다. 현재 접속 중인 데모 교실만 실시간 표시됩니다.
           </p>
         </div>
         <div class="btn-group">
           <a href="https://boardest-eat.web.app?Demo=yes" class="btn btn-primary" target="_blank">급식 지도 데모 열기 →</a>
-        </div>
-      </div>
-    </div>
-
-    <!-- 2. Windows 데스크톱 앱 데모 설치 -->
-    <div class="section-title">💻 Windows 데스크톱 앱 데모 설치</div>
-    <div class="grid">
-      <div class="card">
-        <div>
-          <div class="card-top">
-            <div class="card-icon" style="color: #00F5D4; border-color: rgba(0, 245, 212, 0.3);">🏫</div>
-            <div>
-              <div class="card-title">교실용 전자칠판 앱 (Demo)</div>
-              <div style="font-size: 12px; color: var(--text-sub);">Windows 10/11 전용 (Android 설치 불가)</div>
-            </div>
-          </div>
-          <p class="card-desc">
-            동일한 정식 인스톨러에 <code>?Demo=yes</code> 파라미터가 연동되어 데모 모드로 자동 설치 및 실행됩니다.
-          </p>
-        </div>
-        <div class="btn-group">
-          <a href="ms-appinstaller:?source=https://download-boardest.web.app/bst.appinstaller?Demo=yes" class="btn btn-primary">윈도우 인스톨러로 설치</a>
-          <a href="https://download-boardest.web.app" class="btn btn-secondary" target="_blank">수동 파일 다운로드</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <div>
-          <div class="card-top">
-            <div class="card-icon" style="color: #7F5AF0; border-color: rgba(127, 90, 240, 0.3);">👩‍🏫</div>
-            <div>
-              <div class="card-title">교사용 PC 앱 (Demo PRO)</div>
-              <div style="font-size: 12px; color: var(--text-sub);">Windows 10/11 전용</div>
-            </div>
-          </div>
-          <p class="card-desc">
-            선생님 PC용 PRO 앱을 데모 모드로 설치합니다. 윈도우 미니 위젯 및 클라우드 동기화가 가상 학교와 연결됩니다.
-          </p>
-        </div>
-        <div class="btn-group">
-          <a href="ms-appinstaller:?source=https://download-boardest.web.app/bst-teacher.appinstaller?Demo=yes" class="btn btn-primary">교사용 인스톨러 설치</a>
-          <a href="https://boardest-teacher.web.app/Pro?Demo=yes" class="btn btn-secondary" target="_blank">PRO 웹앱 바로가기</a>
         </div>
       </div>
     </div>

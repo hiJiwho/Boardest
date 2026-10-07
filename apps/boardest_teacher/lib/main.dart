@@ -31,6 +31,7 @@ import 'views/bst_viewer_route.dart';
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  AppConfig.initDemoMode(args);
   
   try {
     await Firebase.initializeApp(

@@ -20,6 +20,7 @@ import 'services/meal_call_service.dart';
 import 'config/app_config.dart';
 import 'views/setup_wizard_view.dart';
 import 'views/dashboard_view.dart';
+import 'services/demo_class_allocator_service.dart';
 import 'helpers/startup_helper.dart';
 
 
@@ -97,8 +98,14 @@ void main(List<String> args) async {
   final storage = StorageService();
   AppSettings settings = await storage.loadConfigAndSync();
 
+  // Demo 모드일 경우 Demo-class 1~10 비겹침 할당 실행
+  if (AppConfig.isDemoMode) {
+    settings = await DemoClassAllocatorService.instance.allocateDemoSettings(settings);
+    debugPrint('[Boardest Startup] Running in Demo mode: ${settings.classNickname}');
+  }
+
   // Dynamic Comcigan school code lookup
-  if (settings.isSetupComplete && settings.schoolId.isNotEmpty) {
+  if (settings.isSetupComplete && settings.schoolId.isNotEmpty && !AppConfig.isDemoMode) {
     try {
       final schoolCodeStr = await ComciganService.fetchCode(settings.schoolId.trim().toLowerCase());
       final parsedCode = int.tryParse(schoolCodeStr);
@@ -123,7 +130,7 @@ void main(List<String> args) async {
     }
   }
 
-  if (kIsWeb) {
+  if (kIsWeb && !AppConfig.isDemoMode) {
     final uri = Uri.base;
     if (uri.queryParameters['oobe_callback'] == 'true') {
       final code = int.tryParse(uri.queryParameters['code'] ?? '') ?? 31415;
@@ -146,8 +153,8 @@ void main(List<String> args) async {
   final authService = AuthService();
   var currentUser = await authService.getCurrentUser();
 
-  // 로그인 검증 및 미로그인 시 샌드박스 정리 & 로그인 요구 (하위 호환 무시, 깨끗한 초기화)
-  if (currentUser == null) {
+  // 로그인 검증 및 미로그인 시 샌드박스 정리 & 로그인 요구 (데모 모드 시 우회)
+  if (currentUser == null && !AppConfig.isDemoMode) {
     if (settings.isSetupComplete && settings.selectedSchool != null) {
       try {
         final err = await authService.loginOrSignupClass(
@@ -171,7 +178,7 @@ void main(List<String> args) async {
     }
 
     // 여전히 로그인이 안 되어있으면 샌드박스 내부 임시 데이터 소거 및 로그인 요구창 진입
-    if (currentUser == null) {
+    if (currentUser == null && !AppConfig.isDemoMode) {
       debugPrint('[Boardest Startup] Not logged in. Purging sandbox data and prompting login...');
       try {
         final tempDir = Directory(AppPaths.bstCldTempDirSync);
