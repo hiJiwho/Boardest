@@ -56,6 +56,7 @@ void main(List<String> args) async {
   };
 
   WidgetsFlutterBinding.ensureInitialized();
+  AppConfig.initDemoMode(args);
   try {
     pdfrxFlutterInitialize();
   } catch (e) {

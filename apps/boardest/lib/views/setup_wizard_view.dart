@@ -816,6 +816,16 @@ class _SetupWizardViewState extends State<SetupWizardView> {
       );
       return;
     }
+
+    if (schoolId == 'demo' && !AppConfig.isDemoMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('학교 ID "$schoolId"의 데이터를 찾을 수 없습니다. (HTTP 404)'),
+          backgroundColor: const Color(0xFFEF4565),
+        ),
+      );
+      return;
+    }
     setState(() => _isSearchingSchool = true);
     try {
       final url = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/control_configs/$schoolId?key=${AppConfig.firebaseApiKey}';

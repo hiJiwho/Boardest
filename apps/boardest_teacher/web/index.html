@@ -69,6 +69,20 @@
 </head>
 <body>
   <script>
+    // ─── Pro vs Lite Device Detection & Route Handling ───
+    (function() {
+      const path = window.location.pathname.toLowerCase();
+      const search = window.location.search;
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      const isExplicitPro = path.includes('/pro');
+      const isExplicitLite = path.includes('/lite');
+
+      if (!isExplicitPro && !isExplicitLite && isMobile) {
+        window.location.replace('/lite/' + search);
+      }
+    })();
+
     // PWA Install Prompt Restriction Policy:
     // Block PWA install prompt on Android & Windows; allow ONLY on iOS, ChromeOS, Linux!
     window.addEventListener('beforeinstallprompt', (e) => {

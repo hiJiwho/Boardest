@@ -8,7 +8,47 @@
   "hosting": [
     {
       "target": "boardest-main",
+      "public": "infra/hub_web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+          ]
+        }
+      ],
+      "rewrites": [
+        { "source": "**", "destination": "/index.html" }
+      ]
+    },
+    {
+      "target": "boardest-class",
       "public": "apps/boardest/build/web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+          ]
+        }
+      ],
+      "rewrites": [
+        { "source": "**", "destination": "/index.html" }
+      ]
+    },
+    {
+      "target": "boardest-demo",
+      "public": "infra/demo_web",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -44,35 +84,6 @@
       ],
       "rewrites": [
         { "source": "**", "destination": "/index.html" }
-      ]
-    },
-    {
-      "target": "boardest-teacher-lite",
-      "public": "apps/boardest_teacher_lite/build/web",
-      "ignore": [
-        "firebase.json",
-        "**/.*",
-        "**/node_modules/**"
-      ],
-      "headers": [
-        {
-          "source": "**",
-          "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
-          ]
-        }
-      ],
-      "rewrites": [
-        { "source": "**", "destination": "/index.html" }
-      ]
-    },
-    {
-      "target": "update-work",
-      "public": "infra/update_work_web",
-      "ignore": [
-        "firebase.json",
-        "**/.*",
-        "**/node_modules/**"
       ]
     },
     {

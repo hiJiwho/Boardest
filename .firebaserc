@@ -8,17 +8,17 @@
         "boardest-main": [
           "boardest"
         ],
+        "boardest-class": [
+          "boardest-class"
+        ],
+        "boardest-demo": [
+          "boardest-demo"
+        ],
         "bst-cld": [
           "bst-cld"
         ],
         "boardest-teacher": [
           "boardest-teacher"
-        ],
-        "boardest-teacher-lite": [
-          "boardest-teacher-lite"
-        ],
-        "update-work": [
-          "boardest-update-work"
         ],
         "boardest-control": [
           "boardest-control"

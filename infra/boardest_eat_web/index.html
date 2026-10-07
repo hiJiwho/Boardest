@@ -686,17 +686,18 @@
     const FIRESTORE_BASE = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents';
     const RTDB_BASE = 'https://jiwhosboardest-default-rtdb.firebaseio.com';
 
-    // Parse URL Query Strings (Supports schoolId, schoolCode, cafeteria, caf, callerName, teacherName)
+    // Parse URL Query Strings (Supports schoolId, schoolCode, cafeteria, caf, callerName, teacherName, Demo)
     const urlParams = new URLSearchParams(window.location.search);
-    const qsSchool = (urlParams.get('schoolId') || urlParams.get('schoolCode') || urlParams.get('school') || '').trim().toLowerCase();
+    const isDemoMode = urlParams.has('Demo') || urlParams.has('demo') || urlParams.get('Demo') === 'yes';
+    const qsSchool = isDemoMode ? 'demo' : (urlParams.get('schoolId') || urlParams.get('schoolCode') || urlParams.get('school') || '').trim().toLowerCase();
     const qsCafeteria = (urlParams.get('cafeteria') || urlParams.get('caf') || urlParams.get('cafNum') || '').trim();
     const qsCaller = (urlParams.get('callerName') || urlParams.get('teacherName') || urlParams.get('teacher') || urlParams.get('name') || '').trim();
 
     // Active session variables (School & Cafeteria are NOT saved to localStorage, only Teacher Name is saved)
-    let schoolCode = qsSchool || '';
+    let schoolCode = qsSchool || (isDemoMode ? 'demo' : '');
     let selectedCafeteria = (qsCafeteria && ['1','2','3','4','5','6','7','8','9','all'].includes(qsCafeteria)) ? qsCafeteria : '1';
-    let callerName = qsCaller || localStorage.getItem('bst_eat_saved_teacher') || '';
-    let schoolName = '';
+    let callerName = qsCaller || localStorage.getItem('bst_eat_saved_teacher') || (isDemoMode ? '데모 관리자' : '');
+    let schoolName = isDemoMode ? 'Boardest 데모 중학교' : '';
 
     // Runtime state
     let onlineClassrooms = [];
@@ -1268,6 +1269,22 @@
     // ─── Neis Meal Menu API ───
     async function loadNeisMealMenu() {
       const container = document.getElementById('mealChipsContainer');
+
+      if ((schoolCode || '').toLowerCase() === 'demo' || isDemoMode) {
+        schoolName = 'Boardest 데모 중학교';
+        updateHeaderInfo();
+        const demoDishes = [
+          '찰보리밥',
+          '소고기 된장국 (소, 대두)',
+          '매콤 돼지갈비찜 (돼지)',
+          '시금치나물무침',
+          '배추김치',
+          '수제 조각케이크 (갑각, 우유, 밀)'
+        ];
+        container.innerHTML = demoDishes.map(d => `<div class="meal-dish-chip">🍱 ${d}</div>`).join('');
+        document.getElementById('mealDateTitle').innerText = `오늘 급식 식단 (Boardest 데모 중학교)`;
+        return;
+      }
 
       // 1. 영문 schoolCode(예: ydm)일 경우 한글 공식 학교명으로 사전 매핑/조회
       if (!schoolName || schoolName.toLowerCase() === (schoolCode || '').toLowerCase()) {

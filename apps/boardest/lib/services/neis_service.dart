@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../models/meal_models.dart';
 
 class NeisService {
   static const String _apiKey = '821179541cf54b6288d51741f30e1c90';
@@ -47,17 +48,20 @@ class NeisService {
     }
   }
 
-  /// Fetches lunch meal menu for a specific date (YYYYMMDD) and cleans allergy indexes
-  Future<String> fetchTodayMeal(String schoolName, DateTime date) async {
+  /// Fetches lunch meal menu as structured MealDayInfo with allergy annotations
+  Future<MealDayInfo> fetchMealDayInfo(String schoolName, DateTime date) async {
+    if (schoolName == 'Demo' || schoolName.toLowerCase() == 'demo') {
+      return MealDayInfo.generateDemo(date);
+    }
+
     final codes = await _resolveSchoolCodes(schoolName);
     if (codes == null) {
-      return '학교 기본 정보를 나이스 API에서 찾을 수 없습니다.';
+      return MealDayInfo(date: date, dishes: [], footnotes: ['학교 기본 정보를 찾을 수 없습니다.']);
     }
 
     final officeCode = codes['officeCode']!;
     final schoolCode = codes['schoolCode']!;
     
-    // Format date as YYYYMMDD
     final year = date.year.toString();
     final month = date.month.toString().padLeft(2, '0');
     final day = date.day.toString().padLeft(2, '0');
@@ -71,29 +75,99 @@ class NeisService {
         '&ATPT_OFCDC_SC_CODE=$officeCode'
         '&SD_SCHUL_CODE=$schoolCode'
         '&MLSV_YMD=$dateStr'
-        '&MMEAL_SC_CODE=2', // 2 represents standard High/Middle School Lunch (중식)
+        '&MMEAL_SC_CODE=2',
       );
 
       final response = await http.get(queryUrl);
-      if (response.statusCode != 200) return '급식을 불러오지 못했습니다. (HTTP ${response.statusCode})';
+      if (response.statusCode != 200) {
+        return MealDayInfo(date: date, dishes: [], footnotes: ['급식을 불러오지 못했습니다.']);
+      }
 
       final data = json.decode(response.body);
-      
-      // If no lunch menu is registered (e.g., weekends, holidays)
       if (data == null || data['mealServiceDietInfo'] == null) {
-        return '오늘 등록된 급식 메뉴가 없습니다.';
+        return MealDayInfo(date: date, dishes: [], footnotes: []);
       }
 
       final rows = data['mealServiceDietInfo'][1]['row'] as List<dynamic>;
-      if (rows.isEmpty) return '오늘 등록된 급식 메뉴가 없습니다.';
+      if (rows.isEmpty) return MealDayInfo(date: date, dishes: [], footnotes: []);
 
       final mealRow = rows[0] as Map<String, dynamic>;
       final rawDdish = mealRow['DDISH_NM'] as String? ?? '';
       
-      return _cleanMealMenu(rawDdish);
-    } catch (e) {
-      return '급식 정보를 받아오는 중 오류가 발생했습니다.';
+      return MealDayInfo.fromNeisRaw(date, rawDdish);
+    } catch (_) {
+      return MealDayInfo(date: date, dishes: [], footnotes: ['급식 정보를 불러오는 중 오류가 발생했습니다.']);
     }
+  }
+
+  /// Fetches lunch meals for an entire month
+  Future<Map<int, MealDayInfo>> fetchMonthMeals(String schoolName, int year, int month) async {
+    if (schoolName == 'Demo' || schoolName.toLowerCase() == 'demo') {
+      final Map<int, MealDayInfo> map = {};
+      final daysInMonth = DateTime(year, month + 1, 0).day;
+      for (int d = 1; d <= daysInMonth; d++) {
+        final date = DateTime(year, month, d);
+        map[d] = MealDayInfo.generateDemo(date);
+      }
+      return map;
+    }
+
+    final codes = await _resolveSchoolCodes(schoolName);
+    if (codes == null) return {};
+
+    final officeCode = codes['officeCode']!;
+    final schoolCode = codes['schoolCode']!;
+
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final fromDateStr = '$year${month.toString().padLeft(2, '0')}01';
+    final toDateStr = '$year${month.toString().padLeft(2, '0')}${daysInMonth.toString().padLeft(2, '0')}';
+
+    try {
+      final queryUrl = Uri.parse(
+        'https://open.neis.go.kr/hub/mealServiceDietInfo'
+        '?KEY=$_apiKey'
+        '&Type=json'
+        '&ATPT_OFCDC_SC_CODE=$officeCode'
+        '&SD_SCHUL_CODE=$schoolCode'
+        '&MLSV_FROM_YMD=$fromDateStr'
+        '&MLSV_TO_YMD=$toDateStr'
+        '&MMEAL_SC_CODE=2'
+        '&pSize=50',
+      );
+
+      final response = await http.get(queryUrl);
+      if (response.statusCode != 200) return {};
+
+      final data = json.decode(response.body);
+      if (data == null || data['mealServiceDietInfo'] == null) return {};
+
+      final rows = data['mealServiceDietInfo'][1]['row'] as List<dynamic>;
+      final Map<int, MealDayInfo> result = {};
+
+      for (final row in rows) {
+        final ymd = row['MLSV_YMD'] as String? ?? '';
+        final rawDdish = row['DDISH_NM'] as String? ?? '';
+        if (ymd.length == 8) {
+          final d = int.tryParse(ymd.substring(6, 8));
+          if (d != null) {
+            final date = DateTime(year, month, d);
+            result[d] = MealDayInfo.fromNeisRaw(date, rawDdish);
+          }
+        }
+      }
+      return result;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Fetches lunch meal menu for a specific date (YYYYMMDD) and cleans allergy indexes
+  Future<String> fetchTodayMeal(String schoolName, DateTime date) async {
+    final info = await fetchMealDayInfo(schoolName, date);
+    if (info.dishes.isEmpty) {
+      return info.footnotes.isNotEmpty ? info.footnotes.first : '오늘 등록된 급식 메뉴가 없습니다.';
+    }
+    return info.dishes.map((d) => '${d.name} ${d.allergyDisplay}'.trim()).join('\n');
   }
 
   /// Cleans HTML breaks and strips allergy index numbers (e.g. "(1.5.13.)")
