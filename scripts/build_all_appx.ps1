@@ -1,374 +1,131 @@
 param(
-    [string]$Channel = "Beta",
-    [string]$AppVersion = "3.0.5.0",
-    [switch]$SkipApk
+  [string]$AppVersion = '4.0.2.0',
+  [switch]$SkipApk
 )
 
-# Build all AppX packages and create AppInstaller manifests
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = 'Stop'
+$RootDir = Split-Path $PSScriptRoot -Parent
+$DistDir = Join-Path $RootDir 'dist'
+$PackageDir = Join-Path $DistDir 'packages'
+$OutDir = Join-Path $DistDir 'appx'
+$TemplateDir = Join-Path $PSScriptRoot 'appx_templates'
+$CertFile = Join-Path $RootDir 'certs\BoardestCert.pfx'
+$CerFile = Join-Path $RootDir 'certs\BoardestCert.cer'
+$CertPassword = $env:BOARDEST_CERT_PASSWORD
+$PublicCertificate = $null
+$CertificateThumbprint = $null
+$UseCertificateStore = [string]::IsNullOrWhiteSpace($CertPassword)
 
-$RootDir = "c:\Users\jiwho\Documents\boardest"
-$DistDir = Join-Path $RootDir "dist"
-$AppxOutDir = Join-Path $DistDir "appx"
-$CertFile = Join-Path $RootDir "certs\BoardestCert.pfx"
-$CertPassword = "Boardest2026!"
-$CerFile = Join-Path $RootDir "certs\BoardestCert.cer"
+$KitBin = 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64'
+$MakeAppx = Join-Path $KitBin 'makeappx.exe'
+$SignTool = Join-Path $KitBin 'signtool.exe'
+$CSharpCompiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+foreach ($tool in @($MakeAppx, $SignTool, $CertFile, $CerFile, $CSharpCompiler)) {
+  if (-not (Test-Path $tool)) { throw "Required build file not found: $tool" }
+}
+$PublicCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($CerFile)
+$CertificateThumbprint = $PublicCertificate.Thumbprint
+if ($UseCertificateStore) {
+  $InstalledSigningCertificate = Get-ChildItem Cert:\CurrentUser\My |
+    Where-Object { $_.Thumbprint -eq $CertificateThumbprint -and $_.HasPrivateKey } |
+    Select-Object -First 1
+  if (-not $InstalledSigningCertificate) {
+    throw 'Set BOARDEST_CERT_PASSWORD or install the matching Boardest signing certificate with its private key.'
+  }
+}
+foreach ($name in @('boardest', 'bst-teacher', 'bst-overlay-panser', 'boardest-class-lite')) {
+  $template = Join-Path $TemplateDir $name
+  if (-not (Test-Path (Join-Path $template 'AppxManifest.xml'))) { throw "AppX template not found: $template" }
+  $package = Join-Path $PackageDir $name
+  New-Item -ItemType Directory -Force -Path $package | Out-Null
+  Copy-Item (Join-Path $template '*') $package -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
-$MakeAppx = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\makeappx.exe"
-$SignTool = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe"
-
-$repoReleaseBase = "https://github.com/hiJiwho/Boardest/releases/latest/download"
-
-Write-Host "=== Starting Full AppX & AppInstaller Packaging Pipeline (v$AppVersion) ===" -ForegroundColor Cyan
-
-# 1. Ensure output directory exists
-if (-not (Test-Path $AppxOutDir)) {
-    New-Item -ItemType Directory -Path $AppxOutDir -Force | Out-Null
+function Set-PackageVersion([string]$Manifest) {
+  $xml = Get-Content $Manifest -Raw -Encoding UTF8
+  $xml = [regex]::Replace($xml, '(<Identity\b[^>]*\bVersion=")[0-9.]+', ('${1}' + $AppVersion))
+  if ($xml -notmatch ('<Identity\b[^>]*\bVersion="' + [regex]::Escape($AppVersion) + '"')) {
+    throw "Could not set AppX version in manifest: $Manifest"
+  }
+  [System.IO.File]::WriteAllText($Manifest, $xml, [System.Text.UTF8Encoding]::new($false))
+}
+function Build-Windows([string]$Directory) {
+  Push-Location $Directory
+  try { & flutter build windows --release; if ($LASTEXITCODE -ne 0) { throw "Windows build failed: $Directory" } }
+  finally { Pop-Location }
+}
+function Build-Apk([string]$Directory, [string]$Name) {
+  Push-Location $Directory
+  try { & flutter build apk --release; if ($LASTEXITCODE -ne 0) { throw "Android APK build failed: $Directory" } }
+  finally { Pop-Location }
+  Copy-Item (Join-Path $Directory 'build\app\outputs\flutter-apk\app-release.apk') (Join-Path $OutDir $Name) -Force
+}
+function Pack-Signed([string]$Name) {
+  $source = Join-Path $PackageDir $Name
+  $target = Join-Path $OutDir "$Name.appx"
+  Set-PackageVersion (Join-Path $source 'AppxManifest.xml')
+  & $MakeAppx pack /d $source /p $target /o
+  if ($LASTEXITCODE -ne 0) { throw "AppX packaging failed: $Name" }
+  if ($UseCertificateStore) {
+    & $SignTool sign /fd SHA256 /s My /sha1 $CertificateThumbprint $target
+  } else {
+    & $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $target
+  }
+  if ($LASTEXITCODE -ne 0) { throw "AppX signing failed: $Name" }
 }
 
-# Copy public cert to appx folder for distribution
-Copy-Item $CerFile (Join-Path $AppxOutDir "BoardestCert.cer") -Force
-Copy-Item (Join-Path $RootDir "certs\install_certificate.bat") (Join-Path $AppxOutDir "install_certificate.bat") -Force
+Write-Host "Building Boardest official v$AppVersion AppX and APK files..." -ForegroundColor Cyan
+Build-Windows (Join-Path $RootDir 'apps\boardest')
+Build-Windows (Join-Path $RootDir 'apps\boardest_teacher')
 
-# Update AppxManifest.xml files to match $AppVersion (only Identity Version, NOT MinVersion)
-foreach ($manifestPath in @(
-    (Join-Path $DistDir "packages\boardest\AppxManifest.xml"),
-    (Join-Path $DistDir "packages\bst-teacher\AppxManifest.xml"),
-    (Join-Path $DistDir "packages\bst-overlay-panser\AppxManifest.xml"),
-    (Join-Path $DistDir "packages\boardest-class-lite\AppxManifest.xml")
-)) {
-    if (Test-Path $manifestPath) {
-        $xml = Get-Content $manifestPath -Raw -Encoding UTF8
-        $xml = [regex]::Replace($xml, '(?<=<Identity[^>]*\bVersion=")[0-9.]+', $AppVersion)
-        Set-Content -Path $manifestPath -Value $xml -Encoding UTF8
-    }
-}
+$BoardestRelease = Join-Path $RootDir 'apps\boardest\build\windows\x64\runner\Release'
+$TeacherRelease = Join-Path $RootDir 'apps\boardest_teacher\build\windows\x64\runner\Release'
+Copy-Item "$BoardestRelease\*" (Join-Path $PackageDir 'boardest') -Recurse -Force
+Copy-Item "$TeacherRelease\*" (Join-Path $PackageDir 'bst-teacher') -Recurse -Force
+Compress-Archive -Path (Join-Path $BoardestRelease '*') -DestinationPath (Join-Path $OutDir 'boardest-windows.zip') -Force
+Compress-Archive -Path (Join-Path $TeacherRelease '*') -DestinationPath (Join-Path $OutDir 'bst-teacher-windows.zip') -Force
+Copy-Item (Join-Path $RootDir 'infra\class_lite_web\index.html') (Join-Path $PackageDir 'boardest-class-lite\index.html') -Force
 
-# 2. Create .appinstaller XML files (Quiet mode: ShowPrompt="false" UpdateBlocksActivation="false")
-Write-Host "`n[1/6] Generating AppInstaller manifests (v$AppVersion)..." -ForegroundColor Yellow
-
-$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-
-# Helper to generate AppInstaller XML
-function Generate-AppInstallerXml([string]$Uri, [string]$PkgName, [string]$PkgUri, [string]$Ver) {
-@"
-<?xml version="1.0" encoding="utf-8"?>
-<AppInstaller
-    xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-    Version="$Ver"
-    Uri="$Uri">
-    <MainPackage
-        Name="$PkgName"
-        Publisher="CN=jiwho"
-        Version="$Ver"
-        ProcessorArchitecture="x64"
-        Uri="$PkgUri" />
-    <UpdateSettings>
-        <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="true"/>
-        <AutomaticBackgroundTask/>
-        <ForceUpdateFromAnyVersion>true</ForceUpdateFromAnyVersion>
-    </UpdateSettings>
-</AppInstaller>
-"@
-}
-
-# 2.1 boardest.appinstaller & bst.appinstaller (Normal)
-$boardestAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/boardest.appinstaller" "jiwho.boardest.bst" "https://bst-installer.web.app/boardest.appx" $AppVersion
-$boardestAppinstallerPath = Join-Path $AppxOutDir "boardest.appinstaller"
-[System.IO.File]::WriteAllText($boardestAppinstallerPath, $boardestAppinstaller, $utf8NoBom)
-
-$bstAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/bst.appinstaller" "jiwho.boardest.bst" "https://bst-installer.web.app/boardest.appx" $AppVersion
-$bstAppinstallerPath = Join-Path $AppxOutDir "bst.appinstaller"
-[System.IO.File]::WriteAllText($bstAppinstallerPath, $bstAppinstaller, $utf8NoBom)
-Write-Host "Created: boardest.appinstaller and bst.appinstaller" -ForegroundColor Green
-
-# 2.1-B boardest-beta.appinstaller & bst-beta.appinstaller (Beta)
-$boardestBetaAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/boardest-beta.appinstaller" "jiwho.boardest.bst.beta" "https://bst-installer.web.app/boardest-beta.appx" $AppVersion
-$boardestBetaAppinstallerPath = Join-Path $AppxOutDir "boardest-beta.appinstaller"
-[System.IO.File]::WriteAllText($boardestBetaAppinstallerPath, $boardestBetaAppinstaller, $utf8NoBom)
-
-$bstBetaAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/bst-beta.appinstaller" "jiwho.boardest.bst.beta" "https://bst-installer.web.app/boardest-beta.appx" $AppVersion
-$bstBetaAppinstallerPath = Join-Path $AppxOutDir "bst-beta.appinstaller"
-[System.IO.File]::WriteAllText($bstBetaAppinstallerPath, $bstBetaAppinstaller, $utf8NoBom)
-Write-Host "Created: boardest-beta.appinstaller and bst-beta.appinstaller" -ForegroundColor Green
-
-# 2.2 bst-teacher.appinstaller & teacher.appinstaller (Normal)
-$teacherAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/bst-teacher.appinstaller" "jiwho.boardest.teacher" "https://bst-installer.web.app/bst-teacher.appx" $AppVersion
-$teacherAppinstallerPath = Join-Path $AppxOutDir "bst-teacher.appinstaller"
-[System.IO.File]::WriteAllText($teacherAppinstallerPath, $teacherAppinstaller, $utf8NoBom)
-
-$teacherAliasAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/teacher.appinstaller" "jiwho.boardest.teacher" "https://bst-installer.web.app/bst-teacher.appx" $AppVersion
-$teacherAliasAppinstallerPath = Join-Path $AppxOutDir "teacher.appinstaller"
-[System.IO.File]::WriteAllText($teacherAliasAppinstallerPath, $teacherAliasAppinstaller, $utf8NoBom)
-Write-Host "Created: bst-teacher.appinstaller and teacher.appinstaller" -ForegroundColor Green
-
-# 2.2-B bst-teacher-beta.appinstaller (Beta)
-$teacherBetaAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/bst-teacher-beta.appinstaller" "jiwho.boardest.teacher.beta" "https://bst-installer.web.app/bst-teacher-beta.appx" $AppVersion
-$teacherBetaAppinstallerPath = Join-Path $AppxOutDir "bst-teacher-beta.appinstaller"
-[System.IO.File]::WriteAllText($teacherBetaAppinstallerPath, $teacherBetaAppinstaller, $utf8NoBom)
-Write-Host "Created: bst-teacher-beta.appinstaller" -ForegroundColor Green
-
-# 2.3 bst-overlay-panser.appinstaller
-$panserAppinstaller = Generate-AppInstallerXml "https://bst-installer.web.app/bst-overlay-panser.appinstaller" "jiwho.boardest.plugin.overlaypanser" "https://bst-installer.web.app/bst-overlay-panser.appx" $AppVersion
-$panserAppinstallerPath = Join-Path $AppxOutDir "bst-overlay-panser.appinstaller"
-[System.IO.File]::WriteAllText($panserAppinstallerPath, $panserAppinstaller, $utf8NoBom)
-Write-Host "Created: bst-overlay-panser.appinstaller" -ForegroundColor Green
-
-# Copy manifests to assets for in-app access
-Copy-Item $boardestAppinstallerPath (Join-Path $RootDir "apps\boardest\assets\boardest.appinstaller") -Force
-Copy-Item $boardestBetaAppinstallerPath (Join-Path $RootDir "apps\boardest\assets\boardest-beta.appinstaller") -Force
-Copy-Item $teacherAppinstallerPath (Join-Path $RootDir "apps\boardest_teacher\assets\bst-teacher.appinstaller") -Force
-Copy-Item $teacherBetaAppinstallerPath (Join-Path $RootDir "apps\boardest_teacher\assets\bst-teacher-beta.appinstaller") -Force
-
-# 3. Package 1: Boardest Main App (Sandboxed)
-Write-Host "`n[2/6] Building & Packaging Boardest Main (jiwho.boardest.bst)..." -ForegroundColor Yellow
-$BoardestAppDir = Join-Path $RootDir "apps\boardest"
-Push-Location $BoardestAppDir
-try {
-    Write-Host "-> Compiling Boardest Windows Release..." -ForegroundColor Cyan
-    & flutter build windows --release
-    if ($LASTEXITCODE -ne 0) { throw "Flutter build windows failed for Boardest" }
-} finally {
-    Pop-Location
-}
-
-$BoardestPkgDir = Join-Path $DistDir "packages\boardest"
-$BoardestReleaseDir = Join-Path $RootDir "apps\boardest\build\windows\x64\runner\Release"
-
-if (Test-Path $BoardestReleaseDir) {
-    Get-ChildItem -Path $BoardestReleaseDir | Where-Object { 
-        $_.Name -notmatch "boardest_ppt.*|boardest_hwp.*|watchdog.*|\.msix$|\.lib$|\.exp$" 
-    } | Copy-Item -Destination $BoardestPkgDir -Recurse -Force
-    Write-Host "-> Synchronized fresh binaries from $BoardestReleaseDir" -ForegroundColor Green
-}
-# Embed .appinstaller directly into package root
-Copy-Item $boardestAppinstallerPath (Join-Path $BoardestPkgDir "boardest.appinstaller") -Force
-Write-Host "-> Embedded boardest.appinstaller into package root" -ForegroundColor Cyan
-
-$BoardestAppx = Join-Path $AppxOutDir "boardest.appx"
-& $MakeAppx pack /d $BoardestPkgDir /p $BoardestAppx /o
-if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed for Boardest" }
-
-& $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $BoardestAppx
-if ($LASTEXITCODE -ne 0) { throw "SignTool failed for Boardest" }
-Write-Host "-> Successfully created and signed boardest.appx" -ForegroundColor Green
-
-# 3-B. Package Boardest Beta (jiwho.boardest.bst.beta)
-Write-Host "-> Packaging Boardest Beta (jiwho.boardest.bst.beta)..." -ForegroundColor Cyan
-$normalBoardestManifest = Get-Content (Join-Path $BoardestPkgDir "AppxManifest.xml") -Raw -Encoding UTF8
-$betaBoardestManifest = $normalBoardestManifest `
-    -replace 'Name="jiwho.boardest.bst"', 'Name="jiwho.boardest.bst.beta"' `
-    -replace '<DisplayName>Boardest</DisplayName>', '<DisplayName>Boardest (Beta)</DisplayName>' `
-    -replace '<uap:VisualElements DisplayName="Boardest"', '<uap:VisualElements DisplayName="Boardest (Beta)"'
-
-try {
-    [System.IO.File]::WriteAllText((Join-Path $BoardestPkgDir "AppxManifest.xml"), $betaBoardestManifest, $utf8NoBom)
-    Copy-Item $boardestBetaAppinstallerPath (Join-Path $BoardestPkgDir "boardest.appinstaller") -Force
-    $BoardestBetaAppx = Join-Path $AppxOutDir "boardest-beta.appx"
-    & $MakeAppx pack /d $BoardestPkgDir /p $BoardestBetaAppx /o
-    if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed for Boardest Beta" }
-    & $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $BoardestBetaAppx
-    if ($LASTEXITCODE -ne 0) { throw "SignTool failed for Boardest Beta" }
-    Write-Host "-> Successfully created and signed boardest-beta.appx" -ForegroundColor Green
-} finally {
-    [System.IO.File]::WriteAllText((Join-Path $BoardestPkgDir "AppxManifest.xml"), $normalBoardestManifest, $utf8NoBom)
-    Copy-Item $boardestAppinstallerPath (Join-Path $BoardestPkgDir "boardest.appinstaller") -Force
-}
-
-
-# 4. Package 2: Boardest Teacher App (Sandboxed)
-Write-Host "`n[3/6] Building & Packaging Boardest Teacher (jiwho.boardest.teacher)..." -ForegroundColor Yellow
-$TeacherAppDir = Join-Path $RootDir "apps\boardest_teacher"
-Push-Location $TeacherAppDir
-try {
-    Write-Host "-> Compiling Boardest Teacher Windows Release..." -ForegroundColor Cyan
-    & flutter build windows --release
-    if ($LASTEXITCODE -ne 0) { throw "Flutter build windows failed for Boardest Teacher" }
-} finally {
-    Pop-Location
-}
-
-$TeacherPkgDir = Join-Path $DistDir "packages\bst-teacher"
-$TeacherReleaseDir = Join-Path $RootDir "apps\boardest_teacher\build\windows\x64\runner\Release"
-
-if (Test-Path $TeacherReleaseDir) {
-    Get-ChildItem -Path $TeacherReleaseDir | Where-Object { 
-        $_.Name -notmatch "boardest_ppt.*|boardest_hwp.*|watchdog.*|\.lib$|\.exp$" 
-    } | Copy-Item -Destination $TeacherPkgDir -Recurse -Force
-    Write-Host "-> Synchronized fresh binaries from $TeacherReleaseDir" -ForegroundColor Green
-}
-# Embed .appinstaller directly into package root
-Copy-Item $teacherAppinstallerPath (Join-Path $TeacherPkgDir "bst-teacher.appinstaller") -Force
-Write-Host "-> Embedded bst-teacher.appinstaller into package root" -ForegroundColor Cyan
-
-$TeacherAppx = Join-Path $AppxOutDir "bst-teacher.appx"
-& $MakeAppx pack /d $TeacherPkgDir /p $TeacherAppx /o
-if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed for Boardest Teacher" }
-
-& $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $TeacherAppx
-if ($LASTEXITCODE -ne 0) { throw "SignTool failed for Boardest Teacher" }
-Write-Host "-> Successfully created and signed bst-teacher.appx" -ForegroundColor Green
-
-# 4-B. Package Boardest Teacher Beta (jiwho.boardest.teacher.beta)
-Write-Host "-> Packaging Boardest Teacher Beta (jiwho.boardest.teacher.beta)..." -ForegroundColor Cyan
-$normalTeacherManifest = Get-Content (Join-Path $TeacherPkgDir "AppxManifest.xml") -Raw -Encoding UTF8
-$betaTeacherManifest = $normalTeacherManifest `
-    -replace 'Name="jiwho.boardest.teacher"', 'Name="jiwho.boardest.teacher.beta"' `
-    -replace '<DisplayName>Boardest Teacher</DisplayName>', '<DisplayName>Boardest Teacher (Beta)</DisplayName>' `
-    -replace '<uap:VisualElements DisplayName="Boardest Teacher"', '<uap:VisualElements DisplayName="Boardest Teacher (Beta)"'
-
-try {
-    [System.IO.File]::WriteAllText((Join-Path $TeacherPkgDir "AppxManifest.xml"), $betaTeacherManifest, $utf8NoBom)
-    Copy-Item $teacherBetaAppinstallerPath (Join-Path $TeacherPkgDir "bst-teacher.appinstaller") -Force
-    $TeacherBetaAppx = Join-Path $AppxOutDir "bst-teacher-beta.appx"
-    & $MakeAppx pack /d $TeacherPkgDir /p $TeacherBetaAppx /o
-    if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed for Boardest Teacher Beta" }
-    & $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $TeacherBetaAppx
-    if ($LASTEXITCODE -ne 0) { throw "SignTool failed for Boardest Teacher Beta" }
-    Write-Host "-> Successfully created and signed bst-teacher-beta.appx" -ForegroundColor Green
-} finally {
-    [System.IO.File]::WriteAllText((Join-Path $TeacherPkgDir "AppxManifest.xml"), $normalTeacherManifest, $utf8NoBom)
-    Copy-Item $teacherAppinstallerPath (Join-Path $TeacherPkgDir "bst-teacher.appinstaller") -Force
-}
-
-
-# 5. Package 3: BST Overlay Panser (Un-sandboxed FullTrust Extension Plugin)
-Write-Host "`n[4/6] Packaging BST Overlay Panser (jiwho.boardest.plugin.overlaypanser)..." -ForegroundColor Yellow
-$PanserPkgDir = Join-Path $DistDir "packages\bst-overlay-panser"
-
-$helpers = @(
-    (Join-Path $TeacherReleaseDir "boardest_ppt_helper.exe"),
-    (Join-Path $TeacherReleaseDir "boardest_ppt_overlay.exe"),
-    (Join-Path $TeacherReleaseDir "boardest_hwp_overlay.exe"),
-    (Join-Path $TeacherReleaseDir "watchdog.exe"),
-    (Join-Path $RootDir "installer\driver_installer.exe")
-)
-
-foreach ($h in $helpers) {
-    if (Test-Path $h) {
-        Copy-Item $h $PanserPkgDir -Force
-        Write-Host "Included in Panser: $(Split-Path $h -Leaf)" -ForegroundColor Gray
-    }
-}
-# Embed .appinstaller directly into package root
-Copy-Item $panserAppinstallerPath (Join-Path $PanserPkgDir "bst-overlay-panser.appinstaller") -Force
-
-$PanserAppx = Join-Path $AppxOutDir "bst-overlay-panser.appx"
-& $MakeAppx pack /d $PanserPkgDir /p $PanserAppx /o
-if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed for BST Overlay Panser" }
-
-& $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $PanserAppx
-if ($LASTEXITCODE -ne 0) { throw "SignTool failed for BST Overlay Panser" }
-Write-Host "-> Successfully created and signed bst-overlay-panser.appx" -ForegroundColor Green
-
-
-# 5.5 Package: Boardest Class Lite (Sandboxed WebView2 App)
-Write-Host "`nPackaging Boardest Class Lite (jiwho.boardest.classlite)..." -ForegroundColor Yellow
-$LitePkgDir = Join-Path $DistDir "packages\boardest-class-lite"
-Copy-Item (Join-Path $RootDir "infra\class_lite_web\index.html") (Join-Path $LitePkgDir "index.html") -Force
-
-$LiteAppx = Join-Path $AppxOutDir "boardest-class-lite.appx"
-& $MakeAppx pack /d $LitePkgDir /p $LiteAppx /o
-if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed for Boardest Class Lite" }
-& $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $LiteAppx
-if ($LASTEXITCODE -ne 0) { throw "SignTool failed for Boardest Class Lite" }
-Write-Host "-> Successfully created and signed boardest-class-lite.appx" -ForegroundColor Green
-
-# Package Boardest Class Lite Beta
-Write-Host "-> Packaging Boardest Class Lite Beta (jiwho.boardest.classlite.beta)..." -ForegroundColor Cyan
-$normalLiteManifest = Get-Content (Join-Path $LitePkgDir "AppxManifest.xml") -Raw -Encoding UTF8
-$betaLiteManifest = $normalLiteManifest `
-    -replace 'Name="jiwho.boardest.classlite"', 'Name="jiwho.boardest.classlite.beta"' `
-    -replace '<DisplayName>Boardest Class Lite</DisplayName>', '<DisplayName>Boardest Class Lite (Beta)</DisplayName>' `
-    -replace '<uap:VisualElements DisplayName="Boardest Class Lite"', '<uap:VisualElements DisplayName="Boardest Class Lite (Beta)"'
-
-try {
-    [System.IO.File]::WriteAllText((Join-Path $LitePkgDir "AppxManifest.xml"), $betaLiteManifest, $utf8NoBom)
-    $LiteBetaAppx = Join-Path $AppxOutDir "boardest-class-lite-beta.appx"
-    & $MakeAppx pack /d $LitePkgDir /p $LiteBetaAppx /o
-    if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed for Boardest Class Lite Beta" }
-    & $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $LiteBetaAppx
-    if ($LASTEXITCODE -ne 0) { throw "SignTool failed for Boardest Class Lite Beta" }
-    Write-Host "-> Successfully created and signed boardest-class-lite-beta.appx" -ForegroundColor Green
-} finally {
-    [System.IO.File]::WriteAllText((Join-Path $LitePkgDir "AppxManifest.xml"), $normalLiteManifest, $utf8NoBom)
-}
-
-
-# 6. Synchronize .appinstaller manifests to infra/download_web and infra/welcome_web
-Write-Host "`n[5/6] Synchronizing .appinstaller files to web distribution directories..." -ForegroundColor Yellow
-$DownloadWebDir = Join-Path $RootDir "infra\download_web"
-$WelcomeWebDir = Join-Path $RootDir "infra\welcome_web"
-
-if (Test-Path $DownloadWebDir) {
-    Copy-Item $boardestAppinstallerPath (Join-Path $DownloadWebDir "boardest.appinstaller") -Force
-    Copy-Item $bstAppinstallerPath (Join-Path $DownloadWebDir "bst.appinstaller") -Force
-    Copy-Item $boardestBetaAppinstallerPath (Join-Path $DownloadWebDir "boardest-beta.appinstaller") -Force
-    Copy-Item $bstBetaAppinstallerPath (Join-Path $DownloadWebDir "bst-beta.appinstaller") -Force
-    Copy-Item $teacherAppinstallerPath (Join-Path $DownloadWebDir "bst-teacher.appinstaller") -Force
-    Copy-Item $teacherAliasAppinstallerPath (Join-Path $DownloadWebDir "teacher.appinstaller") -Force
-    Copy-Item $teacherBetaAppinstallerPath (Join-Path $DownloadWebDir "bst-teacher-beta.appinstaller") -Force
-    Copy-Item $panserAppinstallerPath (Join-Path $DownloadWebDir "bst-overlay-panser.appinstaller") -Force
-
-    # Copy actual .appx packages and cert for direct web downloading
-    Copy-Item (Join-Path $AppxOutDir "boardest.appx") (Join-Path $DownloadWebDir "boardest.appx") -Force
-    Copy-Item (Join-Path $AppxOutDir "boardest-beta.appx") (Join-Path $DownloadWebDir "boardest-beta.appx") -Force
-    Copy-Item (Join-Path $AppxOutDir "bst-teacher.appx") (Join-Path $DownloadWebDir "bst-teacher.appx") -Force
-    Copy-Item (Join-Path $AppxOutDir "bst-teacher-beta.appx") (Join-Path $DownloadWebDir "bst-teacher-beta.appx") -Force
-    Copy-Item (Join-Path $AppxOutDir "bst-overlay-panser.appx") (Join-Path $DownloadWebDir "bst-overlay-panser.appx") -Force
-    Copy-Item (Join-Path $AppxOutDir "boardest-class-lite.appx") (Join-Path $DownloadWebDir "boardest-class-lite.appx") -Force
-    Copy-Item (Join-Path $AppxOutDir "boardest-class-lite-beta.appx") (Join-Path $DownloadWebDir "boardest-class-lite-beta.appx") -Force
-    Copy-Item (Join-Path $AppxOutDir "boardest-class-lite.appx") (Join-Path $RootDir "infra\hub_web\boardest-class-lite.appx") -Force
-    Copy-Item (Join-Path $AppxOutDir "boardest-class-lite-beta.appx") (Join-Path $RootDir "infra\hub_web\boardest-class-lite-beta.appx") -Force
-    Copy-Item (Join-Path $AppxOutDir "BoardestCert.cer") (Join-Path $DownloadWebDir "BoardestCert.cer") -Force
-    Write-Host "-> Synchronized all manifests and appx packages to infra/download_web" -ForegroundColor Green
-}
-
-if (Test-Path $WelcomeWebDir) {
-    Copy-Item $boardestAppinstallerPath (Join-Path $WelcomeWebDir "boardest.appinstaller") -Force
-    Copy-Item $bstAppinstallerPath (Join-Path $WelcomeWebDir "bst.appinstaller") -Force
-    Copy-Item $boardestBetaAppinstallerPath (Join-Path $WelcomeWebDir "boardest-beta.appinstaller") -Force
-    Copy-Item $bstBetaAppinstallerPath (Join-Path $WelcomeWebDir "bst-beta.appinstaller") -Force
-    Copy-Item $teacherAppinstallerPath (Join-Path $WelcomeWebDir "bst-teacher.appinstaller") -Force
-    Copy-Item $teacherAliasAppinstallerPath (Join-Path $WelcomeWebDir "teacher.appinstaller") -Force
-    Copy-Item $teacherBetaAppinstallerPath (Join-Path $WelcomeWebDir "bst-teacher-beta.appinstaller") -Force
-    Copy-Item $panserAppinstallerPath (Join-Path $WelcomeWebDir "bst-overlay-panser.appinstaller") -Force
-    Write-Host "-> Synchronized all manifests to infra/welcome_web" -ForegroundColor Green
-}
-
-# 7. Build and synchronize Android Release APK
 if (-not $SkipApk) {
-    Write-Host "`n[6/6] Building Android Release APK (boardest.apk)..." -ForegroundColor Yellow
-    $BoardestAppDir = Join-Path $RootDir "apps\boardest"
-    Push-Location $BoardestAppDir
-    try {
-        & flutter build apk --release
-        if ($LASTEXITCODE -ne 0) { throw "Flutter build apk failed with code $LASTEXITCODE" }
-        
-        $GeneratedApk = Join-Path $BoardestAppDir "build\app\outputs\flutter-apk\app-release.apk"
-        if (-not (Test-Path $GeneratedApk)) { throw "Generated APK not found at $GeneratedApk" }
-        
-        Copy-Item $GeneratedApk (Join-Path $DistDir "boardest.apk") -Force
-        Copy-Item $GeneratedApk (Join-Path $AppxOutDir "boardest.apk") -Force
-        Write-Host "-> Successfully built and copied boardest.apk to dist/ and dist/appx/" -ForegroundColor Green
-    } finally {
-        Pop-Location
-    }
-} else {
-    Write-Host "`n[6/6] Skipping Android APK build (-SkipApk specified)..." -ForegroundColor Yellow
+  Build-Apk (Join-Path $RootDir 'apps\boardest') 'boardest.apk'
+  Build-Apk (Join-Path $RootDir 'apps\boardest_teacher') 'bst-teacher.apk'
+  Build-Apk (Join-Path $RootDir 'apps\boardest_teacher_lite') 'bst-teacher-lite.apk'
+  Build-Apk (Join-Path $RootDir 'apps\boardest_class_lite') 'boardest-class-lite.apk'
 }
 
-# 8. Create ZIP distributions for Windows
-Write-Host "`n[7/7] Creating Windows standalone ZIP archives..." -ForegroundColor Yellow
-if (Test-Path $BoardestReleaseDir) {
-    $BoardestZip = Join-Path $AppxOutDir "boardest_windows.zip"
-    Compress-Archive -Path "$BoardestReleaseDir\*" -DestinationPath $BoardestZip -Force
-    Write-Host "-> Created boardest_windows.zip" -ForegroundColor Green
-}
-if (Test-Path $TeacherReleaseDir) {
-    $TeacherZip = Join-Path $AppxOutDir "boardest_teacher_windows.zip"
-    Compress-Archive -Path "$TeacherReleaseDir\*" -DestinationPath $TeacherZip -Force
-    Write-Host "-> Created boardest_teacher_windows.zip" -ForegroundColor Green
-}
+$ClassLiteExe = Join-Path $PackageDir 'boardest-class-lite\Boardest-Class-Lite.exe'
+& $CSharpCompiler /nologo /target:winexe "/out:$ClassLiteExe" (Join-Path $RootDir 'infra\class_lite_win\Boardest-Class-Lite.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Class Lite Windows launcher compilation failed.' }
 
-Write-Host "`n=== All AppX Packages, APK, ZIP and AppInstaller files built and signed successfully! ===" -ForegroundColor Cyan
+$OverlayPackage = Join-Path $PackageDir 'bst-overlay-panser'
+$OverlaySource = Join-Path $RootDir 'apps\boardest'
+$WpfLib = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319;$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\WPF"
+$WpfReferences = @(
+  '/r:System.dll',
+  '/r:System.Core.dll',
+  '/r:WindowsBase.dll',
+  '/r:PresentationCore.dll',
+  '/r:PresentationFramework.dll',
+  '/r:System.Xaml.dll'
+)
+foreach ($overlay in @('boardest_ppt_overlay', 'boardest_hwp_overlay')) {
+  & $CSharpCompiler /nologo /target:winexe "/out:$(Join-Path $OverlayPackage "$overlay.exe")" `
+    "/lib:$WpfLib" `
+    $WpfReferences (Join-Path $OverlaySource "$overlay.cs")
+  if ($LASTEXITCODE -ne 0) { throw "Overlay compilation failed: $overlay" }
+}
+& $CSharpCompiler /nologo /target:exe "/out:$(Join-Path $OverlayPackage 'boardest_ppt_helper.exe')" `
+  (Join-Path $OverlaySource 'boardest_ppt_helper.cs')
+if ($LASTEXITCODE -ne 0) { throw 'PowerPoint helper compilation failed.' }
+
+foreach ($name in @('boardest', 'bst-teacher', 'bst-overlay-panser', 'boardest-class-lite')) { Pack-Signed $name }
+Copy-Item $CerFile (Join-Path $OutDir 'BoardestCert.cer') -Force
+
+$DownloadDir = Join-Path $RootDir 'infra\download_web'
+New-Item -ItemType Directory -Force -Path $DownloadDir | Out-Null
+foreach ($file in @('boardest.appx', 'bst-teacher.appx', 'bst-overlay-panser.appx', 'boardest-class-lite.appx', 'boardest.apk', 'bst-teacher.apk', 'bst-teacher-lite.apk', 'boardest-class-lite.apk', 'BoardestCert.cer')) {
+  $source = Join-Path $OutDir $file
+  if (Test-Path $source) { Copy-Item $source (Join-Path $DownloadDir $file) -Force }
+}
+Write-Host 'Official AppX/APK artifacts are ready in dist\appx.' -ForegroundColor Green

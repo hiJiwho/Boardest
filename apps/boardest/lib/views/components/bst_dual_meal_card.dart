@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 export '../../models/meal_models.dart';
 import '../../models/meal_models.dart';
+import '../../services/meal_vote_service.dart';
 
 class BstDualMealCard extends StatefulWidget {
   final List<MealDishItem> todayDishes;
@@ -14,6 +15,9 @@ class BstDualMealCard extends StatefulWidget {
   // 점심 시간 투표 설정 (예: 12:30 ~ 13:20)
   final TimeOfDay lunchStartTime;
   final TimeOfDay lunchEndTime;
+  final DateTime? currentTime;
+  final Future<void> Function(String dishName)? onVote;
+  final ValueChanged<String>? onShowVoteBreakdown;
 
   const BstDualMealCard({
     super.key,
@@ -26,6 +30,9 @@ class BstDualMealCard extends StatefulWidget {
     this.onCloudToggle,
     this.lunchStartTime = const TimeOfDay(hour: 12, minute: 30),
     this.lunchEndTime = const TimeOfDay(hour: 13, minute: 20),
+    this.currentTime,
+    this.onVote,
+    this.onShowVoteBreakdown,
   });
 
   @override
@@ -41,6 +48,11 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
   void initState() {
     super.initState();
     _todayList = List.from(widget.todayDishes);
+    MealVoteService.instance.votesNotifier.addListener(_onVotesChanged);
+  }
+
+  void _onVotesChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -51,18 +63,31 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
     }
   }
 
+  @override
+  void dispose() {
+    MealVoteService.instance.votesNotifier.removeListener(_onVotesChanged);
+    super.dispose();
+  }
+
+  DateTime get _now => widget.currentTime ?? DateTime.now();
+
   bool _isVotingActive() {
-    final now = DateTime.now();
+    final now = _now;
     final start = DateTime(now.year, now.month, now.day, widget.lunchStartTime.hour, widget.lunchStartTime.minute);
     final endMinus10 = DateTime(now.year, now.month, now.day, widget.lunchEndTime.hour, widget.lunchEndTime.minute - 10);
-    return now.isAfter(start) && now.isBefore(endMinus10);
+    return !now.isBefore(start) && now.isBefore(endMinus10);
   }
 
   bool _isResultRevealed() {
-    final now = DateTime.now();
+    final now = _now;
     final revealTime = DateTime(now.year, now.month, now.day, widget.lunchEndTime.hour, widget.lunchEndTime.minute - 9);
     final end = DateTime(now.year, now.month, now.day, widget.lunchEndTime.hour, widget.lunchEndTime.minute);
-    return now.isAfter(revealTime) && now.isBefore(end.add(const Duration(hours: 1)));
+    return !now.isBefore(revealTime) && !now.isBefore(end);
+  }
+
+  Future<void> _recordVote(MealDishItem dish) async {
+    await widget.onVote?.call(dish.name);
+    if (mounted) setState(() => _votedDish = dish.name);
   }
 
   void _onDishTap(MealDishItem dish) {
@@ -164,10 +189,9 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
                     child: ElevatedButton.icon(
                       onPressed: !canVote
                           ? null
-                          : () {
-                              setState(() {
-                                _votedDish = dish.name;
-                              });
+                          : () async {
+                              await _recordVote(dish);
+                              if (!ctx.mounted) return;
                               Navigator.pop(ctx);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
@@ -569,22 +593,19 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
                               final isVoted = _votedDish == dish.name;
 
                                 return InkWell(
-                                  onTap: () {
-                                    if (_isVotingActive()) {
-                                      setState(() {
-                                        if (_votedDish == dish.name) {
-                                          _votedDish = null;
-                                        } else {
-                                          _votedDish = dish.name;
-                                        }
-                                      });
+                                onTap: () async {
+                                  if (_isVotingActive()) {
+                                      await _recordVote(dish);
                                     } else {
                                       _onDishTap(dish);
                                     }
                                   },
                                   onLongPress: () {
-                                    // 꾹 누르면 투표 통계 및 형광펜 상세 보기
-                                    _showVoteBreakdownDialog();
+                                    if (_isResultRevealed()) {
+                                      widget.onShowVoteBreakdown?.call(dish.name);
+                                    } else {
+                                      _onDishTap(dish);
+                                    }
                                   },
                                   borderRadius: BorderRadius.circular(6),
                                   child: Container(
@@ -645,7 +666,7 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
                                         ),
                                         if (isVoted)
                                           const Text(' ❤️', style: TextStyle(fontSize: 12)),
-                                        if (revealResult && dish.votes > 0)
+                                        if (revealResult && MealVoteService.instance.getTotalVotes(dish.name) > 0)
                                           Container(
                                             margin: const EdgeInsets.only(left: 4),
                                             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
@@ -654,7 +675,7 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
                                               borderRadius: BorderRadius.circular(4),
                                             ),
                                             child: Text(
-                                              '${dish.votes}표 👑',
+                                              '${MealVoteService.instance.getTotalVotes(dish.name)}표 👑',
                                               style: const TextStyle(
                                                 fontSize: 10,
                                                 color: Colors.redAccent,
@@ -720,15 +741,7 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
                               final isVoted = _votedDish == dish.name;
 
                               return InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    if (_votedDish == dish.name) {
-                                      _votedDish = null;
-                                    } else {
-                                      _votedDish = dish.name;
-                                    }
-                                  });
-                                },
+                                onTap: () {},
                                 onLongPress: () {
                                   setState(() {
                                     if (isHigh) {

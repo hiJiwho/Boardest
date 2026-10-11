@@ -82,6 +82,9 @@ class ComciganService {
     const Map<String, String> fallbackMap = {
       'ydm': '48588',
     };
+    if (kIsWeb && fallbackMap.containsKey(schoolId.toLowerCase())) {
+      return fallbackMap[schoolId.toLowerCase()]!;
+    }
     try {
       final url = Uri.parse('${AppConfig.firebaseFunctionsBase}/getComciganCode?schoolId=${Uri.encodeComponent(schoolId)}');
       final res = await http.get(url).timeout(const Duration(seconds: 4));
@@ -90,8 +93,8 @@ class ComciganService {
         final code = data['code']?.toString() ?? '';
         if (code.isNotEmpty) return code;
       }
-    } catch (e) {
-      debugPrint('[ComciganService] fetchCode Cloud Function failed: $e');
+    } catch (_) {
+      // Cloud Function CORS 혹은 네트워크 미연결 시 fallbackMap 사용
     }
     return fallbackMap[schoolId.toLowerCase()] ?? schoolId;
   }

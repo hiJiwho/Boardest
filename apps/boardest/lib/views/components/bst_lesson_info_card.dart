@@ -224,34 +224,40 @@ class BstLessonInfoCard extends StatelessWidget {
 
                   const SizedBox(width: 22),
 
-                  // 과목명 + 수업 안내
+                  // 과목명 + 수업 안내 (시계와 동급 수준의 초대형 표시)
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            currentSubject.isNotEmpty ? currentSubject : '수업 준비',
-                            style: const TextStyle(
-                              fontSize: 74, // 교과서 & 과목명 훨씬 더 크게 표시
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                              letterSpacing: -1.5,
-                              height: 1.02,
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: FittedBox(
+                              fit: BoxFit.contain,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                currentSubject.isNotEmpty ? currentSubject : '수업 준비',
+                                style: const TextStyle(
+                                  fontSize: 110, // 초대형 시계급 폰트
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  letterSpacing: -2.0,
+                                  height: 1.0,
+                                ),
+                                maxLines: 1,
+                              ),
                             ),
-                            maxLines: 1,
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 6),
                         Text(
                           subjectDescription.isNotEmpty ? subjectDescription : '수업 진행 중',
                           style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
                             color: Color(0xFF94A3B8),
+                            letterSpacing: -0.3,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

@@ -47,6 +47,7 @@
       ],
       "rewrites": [
         { "source": "/Class-Win-Guide", "destination": "/Class-Win-Guide/index.html" },
+        { "source": "/Class-Lite-Win-Guide", "destination": "/Class-Lite-Win-Guide/index.html" },
         { "source": "/Teacher-PRO-Guide", "destination": "/Teacher-PRO-Guide/index.html" },
         { "source": "**", "destination": "/index.html" }
       ]
@@ -199,6 +200,7 @@
         }
       ],
       "rewrites": [
+        { "source": "/lite/**", "destination": "/lite/index.html" },
         { "source": "**", "destination": "/index.html" }
       ]
     },
@@ -289,7 +291,9 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.appx"
       ],
       "headers": [
         {
@@ -303,14 +307,6 @@
           "source": "**/*.ps1",
           "headers": [
             { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
-            { "key": "Access-Control-Allow-Origin", "value": "*" }
-          ]
-        },
-        {
-          "source": "**/*.appinstaller",
-          "headers": [
-            { "key": "Content-Type", "value": "application/appinstaller" },
-            { "key": "Cache-Control", "value": "no-cache, max-age=0" },
             { "key": "Access-Control-Allow-Origin", "value": "*" }
           ]
         },
@@ -332,6 +328,16 @@
       ],
       "redirects": [
         {
+          "source": "/boardest-class-lite.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.apk",
+          "type": 302
+        },
+        {
+          "source": "/bst-teacher-lite.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher-lite.apk",
+          "type": 302
+        },
+        {
           "source": "/bst.apk",
           "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk",
           "type": 302
@@ -349,6 +355,36 @@
         {
           "source": "/bst-teacher.apk",
           "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.apk",
+          "type": 302
+        },
+        {
+          "source": "/boardest.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "type": 302
+        },
+        {
+          "source": "/bst.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "type": 302
+        },
+        {
+          "source": "/bst-class.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "type": 302
+        },
+        {
+          "source": "/bst-teacher.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx",
+          "type": 302
+        },
+        {
+          "source": "/bst-overlay-panser.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-overlay-panser.appx",
+          "type": 302
+        },
+        {
+          "source": "/boardest-class-lite.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.appx",
           "type": 302
         },
         {

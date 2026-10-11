@@ -130,6 +130,27 @@ class BstCloudService {
   String? activeTotpSecret;
   String? activeTeacherName;
 
+  void setDirectAccessToken(
+    String token, {
+    String teacherName = '선생님',
+    String ownerEmail = '',
+    String? folderId,
+  }) {
+    activeToken = token;
+    activeTeacherName = teacherName;
+    activeOwnerEmail = ownerEmail;
+    if (folderId != null) activeFolderId = folderId;
+  }
+
+  void disconnect() {
+    activeToken = null;
+    activeRefreshToken = null;
+    activeFolderId = null;
+    activeOwnerEmail = null;
+    activeTotpSecret = null;
+    activeTeacherName = null;
+  }
+
   /// 현재 활성화된 교사를 이 전자칠판 기기의 신뢰 기기(자동 로그인)로 등록
   Future<bool> registerActiveTeacherAsTrusted() async {
     if (activeOwnerEmail == null || activeOwnerEmail!.isEmpty) return false;
@@ -193,6 +214,18 @@ class BstCloudService {
     });
   }
 
+  String _safeDecode(String input) {
+    try {
+      return Uri.decodeComponent(input);
+    } catch (_) {
+      try {
+        return Uri.decodeQueryComponent(input);
+      } catch (_) {
+        return input;
+      }
+    }
+  }
+
   Future<List<BstCloudTeacher>> _fetchAllCloudTeachers() async {
     final teachers = <BstCloudTeacher>[];
     try {
@@ -205,7 +238,7 @@ class BstCloudService {
           final docName = p.basename(doc['name'] as String? ?? '');
           final fields = doc['fields'] as Map<String, dynamic>?;
           if (fields != null && docName.isNotEmpty) {
-            final t = BstCloudTeacher.fromFirestore(fields, Uri.decodeComponent(docName));
+            final t = BstCloudTeacher.fromFirestore(fields, _safeDecode(docName));
             teachers.add(t);
           }
         }
@@ -225,7 +258,7 @@ class BstCloudService {
           final name = p.basename(doc['name'] as String? ?? '');
           final fields = doc['fields'] as Map<String, dynamic>?;
           if (fields != null && name.isNotEmpty) {
-            final t = BstCloudTeacher.fromFirestore(fields, Uri.decodeComponent(name));
+            final t = BstCloudTeacher.fromFirestore(fields, _safeDecode(name));
             teachers.add(t);
           }
         }
@@ -1254,12 +1287,6 @@ class BstCloudService {
       accessToken: accessToken,
       errorMessage: null
     );
-  }
-
-  void setDirectAccessToken(String token, {String teacherName = '선생님', String ownerEmail = ''}) {
-    activeToken = token;
-    activeTeacherName = teacherName;
-    activeOwnerEmail = ownerEmail;
   }
 
   static const String _boardPairedSecretKey = 'bst_board_paired_secret';

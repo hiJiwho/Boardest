@@ -29,3 +29,9 @@ infra/*
 !infra/demo_web/
 !infra/download_web/
 !infra/class_lite_web/
+
+# Release binaries are published as GitHub release assets, not source files.
+infra/download_web/*.appx
+infra/download_web/*.apk
+infra/download_web/*.cer
+infra/download_web/*.zip

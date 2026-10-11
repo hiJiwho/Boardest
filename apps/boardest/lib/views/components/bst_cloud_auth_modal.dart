@@ -48,7 +48,7 @@ class BstCloudAuthModal extends StatefulWidget {
 }
 
 class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
-  // 0: 모바일 Web QR (기본값), 1: 6자리 OTP, 2: 순정 패스키
+  // 0: 모바일 Web QR (기본값), 1: 6자리 OTP, 2: 이미 등록한 교사, 3: 순정 패스키
   int _selectedTab = 0;
 
   // Web QR 세션 상태
@@ -65,10 +65,26 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
   bool _saveOtpToDevice = false;
   String? _otpError;
 
+  // 등록된 교사 목록
+  List<Map<String, String>> _savedTeachers = [];
+  bool _isLoadingSavedTeachers = false;
+
   @override
   void initState() {
     super.initState();
     _startQrSession();
+    _loadSavedTeachers();
+  }
+
+  Future<void> _loadSavedTeachers() async {
+    setState(() => _isLoadingSavedTeachers = true);
+    final list = await PasskeyService.instance.getProSavedTeachers();
+    if (mounted) {
+      setState(() {
+        _savedTeachers = list;
+        _isLoadingSavedTeachers = false;
+      });
+    }
   }
 
   @override
@@ -294,7 +310,7 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
               ),
             ),
 
-            // 2. 탭 바 (3원화: 1. Web QR, 2. 6자리 OTP, 3. 순정 Passkey)
+            // 2. 탭 바 (4원화: 1. Web QR, 2. 6자리 OTP, 3. 등록된 교사, 4. 순정 Passkey)
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 24 * s),
               child: Container(
@@ -306,9 +322,10 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
                 ),
                 child: Row(
                   children: [
-                    _buildTabItem(0, '📱 모바일 Web QR', '1초 즉시 승인 (권장)', s),
-                    _buildTabItem(1, '🔢 6자리 OTP', '구형칠판/데스크톱 100% 호환', s),
-                    _buildTabItem(2, '🔑 순정 패스키', 'boardest-cloud 연동', s),
+                    _buildTabItem(0, '📱 Web QR', '1초 즉시 승인', s),
+                    _buildTabItem(1, '🔢 6자리 OTP', '구형칠판 호환', s),
+                    _buildTabItem(2, '👨‍🏫 등록된 교사', '원클릭 연동', s),
+                    _buildTabItem(3, '🔑 순정 패스키', 'FIDO2 생체인증', s),
                   ],
                 ),
               ),
@@ -325,6 +342,7 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
                   children: [
                     _buildWebQrTab(s),
                     _buildOtpKeypadTab(s),
+                    _buildSavedTeachersTab(s),
                     _buildPasskeyTab(s),
                   ],
                 ),
@@ -770,7 +788,170 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
     );
   }
 
-  // ─── Tab 2: 순정 패스키 ───
+  // ─── Tab 2: 등록된 교사 (Saved Teachers) ───
+  Widget _buildSavedTeachersTab(double s) {
+    if (_isLoadingSavedTeachers) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)));
+    }
+    if (_savedTeachers.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person_off_rounded, size: 48 * s, color: Colors.white38),
+            SizedBox(height: 12 * s),
+            Text(
+              '이 기기에 등록된 교사가 없습니다.',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 16 * s,
+                fontWeight: FontWeight.bold,
+                color: Colors.white70,
+              ),
+            ),
+            SizedBox(height: 6 * s),
+            Text(
+              '모바일 Web QR 또는 6자리 OTP 인증 시\n"이 기기에 로그인 정보 저장"을 체크하면 등록됩니다.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 12 * s,
+                color: const Color(0xFF94A3B8),
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(bottom: 12 * s),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '등록된 교사 (${_savedTeachers.length}명)',
+                style: GoogleFonts.notoSansKr(
+                  color: const Color(0xFF00F5D4),
+                  fontSize: 14 * s,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                '원클릭으로 Cloud 수업자료를 연결합니다',
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white54,
+                  fontSize: 11 * s,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.separated(
+            itemCount: _savedTeachers.length,
+            separatorBuilder: (_, __) => SizedBox(height: 8 * s),
+            itemBuilder: (ctx, idx) {
+              final t = _savedTeachers[idx];
+              final name = t['teacherName'] ?? '선생님';
+              final email = t['email'] ?? '';
+              final school = t['schoolName'] ?? '';
+              final token = t['accessToken'] ?? 'saved_token_$name';
+
+              return Container(
+                padding: EdgeInsets.symmetric(horizontal: 14 * s, vertical: 10 * s),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF070B14),
+                  borderRadius: BorderRadius.circular(12 * s),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20 * s,
+                      backgroundColor: const Color(0xFF00F5D4).withValues(alpha: 0.15),
+                      child: Text(
+                        name.isNotEmpty ? name.substring(0, 1) : '교',
+                        style: GoogleFonts.notoSansKr(
+                          color: const Color(0xFF00F5D4),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16 * s,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 14 * s),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            style: GoogleFonts.notoSansKr(
+                              color: Colors.white,
+                              fontSize: 15 * s,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (school.isNotEmpty || email.isNotEmpty)
+                            Text(
+                              [school, email].where((e) => e.isNotEmpty).join(' • '),
+                              style: GoogleFonts.notoSansKr(
+                                color: const Color(0xFF94A3B8),
+                                fontSize: 11 * s,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        BstCloudService.instance.setDirectAccessToken(
+                          token,
+                          teacherName: name,
+                          ownerEmail: email,
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('🎉 $name의 Cloud 수업자료가 연결되었습니다!'),
+                            backgroundColor: const Color(0xFF00F5D4),
+                          ),
+                        );
+                        Navigator.of(context).pop();
+                        widget.onUnlocked();
+                      },
+                      icon: const Icon(Icons.link_rounded, size: 16),
+                      label: const Text('연결'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00F5D4),
+                        foregroundColor: const Color(0xFF0F172A),
+                        padding: EdgeInsets.symmetric(horizontal: 14 * s, vertical: 8 * s),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8 * s)),
+                      ),
+                    ),
+                    SizedBox(width: 6 * s),
+                    IconButton(
+                      icon: Icon(Icons.delete_outline_rounded, size: 18 * s, color: Colors.white38),
+                      tooltip: '등록 해제',
+                      onPressed: () async {
+                        await PasskeyService.instance.removeProTeacher(email);
+                        _loadSavedTeachers();
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── Tab 3: 순정 패스키 ───
   Widget _buildPasskeyTab(double s) {
     return Center(
       child: Column(

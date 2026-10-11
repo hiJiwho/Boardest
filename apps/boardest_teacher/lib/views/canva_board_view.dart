@@ -56,9 +56,32 @@ class _CanvaBoardViewState extends State<CanvaBoardView> {
   }
 
   Future<void> _initWebview() async {
+    if (_effectiveUrl.isEmpty && widget.filePath != null && widget.filePath!.isNotEmpty) {
+      try {
+        final f = File(widget.filePath!);
+        if (await f.exists()) {
+          final content = await f.readAsString();
+          try {
+            final parsed = jsonDecode(content) as Map<String, dynamic>;
+            final rawUrl = parsed['embedUrl'] ?? parsed['url'] ?? parsed['canvaUrl'] ?? parsed['link'] ?? '';
+            if (rawUrl.toString().isNotEmpty) {
+              _effectiveUrl = CanvaBoardView.formatCanvaEmbedUrl(rawUrl.toString());
+            } else if (parsed['canvaId'] != null) {
+              _effectiveUrl = 'https://www.canva.com/design/${parsed['canvaId']}/view?embed';
+            }
+          } catch (_) {
+            if (content.trim().startsWith('http')) {
+              _effectiveUrl = CanvaBoardView.formatCanvaEmbedUrl(content.trim());
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[CanvaBoardView] File reading error: $e');
+      }
+    }
+
     if (_effectiveUrl.isEmpty) {
-      setState(() => _isReady = true);
-      return;
+      _effectiveUrl = 'https://www.canva.com';
     }
 
     if (kIsWeb) {

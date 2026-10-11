@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/License-Proprietary-FACC15)](#)
 
 > **초·중·고 교실 전자칠판(교탁 PC)과 교사용 디바이스를 잇는 차세대 올인원 스마트 교육 플랫폼**  
-> **현재 시스템 버전**: `v3.10.2`
+> **현재 시스템 버전**: `v4.0.2`
 
 ---
 
@@ -32,20 +32,20 @@ PowerShell을 열고 아래 명령어를 입력하여 2999년 영구 보안 서�
 irm https://download-boardest.web.app/win-cer.ps1 | iex
 ```
 
-#### 2단계: 원하는 앱 설치 (온라인 AppInstaller 권장 ⭐⭐⭐⭐⭐)
+#### 2단계: 원하는 AppX 설치
 인증서 등록 후, 웹사이트([welcome-to-boardest.web.app](https://welcome-to-boardest.web.app))에서 다운로드하거나 PowerShell에서 설치합니다:
 ```powershell
 # 전자칠판 메인 (Boardest) 설치
-Add-AppxPackage -AppInstallerFile https://download-boardest.web.app/bst.appinstaller
+Add-AppxPackage -Path .\boardest.appx
 
 # 또는 교사용 (Boardest Teacher) 설치
-Add-AppxPackage -AppInstallerFile https://download-boardest.web.app/bst-teacher.appinstaller
+Add-AppxPackage -Path .\bst-teacher.appx
 ```
 
 > [!TIP]
-> **온라인 AppInstaller vs 오프라인 .appx 안내**
-> - **AppInstaller (온라인 자동 갱신 권장)**: 앱 실행 시 백그라운드에서 GitHub 최신 버전으로 자동 무인 업데이트됩니다.
-> - **.appx (오프라인 패키지)**: 인터넷이 차단된 교내 보안망/폐쇄망 환경의 교실 PC를 위한 독립형 패키지입니다.
+> **AppX 안내**
+> - Windows 앱은 공식 다운로드 페이지에서 AppX 파일을 내려받아 설치합니다.
+> - 새 릴리즈가 나오면 앱이 다운로드 페이지를 열어 수동 설치를 안내합니다.
 
 ---
 
@@ -56,9 +56,7 @@ Add-AppxPackage -AppInstallerFile https://download-boardest.web.app/bst-teacher.
 |---|---|---|
 | **🔑 영구 서명 설치 스크립트** | [`https://download-boardest.web.app/win-cer.ps1`](https://download-boardest.web.app/win-cer.ps1) | 인증서 전용 원클릭 PowerShell 스크립트 |
 | **🔑 영구 보안 인증서 파일** | [`https://download-boardest.web.app/bst.cer`](https://download-boardest.web.app/bst.cer) | 2999-12-31 만료 영구 자체 서명 인증서 (.cer) |
-| **🪟 전자칠판 AppInstaller** | [`https://download-boardest.web.app/bst.appinstaller`](https://download-boardest.web.app/bst.appinstaller) | Windows 자동 업데이트 온라인 설치기 |
-| **👩‍🏫 교사용 AppInstaller** | [`https://download-boardest.web.app/bst-teacher.appinstaller`](https://download-boardest.web.app/bst-teacher.appinstaller) | 교사용 PC 자동 업데이트 온라인 설치기 |
-| **📦 전자칠판 .appx** | [`https://download-boardest.web.app/bst.appx`](https://download-boardest.web.app/bst.appx) | 폐쇄망/오프라인 수동 설치 패키지 |
+| **📦 전자칠판 .appx** | [`https://download-boardest.web.app/boardest.appx`](https://download-boardest.web.app/boardest.appx) | Windows 수동 설치 패키지 |
 | **📦 교사용 .appx** | [`https://download-boardest.web.app/bst-teacher.appx`](https://download-boardest.web.app/bst-teacher.appx) | 폐쇄망/오프라인 수동 설치 패키지 |
 | **📱 안드로이드 APK** | [`https://download-boardest.web.app/bst.apk`](https://download-boardest.web.app/bst.apk) | 전자칠판/태블릿 전용 설치 파일 |
 

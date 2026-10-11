@@ -151,70 +151,25 @@ class _BstGiantClockState extends State<BstGiantClock> {
                 ],
               ),
 
-              // 2. 중앙: 시:분:초 대형 폰트 + 우측 원형 남은 시간 게이지 & D-day
+              // 2. 중앙: 시:분:초 대형 폰트 (시계 전체 영역 확장)
               Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: FittedBox(
-                        fit: BoxFit.contain,
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Text(
-                            '$h:$m:$s',
-                            style: const TextStyle(
-                              fontSize: 64,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                              letterSpacing: -1.5,
-                              fontFeatures: [FontFeature.tabularFigures()],
-                              height: 1.0,
-                            ),
-                          ),
-                        ),
+                child: FittedBox(
+                  fit: BoxFit.contain,
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      '$h:$m:$s',
+                      style: const TextStyle(
+                        fontSize: 72,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: -1.5,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                        height: 1.0,
                       ),
                     ),
-                    const SizedBox(width: 14),
-                    // 원형 남은 시간 인디케이터
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SizedBox(
-                          width: 58,
-                          height: 58,
-                          child: CircularProgressIndicator(
-                            value: progress > 0 ? progress : 0.05,
-                            backgroundColor: Colors.white.withValues(alpha: 0.08),
-                            valueColor: AlwaysStoppedAnimation<Color>(widget.accentColor),
-                            strokeWidth: 5.5,
-                          ),
-                        ),
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '${(progress * 100).toInt()}%',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w900,
-                                color: widget.accentColor,
-                              ),
-                            ),
-                            Text(
-                              '남음',
-                              style: TextStyle(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white.withValues(alpha: 0.6),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
               ),
 

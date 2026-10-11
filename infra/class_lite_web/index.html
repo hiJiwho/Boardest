@@ -3,6 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
+  <meta name="application-version" content="4.0.2">
   <title>Boardest Class Lite</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
@@ -518,7 +519,59 @@
       color: #ffffff;
       letter-spacing: -4px;
       text-align: center;
+      touch-action: none;
+      cursor: pointer;
     }
+
+    #time-debug-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(8px);
+    }
+
+    #time-debug-modal.open { display: flex; }
+
+    .time-debug-card {
+      width: min(440px, 100%);
+      padding: 24px;
+      color: #fff;
+      background: #151b28;
+      border: 1px solid rgba(0, 245, 212, 0.45);
+      border-radius: 18px;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+    }
+
+    .time-debug-card h2 { margin: 0 0 8px; font-size: 20px; }
+    .time-debug-card p { margin: 0 0 18px; color: #aab4c4; font-size: 13px; }
+    .time-debug-card input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px;
+      color: #fff;
+      background: #0b1019;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 10px;
+      font: inherit;
+    }
+
+    .time-debug-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .time-debug-actions button {
+      flex: 1;
+      padding: 11px 8px;
+      border: 0;
+      border-radius: 9px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    #time-debug-apply { color: #061313; background: #00f5d4; }
+    #time-debug-reset { color: #fff; background: #374151; }
+    #time-debug-close { color: #fff; background: #263041; }
 
     .countdown-section {
       flex: 1;
@@ -565,7 +618,7 @@
       display: none !important;
     }
 
-    /* Split Layout for Class and Meal */
+    /* Main lesson view fills the full lower panel. */
     #class-main-split {
       display: flex;
       flex-direction: row;
@@ -573,11 +626,11 @@
       justify-content: space-between;
       width: 100%;
       height: 100%;
-      gap: 1.5vw;
+      gap: 0;
     }
 
     #current-class-card {
-      flex: 1.15;
+      flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1582,10 +1635,22 @@
     <div class="top-right">
       <div id="school-display">정보를 불러오는 중...</div>
       <div class="clock-container">
-        <div id="time-display">00:00:00</div>
+        <div id="time-display" title="길게 눌러 시간 디버깅" aria-label="시계. 길게 누르면 시간 디버깅을 엽니다">00:00:00</div>
         <div class="countdown-section">
           <div id="countdown-label">다음 시간까지</div>
           <div id="countdown-timer">0:00</div>
+        </div>
+      </div>
+      <div id="time-debug-modal" role="dialog" aria-modal="true" aria-labelledby="time-debug-title">
+        <div class="time-debug-card">
+          <h2 id="time-debug-title">시간 디버깅</h2>
+          <p>시뮬레이션할 날짜와 시간을 선택하세요. 실제 시간으로 복원할 수 있습니다.</p>
+          <input id="time-debug-input" type="datetime-local" step="60">
+          <div class="time-debug-actions">
+            <button id="time-debug-apply" type="button">적용</button>
+            <button id="time-debug-reset" type="button">실제 시간</button>
+            <button id="time-debug-close" type="button">닫기</button>
+          </div>
         </div>
       </div>
       <div id="date-display" style="margin-top: 2vh; font-size: 3vh; color: var(--text-sub);">날짜 로드 중...</div>
@@ -1628,19 +1693,6 @@
           <div id="no-class-message" style="display:none; font-size:5vh; font-weight:bold; color:#555;">수업 정보가 없습니다.</div>
         </div>
 
-        <!-- Right: Today's Lunch & Satisfaction Vote -->
-        <div id="meal-panel">
-          <div class="meal-header">
-            <div class="meal-title-wrap">
-              <span class="meal-icon">🍱</span>
-              <span class="meal-title">오늘의 급식</span>
-            </div>
-            <span id="meal-cal-badge" class="meal-cal-badge">칼로리 정보 조회 중...</span>
-          </div>
-          <div id="meal-menu-list" class="meal-menu-list">
-            <div class="meal-loading" style="color:#888; font-size:1.6vh; text-align:center; padding:3vh 0;">급식 정보를 불러오는 중입니다...</div>
-          </div>
-        </div>
       </div>
 
       <!-- Realtime Meal Call Modal -->
@@ -2196,6 +2248,71 @@
     let countdownTargetDate = null;
     setInterval(updateClock, 1000);
     updateClock();
+
+    const clockDisplay = document.getElementById('time-display');
+    const timeDebugModal = document.getElementById('time-debug-modal');
+    const timeDebugInput = document.getElementById('time-debug-input');
+    let clockLongPressTimer = null;
+
+    function formatDateTimeLocal(date) {
+      const pad = value => String(value).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    function openTimeDebug() {
+      timeDebugInput.value = formatDateTimeLocal(getCurrentTime());
+      timeDebugModal.classList.add('open');
+      timeDebugInput.focus();
+    }
+
+    function closeTimeDebug() {
+      timeDebugModal.classList.remove('open');
+    }
+
+    function applyTimeDebug() {
+      const target = new Date(timeDebugInput.value);
+      if (Number.isNaN(target.getTime())) {
+        timeDebugInput.focus();
+        return;
+      }
+      debugOffset = target.getTime() - Date.now();
+      closeTimeDebug();
+      updateClock();
+      updateCurrentClassDisplay();
+      if (isCLIMode) {
+        renderTerminalLeft();
+        renderTerminalTopRight();
+        renderTerminalBottomRight();
+      }
+      console.log(`[Debug] Virtual date/time set: ${target.toLocaleString()}`);
+    }
+
+    clockDisplay.addEventListener('pointerdown', () => {
+      clearTimeout(clockLongPressTimer);
+      clockLongPressTimer = setTimeout(openTimeDebug, 650);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(eventName => {
+      clockDisplay.addEventListener(eventName, () => clearTimeout(clockLongPressTimer));
+    });
+    clockDisplay.addEventListener('contextmenu', event => event.preventDefault());
+    document.getElementById('time-debug-apply').addEventListener('click', applyTimeDebug);
+    document.getElementById('time-debug-reset').addEventListener('click', () => {
+      debugOffset = 0;
+      closeTimeDebug();
+      updateClock();
+      updateCurrentClassDisplay();
+      if (isCLIMode) {
+        isCLIMode = false;
+        document.body.classList.remove('cli-mode');
+      }
+    });
+    document.getElementById('time-debug-close').addEventListener('click', closeTimeDebug);
+    timeDebugModal.addEventListener('click', event => {
+      if (event.target === timeDebugModal) closeTimeDebug();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') closeTimeDebug();
+    });
 
     function getMinutes(timeStr) {
       const [h, m] = timeStr.split(':').map(Number);
@@ -3090,8 +3207,6 @@
           updateCurrentClassDisplay();
         }
 
-        initNeisMeal();
-        initMealVotes();
         startLiteRealtimePresence();
         startMealCallListener();
         loadTextbookAssets();

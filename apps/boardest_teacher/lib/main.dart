@@ -27,10 +27,16 @@ import 'views/teacher_view.dart';
 import 'views/teacher_setup_wizard_view.dart';
 import 'services/registry_service.dart';
 import 'services/update_service.dart';
+import 'package:pdfrx/pdfrx.dart';
 import 'views/bst_viewer_route.dart';
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await pdfrxFlutterInitialize();
+  } catch (e) {
+    debugPrint('[Pdfrx] initialization notice: $e');
+  }
   AppConfig.initDemoMode(args);
   
   try {
@@ -46,7 +52,6 @@ void main(List<String> args) async {
     try {
       await acrylic.Window.initialize();
       await RegistryService.instance.registerFileAssociations();
-      await UpdateService.ensureNativeAppInstallerSettings();
     } catch (e) {
       debugPrint('[Boardest Teacher] Registry initialization error: $e');
     }

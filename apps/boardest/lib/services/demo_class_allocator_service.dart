@@ -92,7 +92,10 @@ class DemoClassAllocatorService {
       selectedGrade: randomGrade,
       selectedClass: randomClass,
       specialClassroomMode: false,
-      classNickname: '$randomGrade학년 $randomClass반',
+      // Demo timetable selection keys are Demo-class1..10. Keeping the
+      // generated key here makes the allocated classroom and its timetable
+      // stay paired instead of parsing the grade from a display label.
+      classNickname: _assignedClassId!,
       isSetupComplete: true,
     );
     // 데모 설정은 메모리 상에서만 유지하여 실제 학교 설정이 덮어써지지 않도록 보호

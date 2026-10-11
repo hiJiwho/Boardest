@@ -100,12 +100,14 @@ class BstToolsDock extends StatelessWidget {
     ];
 
     if (!isPro) {
-      // 1. Web 버전: 3열 x 2행 (총 6개 주요 도구)
+      // 1. Web 버전: 4열 x 2행 (총 8개 전체 수업 도구)
       final webTools = [
         {'type': BstToolType.pen, 'icon': '🖊️', 'label': '판서', 'primary': true},
         {'type': BstToolType.timer, 'icon': '⏱️', 'label': '타이머', 'primary': false},
         {'type': BstToolType.random, 'icon': '🎲', 'label': '추첨', 'primary': false},
         {'type': BstToolType.calculator, 'icon': '🧮', 'label': '계산기', 'primary': false},
+        {'type': BstToolType.web, 'icon': '🌐', 'label': '웹', 'primary': false},
+        {'type': BstToolType.pdf, 'icon': '📄', 'label': 'PDF', 'primary': false},
         {'type': BstToolType.cloud, 'icon': '☁️', 'label': 'Cloud', 'primary': false},
         {'type': BstToolType.settings, 'icon': '⚙️', 'label': '설정', 'primary': false},
       ];
@@ -155,7 +157,7 @@ class BstToolsDock extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text(
-                    'WEB 3×2',
+                    'WEB 4×2',
                     style: TextStyle(
                       color: Color(0xFF94A3B8),
                       fontSize: 10,
@@ -169,7 +171,7 @@ class BstToolsDock extends StatelessWidget {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  const crossAxisCount = 3;
+                  const crossAxisCount = 4;
                   const rowCount = 2;
                   const spacing = 8.0;
                   final itemWidth = (constraints.maxWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
@@ -204,24 +206,8 @@ class BstToolsDock extends StatelessWidget {
       );
     }
 
-    // 2. Windows / Android PRO 모드: 6열 x 4행 (총 24 슬롯 대형 도구함)
-    // 8개 기본 도구 + 1개 추가 버튼 + 남는 슬롯 시스템/사용자 앱 슬롯
-    final systemApps = [
-      {'icon': '🌐', 'label': '브라우저', 'action': () => onToolTap?.call(BstToolType.web)},
-      {'icon': '📊', 'label': '엑셀/시트', 'action': () {}},
-      {'icon': '📽️', 'label': '화면 녹화', 'action': () {}},
-      {'icon': '🖼️', 'label': '갤러리', 'action': () {}},
-      {'icon': '📁', 'label': '탐색기', 'action': () {}},
-      {'icon': '🎵', 'label': '미디어', 'action': () {}},
-      {'icon': '📷', 'label': '웹캠/실물', 'action': () {}},
-      {'icon': '🗂️', 'label': '다운로드', 'action': () {}},
-      {'icon': '📝', 'label': '메모장', 'action': () {}},
-      {'icon': '🔊', 'label': '볼륨/사운드', 'action': () {}},
-      {'icon': '📡', 'label': '화면 미러링', 'action': () {}},
-      {'icon': '🖥️', 'label': '데스크톱', 'action': () {}},
-      {'icon': '🔒', 'label': '화면 잠금', 'action': () {}},
-    ];
-
+    // 2. Windows / Android PRO 모드: 6열 x 3행 (총 18 슬롯 도구함)
+    // 8개 기본 도구 (Web과 동일) + 시스템 앱 등록 빈칸 + 윈도우 닫기/종료 버튼
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -268,7 +254,7 @@ class BstToolsDock extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text(
-                  '6×4 PRO',
+                  '6×3 PRO',
                   style: TextStyle(
                     color: Color(0xFF00F5D4),
                     fontSize: 10,
@@ -313,12 +299,12 @@ class BstToolsDock extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          // 6열 x 4행 = 24칸 그리드
+          // 6열 x 3행 = 18칸 그리드
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
                 const crossAxisCount = 6;
-                const rowCount = 4;
+                const rowCount = 3;
                 const spacing = 6.0;
                 final itemWidth = (constraints.maxWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
                 final itemHeight = (constraints.maxHeight - (spacing * (rowCount - 1))) / rowCount;
@@ -332,10 +318,10 @@ class BstToolsDock extends StatelessWidget {
                     mainAxisSpacing: spacing,
                     childAspectRatio: ratio,
                   ),
-                  itemCount: 24,
+                  itemCount: 18,
                   itemBuilder: (context, index) {
                     if (index < baseTools.length) {
-                      // 기본 8대 수업 도구
+                      // 0~7: Web과 동일한 8개 기본 도구
                       final tool = baseTools[index];
                       return _buildToolGridCard(
                         icon: tool['icon'] as String,
@@ -343,21 +329,18 @@ class BstToolsDock extends StatelessWidget {
                         isPrimary: tool['primary'] as bool,
                         onTap: () => onToolTap?.call(tool['type'] as BstToolType),
                       );
-                    } else if (index == baseTools.length) {
+                    } else if (index == 8) {
                       // 앱 추가 버튼
                       return _buildAddAppCard();
+                    } else if (index == 17 && isWindows) {
+                      // 마지막 슬롯: 윈도우 전용 종료/닫기 버튼
+                      return _buildSystemAppCard(
+                        icon: '🚪',
+                        label: '앱 닫기',
+                        onTap: onCloseTap ?? () {},
+                      );
                     } else {
-                      // 9~23: 시스템 앱 슬롯
-                      final sysIdx = index - (baseTools.length + 1);
-                      if (sysIdx < systemApps.length) {
-                        final sys = systemApps[sysIdx];
-                        return _buildSystemAppCard(
-                          icon: sys['icon'] as String,
-                          label: sys['label'] as String,
-                          onTap: sys['action'] as VoidCallback,
-                        );
-                      }
-                      // 빈 슬롯
+                      // 9~16 (또는 17): 시스템 앱 등록 가능한 빈칸 슬롯
                       return _buildEmptySlotCard();
                     }
                   },

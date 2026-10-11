@@ -176,37 +176,42 @@ class BstTodayTimetableStrip extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final count = periods.length > 7 ? periods.length : 7.2;
-        final cardWidth = (constraints.maxWidth / count).clamp(70.0, 115.0);
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: List.generate(periods.length, (index) {
-            final item = periods[index];
-            final subjectColor = _getSubjectColor(item.subject);
-            final imagePath = getTextbookPath?.call(item.subject);
-            final imageBytes = getTextbookBytes?.call(item.subject);
+        final totalHeight = constraints.maxHeight;
+        final cardSize = totalHeight > 0 ? totalHeight : 96.0;
 
-            return Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: SizedBox(
-                width: cardWidth,
-                child: InkWell(
-                        onTap: () => onPeriodTap?.call(item.period),
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: List.generate(periods.length, (index) {
+              final item = periods[index];
+              final subjectColor = _getSubjectColor(item.subject);
+              final imagePath = getTextbookPath?.call(item.subject);
+              final imageBytes = getTextbookBytes?.call(item.subject);
+
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: SizedBox(
+                  width: cardSize, // 과목당 1:1 비율 (정사각형)
+                  height: cardSize,
+                  child: InkWell(
+                    onTap: () => onPeriodTap?.call(item.period),
+                    borderRadius: BorderRadius.circular(12),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      decoration: BoxDecoration(
+                        color: item.isCurrent
+                            ? const Color(0xFF0F1E2E)
+                            : const Color(0xFF0B101B),
                         borderRadius: BorderRadius.circular(12),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          decoration: BoxDecoration(
-                            color: item.isCurrent
-                                ? const Color(0xFF0F1E2E)
-                                : const Color(0xFF0B101B),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: item.isCurrent
-                                  ? const Color(0xFF00F5D4)
-                                  : Colors.white.withValues(alpha: 0.08),
-                              width: item.isCurrent ? 2 : 1,
-                            ),
+                        border: Border.all(
+                          color: item.isCurrent
+                              ? const Color(0xFF00F5D4)
+                              : Colors.white.withValues(alpha: 0.1),
+                          width: item.isCurrent ? 2 : 1,
+                        ),
                         boxShadow: item.isCurrent
                             ? [
                                 BoxShadow(
@@ -217,127 +222,112 @@ class BstTodayTimetableStrip extends StatelessWidget {
                               ]
                             : null,
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // 1. 상단: [1교시] 과목명 (진행 중이면 뱃지 반짝임)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: item.isCurrent
-                                  ? const Color(0xFF00F5D4).withValues(alpha: 0.18)
-                                  : Colors.white.withValues(alpha: 0.04),
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(11),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // 1. 좌측: 교과서 높이 꽉 차게 (좌측 : 우측 = 3 : 1)
+                            Expanded(
+                              flex: 3,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  _buildTextbookCover(item.subject, imagePath, imageBytes, subjectColor),
+                                  if (isSpecialRoom && (item.targetClass?.isNotEmpty == true))
+                                    Positioned(
+                                      left: 2,
+                                      right: 2,
+                                      bottom: 4,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF0F1E2E).withValues(alpha: 0.94),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: const Color(0xFF00F5D4), width: 1),
+                                        ),
+                                        child: Text(
+                                          item.targetClass!,
+                                          style: const TextStyle(
+                                            color: Color(0xFF00F5D4),
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                          maxLines: 1,
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                  decoration: BoxDecoration(
-                                    color: item.isCurrent
-                                        ? const Color(0xFF00F5D4)
-                                        : subjectColor.withValues(alpha: 0.25),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    '${item.period}',
-                                    style: TextStyle(
-                                      color: item.isCurrent ? Colors.black : Colors.white,
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 5),
-                                Expanded(
-                                  child: Text(
-                                    item.subject,
-                                    style: TextStyle(
-                                      color: item.isCurrent
-                                          ? const Color(0xFF00F5D4)
-                                          : Colors.white,
-                                      fontSize: 13,
-                                      fontWeight: item.isCurrent
-                                          ? FontWeight.w900
-                                          : FontWeight.w700,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (item.isCurrent)
-                                  const Text(
-                                    '●',
-                                    style: TextStyle(
-                                      color: Color(0xFF00F5D4),
-                                      fontSize: 8,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
 
-                          // 2. 하단: 교과서 사진 유지 + 전용 교실일 땐 들어오는 반을 중앙/하단에 선명하게 오버레이 뱃지로 표시!
-                          Expanded(
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                _buildTextbookCover(item.subject, imagePath, imageBytes, subjectColor),
-                                if (isSpecialRoom && (item.targetClass?.isNotEmpty == true))
-                                  Positioned(
-                                    left: 4,
-                                    right: 4,
-                                    bottom: 6,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF0F1E2E).withValues(alpha: 0.92),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: const Color(0xFF00F5D4), width: 1.2),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(alpha: 0.5),
-                                            blurRadius: 6,
-                                          ),
-                                        ],
-                                      ),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            item.targetClass!,
-                                            style: const TextStyle(
-                                              color: Color(0xFF00F5D4),
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                            maxLines: 1,
-                                            textAlign: TextAlign.center,
-                                          ),
-                                          const Text(
-                                            '입실 학급',
-                                            style: TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 8.5,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                              ],
+                            // 구분선
+                            Container(
+                              width: 1,
+                              color: Colors.white.withValues(alpha: 0.08),
                             ),
-                          ),
-                        ],
+
+                            // 2. 우측: 1.국어 시계방향 90도 회전 (flex: 1)
+                            Expanded(
+                              flex: 1,
+                              child: Container(
+                                color: item.isCurrent
+                                    ? const Color(0xFF00F5D4).withValues(alpha: 0.15)
+                                    : Colors.white.withValues(alpha: 0.03),
+                                alignment: Alignment.center,
+                                child: RotatedBox(
+                                  quarterTurns: 1, // 시계방향 90도 회전
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        '${item.period}.',
+                                        style: TextStyle(
+                                          color: item.isCurrent ? const Color(0xFF00F5D4) : subjectColor,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        item.subject,
+                                        style: TextStyle(
+                                          color: item.isCurrent ? Colors.white : const Color(0xFFE2E8F0),
+                                          fontSize: 12,
+                                          fontWeight: item.isCurrent ? FontWeight.w900 : FontWeight.w700,
+                                          letterSpacing: -0.2,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if (item.isCurrent) ...[
+                                        const SizedBox(width: 4),
+                                        const Text(
+                                          '●',
+                                          style: TextStyle(
+                                            color: Color(0xFF00F5D4),
+                                            fontSize: 8,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               );
             }),
-          );
-        },
+          ),
+        );
+      },
     );
   }
 }

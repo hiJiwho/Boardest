@@ -50,6 +50,11 @@ class BstClassMainLayout extends StatelessWidget {
   final List<MealDishItem> tomorrowDishes;
   final String tomorrowCalories;
   final String tomorrowDateLabel;
+  final DateTime? currentTime;
+  final TimeOfDay lunchStartTime;
+  final TimeOfDay lunchEndTime;
+  final Future<void> Function(String dishName)? onMealVote;
+  final ValueChanged<String>? onShowVoteBreakdown;
   final bool isCloudActive;
   final VoidCallback? onCloudToggle;
 
@@ -101,6 +106,11 @@ class BstClassMainLayout extends StatelessWidget {
     required this.tomorrowDishes,
     this.tomorrowCalories = '',
     this.tomorrowDateLabel = '내일',
+    this.currentTime,
+    this.lunchStartTime = const TimeOfDay(hour: 12, minute: 30),
+    this.lunchEndTime = const TimeOfDay(hour: 13, minute: 20),
+    this.onMealVote,
+    this.onShowVoteBreakdown,
     this.isCloudActive = false,
     this.onCloudToggle,
     this.isSpecialRoom = false,
@@ -243,6 +253,11 @@ class BstClassMainLayout extends StatelessWidget {
                                     tomorrowDateLabel: tomorrowDateLabel,
                                     isCloudActive: isCloudActive,
                                     onCloudToggle: onCloudToggle,
+                                    currentTime: currentTime,
+                                    lunchStartTime: lunchStartTime,
+                                    lunchEndTime: lunchEndTime,
+                                    onVote: onMealVote,
+                                    onShowVoteBreakdown: onShowVoteBreakdown,
                                   ),
                           ),
                         ],

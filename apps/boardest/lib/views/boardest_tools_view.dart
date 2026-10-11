@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../services/bst_cloud_service.dart';
 import '../services/passkey_service.dart';
-import '../widgets/bst_cloud_modal.dart';
+import 'components/bst_cloud_auth_modal.dart';
 
 class BoardestToolsView extends StatefulWidget {
   const BoardestToolsView({super.key});
@@ -230,100 +230,34 @@ class _BoardestToolsViewState extends State<BoardestToolsView> {
     });
   }
 
-  // ── Cloud Modal (QR 없이 브라우저 순정 패스키 직결) ──
+  // ── Cloud Modal (Class와 동일하게 OTP, Web QR, 등록된 교사, Passkey 지원) ──
   Future<void> _openCloudModal() async {
     if (BstCloudService.instance.activeToken != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${BstCloudService.instance.activeTeacherName ?? "선생님"} Cloud가 이미 연결되어 있습니다.'),
           backgroundColor: const Color(0xFF10B981),
+          action: SnackBarAction(
+            label: '연결 해제',
+            textColor: Colors.white,
+            onPressed: () {
+              BstCloudService.instance.disconnect();
+              setState(() {});
+            },
+          ),
         ),
       );
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('🔐 브라우저 순정 패스키 생체인증을 요청합니다...'),
-        duration: Duration(seconds: 2),
-      ),
+    await BstCloudAuthModal.show(
+      context,
+      schoolName: 'Boardest Tools',
+      gradeClass: '도구 모음',
+      onUnlocked: () {
+        if (mounted) setState(() {});
+      },
     );
-
-    // 1. 순정 패스키 로그인 즉시 요청 (QR 코드 없이 직접 인증!)
-    final authRes = await PasskeyService.instance.authenticateNativePasskey();
-    if (authRes.success && authRes.accessToken != null) {
-      BstCloudService.instance.setDirectAccessToken(
-        authRes.accessToken!,
-        teacherName: authRes.teacherName ?? '선생님',
-        ownerEmail: authRes.email ?? '',
-      );
-      if (mounted) {
-        setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚡ ${authRes.teacherName ?? "선생님"} 패스키 인증 완료! Tools Cloud 연결되었습니다.'),
-            backgroundColor: const Color(0xFF10B981),
-          ),
-        );
-      }
-      return;
-    }
-
-    // 만약 등록된 패스키가 없는 경우 순정 패스키 등록
-    final registerNow = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F141E),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF00F5D4), width: 1.2),
-        ),
-        title: Row(
-          children: [
-            const Icon(Icons.fingerprint_rounded, color: Color(0xFF00F5D4), size: 24),
-            const SizedBox(width: 10),
-            Text('Boardest Tools 패스키 연동', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-          ],
-        ),
-        content: Text(
-          '이 기기에 등록된 패스키가 없습니다.\n현재 브라우저에 순정 패스키(Windows Hello / Touch ID / 지문)를 등록하시겠습니까?',
-          style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 13),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소', style: TextStyle(color: Colors.white54))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4), foregroundColor: Colors.black),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('🔐 순정 패스키 등록', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (registerNow == true) {
-      final regOk = await PasskeyService.instance.registerNativePasskey(
-        teacherName: '수업 교사',
-        email: 'tools_user@boardest.local',
-        schoolName: 'Boardest Tools',
-      );
-      if (regOk) {
-        final token = 'passkey_tools_${DateTime.now().millisecondsSinceEpoch}';
-        BstCloudService.instance.setDirectAccessToken(
-          token,
-          teacherName: '수업 교사',
-          ownerEmail: 'tools_user@boardest.local',
-        );
-        if (mounted) {
-          setState(() {});
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Tools 순정 패스키가 등록 및 연결되었습니다!'),
-              backgroundColor: Color(0xFF10B981),
-            ),
-          );
-        }
-      }
-    }
   }
 
 

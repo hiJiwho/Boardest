@@ -285,13 +285,19 @@ class _BstCloudModalState extends State<BstCloudModal> {
     if (token == null) return;
     final lower = file.name.toLowerCase();
 
-    if (lower.endsWith('.canva.bst') || lower.endsWith('.canva')) {
+    if (lower.endsWith('.canva.bst') || lower.endsWith('.canva') || lower.endsWith('.bstcanva')) {
       // Canva 디자인 열기
       final content = await BstCloudService.instance.readDriveFileText(file.id, token);
       if (content != null) {
-        final data = jsonDecode(content);
-        final canvaId = data['canvaId']?.toString() ?? '';
-        final title = data['title']?.toString() ?? file.name;
+        String canvaId = '';
+        String title = file.name;
+        try {
+          final data = jsonDecode(content);
+          canvaId = data['canvaId']?.toString() ?? data['embedUrl']?.toString() ?? data['url']?.toString() ?? '';
+          title = data['title']?.toString() ?? file.name;
+        } catch (_) {
+          canvaId = content.trim();
+        }
         if (canvaId.isNotEmpty && mounted) {
           Navigator.push(
             context,
@@ -299,6 +305,36 @@ class _BstCloudModalState extends State<BstCloudModal> {
               builder: (ctx) => CanvaOverlayView(
                 canvaId: canvaId,
                 title: title,
+                scaleFactor: widget.scaleFactor,
+              ),
+            ),
+          );
+        }
+      }
+    } else if (lower.endsWith('.tbp') || lower.endsWith('.bsttbp')) {
+      // TBP 교과서 열기
+      if (kIsWeb) {
+        final bytes = await BstCloudService.instance.downloadDriveFileBytes(file.id, token);
+        if (bytes != null && mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (ctx) => PdfBoardView(
+                initialFilePath: file.name,
+                pdfData: bytes,
+                scaleFactor: widget.scaleFactor,
+              ),
+            ),
+          );
+        }
+      } else {
+        final localPath = await BstCloudService.instance.downloadDriveFile(file.id, file.name, token);
+        if (localPath != null && mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (ctx) => PdfBoardView(
+                initialFilePath: localPath,
                 scaleFactor: widget.scaleFactor,
               ),
             ),

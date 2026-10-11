@@ -284,10 +284,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
     if (!kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Windows 환경에서는 OS 네이티브 팝업 대신 인앱 자동 확인 후 조용히 업데이트 실행
-        if (Platform.isWindows) {
-          UpdateService.ensureNativeAppInstallerSettings(channel: _settings.updateChannel);
-        }
         UpdateService.checkAndUpdate(context, silent: true, channel: _settings.updateChannel);
         if (Platform.isAndroid) {
           _checkAndPromptHomeLauncher();
@@ -4082,9 +4078,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   if (mounted) {
                     setState(() => _settings = updated);
                   }
-                  if (Platform.isWindows) {
-                    UpdateService.ensureNativeAppInstallerSettings(channel: selectedChannel);
-                  }
                 }
                 UpdateService.checkAndUpdate(
                   context,
@@ -5269,6 +5262,17 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 tomorrowDishes: _tomorrowMeal?.dishes ?? [],
                 tomorrowCalories: '682 kcal',
                 tomorrowDateLabel: '다음 급식',
+                currentTime: _debugTimeOverride ?? DateTime.now(),
+                lunchStartTime: TimeOfDay(
+                  hour: _getLunchStartMinutes() ~/ 60,
+                  minute: _getLunchStartMinutes() % 60,
+                ),
+                lunchEndTime: TimeOfDay(
+                  hour: _getLunchEndMinutes() ~/ 60,
+                  minute: _getLunchEndMinutes() % 60,
+                ),
+                onMealVote: _handleDishVote,
+                onShowVoteBreakdown: _showDishVotesBreakdown,
                 isCloudActive: BstCloudService.instance.activeToken != null,
                 onCloudToggle: _openCloudPairingModal,
                 isPro: !kIsWeb,
@@ -6220,6 +6224,12 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     return minutes >= start && minutes < (end - 10);
   }
 
+  bool _isMealVoteResultTimeNow() {
+    final now = _debugTimeOverride ?? DateTime.now();
+    final minutes = now.hour * 60 + now.minute;
+    return minutes >= (_getLunchEndMinutes() - 9);
+  }
+
   /// [신규] 점심시간 끝나고 20분 뒤인지 판별 (20분 뒤면 다음날 급식으로 자동 전환)
   bool _isAfterLunchPlus20Min() {
     final now = _debugTimeOverride ?? DateTime.now();
@@ -6780,6 +6790,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                                   final int voteCount = isToday
                                                       ? MealVoteService.instance.getTotalVotes(d.name)
                                                       : (pastDayVotes[dKey] ?? 0);
+                                                  final showVoteCount = !isToday || _isMealVoteResultTimeNow();
 
                                                   return InkWell(
                                                     onTap: () async {
@@ -6790,7 +6801,13 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                                         _showDishAllergyDialog(d);
                                                       }
                                                     },
-                                                    onLongPress: () => _showDishAllergyDialog(d),
+                                                    onLongPress: () {
+                                                      if (isToday && _isMealVoteResultTimeNow()) {
+                                                        _showDishVotesBreakdown(d.name);
+                                                      } else {
+                                                        _showDishAllergyDialog(d);
+                                                      }
+                                                    },
                                                     borderRadius: BorderRadius.circular(4 * scale),
                                                     child: Container(
                                                       margin: const EdgeInsets.only(bottom: 3),
@@ -6819,7 +6836,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                                              ),
                                                             ),
                                                           ),
-                                                          if (voteCount > 0)
+                                                          if (showVoteCount && voteCount > 0)
                                                             Container(
                                                               margin: EdgeInsets.only(left: 4 * scale),
                                                               padding: EdgeInsets.symmetric(horizontal: 5 * scale, vertical: 1 * scale),
@@ -7040,8 +7057,13 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         _showDishAllergyDialog(dish);
                       }
                     },
-                    // 꾹 누르면: 언제든 알레르기 정보 팝업이 먼저 뜸!
-                    onLongPress: () => _showDishAllergyDialog(dish),
+                    onLongPress: () {
+                      if (isToday && _isMealVoteResultTimeNow()) {
+                        _showDishVotesBreakdown(dish.name);
+                      } else {
+                        _showDishAllergyDialog(dish);
+                      }
+                    },
                     borderRadius: BorderRadius.circular(6 * scale),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
@@ -7069,9 +7091,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                               ),
                             ),
                           ),
-                          if (totalVotes > 0)
+                          if (totalVotes > 0 && (!isToday || _isMealVoteResultTimeNow()))
                             GestureDetector(
-                              onTap: () => _showDishVotesBreakdown(dish.name),
+                              onLongPress: () => _showDishVotesBreakdown(dish.name),
                               child: Container(
                                 margin: EdgeInsets.only(left: 4 * scale),
                                 padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 1.5 * scale),
@@ -16696,4 +16718,3 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 }
-
