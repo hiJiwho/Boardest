@@ -150,9 +150,9 @@ class BstClassMainLayout extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // [좌측 열 (가로 flex: 3)]
+                    // [좌측 열 (가로 flex: 1)]
                     Expanded(
-                      flex: 3,
+                      flex: 1,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -195,13 +195,27 @@ class BstClassMainLayout extends StatelessWidget {
 
                     const SizedBox(width: 10),
 
-                    // [우측 열 (가로 flex: 2)]
+                    // [우측 열 (가로 flex: 1)]
                     Expanded(
-                      flex: 2,
+                      flex: 1,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // 1. 수업 도구함 (세로 flex: 2, 시계와 동일한 높이 2)
+                          // 1. 일과 시간표 스트립 (세로 flex: 1)
+                          Expanded(
+                            flex: 1,
+                            child: BstTodayTimetableStrip(
+                              periods: periods,
+                              onPeriodTap: onPeriodTap,
+                              getTextbookPath: getTextbookPath,
+                              getTextbookBytes: getTextbookBytes,
+                              isSpecialRoom: isSpecialRoom,
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // 2. 일과 시간표 아래 수업 도구함 (세로 flex: 2)
                           Expanded(
                             flex: 2,
                             child: BstToolsDock(
@@ -211,20 +225,6 @@ class BstClassMainLayout extends StatelessWidget {
                               onAddAppTap: onAddAppTap,
                               onMinimizeTap: onMinimizeTap,
                               onCloseTap: onCloseTap,
-                            ),
-                          ),
-
-                          const SizedBox(height: 10),
-
-                          // 2. 일과 시간표 스트립 (세로 flex: 1)
-                          Expanded(
-                            flex: 1,
-                            child: BstTodayTimetableStrip(
-                              periods: periods,
-                              onPeriodTap: onPeriodTap,
-                              getTextbookPath: getTextbookPath,
-                              getTextbookBytes: getTextbookBytes,
-                              isSpecialRoom: isSpecialRoom,
                             ),
                           ),
 
