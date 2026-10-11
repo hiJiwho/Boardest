@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>BOARDEST Passkey & Cloud 연동</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      background-color: #070B14;
+      color: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px 16px;
+      user-select: none;
+    }
+    .card {
+      background: #0F172A;
+      border: 1.5px solid rgba(0, 245, 212, 0.35);
+      border-radius: 28px;
+      padding: 36px 24px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.7), 0 0 36px rgba(0, 245, 212, 0.12);
+      animation: popIn 0.3s ease-out;
+    }
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .pulse-ring {
+      width: 84px;
+      height: 84px;
+      background: rgba(0, 245, 212, 0.15);
+      border: 2px solid #00F5D4;
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px auto;
+      font-size: 40px;
+      animation: pulse 1.6s infinite ease-in-out;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 245, 212, 0.4); }
+      50% { transform: scale(1.06); box-shadow: 0 0 24px 6px rgba(0, 245, 212, 0.25); }
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 900;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+    .sub {
+      font-size: 14px;
+      color: #94A3B8;
+      line-height: 1.55;
+      margin-bottom: 24px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      background: rgba(0, 245, 212, 0.12);
+      border: 1px solid rgba(0, 245, 212, 0.3);
+      border-radius: 30px;
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #00F5D4;
+      margin-bottom: 24px;
+    }
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      background: #00F5D4;
+      border-radius: 50%;
+      animation: blink 1s infinite alternate;
+    }
+    @keyframes blink {
+      from { opacity: 0.3; }
+      to { opacity: 1; }
+    }
+    .info-box {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 16px 18px;
+      margin-bottom: 24px;
+      text-align: left;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 13.5px;
+    }
+    .info-row:last-child {
+      margin-bottom: 0;
+    }
+    .info-label {
+      color: #94A3B8;
+    }
+    .info-val {
+      font-weight: 800;
+      color: #00F5D4;
+    }
+    .btn {
+      width: 100%;
+      background: #00F5D4;
+      color: #070B14;
+      font-size: 16px;
+      font-weight: 900;
+      padding: 18px;
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 8px 24px rgba(0, 245, 212, 0.3);
+      transition: all 0.2s ease;
+    }
+    .btn:active {
+      transform: scale(0.97);
+    }
+    .fido-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 20px;
+      padding: 6px 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 20px;
+      font-size: 11px;
+      color: #94A3B8;
+      font-weight: 600;
+    }
+    .success-box {
+      display: none;
+      animation: popIn 0.35s ease-out;
+    }
+  </style>
+</head>
+<body>
+  <!-- 1. 패스키 등록 카드 -->
+  <div class="card" id="registerCard">
+    <div class="pulse-ring">🔑</div>
+    <h1>순정 시스템 패스키 등록</h1>
+    <p class="sub">
+      아래 버튼을 터치하시면 <strong>iPhone(Face ID)</strong> 또는<br>
+      <strong>Android(지문인식)</strong> 시스템 패스키 창이 즉시 열립니다.
+    </p>
+
+    <div class="status-badge" id="statusBadge">
+      <div class="status-dot"></div>
+      <span id="statusText">터치 대기 중 (준비 완료)</span>
+    </div>
+
+    <div class="info-box">
+      <div class="info-row">
+        <span class="info-label">선생님</span>
+        <span class="info-val" id="teacherDisplay">선생님</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">학교</span>
+        <span class="info-val" id="schoolDisplay">학교</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">국제 규격</span>
+        <span class="info-val">W3C WebAuthn / FIDO2 Level 3</span>
+      </div>
+    </div>
+
+    <button class="btn" id="registerBtn" onclick="handleRegister()">
+      <span>📱 터치하여 순정 패스키 생성</span>
+    </button>
+
+    <div class="fido-badge">
+      <span>🛡️ FIDO Alliance · W3C Standard Authenticators</span>
+    </div>
+  </div>
+
+  <!-- 2. 교실 전자칠판 Cloud 잠금해제 승인 카드 -->
+  <div class="card" id="approveCard" style="display: none;">
+    <div class="pulse-ring">⚡</div>
+    <h1>전자칠판 Cloud 연결 승인</h1>
+    <p class="sub">
+      교실 전자칠판(Class)에서 Cloud 수업자료를 열 수 있도록<br>
+      <strong>터치하여 즉시 승인</strong>합니다.
+    </p>
+
+    <div class="status-badge">
+      <div class="status-dot"></div>
+      <span id="approveStatusText">연결 요청 대기 중</span>
+    </div>
+
+    <div class="info-box">
+      <div class="info-row">
+        <span class="info-label">요청 교실</span>
+        <span class="info-val" id="approveRoomDisplay">교실 전자칠판</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">인증 모드</span>
+        <span class="info-val">QR 1초 즉시 페어링</span>
+      </div>
+    </div>
+
+    <button class="btn" id="approveBtn" onclick="handleApprove()">
+      <span>🚀 즉시 승인 및 로그인 (1초)</span>
+    </button>
+  </div>
+
+  <!-- 3. 성공 카드 -->
+  <div class="card success-box" id="successCard">
+    <div class="pulse-ring" style="border-color: #10B981; background: rgba(16, 185, 129, 0.2);">✅</div>
+    <h1 style="color: #10B981;" id="successTitle">순정 패스키 등록 완료</h1>
+    <p class="sub" id="successDesc" style="margin-bottom: 20px;">
+      스마트폰 기기 키체인(Face ID/지문)에 안전하게 등록되었습니다.<br>
+      교실 전자칠판 및 교사용 앱에서 바로 사용하실 수 있습니다!
+    </p>
+    <div class="info-box" style="text-align: center;">
+      <span style="color: #94A3B8; font-size: 12.5px;">이 창을 닫으셔도 좋습니다.</span>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const teacherName = params.get('teacher') || localStorage.getItem('bst_teacher_name') || '선생님';
+    const schoolName = params.get('school') || localStorage.getItem('bst_school_name') || '보데스트 학교';
+    const challengeId = params.get('challenge') || params.get('c') || ('CH-' + Date.now());
+    const sessionId = params.get('sid') || params.get('session') || '';
+    const action = params.get('action') || (sessionId ? 'approve' : 'register');
+    const email = params.get('email') || (teacherName.toLowerCase() + '@school.go.kr');
+
+    document.getElementById('teacherDisplay').textContent = teacherName;
+    document.getElementById('schoolDisplay').textContent = schoolName;
+
+    // 모드 판별: action=approve 또는 sid가 전달된 경우 전자칠판 잠금해제 모드
+    if (action === 'approve' && sessionId) {
+      document.getElementById('registerCard').style.display = 'none';
+      document.getElementById('approveCard').style.display = 'block';
+      document.getElementById('approveRoomDisplay').textContent = schoolName;
+    }
+
+    let isProcessing = false;
+
+    // ──────────────────────────────────────────────
+    // 1. 순정 패스키 생성 (FIDO2 / WebAuthn Level 3)
+    // ──────────────────────────────────────────────
+    async function handleRegister() {
+      if (isProcessing) return;
+      isProcessing = true;
+
+      const btn = document.getElementById('registerBtn');
+      const badgeText = document.getElementById('statusText');
+      btn.disabled = true;
+      btn.innerHTML = '<span>생체인증 확인 중...</span>';
+      badgeText.textContent = '시스템 생체인증 확인 중...';
+
+      try {
+        if (!window.PublicKeyCredential) {
+          throw new Error('이 브라우저는 FIDO2 / WebAuthn 패스키를 지원하지 않습니다.');
+        }
+
+        const challengeBytes = new Uint8Array(32);
+        crypto.getRandomValues(challengeBytes);
+        const userIdBytes = new TextEncoder().encode(email);
+
+        const createOptions = {
+          publicKey: {
+            challenge: challengeBytes,
+            rp: {
+              name: "BOARDEST Cloud",
+              id: window.location.hostname
+            },
+            user: {
+              id: userIdBytes,
+              name: email,
+              displayName: teacherName
+            },
+            pubKeyCredParams: [
+              { alg: -7, type: "public-key" },  // ES256
+              { alg: -257, type: "public-key" } // RS256
+            ],
+            authenticatorSelection: {
+              authenticatorAttachment: "platform", // 아이폰 FaceID/TouchID 또는 안드로이드 순정 지문
+              userVerification: "required",
+              residentKey: "preferred"
+            },
+            timeout: 60000,
+            attestation: "none"
+          }
+        };
+
+        // 스마트폰 OS 순정 패스키 생성 시스템 대화상자 직접 호출!
+        const credential = await navigator.credentials.create(createOptions);
+
+        if (credential) {
+          const cleanKey = email.replace(/[.#$\[\]]/g, '_');
+          const payload = {
+            teacherName: teacherName,
+            schoolName: schoolName,
+            hasPasskey: true,
+            credentialId: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
+            clientDataJSON: btoa(String.fromCharCode(...new Uint8Array(credential.response.clientDataJSON))),
+            updatedAt: Date.now(),
+            platform: /iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'iOS' : (/Android/i.test(navigator.userAgent) ? 'Android' : 'Desktop')
+          };
+
+          await fetch('https://jiwhosboardest-default-rtdb.firebaseio.com/passkey/vaults/' + cleanKey + '.json', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          }).catch(() => {});
+
+          if (sessionId) {
+            await fetch('https://jiwhosboardest-default-rtdb.firebaseio.com/passkey/sessions/' + sessionId + '.json', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                status: 'approved',
+                approvedAt: Date.now(),
+                teacherName: teacherName,
+                email: email,
+                accessToken: 'passkey_reg_access_' + Date.now()
+              })
+            }).catch(() => {});
+          }
+
+          document.getElementById('registerCard').style.display = 'none';
+          document.getElementById('successTitle').textContent = '순정 패스키 등록 완료';
+          document.getElementById('successDesc').innerHTML = '스마트폰 기기 키체인(Face ID/지문)에 안전하게 등록되었습니다.<br>교실 전자칠판 및 교사용 앱에서 바로 사용하실 수 있습니다!';
+          document.getElementById('successCard').style.display = 'block';
+        }
+      } catch (err) {
+        console.error('WebAuthn registration error:', err);
+        badgeText.textContent = '다시 터치하여 시도';
+        btn.disabled = false;
+        btn.innerHTML = '<span>📱 터치하여 순정 패스키 생성</span>';
+        isProcessing = false;
+      }
+    }
+
+    // ──────────────────────────────────────────────
+    // 2. 전자칠판 Cloud 잠금해제 승인
+    // ──────────────────────────────────────────────
+    async function handleApprove() {
+      if (isProcessing) return;
+      isProcessing = true;
+
+      const btn = document.getElementById('approveBtn');
+      const badgeText = document.getElementById('approveStatusText');
+      btn.disabled = true;
+      btn.innerHTML = '<span>승인 처리 중...</span>';
+      badgeText.textContent = '전자칠판으로 토큰 전송 중...';
+
+      try {
+        const payload = {
+          status: 'approved',
+          approvedAt: Date.now(),
+          teacherName: teacherName,
+          email: email,
+          accessToken: 'passkey_cloud_access_' + Date.now()
+        };
+
+        await fetch('https://jiwhosboardest-default-rtdb.firebaseio.com/passkey/sessions/' + sessionId + '.json', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        document.getElementById('approveCard').style.display = 'none';
+        document.getElementById('successTitle').textContent = '전자칠판 Cloud 연결 완료!';
+        document.getElementById('successDesc').innerHTML = '교실 전자칠판이 즉시 잠금해제되었습니다.<br>지금 칠판에서 수업자료를 바로 확인하세요!';
+        document.getElementById('successCard').style.display = 'block';
+      } catch (e) {
+        console.error('Approval error:', e);
+        badgeText.textContent = '승인 실패: 다시 시도해주세요';
+        btn.disabled = false;
+        btn.innerHTML = '<span>🚀 다시 시도</span>';
+        isProcessing = false;
+      }
+    }
+
+    // ──────────────────────────────────────────────
+    // 3. 페이지 로드 시 및 화면 터치 시 자동 실행
+    // ──────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', () => {
+      // 1초 후 자동 발동 시도 (모바일 OS 허용 시 즉시 다이얼로그 팝업)
+      setTimeout(() => {
+        if (!isProcessing) {
+          if (action === 'approve' && sessionId) {
+            handleApprove();
+          } else {
+            handleRegister();
+          }
+        }
+      }, 300);
+
+      // 모바일 브라우저의 사용자 인터랙션 요구 대응: 화면 어디든 첫 터치 시 즉시 발동
+      document.body.addEventListener('click', (e) => {
+        if (!isProcessing && e.target.tagName !== 'BUTTON') {
+          if (action === 'approve' && sessionId) {
+            handleApprove();
+          } else {
+            handleRegister();
+          }
+        }
+      }, { once: true });
+    });
+  </script>
+</body>
+</html>

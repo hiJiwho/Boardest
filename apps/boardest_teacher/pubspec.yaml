@@ -2,7 +2,7 @@ name: boardest_teacher
 description: "Boardest Teacher PC App"
 publish_to: 'none'
 
-version: 3.0.5+3005
+version: 4.0.0+4000
 
 environment:
   sdk: ^3.11.5
@@ -60,6 +60,7 @@ dependencies:
     path: ../../packages/common/bst_cast
   bst_native:
     path: ../../packages/plugins/bst_native
+  qr_flutter: ^4.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -71,3 +72,4 @@ flutter:
   assets:
     - assets/app_icon.ico
     - assets/bst-web/
+    - assets/icons/

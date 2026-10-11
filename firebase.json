@@ -67,12 +67,86 @@
           ]
         },
         {
+          "source": "**/version.json",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+          ]
+        },
+        {
           "source": "**/*.@(wasm|js|otf|ttf|woff|woff2|png|jpg|jpeg|gif|svg|ico)",
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
           ]
         }
       ],
+      "rewrites": [
+        { "source": "**", "destination": "/index.html" }
+      ]
+    },
+    {
+      "target": "boardest-class-lite",
+      "public": "infra/class_lite_web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**/index.html",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+          ]
+        },
+        {
+          "source": "**/*.@(wasm|js|otf|ttf|woff|woff2|png|jpg|jpeg|gif|svg|ico)",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+          ]
+        }
+      ],
+      "rewrites": [
+        { "source": "**", "destination": "/index.html" }
+      ]
+    },
+    {
+      "target": "boardest-tools",
+      "public": "apps/boardest/build/web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+          ]
+        }
+      ],
+      "cleanUrls": true,
+      "rewrites": [
+        { "source": "**", "destination": "/index.html" }
+      ]
+    },
+    {
+      "target": "boardest-class-pro",
+      "public": "infra/class_pro_launcher_web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+          ]
+        }
+      ],
+      "cleanUrls": true,
       "rewrites": [
         { "source": "**", "destination": "/index.html" }
       ]
@@ -299,6 +373,35 @@
         }
       ],
       "cleanUrls": true
+    },
+    {
+      "target": "boardest-cloud-connect",
+      "public": "infra/cloud_connect_web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" },
+            { "key": "Access-Control-Allow-Origin", "value": "*" }
+          ]
+        },
+        {
+          "source": "/.well-known/**",
+          "headers": [
+            { "key": "Content-Type", "value": "application/json; charset=utf-8" },
+            { "key": "Access-Control-Allow-Origin", "value": "*" }
+          ]
+        }
+      ],
+      "cleanUrls": true,
+      "rewrites": [
+        { "source": "**", "destination": "/index.html" }
+      ]
     }
   ]
 }

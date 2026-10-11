@@ -838,19 +838,49 @@ class CloudDriveService with ChangeNotifier {
     }
   }
 
-  bool _isRefreshing = false;
-  /// Google Access Token 토큰 자동 갱신 (OTP 기반 & Cloudflare Worker KV & Refresh Token)
-  Future<bool> refreshAccessToken({bool force = false}) async {
-    if (_isRefreshing) return false;
-    _isRefreshing = true;
+  /// Google Access Token이 유효한지 사전 점검하고 401(만료)인 경우 자가 치유(Self-healing) 재발급
+  Future<bool> ensureValidAccessToken() async {
+    if (_accessToken == null || _accessToken!.isEmpty) {
+      return await refreshAccessToken();
+    }
+    try {
+      final res = await http.get(
+        Uri.parse('https://www.googleapis.com/oauth2/v2/userinfo'),
+        headers: {'Authorization': 'Bearer $_accessToken'},
+      ).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 401) {
+        debugPrint('[CloudDriveService] ⚠️ Google access token 만료 감지 (401). Worker를 통해 자동 재발급 실행...');
+        return await refreshAccessToken();
+      }
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
 
+  Future<bool>? _ongoingRefreshFuture;
+
+  /// Google Access Token 토큰 자동 갱신 (인플라이트 중복 제거 및 캐시)
+  Future<bool> refreshAccessToken({bool force = false}) {
+    if (_ongoingRefreshFuture != null) {
+      debugPrint('[CloudDriveService] 🔄 Reusing ongoing refreshAccessToken Future...');
+      return _ongoingRefreshFuture!;
+    }
+    final future = _executeRefreshAccessToken(force: force);
+    _ongoingRefreshFuture = future;
+    return future.whenComplete(() {
+      _ongoingRefreshFuture = null;
+    });
+  }
+
+  Future<bool> _executeRefreshAccessToken({bool force = false}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _userEmail ??= prefs.getString(_userEmailKey) ?? prefs.getString('bst_user_email') ?? prefs.getString('email');
       _refreshToken ??= prefs.getString(_refreshTokenKey);
 
-      // 1. Local Refresh Token direct exchange
-      if (_refreshToken != null && _refreshToken!.isNotEmpty) {
+      // 1. Local Refresh Token direct exchange (Windows / Native)
+      if (!kIsWeb && _refreshToken != null && _refreshToken!.isNotEmpty) {
         var response = await http.post(
           Uri.parse('https://oauth2.googleapis.com/token'),
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -887,7 +917,7 @@ class CloudDriveService with ChangeNotifier {
         }
       }
 
-      // 2. Cloudflare Worker token/refresh endpoint fallback
+      // 2. Cloudflare Worker token/refresh endpoint fallback (Web & CORS Bypass)
       if (_userEmail != null && _userEmail!.isNotEmpty) {
         try {
           final refreshRes = await http.post(
@@ -895,6 +925,7 @@ class CloudDriveService with ChangeNotifier {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'email': _userEmail,
+              if (_refreshToken != null && _refreshToken!.isNotEmpty) 'refreshToken': _refreshToken,
             }),
           ).timeout(const Duration(seconds: 5));
           if (refreshRes.statusCode == 200) {
@@ -945,8 +976,6 @@ class CloudDriveService with ChangeNotifier {
       debugPrint('[CloudDriveService] ⚠️ Could not refresh token automatically. Retaining session.');
     } catch (e) {
       debugPrint('[CloudDriveService] Token refresh error: $e');
-    } finally {
-      _isRefreshing = false;
     }
     return false;
   }
@@ -1066,10 +1095,20 @@ class CloudDriveService with ChangeNotifier {
       final searchUrl = Uri.parse(
         "https://www.googleapis.com/drive/v3/files?${spaceQuery}q=name='$folderName' and mimeType='application/vnd.google-apps.folder' and $parentQuery and trashed=false&fields=files(id,name)",
       );
-      final searchRes = await http.get(
+      var searchRes = await http.get(
         searchUrl,
         headers: {'Authorization': 'Bearer $_accessToken', 'Accept': 'application/json'},
       );
+      if (searchRes.statusCode == 401) {
+        debugPrint('[CloudDriveService] ⚠️ Google Drive 401 on searching folder $folderName. Refreshing token...');
+        final refreshed = await refreshAccessToken();
+        if (refreshed) {
+          searchRes = await http.get(
+            searchUrl,
+            headers: {'Authorization': 'Bearer $_accessToken', 'Accept': 'application/json'},
+          );
+        }
+      }
       if (searchRes.statusCode == 200) {
         final data = jsonDecode(searchRes.body);
         final files = data['files'] as List?;
@@ -1085,7 +1124,7 @@ class CloudDriveService with ChangeNotifier {
         'parents': [parentId],
       };
 
-      final createRes = await http.post(
+      var createRes = await http.post(
         createUrl,
         headers: {
           'Authorization': 'Bearer $_accessToken',
@@ -1093,6 +1132,20 @@ class CloudDriveService with ChangeNotifier {
         },
         body: jsonEncode(bodyMap),
       );
+      if (createRes.statusCode == 401) {
+        debugPrint('[CloudDriveService] ⚠️ Google Drive 401 on creating folder $folderName. Refreshing token...');
+        final refreshed = await refreshAccessToken();
+        if (refreshed) {
+          createRes = await http.post(
+            createUrl,
+            headers: {
+              'Authorization': 'Bearer $_accessToken',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(bodyMap),
+          );
+        }
+      }
       if (createRes.statusCode == 200 || createRes.statusCode == 201) {
         final createData = jsonDecode(createRes.body);
         return createData['id'] as String?;
@@ -1138,50 +1191,9 @@ class CloudDriveService with ChangeNotifier {
   String get currentFull10DigitOtp => currentStegano6DigitOtp;
   int get remainingSeconds => TotpService.getRemainingSeconds(step: 60);
 
-  /// Firestore teacher_cloud_tokens 컬렉션과 TOTP Secret 및 최신 인증 토큰 즉시 동기화
+  /// Firestore teacher_cloud_tokens 컬렉션과 TOTP Secret 및 최신 인증 토큰 동기화 (하위 호환 래퍼)
   Future<void> _syncTeacherCloudTokens() async {
-    if (_userEmail == null || _userEmail!.isEmpty) return;
-    try {
-      final docId = _userEmail!.replaceAll('.', '_').replaceAll('@', '_').replaceAll('+', '_');
-      const apiKey = 'AIzaSyBMoJZHMBN4eYJtiZR2iGePcmIB7bg8wGo';
-      final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/teacher_cloud_tokens/$docId?key=$apiKey';
-
-      if (_totpSecret == null || _totpSecret!.isEmpty) {
-        _totpSecret = TotpService.generateDeterministicSecret(_userEmail!);
-      }
-
-      final payload = {
-        'fields': {
-          'email': {'stringValue': _userEmail ?? ''},
-          'name': {'stringValue': _userName ?? '선생님'},
-          'teacherName': {'stringValue': _userName ?? '선생님'},
-          'school': {'stringValue': _schoolName ?? ''},
-          'schoolId': {'stringValue': ''},
-          'accessToken': {'stringValue': _accessToken ?? ''},
-          'refreshToken': {'stringValue': _refreshToken ?? ''},
-          'totpSecret': {'stringValue': _totpSecret ?? ''},
-          'shortId': {'stringValue': _shortId ?? '12'},
-          'cloudId': {'stringValue': cloudId},
-          'trustDeviceEnabled': {'booleanValue': _trustDeviceEnabled},
-          'autoLessonFlowEnabled': {'booleanValue': _autoLessonFlowEnabled},
-          'folderId': {'stringValue': _boardestFolderId ?? ''},
-          'bstCloudFolderId': {'stringValue': _boardestConnectFolderId ?? ''},
-          'bstPenFolderId': {'stringValue': _bstPenFolderId ?? ''},
-          'lastConsumedWindow': {'integerValue': '0'},
-          'updatedAt': {'timestampValue': DateTime.now().toUtc().toIso8601String()},
-          'expiresAt': {'timestampValue': DateTime.now().add(const Duration(days: 30)).toUtc().toIso8601String()},
-        }
-      };
-
-      await http.patch(
-        Uri.parse(firestoreUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 4));
-      debugPrint('[CloudDriveService] ✅ teacher_cloud_tokens Firestore sync complete ($docId)');
-    } catch (e) {
-      debugPrint('[CloudDriveService] _syncTeacherCloudTokens error: $e');
-    }
+    await syncTeacherCloudTokenToFirestore();
   }
 
   Future<void> _ensureTotpSecret() async {
@@ -1203,8 +1215,8 @@ class CloudDriveService with ChangeNotifier {
       await prefs.setString('bst_totp_secret', _totpSecret!);
     }
 
-    // Cloudflare Worker와 기기 및 4자리 ID 동기화
-    if (_userEmail != null && _userEmail!.isNotEmpty) {
+    // Cloudflare Worker와 기기 및 4자리 ID 동기화 (기존 캐시가 없을 때만 등록)
+    if (_userEmail != null && _userEmail!.isNotEmpty && (_shortId == null || _shortId!.isEmpty)) {
       try {
         final regRes = await http.post(
           Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/device/register'),
@@ -1257,39 +1269,70 @@ class CloudDriveService with ChangeNotifier {
     return _totpSecret!;
   }
 
-  Future<void> syncTeacherCloudTokenToFirestore() async {
+  DateTime? _lastFirestoreSyncTime;
+  Future<void>? _ongoingSyncFuture;
+
+  /// Firestore teacher_cloud_tokens 동기화 (5초 쿨다운 및 인플라이트 락 적용)
+  Future<void> syncTeacherCloudTokenToFirestore({bool force = false}) {
+    if (!force && _lastFirestoreSyncTime != null && 
+        DateTime.now().difference(_lastFirestoreSyncTime!).inSeconds < 5) {
+      debugPrint('[CloudDriveService] ⏳ Skipping duplicate Firestore sync (cooldown 5s)');
+      return Future.value();
+    }
+    if (_ongoingSyncFuture != null) {
+      return _ongoingSyncFuture!;
+    }
+    final future = _executeSyncTeacherCloudTokenToFirestore();
+    _ongoingSyncFuture = future;
+    return future.whenComplete(() {
+      _ongoingSyncFuture = null;
+    });
+  }
+
+  Future<void> _executeSyncTeacherCloudTokenToFirestore() async {
     if (_accessToken == null || _userEmail == null || _userEmail!.isEmpty) return;
-    await _ensureTotpSecret();
+    _lastFirestoreSyncTime = DateTime.now();
+
     try {
-      final uid = _userEmail!.replaceAll('.', '_').replaceAll('@', '_');
+      final uid = _userEmail!.replaceAll('.', '_').replaceAll('@', '_').replaceAll('+', '_');
       final firestoreUrl = '${AppConfig.firestoreBase}/teacher_cloud_tokens/$uid?key=${AppConfig.firebaseApiKey}';
+
+      if (_totpSecret == null || _totpSecret!.isEmpty) {
+        _totpSecret = TotpService.generateDeterministicSecret(_userEmail!);
+      }
+
       final payload = {
         'fields': {
           'email': {'stringValue': _userEmail!},
-          'name': {'stringValue': _userName ?? ''},
+          'name': {'stringValue': _userName ?? '선생님'},
+          'teacherName': {'stringValue': _userName ?? '선생님'},
           'school': {'stringValue': _schoolName ?? ''},
+          'schoolId': {'stringValue': ''},
           'accessToken': {'stringValue': _accessToken!},
           'refreshToken': {'stringValue': _refreshToken ?? ''},
           'totpSecret': {'stringValue': _totpSecret ?? ''},
+          'shortId': {'stringValue': _shortId ?? '12'},
+          'cloudId': {'stringValue': cloudId},
           'trustDeviceEnabled': {'booleanValue': _trustDeviceEnabled},
           'autoLessonFlowEnabled': {'booleanValue': _autoLessonFlowEnabled},
           'folderId': {'stringValue': _boardestFolderId ?? ''},
           'bstSaveFolderId': {'stringValue': _bstSaveFolderId ?? _boardestFolderId ?? ''},
-          'bstCloudFolderId': {'stringValue': _bstSaveFolderId ?? _boardestFolderId ?? ''},
+          'bstCloudFolderId': {'stringValue': _boardestConnectFolderId ?? _boardestFolderId ?? ''},
           'bstPenFolderId': {'stringValue': _bstPenFolderId ?? ''},
           'bstCanvaFolderId': {'stringValue': _bstCanvaFolderId ?? ''},
           'bstTextbookProFolderId': {'stringValue': _bstTextbookProFolderId ?? ''},
           'lastConsumedWindow': {'integerValue': '0'},
           'updatedAt': {'timestampValue': DateTime.now().toUtc().toIso8601String()},
-          'expiresAt': {'timestampValue': DateTime.now().add(const Duration(hours: 1)).toUtc().toIso8601String()},
+          'expiresAt': {'timestampValue': DateTime.now().add(const Duration(days: 30)).toUtc().toIso8601String()},
         }
       };
+
       await http.patch(
         Uri.parse(firestoreUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
-      );
-      debugPrint('[CloudDriveService] ☁ Teacher cloud token, TOTP & trust settings synced to Firestore');
+      ).timeout(const Duration(seconds: 4));
+      debugPrint('[CloudDriveService] ☁️ teacher_cloud_tokens Firestore sync complete ($uid)');
     } catch (e) {
       debugPrint('[CloudDriveService] Failed to sync token to Firestore: $e');
     }
@@ -1426,8 +1469,8 @@ class CloudDriveService with ChangeNotifier {
     if (_userName != null) await prefs.setString(_userNameKey, _userName!);
     if (_schoolName != null) await prefs.setString(_schoolNameKey, _schoolName!);
 
-    // Worker에서 shortId 동기화
-    if (_userEmail != null && _userEmail!.isNotEmpty) {
+    // Worker에서 shortId 동기화 (기존 캐시가 없을 때만 호출)
+    if (_userEmail != null && _userEmail!.isNotEmpty && (_shortId == null || _shortId!.isEmpty)) {
       try {
         final profRes = await http.get(
           Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/profile/get?email=${Uri.encodeComponent(_userEmail!)}'),
@@ -1444,6 +1487,9 @@ class CloudDriveService with ChangeNotifier {
 
     _startAutoRefreshTimer();
     await _saveSessionToDisk();
+
+    // 토큰 유효성 검증 및 만료 시 즉시 자동 갱신 (Self-Healing)
+    await ensureValidAccessToken();
   }
 
   /// 웹사이트를 쳐다보지 않고 127.0.0.1 켜두고 구글 OAuth로 직접 직행
@@ -2293,7 +2339,7 @@ class CloudDriveService with ChangeNotifier {
     if (!isLoggedIn) return false;
     try {
       final url = Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId');
-      final res = await http.patch(
+      var res = await http.patch(
         url,
         headers: {
           'Authorization': 'Bearer $_accessToken',
@@ -2301,6 +2347,19 @@ class CloudDriveService with ChangeNotifier {
         },
         body: jsonEncode({'name': newName}),
       );
+      if (res.statusCode == 401) {
+        final refreshed = await refreshAccessToken();
+        if (refreshed) {
+          res = await http.patch(
+            url,
+            headers: {
+              'Authorization': 'Bearer $_accessToken',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'name': newName}),
+          );
+        }
+      }
       return res.statusCode == 200;
     } catch (e) {
       debugPrint('[CloudDriveService] renameDriveFile error: $e');
@@ -2313,10 +2372,19 @@ class CloudDriveService with ChangeNotifier {
     if (!isLoggedIn) return false;
     try {
       final url = Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId');
-      final res = await http.delete(
+      var res = await http.delete(
         url,
         headers: {'Authorization': 'Bearer $_accessToken'},
       );
+      if (res.statusCode == 401) {
+        final refreshed = await refreshAccessToken();
+        if (refreshed) {
+          res = await http.delete(
+            url,
+            headers: {'Authorization': 'Bearer $_accessToken'},
+          );
+        }
+      }
       return res.statusCode == 204 || res.statusCode == 200;
     } catch (e) {
       debugPrint('[CloudDriveService] deleteDriveFile error: $e');
@@ -2502,6 +2570,10 @@ class CloudDriveService with ChangeNotifier {
             }
           } catch (_) {}
           return true;
+        } else if (response.statusCode == 401 && attempt == 0) {
+          debugPrint('[CloudDriveService] ⚠️ Google Drive 401 on uploadBytesToDrive. Refreshing token...');
+          final refreshed = await refreshAccessToken();
+          if (refreshed) continue;
         }
         return false;
       } catch (e) {
@@ -2673,7 +2745,7 @@ class CloudDriveService with ChangeNotifier {
         'mimeType': 'application/vnd.google-apps.folder',
         if (targetParent != null && targetParent.isNotEmpty) 'parents': [targetParent],
       };
-      final res = await http.post(
+      var res = await http.post(
         Uri.parse('https://www.googleapis.com/drive/v3/files'),
         headers: {
           'Authorization': 'Bearer $_accessToken',
@@ -2681,6 +2753,20 @@ class CloudDriveService with ChangeNotifier {
         },
         body: jsonEncode(body),
       );
+      if (res.statusCode == 401) {
+        debugPrint('[CloudDriveService] ⚠️ Google Drive 401 on createFolderInDrive. Refreshing token...');
+        final refreshed = await refreshAccessToken();
+        if (refreshed) {
+          res = await http.post(
+            Uri.parse('https://www.googleapis.com/drive/v3/files'),
+            headers: {
+              'Authorization': 'Bearer $_accessToken',
+              'Content-Type': 'application/json; charset=UTF-8',
+            },
+            body: jsonEncode(body),
+          );
+        }
+      }
       if (res.statusCode == 200 || res.statusCode == 201) {
         final data = jsonDecode(res.body);
         return data['id'] as String?;

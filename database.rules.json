@@ -2,18 +2,40 @@
   "rules": {
     "eat_calls": {
       ".read": true,
-      ".write": true,
       "$doc_id": {
+        ".write": "newData.hasChildren(['schoolCode', 'grade', 'classNum'])",
         ".indexOn": ["schoolCode", "cafeteriaNum", "isOnline", "lastActive"]
       }
     },
     "demo_active_devices": {
       ".read": true,
-      ".write": true
+      "$device_id": {
+        ".write": true
+      }
     },
     "meal_votes": {
       ".read": true,
-      ".write": true
+      "$vote_key": {
+        ".write": true
+      }
+    },
+    "passkey": {
+      ".read": false,
+      ".write": false,
+      "sessions": {
+        ".read": false,
+        "$session_id": {
+          ".read": true,
+          ".write": true
+        }
+      },
+      "vaults": {
+        ".read": false,
+        "$teacher_key": {
+          ".read": true,
+          ".write": true
+        }
+      }
     }
   }
 }

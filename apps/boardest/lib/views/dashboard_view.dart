@@ -29,9 +29,11 @@ import '../services/sleep_scheduler.dart';
 import '../services/meal_call_service.dart';
 import '../services/meal_vote_service.dart';
 import '../services/demo_timetable_service.dart';
+import '../services/demo_class_allocator_service.dart';
 import 'timetable_view.dart';
 import 'boardest_pen_view.dart';
 import 'setup_wizard_view.dart';
+import 'settings_fullscreen_view.dart';
 import 'weather_view.dart';
 import 'school_calendar_view.dart';
 import 'ppt_overlay_view.dart';
@@ -61,6 +63,20 @@ import 'plugin_runner_view.dart';
 import '../services/auth_service.dart';
 import '../services/local_server_service.dart';
 import '../services/update_service.dart';
+import 'components/bst_class_main_layout.dart';
+import 'components/bst_today_timetable_strip.dart';
+import 'components/bst_app_header.dart';
+import 'components/bst_academic_schedule_card.dart';
+import 'components/bst_dual_meal_card.dart';
+import 'components/bst_tools_dock.dart';
+import 'components/bst_cloud_passkey_modal.dart';
+import 'components/bst_cloud_auth_modal.dart';
+import 'modals/classroom_dice_modal.dart';
+import 'modals/noise_meter_modal.dart';
+import 'modals/timer_modal.dart';
+import 'modals/app_drawer_dialog.dart';
+import 'browser_board_view.dart';
+import '../services/passkey_service.dart';
 
 class PeriodTimeRange {
   final int period; // 0 for break/lunch, 1-8 for classes
@@ -1542,7 +1558,15 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
       AppSettings? settings;
       try {
-        settings = await _storageService.getSettings();
+        final isDemo = AppConfig.isDemoMode ||
+            (kIsWeb && (Uri.base.queryParameters.containsKey('Demo') || Uri.base.queryParameters.containsKey('demo') || Uri.base.host.contains('demo')));
+        if (isDemo) {
+          AppConfig.isDemoMode = true;
+          final loaded = await _storageService.getSettings();
+          settings = await DemoClassAllocatorService.instance.allocateDemoSettings(loaded ?? AppSettings());
+        } else {
+          settings = await _storageService.getSettings();
+        }
         if (settings == null) {
           throw Exception('Settings null after loading');
         }
@@ -1627,11 +1651,20 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       }
 
       if (settings == null || settings.selectedSchool == null) {
-        setState(() {
-          _errorMessage = '학교 설정이 완료되지 않았습니다.';
-          _isLoading = false;
-        });
-        return;
+        final isDemo = AppConfig.isDemoMode ||
+            (kIsWeb && (Uri.base.queryParameters.containsKey('Demo') || Uri.base.queryParameters.containsKey('demo') || Uri.base.host.contains('demo'))) ||
+            (settings?.schoolId.toLowerCase() == 'demo');
+        if (isDemo) {
+          AppConfig.isDemoMode = true;
+          settings = await DemoClassAllocatorService.instance.allocateDemoSettings(settings ?? AppSettings());
+          _settings = settings;
+        } else {
+          setState(() {
+            _errorMessage = '학교 설정이 완료되지 않았습니다.';
+            _isLoading = false;
+          });
+          return;
+        }
       }
 
       _startMealCallListener(settings);
@@ -1653,7 +1686,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           final lessons = DemoTimetableService.getAllDemoLessons(classKey);
           final demoResult = TimetableResult(
             schoolName: '데모 중학교',
-            periodTimes: ['09:00', '09:50', '10:40', '11:30', '12:20', '13:50', '14:40'],
+            periodTimes: ['09:00', '09:50', '10:40', '11:30', '12:20', '13:50', '14:40', '15:30'],
             classCounts: {1: 10, 2: 10, 3: 10},
             lessons: lessons,
             homeroomTeachers: {},
@@ -1747,6 +1780,35 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
       _applyAutoSleepSchedule();
       _startDashboardTimer();
+
+      final isDemoModeActive = AppConfig.isDemoMode ||
+          _settings.schoolId.toLowerCase() == 'demo' ||
+          (_settings.selectedSchool?.name.contains('데모') ?? false);
+      if (isDemoModeActive) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.sports_esports_rounded, color: Color(0xFFFF9F1C)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '🎮 가상 데모 모드 진입됨 (하단 [설정]을 꾹 누르면 언제든 데모를 탈출할 수 있습니다)',
+                        style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: const Color(0xFF16161A),
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
+        });
+      }
 
       if (!_initialToolTriggered && widget.initialTool != null) {
         _initialToolTriggered = true;
@@ -2333,14 +2395,22 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     }
 
     if (_settings.isTeacherFixedRoom) {
-      final teacherName = _settings.selectedTeacherId
-          .replaceAll('*', '')
-          .trim();
-      if (teacherName.isEmpty) return [];
+      final candidates = <String>{
+        _settings.selectedTeacherId.replaceAll('*', '').replaceAll(' ', '').trim(),
+        _settings.selectedTeacher.replaceAll('*', '').replaceAll(' ', '').trim(),
+        _settings.selectedTeacherName.replaceAll('*', '').replaceAll(' ', '').trim(),
+      }..removeWhere((s) => s.isEmpty);
+
+      if (candidates.isEmpty) return [];
 
       final rawLessons = _timetableResult!.lessons.where((lesson) {
-        return lesson.weekday == day &&
-            lesson.teacher.replaceAll('*', '').trim() == teacherName;
+        if (lesson.weekday != day) return false;
+        final lt = lesson.teacher.replaceAll('*', '').replaceAll(' ', '').trim();
+        if (lt.isEmpty) return false;
+        return candidates.any((c) =>
+            lt == c ||
+            (c.length >= 2 && lt.startsWith(c)) ||
+            (lt.length >= 2 && c.startsWith(lt)));
       }).toList();
 
       if (rawLessons.isEmpty) return [];
@@ -2902,18 +2972,27 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     if (nextLesson == null) return null;
     if (_timetableResult == null) return null;
 
-    final teacherAbbr = _settings.selectedTeacherId.replaceAll('*', '').trim();
-    if (teacherAbbr.isEmpty) return null;
+    final candidates = [
+      _settings.selectedTeacherId.replaceAll('*', '').replaceAll(' ', '').trim(),
+      _settings.selectedTeacher.replaceAll('*', '').replaceAll(' ', '').trim(),
+      _settings.selectedTeacherName.replaceAll('*', '').replaceAll(' ', '').trim(),
+    ].where((s) => s.isNotEmpty).toList();
+
+    if (candidates.isEmpty) return null;
 
     final today = DateTime.now();
     final weekday = today.weekday; // 1=Mon ~ 7=Sun
     if (weekday > 5) return null; // 주말이면 null
 
-    final classInfo = _timetableResult!.findClassByTeacherAndPeriod(
-      weekday: weekday,
-      period: nextLesson.classTime,
-      teacherAbbr: teacherAbbr,
-    );
+    Map<String, int>? classInfo;
+    for (final cand in candidates) {
+      classInfo = _timetableResult!.findClassByTeacherAndPeriod(
+        weekday: weekday,
+        period: nextLesson.classTime,
+        teacherAbbr: cand,
+      );
+      if (classInfo != null) break;
+    }
 
     if (classInfo == null) return null;
     return '${classInfo['grade']}학년 ${classInfo['classNum']}반';
@@ -3128,6 +3207,270 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     }
   }
 
+  Widget _buildQuickTimeBtn(BuildContext ctx, DateTime current, int hour, int minute, String label) {
+    return InkWell(
+      onTap: () {
+        Navigator.pop(ctx);
+        final newDate = DateTime(current.year, current.month, current.day, hour, minute);
+        setState(() {
+          _debugTimeOverride = newDate;
+          _updateLiveSchedule();
+          if (_settings.selectedSchool != null) {
+            _fetchLunchMenu(_settings.selectedSchool!.name, newDate);
+          }
+        });
+      },
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.white.withOpacity(0.12)),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(color: Color(0xFF00F5D4), fontSize: 11, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openDebugDatePicker() async {
+    final current = _debugTimeOverride ?? DateTime.now();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16161A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.edit_calendar_rounded, color: Color(0xFF00F5D4)),
+            SizedBox(width: 8),
+            Text('일자 및 시간 디버깅', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '현재 설정: ${current.year}년 ${current.month}월 ${current.day}일 ${current.hour.toString().padLeft(2, '0')}:${current.minute.toString().padLeft(2, '0')}',
+              style: const TextStyle(color: Color(0xFF00F5D4), fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '원하는 날짜와 시간을 지정하여 특정 교시의 시간표와 급식을 시뮬레이션할 수 있습니다.',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    setState(() {
+                      final prev = current.subtract(const Duration(days: 1));
+                      _debugTimeOverride = prev;
+                      _updateLiveSchedule();
+                      if (_settings.selectedSchool != null) {
+                        _fetchLunchMenu(_settings.selectedSchool!.name, prev);
+                      }
+                    });
+                  },
+                  icon: const Icon(Icons.arrow_back, size: 14),
+                  label: const Text('◀ 어제'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    setState(() {
+                      final next = current.add(const Duration(days: 1));
+                      _debugTimeOverride = next;
+                      _updateLiveSchedule();
+                      if (_settings.selectedSchool != null) {
+                        _fetchLunchMenu(_settings.selectedSchool!.name, next);
+                      }
+                    });
+                  },
+                  icon: const Icon(Icons.arrow_forward, size: 14),
+                  label: const Text('내일 ▶'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Text('시간/분 미세 조정 (실시간 시뮬레이션):', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                ActionChip(
+                  label: const Text('-1분'),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    setState(() {
+                      _debugTimeOverride = current.subtract(const Duration(minutes: 1));
+                      _updateLiveSchedule();
+                    });
+                  },
+                ),
+                ActionChip(
+                  label: const Text('+1분'),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    setState(() {
+                      _debugTimeOverride = current.add(const Duration(minutes: 1));
+                      _updateLiveSchedule();
+                    });
+                  },
+                ),
+                ActionChip(
+                  label: const Text('-5분'),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    setState(() {
+                      _debugTimeOverride = current.subtract(const Duration(minutes: 5));
+                      _updateLiveSchedule();
+                    });
+                  },
+                ),
+                ActionChip(
+                  label: const Text('+5분'),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    setState(() {
+                      _debugTimeOverride = current.add(const Duration(minutes: 5));
+                      _updateLiveSchedule();
+                    });
+                  },
+                ),
+                ActionChip(
+                  label: const Text('-10분'),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    setState(() {
+                      _debugTimeOverride = current.subtract(const Duration(minutes: 10));
+                      _updateLiveSchedule();
+                    });
+                  },
+                ),
+                ActionChip(
+                  label: const Text('+10분'),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    setState(() {
+                      _debugTimeOverride = current.add(const Duration(minutes: 10));
+                      _updateLiveSchedule();
+                    });
+                  },
+                ),
+                ActionChip(
+                  label: const Text('-1시간'),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    setState(() {
+                      _debugTimeOverride = current.subtract(const Duration(hours: 1));
+                      _updateLiveSchedule();
+                    });
+                  },
+                ),
+                ActionChip(
+                  label: const Text('+1시간'),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    setState(() {
+                      _debugTimeOverride = current.add(const Duration(hours: 1));
+                      _updateLiveSchedule();
+                    });
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Text('빠른 교시 이동:', style: TextStyle(color: Colors.white54, fontSize: 11)),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _buildQuickTimeBtn(ctx, current, 9, 20, '1교시(09:20)'),
+                _buildQuickTimeBtn(ctx, current, 10, 20, '2교시(10:20)'),
+                _buildQuickTimeBtn(ctx, current, 12, 40, '점심(12:40)'),
+                _buildQuickTimeBtn(ctx, current, 13, 40, '5교시(13:40)'),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          if (_debugTimeOverride != null)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                setState(() {
+                  _debugTimeOverride = null;
+                  _updateLiveSchedule();
+                  if (_settings.selectedSchool != null) {
+                    _fetchLunchMenu(_settings.selectedSchool!.name, DateTime.now());
+                  }
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('🔄 실제 오늘 날짜/시간으로 복귀되었습니다.')),
+                );
+              },
+              child: const Text('오늘로 초기화', style: TextStyle(color: Colors.orangeAccent)),
+            ),
+          OutlinedButton.icon(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final time = await showTimePicker(
+                context: context,
+                initialTime: TimeOfDay(hour: current.hour, minute: current.minute),
+              );
+              if (time != null) {
+                final newDate = DateTime(current.year, current.month, current.day, time.hour, time.minute);
+                setState(() {
+                  _debugTimeOverride = newDate;
+                  _updateLiveSchedule();
+                });
+              }
+            },
+            icon: const Icon(Icons.access_time_rounded, size: 16),
+            label: const Text('시간 변경'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00F5D4),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: current,
+                firstDate: DateTime(2020),
+                lastDate: DateTime(2035),
+              );
+              if (picked != null) {
+                final newDate = DateTime(picked.year, picked.month, picked.day, current.hour, current.minute);
+                setState(() {
+                  _debugTimeOverride = newDate;
+                  _updateLiveSchedule();
+                  if (_settings.selectedSchool != null) {
+                    _fetchLunchMenu(_settings.selectedSchool!.name, newDate);
+                  }
+                });
+              }
+            },
+            icon: const Icon(Icons.calendar_month_rounded, size: 16),
+            label: const Text('날짜 선택'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openWeeklyTimetable() async {
     if (_settings.selectedSchool == null) return;
     await Navigator.of(context).push(
@@ -3142,7 +3485,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     _loadPreferencesAndFetch(); // Reload settings in case they changed
   }
 
-  /// 설정 메뉴 타일 (바텀 시트용)
+  /// 설정 메뉴 타일 (바텀 시트용 - 모던 글래스모피즘)
   Widget _buildSettingsMenuTile({
     required IconData icon,
     required Color color,
@@ -3150,32 +3493,56 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     required String subtitle,
     required double scale,
     required VoidCallback onTap,
+    Widget? trailing,
   }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14 * scale),
+        borderRadius: BorderRadius.circular(16 * scale),
+        splashColor: color.withValues(alpha: 0.15),
+        highlightColor: color.withValues(alpha: 0.08),
         child: Container(
           padding: EdgeInsets.symmetric(
             horizontal: 16 * scale,
-            vertical: 14 * scale,
+            vertical: 12 * scale,
           ),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(14 * scale),
-            border: Border.all(color: color.withValues(alpha: 0.25)),
+            color: const Color(0xFF1E212B).withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(16 * scale),
+            border: Border.all(
+              color: color.withValues(alpha: 0.22),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 10 * scale,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           child: Row(
             children: [
               Container(
-                width: 40 * scale,
-                height: 40 * scale,
+                width: 42 * scale,
+                height: 42 * scale,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10 * scale),
+                  gradient: LinearGradient(
+                    colors: [
+                      color.withValues(alpha: 0.25),
+                      color.withValues(alpha: 0.08),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12 * scale),
+                  border: Border.all(
+                    color: color.withValues(alpha: 0.4),
+                    width: 1.2,
+                  ),
                 ),
-                child: Icon(icon, color: color, size: 22 * scale),
+                child: Icon(icon, color: color, size: 21 * scale),
               ),
               SizedBox(width: 14 * scale),
               Expanded(
@@ -3186,8 +3553,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       label,
                       style: GoogleFonts.notoSansKr(
                         color: Colors.white,
-                        fontSize: 15 * scale,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 14.5 * scale,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     SizedBox(height: 2 * scale),
@@ -3195,17 +3562,26 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       subtitle,
                       style: GoogleFonts.notoSansKr(
                         color: const Color(0xFF94A1B2),
-                        fontSize: 12 * scale,
+                        fontSize: 11.5 * scale,
+                        height: 1.25,
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: color.withValues(alpha: 0.5),
-                size: 20 * scale,
-              ),
+              trailing ??
+                  Container(
+                    padding: EdgeInsets.all(6 * scale),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.04),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      color: color.withValues(alpha: 0.6),
+                      size: 18 * scale,
+                    ),
+                  ),
             ],
           ),
         ),
@@ -3213,6 +3589,20 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
+  Widget _buildSettingsSectionHeader(String title, double scale) {
+    return Padding(
+      padding: EdgeInsets.only(left: 4 * scale, bottom: 8 * scale, top: 4 * scale),
+      child: Text(
+        title,
+        style: GoogleFonts.notoSansKr(
+          color: const Color(0xFF00F5D4),
+          fontSize: 12 * scale,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
   /// [비밀 데모 제어판] 데모 버전에서만 설정 문구를 길게 누를 때 실행되는 비밀 제어 모달
   void _showDemoSecretControllerDialog() async {
     final isDemo = AppConfig.isDemoMode || _settings.schoolId.toLowerCase() == 'demo';
@@ -3409,388 +3799,137 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
+  void _onSettingsLongPress() {
+    final isDemo = AppConfig.isDemoMode ||
+        _settings.schoolId.toLowerCase() == 'demo' ||
+        (_settings.selectedSchool?.name.contains('데모') ?? false);
+    if (isDemo) {
+      showDialog(
+        context: context,
+        builder: (dialogCtx) => AlertDialog(
+          backgroundColor: const Color(0xFF16161A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.exit_to_app_rounded, color: Color(0xFFFF9F1C), size: 26),
+              const SizedBox(width: 10),
+              Text(
+                'Demo 탈출',
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            '가상 데모 모드를 종료하고, 시작 마법사(OOBE)로 돌아가시겠습니까?',
+            style: GoogleFonts.notoSansKr(
+              color: const Color(0xFF94A1B2),
+              fontSize: 14,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: Text(
+                '취소',
+                style: GoogleFonts.notoSansKr(color: Colors.white70),
+              ),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4565),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                Navigator.pop(dialogCtx);
+                await _exitDemoMode();
+              },
+              icon: const Icon(Icons.logout_rounded, size: 18),
+              label: Text(
+                'Demo 탈출',
+                style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      _openSettingsWizard();
+    }
+  }
+
+  Future<void> _exitDemoMode() async {
+    AppConfig.isDemoMode = false;
+    final clearedSettings = _settings.copyWith(
+      isSetupComplete: false,
+      schoolId: '',
+      classNickname: '',
+    );
+    await _storageService.saveSettings(clearedSettings);
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const SetupWizardView()),
+      );
+    }
+  }
+
   void _openSettingsWizard() async {
-    if (AppConfig.isDemoMode) {
+    final isDemo = AppConfig.isDemoMode ||
+        _settings.schoolId.toLowerCase() == 'demo' ||
+        (_settings.selectedSchool?.name.contains('데모') ?? false);
+    if (isDemo) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🔒 데모 모드에서는 설정을 변경할 수 없습니다.'),
-          backgroundColor: Colors.orange,
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.lock_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '🔒 데모 모드에서는 설정을 변경할 수 없습니다.\n([설정] 버튼을 1.5초간 꾹 누르면 데모를 탈출할 수 있습니다)',
+                  style: GoogleFonts.notoSansKr(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          action: SnackBarAction(
+            label: '데모 탈출',
+            textColor: const Color(0xFFFF9F1C),
+            onPressed: _onSettingsLongPress,
+          ),
+          backgroundColor: const Color(0xFFEF4565),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 4),
         ),
       );
       return;
     }
-    // 설정 메뉴 바텀 시트 (설정 / 로그아웃 / 탈퇴)
-    final scale = _settings.scaleFactor;
+
     _pauseDashboardTimer();
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF16161A),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24 * scale)),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
-        ),
-        padding: EdgeInsets.fromLTRB(
-          24 * scale,
-          20 * scale,
-          24 * scale,
-          32 * scale,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 40 * scale,
-                height: 4 * scale,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            SizedBox(height: 20 * scale),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '설정',
-                  style: GoogleFonts.notoSansKr(
-                    color: Colors.white,
-                    fontSize: 18 * scale,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (AppConfig.isDemoMode || _settings.schoolId.toLowerCase() == 'demo')
-                  GestureDetector(
-                    onLongPress: () {
-                      Navigator.pop(sheetCtx);
-                      _showDemoSecretControllerDialog();
-                    },
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 4 * scale),
-                      decoration: BoxDecoration(
-                        color: Colors.purple.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(8 * scale),
-                        border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.5)),
-                      ),
-                      child: Text(
-                        'Boardest Demo 버전입니다.',
-                        style: GoogleFonts.notoSansKr(
-                          color: Colors.purpleAccent,
-                          fontSize: 12 * scale,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            SizedBox(height: 16 * scale),
-            _buildSettingsMenuTile(
-              icon: Icons.tune_rounded,
-              color: const Color(0xFF7F5AF0),
-              label: '앱 설정',
-              subtitle: '학교, 시간표, 시스템 앱 설정',
-              scale: scale,
-              onTap: () => Navigator.pop(sheetCtx, 'settings'),
-            ),
-            SizedBox(height: 10 * scale),
-            _buildSettingsMenuTile(
-              icon: Icons.meeting_room_rounded,
-              color: const Color(0xFF2EC4B6),
-              label: '특별실 모드 전환',
-              subtitle: _settings.specialClassroomMode
-                  ? '특별실 사용 중 (${_settings.selectedTeacher}교사) — 클릭해 일반교실로 전환'
-                  : '일반교실 사용 중 — 클릭해 특별실 교과교실로 전환',
-              scale: scale,
-              onTap: () => Navigator.pop(sheetCtx, 'toggle_special_mode'),
-            ),
-            if (!kIsWeb && Platform.isWindows) ...[
-              SizedBox(height: 10 * scale),
-              _buildSettingsMenuTile(
-                icon: Icons.bedtime_rounded,
-                color: const Color(0xFF2EC4B6),
-                label: '자동 절전',
-                subtitle: _settings.autoSleepEnabled
-                    ? '쉬는 시간·점심·하교 후 화면 끔 (켜짐)'
-                    : '꺼짐 — 탭하여 설정',
-                scale: scale,
-                onTap: () => Navigator.pop(sheetCtx, 'auto_sleep'),
-              ),
-            ],
-            if (!kIsWeb && Platform.isAndroid) ...[
-              SizedBox(height: 10 * scale),
-              _buildSettingsMenuTile(
-                icon: Icons.home_rounded,
-                color: const Color(0xFF2EC4B6),
-                label: '기본 홈 앱 (런처)',
-                subtitle: 'Boardest를 기본 홈 화면으로 설정',
-                scale: scale,
-                onTap: () => Navigator.pop(sheetCtx, 'home_launcher'),
-              ),
-            ],
-            SizedBox(height: 10 * scale),
-            _buildSettingsMenuTile(
-              icon: Icons.aspect_ratio_rounded,
-              color: const Color(0xFF00F5D4),
-              label: '화면 배율 (DPI) 조정',
-              subtitle: 'UI 크기 조절 (현재: ${(_settings.scaleFactor * 100).round()}%)',
-              scale: scale,
-              onTap: () => Navigator.pop(sheetCtx, 'dpi_scale'),
-            ),
-            if (!kIsWeb) ...[
-              SizedBox(height: 10 * scale),
-              _buildSettingsMenuTile(
-                icon: Icons.system_update_rounded,
-                color: const Color(0xFF2EC4B6),
-                label: '시스템 업데이트 확인',
-                subtitle: 'v${UpdateService.currentVersion} [채널: ${_settings.updateChannel.toUpperCase()}] — 클릭 시 최신 확인/채널 변경',
-                scale: scale,
-                onTap: () => Navigator.pop(sheetCtx, 'check_update'),
-              ),
-            ],
-            SizedBox(height: 10 * scale),
-            _buildSettingsMenuTile(
-              icon: Icons.logout_rounded,
-              color: const Color(0xFF2EC4B6),
-              label: '로그아웃',
-              subtitle: '현재 기기에서 로그아웃',
-              scale: scale,
-              onTap: () => Navigator.pop(sheetCtx, 'logout'),
-            ),
-            SizedBox(height: 10 * scale),
-            _buildSettingsMenuTile(
-              icon: Icons.person_off_rounded,
-              color: const Color(0xFFEF4565),
-              label: '회원 탈퇴',
-              subtitle: '계정 영구 삭제',
-              scale: scale,
-              onTap: () => Navigator.pop(sheetCtx, 'withdraw'),
-            ),
-          ],
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => SettingsFullscreenView(
+          settings: _settings,
+          onSettingsChanged: () {
+            _loadPreferencesAndFetch();
+          },
         ),
       ),
     );
     _resumeDashboardTimer();
-
-    if (!mounted) return;
-    if (choice == 'settings') {
-      final setupComplete = _settings.isSetupComplete;
-      _pauseDashboardTimer();
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) =>
-              SetupWizardView(startWithStepList: setupComplete),
-        ),
-      );
-      _resumeDashboardTimer();
-      _loadPreferencesAndFetch();
-    } else if (choice == 'toggle_special_mode') {
-      if (_settings.specialClassroomMode) {
-        // 특별실 모드 해제 -> 일반 교실로 전환
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (context) => BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: AlertDialog(
-              backgroundColor: const Color(0xFF0F0E17).withOpacity(0.85),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: const Color(0xFF2EC4B6).withOpacity(0.2),
-                ),
-              ),
-              title: Text(
-                '일반 교실 모드로 전환',
-                style: GoogleFonts.notoSansKr(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              content: Text(
-                '특별실 모드를 해제하고 일반 교실 시간표 모드로 돌아가시겠습니까?',
-                style: GoogleFonts.notoSansKr(color: Colors.white70),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text(
-                    '취소',
-                    style: GoogleFonts.notoSansKr(color: Colors.white54),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: Text(
-                    '전환',
-                    style: GoogleFonts.notoSansKr(
-                      color: const Color(0xFF2EC4B6),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-
-        if (confirmed == true) {
-          final newSettings = _settings.copyWith(
-            specialClassroomMode: false,
-            selectedTeacher: '',
-            selectedTeacherId: '',
-            selectedTeacherName: '',
-          );
-          await _storageService.saveSettings(newSettings);
-          setState(() {
-            _settings = newSettings;
-          });
-          _loadPreferencesAndFetch();
-
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('일반 교실 모드로 성공적으로 전환되었습니다.')),
-            );
-          }
-        }
-      } else {
-        // 일반 교실 -> 특별실 전환 (교사 약칭 2글자 입력받음)
-        final teacherController = TextEditingController();
-        final formKey = GlobalKey<FormState>();
-
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (context) => BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: AlertDialog(
-              backgroundColor: const Color(0xFF0F0E17).withOpacity(0.85),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: const Color(0xFF2EC4B6).withOpacity(0.2),
-                ),
-              ),
-              title: Text(
-                '특별실 모드로 전환',
-                style: GoogleFonts.notoSansKr(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              content: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '특별실에서 수업을 진행하는 담당 교사 약칭(2글자)을 입력하세요.',
-                      style: GoogleFonts.notoSansKr(
-                        color: Colors.white70,
-                        fontSize: 13 * scale,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: teacherController,
-                      style: GoogleFonts.notoSansKr(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: '예: 김희, 이정, 홍길',
-                        hintStyle: GoogleFonts.notoSansKr(
-                          color: Colors.white30,
-                        ),
-                        filled: true,
-                        fillColor: Colors.white.withOpacity(0.03),
-                        enabledBorder: OutlineInputBorder(
-                          borderSide: BorderSide(
-                            color: Colors.white.withOpacity(0.08),
-                          ),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderSide: const BorderSide(
-                            color: Color(0xFF2EC4B6),
-                          ),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().length != 2) {
-                          return '정확히 2글자의 교사명을 입력해 주세요.';
-                        }
-                        return null;
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text(
-                    '취소',
-                    style: GoogleFonts.notoSansKr(color: Colors.white54),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    if (formKey.currentState?.validate() == true) {
-                      Navigator.of(context).pop(true);
-                    }
-                  },
-                  child: Text(
-                    '전환 및 저장',
-                    style: GoogleFonts.notoSansKr(
-                      color: const Color(0xFF2EC4B6),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-    } else if (choice == 'logout') {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF16161A),
-          title: Text('로그아웃', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
-          content: Text('로그아웃 시 현재 기기 설정이 초기화됩니다. 로그아웃하시겠습니까?', style: GoogleFonts.notoSansKr(color: Colors.white70)),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('취소', style: GoogleFonts.notoSansKr(color: Colors.white54))),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2EC4B6)),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text('로그아웃', style: GoogleFonts.notoSansKr(color: Colors.black, fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      );
-      if (confirmed == true) {
-        await AuthService().logout();
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.clear();
-        if (mounted) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const SetupWizardView()),
-            (route) => false,
-          );
-        }
-      }
-    } else if (choice == 'home_launcher') {
-      _showHomeLauncherDialog();
-    } else if (choice == 'check_update') {
-      _showUpdateChannelDialog();
-    } else if (choice == 'dpi_scale') {
-      _showDpiScaleDialog();
-    } else if (choice == 'withdraw') {
-      await _showWithdrawDialog();
-    }
+    _loadPreferencesAndFetch();
   }
 
   void _showUpdateChannelDialog() {
@@ -4483,8 +4622,29 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                     SizedBox(height: 24 * scale),
                     // Actions
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
+                        if (_debugTimeOverride != null)
+                          TextButton.icon(
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFFEF4565),
+                            ),
+                            icon: Icon(Icons.history_rounded, size: 16 * scale),
+                            label: Text(
+                              '실시간 복원',
+                              style: GoogleFonts.notoSansKr(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13 * scale,
+                              ),
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _debugTimeOverride = null;
+                              });
+                              _loadPreferencesAndFetch();
+                              Navigator.pop(dialogCtx);
+                            },
+                          ),
+                        const Spacer(),
                         TextButton(
                           onPressed: () => Navigator.pop(dialogCtx),
                           child: Text(
@@ -4974,6 +5134,44 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     final todayLessons = _getLessonsForDay(displayWeekday);
     final scale = AppPaths.adaptiveUiScale(context, _settings.scaleFactor);
 
+    String remainingTimeText = '';
+    String clockRemainingDetailText = '';
+    double? clockRemainingProgress;
+
+    if (_currentPeriod != null) {
+      final diff = _currentPeriod!.end.difference(_now);
+      final minutes = diff.inMinutes;
+      final seconds = diff.inSeconds % 60;
+      final totalSec = _currentPeriod!.end.difference(_currentPeriod!.start).inSeconds;
+      final elapsedSec = _now.difference(_currentPeriod!.start).inSeconds;
+      if (totalSec > 0) {
+        clockRemainingProgress = (elapsedSec / totalSec).clamp(0.0, 1.0);
+      }
+
+      if (diff.inSeconds > 0) {
+        final totalMinutes = diff.inSeconds ~/ 60;
+        final secStr = seconds > 0 ? ' $seconds초' : '';
+        clockRemainingDetailText = _currentPeriod!.isClass
+            ? '${_currentPeriod!.period}교시 종료까지 $totalMinutes분$secStr 남음'
+            : '쉬는시간 $totalMinutes분$secStr 남음';
+        remainingTimeText = _currentPeriod!.isClass
+            ? '수업 종료까지 $totalMinutes분$secStr'
+            : '쉬는 시간 $totalMinutes분$secStr 남음';
+      } else {
+        clockRemainingDetailText = '수업 준비 중';
+      }
+    }
+
+    final activeDday = _activeDdayEvent;
+    String? ddayLabel;
+    if (activeDday != null) {
+      final diffDays = DateTime(activeDday.date.year, activeDday.date.month, activeDday.date.day)
+          .difference(_todayDateOnly)
+          .inDays;
+      final ddayNum = diffDays == 0 ? 'D-Day' : (diffDays > 0 ? 'D-$diffDays' : 'D+${diffDays.abs()}');
+      ddayLabel = '$ddayNum ${activeDday.title}';
+    }
+
     final dashboardScaffold = MediaQuery(
       data: MediaQuery.of(
         context,
@@ -5013,84 +5211,113 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             ),
 
             SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // 1:4:1 황금비 분할: 일과표(1) : 시계 및 메인(4) : 런처(1)
-                    // Col 1: Left - 오늘의 시간표 (flex: 1)
-                    Expanded(
-                      flex: 1,
-                      child: _buildTodayTimetablePanel(todayLessons, isWeekend),
-                    ),
-                    const SizedBox(width: 14),
-
-                    // Col 2: Center - 시계 (상단 높이 flex 5) & 수업/광고판 (하단 높이 flex 8) (flex: 4)
-                    Expanded(
-                      flex: 4,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // 상단 행: 와이드 초대형 시계 카드 (디지털 시계 크기 및 비율 강화)
-                          Expanded(
-                            flex: 5,
-                            child: _buildPptClockCard(dateString),
-                          ),
-                          SizedBox(height: 14 * scale),
-
-                          // 하단 행: [지금 시간표 (flex: 7)] : [광고판 / Cloud / USB (flex: 4)]
-                          Builder(
-                            builder: (context) {
-                              final isCloudActive = !BstCloudService.isCloudFeatureDisabled &&
-                                  BstCloudService.instance.activeToken != null &&
-                                  !_hideCloudPanel;
-
-                              return Expanded(
-                                flex: 8,
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    // 1. 좌측 영역: flex: 7 (광활한 메인 영역)
-                                    //    교사 Cloud 연결 시 -> Cloud 패널 (수업 자료 탐색기)이 좌측을 넓게 차지!
-                                    //    평상 시             -> 지금 시간표 (수업 카드)
-                                    Expanded(
-                                      flex: 7,
-                                      child: isCloudActive
-                                          ? _buildFullCloudPanel(scale)
-                                          : _buildPptSubjectCard(todayLessons, isExpandedDock: false),
-                                    ),
-                                    SizedBox(width: 12 * scale),
-
-                                    // 2. 우측 영역: flex: 4 (보조/급식/USB 영역)
-                                    //    교사 Cloud 연결 시 -> 광고판 위치에 "지금 시간표" 컴팩트 배치!
-                                    //    USB 연결 시        -> USB 패널 (Cloud 대체)
-                                    //    평상 시            -> 오늘의 급식 식단 카드
-                                    Expanded(
-                                      flex: 4,
-                                      child: isCloudActive
-                                          ? _buildCompactCurrentLessonCard(_currentLesson, scale)
-                                          : (_isUsbConnected
-                                              ? _buildFullUsbPanel(scale)
-                                              : _buildNeisMealCard(scale)),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-
-                    // Col 3: Right - 런처 패널 (flex: 1)
-                    Expanded(
-                      flex: 1,
-                      child: _buildRightSideLauncherPanel(scale),
-                    ),
-                  ],
-                ),
+              child: BstClassMainLayout(
+                appName: kIsWeb
+                    ? (_settings.specialClassroomMode ? 'Class Teacher' : 'Class')
+                    : (_settings.specialClassroomMode ? 'Teacher PRO' : 'Class PRO'),
+                schoolName: _settings.selectedSchool?.name ?? (_settings.schoolId.isNotEmpty ? _settings.schoolId : '보데스트 중학교'),
+                gradeClass: '${_settings.selectedGrade}학년 ${_settings.selectedClass}반',
+                isSpecialRoom: _settings.specialClassroomMode,
+                specialSubjectName: _settings.selectedSubject.isNotEmpty ? _settings.selectedSubject : null,
+                showCloudFiles: !_hideCloudPanel,
+                cloudFilesWidget: _buildInlineCloudDockPanel(_settings.scaleFactor),
+                periods: todayLessons.map((l) => TimetablePeriodItem(
+                  period: l.classTime,
+                  subject: l.subject,
+                  isCurrent: _currentLesson?.classTime == l.classTime,
+                  targetClass: (_settings.specialClassroomMode && l.grade > 0 && l.classNum > 0)
+                      ? '${l.grade}-${l.classNum}반'
+                      : (l.subject.isNotEmpty ? l.subject : null),
+                )).toList(),
+                onPeriodTap: (p) => _openWeeklyTimetable(),
+                getTextbookPath: (subject) => _settings.getTextbookPath(subject, grade: _settings.selectedGrade),
+                getTextbookBytes: _getTextbookBytesForSubject,
+                dateString: dateString,
+                ddayLabel: ddayLabel,
+                onDdayLongPress: _openSchoolScheduleDdayPicker,
+                currentPeriodStatus: _currentLesson != null
+                    ? '● ${_currentLesson!.classTime}교시 ${_currentLesson!.subject} 진행 중'
+                    : '수업 준비 중',
+                onClockLongPress: _openDebugDatePicker,
+                clockRemainingDetailText: clockRemainingDetailText,
+                clockRemainingProgress: clockRemainingProgress,
+                currentSubject: _currentLesson != null
+                    ? _currentLesson!.subject
+                    : (_nextLesson?.subject ?? '수업 없음'),
+                subjectDescription: _currentLesson != null
+                    ? '${_settings.selectedGrade}학년 교과서 • 수업 진행 중'
+                    : (_nextLesson != null
+                        ? '쉬는 시간 • ${_nextLesson!.classTime}교시 교과서 준비'
+                        : '오늘 수업 일과 종료'),
+                onLessonInfoTap: _openTextbookProModal,
+                nextSubject: _nextLesson?.subject ?? '일과 종료',
+                nextSubjectRoom: _nextLesson != null ? '${_nextLesson!.classTime}교시 예정' : '',
+                subjectIcon: '📘',
+                currentTextbookImagePath: _currentLesson != null
+                    ? _settings.getTextbookPath(_currentLesson!.subject, grade: _settings.selectedGrade)
+                    : (_nextLesson != null
+                        ? _settings.getTextbookPath(_nextLesson!.subject, grade: _settings.selectedGrade)
+                        : null),
+                currentTextbookBytes: _currentLesson != null
+                    ? _getTextbookBytesForSubject(_currentLesson!.subject)
+                    : (_nextLesson != null
+                        ? _getTextbookBytesForSubject(_nextLesson!.subject)
+                        : null),
+                remainingTimeText: remainingTimeText,
+                todayDishes: _todayMeal?.dishes ?? [],
+                todayCalories: '745 kcal',
+                tomorrowDishes: _tomorrowMeal?.dishes ?? [],
+                tomorrowCalories: '682 kcal',
+                tomorrowDateLabel: '다음 급식',
+                isCloudActive: BstCloudService.instance.activeToken != null,
+                onCloudToggle: _openCloudPairingModal,
+                isPro: !kIsWeb,
+                isWindows: !kIsWeb && Platform.isWindows,
+                onToolTap: (tool) {
+                  switch (tool) {
+                    case BstToolType.pen:
+                      _openUnifiedPenDialog();
+                      break;
+                    case BstToolType.timer:
+                      _openTimer();
+                      break;
+                    case BstToolType.random:
+                      _openRandomPicker();
+                      break;
+                    case BstToolType.calculator:
+                      _openCalculator();
+                      break;
+                    case BstToolType.web:
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => BrowserBoardView(
+                          scaleFactor: _settings.scaleFactor,
+                          onBack: () => Navigator.of(context).pop(),
+                        ),
+                      ));
+                      break;
+                    case BstToolType.pdf:
+                      _openTextbookProModal();
+                      break;
+                    case BstToolType.cloud:
+                      _openCloudPairingModal();
+                      break;
+                    case BstToolType.settings:
+                      _openSettingsWizard();
+                      break;
+                  }
+                },
+                onAddAppTap: _openAppDrawer,
+                onMinimizeTap: () async {
+                  if (!kIsWeb && Platform.isWindows) {
+                    await windowManager.minimize();
+                  }
+                },
+                onCloseTap: () async {
+                  if (!kIsWeb && Platform.isWindows) {
+                    await windowManager.close();
+                  }
+                },
+                onLogoTap: _openWeeklyTimetable,
               ),
             ),
 
@@ -5620,23 +5847,41 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                             ],
                                           ),
 
-                                          // Center: Subject Name
+                                          // Center: Subject Name / Visiting Class in Special Room Mode
                                           Center(
-                                            child: Text(
-                                              subject,
-                                              style: GoogleFonts.notoSansKr(
-                                                color: isCurrent ? const Color(0xFF00F5D4) : Colors.white,
-                                                fontSize: 15.5 * scale,
-                                                fontWeight: FontWeight.bold,
-                                                shadows: [
-                                                  Shadow(
-                                                    color: Colors.black.withValues(alpha: 0.9),
-                                                    blurRadius: 4,
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  _settings.specialClassroomMode
+                                                      ? '${lesson.grade}학년 ${lesson.classNum}반'
+                                                      : subject,
+                                                  style: GoogleFonts.notoSansKr(
+                                                    color: isCurrent ? const Color(0xFF00F5D4) : Colors.white,
+                                                    fontSize: (_settings.specialClassroomMode ? 14.0 : 15.5) * scale,
+                                                    fontWeight: FontWeight.bold,
+                                                    shadows: [
+                                                      Shadow(
+                                                        color: Colors.black.withValues(alpha: 0.9),
+                                                        blurRadius: 4,
+                                                      ),
+                                                    ],
                                                   ),
-                                                ],
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                if (_settings.specialClassroomMode && lesson.subject.isNotEmpty)
+                                                  Text(
+                                                    lesson.subject,
+                                                    style: GoogleFonts.notoSansKr(
+                                                      color: isCurrent ? const Color(0xFF74F8E5) : Colors.white70,
+                                                      fontSize: 10 * scale,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                              ],
                                             ),
                                           ),
 
@@ -5760,6 +6005,35 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 7 * scale, vertical: 3 * scale),
+                    decoration: BoxDecoration(
+                      color: AppConfig.isLiteMode
+                          ? const Color(0xFF2EC4B6).withValues(alpha: 0.18)
+                          : (!kIsWeb
+                              ? const Color(0xFF7F5AF0).withValues(alpha: 0.22)
+                              : const Color(0xFF00F5D4).withValues(alpha: 0.15)),
+                      borderRadius: BorderRadius.circular(8 * scale),
+                      border: Border.all(
+                        color: AppConfig.isLiteMode
+                            ? const Color(0xFF2EC4B6).withValues(alpha: 0.5)
+                            : (!kIsWeb
+                                ? const Color(0xFF7F5AF0).withValues(alpha: 0.5)
+                                : const Color(0xFF00F5D4).withValues(alpha: 0.4)),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      AppConfig.isLiteMode ? 'LITE' : (!kIsWeb ? 'PRO' : 'CLASS'),
+                      style: GoogleFonts.outfit(
+                        color: AppConfig.isLiteMode
+                            ? const Color(0xFF2EC4B6)
+                            : (!kIsWeb ? const Color(0xFFE0B0FF) : const Color(0xFF00F5D4)),
+                        fontSize: 11 * scale,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                   if (kIsWeb) ...[
                     SizedBox(width: 8 * scale),
                     // Aspect Ratio & Fullscreen Switcher (짧게 탭: 전체화면, 길게 꾹: 16:9/4:3 화면비 토글)
@@ -5804,10 +6078,13 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               ),
             ],
           ),
-          // Center: Massive Ultra-Large Digital Clock
+          // Center: Massive Ultra-Large Digital Clock (꾹 누르면 날짜/시간 변경)
           Expanded(
-            child: Center(
-              child: FittedBox(
+            child: GestureDetector(
+              onLongPress: _setDebugTime,
+              behavior: HitTestBehavior.opaque,
+              child: Center(
+                child: FittedBox(
                   fit: BoxFit.contain,
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: 4 * scale),
@@ -5824,6 +6101,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 ),
               ),
             ),
+          ),
           // Dynamic Animated Progress Gauge Bar (실시간 진행 게이지 바)
           if (_currentPeriod != null && _periodProgress > 0) ...[
             SizedBox(height: 6 * scale),
@@ -6232,7 +6510,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 viewingMonth = month;
               });
               // 학교명 정확히 전달 (schoolId 대신 selectedSchool?.name 우선)
-              final schoolName = _settings.selectedSchool?.name ?? (_settings.schoolId.isNotEmpty ? _settings.schoolId : '양동중학교');
+              final schoolName = _settings.selectedSchool?.name ?? (_settings.schoolId.isNotEmpty ? _settings.schoolId : '보데스트 중학교');
               final mealMap = await _neisService.fetchMonthMeals(schoolName, month.year, month.month);
               final sId = _settings.schoolId.isNotEmpty ? _settings.schoolId : (_settings.selectedSchool?.name ?? 'Demo');
               final Map<String, Map<String, int>> historyVotes = {};
@@ -8360,13 +8638,40 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
-      // --- 6. Bottom Right 4-Tool Grid (1열 4행: 플러그인(비활성화), 클라우드, 계산기, 설정) ---
+  Future<void> _openCloudPairingModal() async {
+    if (BstCloudService.instance.activeToken != null) {
+      setState(() {
+        _hideCloudPanel = !_hideCloudPanel;
+      });
+      return;
+    }
+
+    await BstCloudAuthModal.show(
+      context,
+      scale: _settings.scaleFactor,
+      schoolName: _settings.selectedSchool?.name ?? (_settings.schoolId.isNotEmpty ? _settings.schoolId : '보데스트 중학교'),
+      gradeClass: _settings.specialClassroomMode
+          ? (_settings.selectedSubject.isNotEmpty ? '${_settings.selectedSubject} 전용교실' : '전용교실')
+          : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반',
+      onUnlocked: () {
+        if (mounted) {
+          setState(() {
+            _hideCloudPanel = false;
+          });
+          _refreshCloudFiles();
+        }
+      },
+    );
+  }
+
+  // --- 6. Bottom Right 4-Tool Grid (1열 4행: 플러그인(비활성화), 클라우드, 계산기, 설정) ---
   Widget _buildBottomPpt4Tools() {
     final scale = _settings.scaleFactor;
+    final isCloudOn = BstCloudService.instance.activeToken != null;
 
     final tools = [
       {'name': '플러그인', 'icon': Icons.extension_rounded, 'action': null, 'disabled': true},
-      {'name': '클라우드', 'icon': Icons.cloud_off_rounded, 'action': null, 'disabled': true},
+      {'name': '클라우드', 'icon': isCloudOn ? Icons.cloud_done_rounded : Icons.cloud_queue_rounded, 'action': _openCloudPairingModal, 'disabled': false},
       {'name': '계산기', 'icon': Icons.calculate, 'action': _openCalculator, 'disabled': false},
       {'name': '설정', 'icon': Icons.settings, 'action': _openSettingsWizard, 'disabled': false},
     ];
@@ -8376,6 +8681,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         color: Colors.transparent,
         child: InkWell(
           onTap: disabled ? null : onTap,
+          onLongPress: (label == '설정') ? _onSettingsLongPress : null,
           borderRadius: BorderRadius.circular(12 * scale),
           child: Container(
             padding: EdgeInsets.symmetric(horizontal: 10 * scale),
@@ -8733,6 +9039,25 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     return null;
   }
 
+  Uint8List? _getTextbookBytesForSubject(String subjectTitle) {
+    if (subjectTitle.isEmpty) return null;
+    final stem = AppSettings.getSubjectStem(subjectTitle);
+    final gradeKey = '${_settings.selectedGrade}_$stem';
+    if (_inMemoryTextbookBytes.containsKey(gradeKey)) {
+      return _inMemoryTextbookBytes[gradeKey];
+    }
+    if (_inMemoryTextbookBytes.containsKey(stem)) {
+      return _inMemoryTextbookBytes[stem];
+    }
+    for (final entry in _inMemoryTextbookBytes.entries) {
+      final keyStem = AppSettings.getSubjectStem(entry.key);
+      if (entry.key == subjectTitle || keyStem == stem || entry.key.contains(stem) || stem.contains(entry.key)) {
+        return entry.value;
+      }
+    }
+    return null;
+  }
+
   String _getCorsSafeImageUrl(String rawUrl) {
     if (!kIsWeb) return rawUrl;
     if (rawUrl.isEmpty || rawUrl.startsWith('data:') || rawUrl.startsWith('blob:')) return rawUrl;
@@ -9032,21 +9357,23 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
       final hasActiveSubject =
           displayLesson != null && displayLesson.subject.isNotEmpty;
-      subjectName = hasActiveSubject ? displayLesson.subject : '일과 종료';
 
-      // 특별실 모드: '다음 X학년 Y반' 표시
-      // 일반 모드: 교사 이름 없이 교실명만 표시
-      if (_settings.specialClassroomMode &&
-          isUpcoming &&
-          displayLesson != null) {
-        final nextClass = _getNextClassForSpecialRoom(displayLesson);
-        teacherText = nextClass ?? '다음 수업 대기 중';
-      } else if (hasActiveSubject) {
-        teacherText = displayLesson!.classroom.isNotEmpty
-            ? displayLesson.classroom
-            : '교실 정보 없음';
+      // 특별실 모드: 대형 텍스트에 방문 'X학년 Y반' 표시, 하단에 '과목명 수업' 표시
+      if (_settings.specialClassroomMode && hasActiveSubject) {
+        subjectName = '${displayLesson!.grade}학년 ${displayLesson.classNum}반';
+        teacherText = isUpcoming
+            ? '다음: ${displayLesson.subject} 수업'
+            : '${displayLesson.subject} 수업 진행 중';
       } else {
-        teacherText = '오늘의 모든 수업이 끝났습니다';
+        subjectName = hasActiveSubject ? displayLesson!.subject : '일과 종료';
+
+        if (hasActiveSubject) {
+          teacherText = displayLesson!.classroom.isNotEmpty
+              ? displayLesson.classroom
+              : '교실 정보 없음';
+        } else {
+          teacherText = '오늘의 모든 수업이 끝났습니다';
+        }
       }
       classroomText = hasActiveSubject ? displayLesson!.classroom : '';
 
@@ -10885,13 +11212,19 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         return;
       }
 
-      // CDN 파이프라인 (가장 신뢰성 높은 GitHub Raw 및 Fastly CDN 우선)
-      final List<String> candidateUrls = [
-        defaultZipUrl,
-        if (zipUrl != null && zipUrl.isNotEmpty) zipUrl,
-        'https://cdn.jsdelivr.net/gh/hiJiwho/TB22-ydms@main/${grade}%ED%95%99%EB%85%84.zip',
-        'https://rawcdn.githack.com/hiJiwho/TB22-ydms/main/${grade}%ED%95%99%EB%85%84.zip',
-      ];
+      // CDN 파이프라인: 양동중학교만 TB22-ydms 허용, 타 학교는 관리자 등록 zipUrl만 사용
+      final bool isYdm = currentSchoolId == 'ydm' || currentSchoolId == '44134' || _settings.selectedSchool?.name.contains('양동') == true;
+      final List<String> candidateUrls = [];
+      if (zipUrl != null && zipUrl.isNotEmpty) {
+        candidateUrls.add(zipUrl);
+      }
+      if (isYdm) {
+        if (defaultZipUrl.isNotEmpty && !candidateUrls.contains(defaultZipUrl)) {
+          candidateUrls.add(defaultZipUrl);
+        }
+        candidateUrls.add('https://cdn.jsdelivr.net/gh/hiJiwho/TB22-ydms@main/${grade}%ED%95%99%EB%85%84.zip');
+        candidateUrls.add('https://rawcdn.githack.com/hiJiwho/TB22-ydms/main/${grade}%ED%95%99%EB%85%84.zip');
+      }
 
       http.Response? resp;
       for (final url in candidateUrls) {
@@ -11524,18 +11857,23 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          buildHeader('Bst도구', const Color(0xFF00F5D4)),
+          buildHeader(
+            AppConfig.isLiteMode ? '시간표도구' : 'Bst도구',
+            AppConfig.isLiteMode ? const Color(0xFF2EC4B6) : const Color(0xFF00F5D4),
+          ),
           SizedBox(height: 6 * scale),
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 1열 (재배치된 핵심 Bst도구 7개: 판서, Cloud, 날씨, 달력, 앱서랍, 타이머, 설정)
+                // 1열 (핵심 Bst도구)
                 Expanded(
                   child: Column(
                     children: [
-                      _buildToolSlotItem('unified_pen', '판서하기', 7, scale),
-                      _buildToolSlotItem('bst_cloud', 'Cloud', 8, scale),
+                      if (!AppConfig.isLiteMode) ...[
+                        _buildToolSlotItem('unified_pen', '판서하기', 7, scale),
+                        _buildToolSlotItem('bst_cloud', 'Cloud', 8, scale),
+                      ],
                       _buildToolSlotItem('weather', '날씨', 9, scale),
                       _buildToolSlotItem('school_calendar', '학사달력', 10, scale),
                       _buildToolSlotItem('app_drawer', '앱서랍', 11, scale),
@@ -11951,6 +12289,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         children: [
           InkWell(
             onTap: isDisabled ? null : onTap,
+            onLongPress: (slot.id == 'settings') ? _onSettingsLongPress : null,
             borderRadius: BorderRadius.circular(10),
             child: Container(
               decoration: BoxDecoration(
@@ -16353,939 +16692,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             child: Text('열기', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class ClassroomDiceModal extends StatefulWidget {
-  const ClassroomDiceModal({super.key});
-
-  @override
-  State<ClassroomDiceModal> createState() => _ClassroomDiceModalState();
-}
-
-class _ClassroomDiceModalState extends State<ClassroomDiceModal> {
-  int _diceCount = 1;
-  List<int> _diceValues = [1];
-  bool _isRolling = false;
-
-  void _rollDice() async {
-    if (_isRolling) return;
-    setState(() {
-      _isRolling = true;
-    });
-
-    for (int i = 0; i < 10; i++) {
-      await Future.delayed(const Duration(milliseconds: 80));
-      setState(() {
-        _diceValues = List.generate(
-          _diceCount,
-          (_) => (1 + (DateTime.now().microsecondsSinceEpoch % 6)),
-        );
-      });
-    }
-
-    setState(() {
-      _isRolling = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: const Color(0xFF0F0E17),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: const Color(0xFF2EC4B6).withValues(alpha: 0.3)),
-      ),
-      title: Row(
-        children: [
-          const Icon(Icons.casino_rounded, color: Color(0xFF00F5D4)),
-          const SizedBox(width: 10),
-          Text(
-            '수업 주사위',
-            style: GoogleFonts.notoSansKr(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [1, 2, 3].map((count) {
-              final isSelected = _diceCount == count;
-              return GestureDetector(
-                onTap: () {
-                  if (_isRolling) return;
-                  setState(() {
-                    _diceCount = count;
-                    _diceValues = List.generate(count, (_) => 1);
-                  });
-                },
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 6),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0xFF2EC4B6).withValues(alpha: 0.2)
-                        : Colors.white.withValues(alpha: 0.02),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isSelected
-                          ? const Color(0xFF00F5D4)
-                          : Colors.white.withValues(alpha: 0.08),
-                    ),
-                  ),
-                  child: Text(
-                    '${count}개',
-                    style: GoogleFonts.notoSansKr(
-                      color: isSelected
-                          ? const Color(0xFF00F5D4)
-                          : Colors.white60,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(_diceCount, (index) {
-              final val = _diceValues[index];
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                margin: const EdgeInsets.symmetric(horizontal: 12),
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF16161A),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: _isRolling
-                        ? const Color(0xFF00F5D4)
-                        : const Color(0xFF2EC4B6).withValues(alpha: 0.5),
-                    width: 2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color:
-                          (_isRolling
-                                  ? const Color(0xFF00F5D4)
-                                  : const Color(0xFF2EC4B6))
-                              .withValues(alpha: _isRolling ? 0.35 : 0.15),
-                      blurRadius: _isRolling ? 20 : 10,
-                      spreadRadius: _isRolling ? 2 : 0,
-                    ),
-                  ],
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '${val}',
-                  style: GoogleFonts.outfit(
-                    fontSize: 48,
-                    fontWeight: FontWeight.w900,
-                    color: _isRolling ? const Color(0xFF00F5D4) : Colors.white,
-                  ),
-                ),
-              );
-            }),
-          ),
-          const SizedBox(height: 32),
-        ],
-      ),
-      actionsPadding: const EdgeInsets.only(bottom: 20, right: 20, left: 20),
-      actions: [
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2EC4B6),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  elevation: 0,
-                ),
-                onPressed: _isRolling ? null : _rollDice,
-                child: Text(
-                  _isRolling ? '주사위 굴리는 중...' : '주사위 던지기 🎲',
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class NoiseMeterModal extends StatefulWidget {
-  const NoiseMeterModal({super.key});
-
-  @override
-  State<NoiseMeterModal> createState() => _NoiseMeterModalState();
-}
-
-class _NoiseMeterModalState extends State<NoiseMeterModal> {
-  double _decibels = 42.0;
-  String _mode = '자습'; // 자습, 모둠, 발표
-  double _threshold = 50.0;
-  bool _alertActive = false;
-  bool _isMonitoring = true;
-
-  final List<double> _history = List.generate(24, (_) => 35.0);
-
-  @override
-  void initState() {
-    super.initState();
-    _simulateDecibels();
-  }
-
-  void _simulateDecibels() async {
-    while (mounted && _isMonitoring) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      if (!mounted) break;
-
-      setState(() {
-        double base = 35.0;
-        double variance = 12.0;
-        if (_mode == '자습') {
-          base = 32.0;
-          variance = 8.0;
-        } else if (_mode == '모둠') {
-          base = 65.0;
-          variance = 20.0;
-        } else if (_mode == '발표') {
-          base = 45.0;
-          variance = 15.0;
-        }
-
-        double roll = DateTime.now().millisecond / 1000.0;
-        _decibels = base + (roll * variance);
-
-        if (roll > 0.92) {
-          _decibels += 15.0;
-        }
-
-        _alertActive = _decibels > _threshold;
-
-        _history.removeAt(0);
-        _history.add(_decibels);
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _isMonitoring = false;
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: const Color(0xFF0F0E17),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(
-          color: _alertActive
-              ? const Color(0xFFEF4565)
-              : const Color(0xFF2EC4B6).withValues(alpha: 0.3),
-          width: 1.5,
-        ),
-      ),
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.volume_up_rounded,
-                color: _alertActive
-                    ? const Color(0xFFEF4565)
-                    : const Color(0xFF00F5D4),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                '교실 소음 측정기',
-                style: GoogleFonts.notoSansKr(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: _alertActive
-                  ? const Color(0xFFEF4565).withValues(alpha: 0.15)
-                  : const Color(0xFF2EC4B6).withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              _alertActive ? '경고: 소음 초과!' : '정상 수치',
-              style: GoogleFonts.notoSansKr(
-                color: _alertActive
-                    ? const Color(0xFFEF4565)
-                    : const Color(0xFF00F5D4),
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-      content: SizedBox(
-        width: 480,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildModeTab('자습', '🤫 자습 시간'),
-                _buildModeTab('발표', '📢 발표 시간'),
-                _buildModeTab('모둠', '🗣️ 모둠 활동'),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Container(
-              height: 140,
-              width: 140,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF16161A),
-                border: Border.all(
-                  color: _alertActive
-                      ? const Color(0xFFEF4565)
-                      : const Color(0xFF2EC4B6),
-                  width: 3,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        (_alertActive
-                                ? const Color(0xFFEF4565)
-                                : const Color(0xFF2EC4B6))
-                            .withValues(alpha: 0.2),
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              alignment: Alignment.center,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _decibels.toStringAsFixed(1),
-                    style: GoogleFonts.outfit(
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      color: _alertActive
-                          ? const Color(0xFFEF4565)
-                          : Colors.white,
-                    ),
-                  ),
-                  Text(
-                    'dB',
-                    style: GoogleFonts.outfit(
-                      fontSize: 14,
-                      color: Colors.white38,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Text(
-                  '경고 임계치: ${_threshold.toInt()} dB',
-                  style: GoogleFonts.notoSansKr(
-                    color: Colors.white70,
-                    fontSize: 13,
-                  ),
-                ),
-                Expanded(
-                  child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      activeTrackColor: const Color(0xFF2EC4B6),
-                      inactiveTrackColor: Colors.white12,
-                      thumbColor: const Color(0xFF00F5D4),
-                      overlayColor: const Color(
-                        0xFF00F5D4,
-                      ).withValues(alpha: 0.2),
-                    ),
-                    child: Slider(
-                      value: _threshold,
-                      min: 40,
-                      max: 90,
-                      onChanged: (val) {
-                        setState(() {
-                          _threshold = val;
-                        });
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Container(
-              height: 60,
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF16161A),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: _history.map((dbVal) {
-                  final double h = 5 + ((dbVal - 30) / 60) * 40;
-                  final clampedH = h.clamp(5.0, 48.0);
-                  final isOver = dbVal > _threshold;
-
-                  return Container(
-                    width: 10,
-                    height: clampedH,
-                    decoration: BoxDecoration(
-                      color: isOver
-                          ? const Color(0xFFEF4565)
-                          : const Color(0xFF2CB67D),
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(3),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(
-            '닫기',
-            style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2)),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildModeTab(String targetMode, String label) {
-    final isSelected = _mode == targetMode;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _mode = targetMode;
-          if (targetMode == '자습') _threshold = 50.0;
-          if (targetMode == '발표') _threshold = 60.0;
-          if (targetMode == '모둠') _threshold = 78.0;
-        });
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFF2EC4B6).withValues(alpha: 0.2)
-              : Colors.white.withValues(alpha: 0.02),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected
-                ? const Color(0xFF00F5D4)
-                : Colors.white.withValues(alpha: 0.08),
-          ),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.notoSansKr(
-            color: isSelected ? const Color(0xFF00F5D4) : Colors.white60,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class TimerModal extends StatefulWidget {
-  const TimerModal({super.key});
-
-  @override
-  State<TimerModal> createState() => _TimerModalState();
-}
-
-class _TimerModalState extends State<TimerModal> {
-  int _secondsElapsed = 0;
-  Timer? _timer;
-  bool _isRunning = false;
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  void _toggleTimer() {
-    if (_isRunning) {
-      _timer?.cancel();
-      setState(() {
-        _isRunning = false;
-      });
-    } else {
-      setState(() {
-        _isRunning = true;
-      });
-      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (!mounted) {
-          timer.cancel();
-          return;
-        }
-        setState(() {
-          _secondsElapsed++;
-        });
-      });
-    }
-  }
-
-  void _resetTimer() {
-    _timer?.cancel();
-    setState(() {
-      _secondsElapsed = 0;
-      _isRunning = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: const Color(0xFF0F0E17),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: const Color(0xFF2EC4B6).withValues(alpha: 0.3)),
-      ),
-      title: Row(
-        children: [
-          const Icon(Icons.timer_rounded, color: Color(0xFF00F5D4)),
-          const SizedBox(width: 10),
-          Text(
-            '타이머 / 스톱워치',
-            style: GoogleFonts.notoSansKr(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '${(_secondsElapsed ~/ 60).toString().padLeft(2, '0')}:${(_secondsElapsed % 60).toString().padLeft(2, '0')}',
-            style: GoogleFonts.outfit(
-              fontSize: 64,
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF00F5D4),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _isRunning
-                      ? Colors.orange
-                      : const Color(0xFF2EC4B6),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                onPressed: _toggleTimer,
-                child: Text(_isRunning ? '일시정지' : '시작'),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFEF4565),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                onPressed: _resetTimer,
-                child: const Text('초기화'),
-              ),
-            ],
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(
-            '닫기',
-            style: GoogleFonts.notoSansKr(color: Colors.white60),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class AppDrawerDialog extends StatefulWidget {
-  final double scale;
-  final Function(String toolId)? onLaunchTool;
-  const AppDrawerDialog({super.key, required this.scale, this.onLaunchTool});
-
-  @override
-  State<AppDrawerDialog> createState() => _AppDrawerDialogState();
-}
-
-class _AppDrawerDialogState extends State<AppDrawerDialog> {
-  List<ScannedApp> _allApps = [];
-  List<ScannedApp> _filteredApps = [];
-  bool _loading = true;
-  String _searchQuery = '';
-  final TextEditingController _searchController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadApps();
-  }
-
-  Future<void> _loadApps() async {
-    try {
-      final apps = SystemAppScanner.externalAppsOnly(
-        await SystemAppScanner.scanInstalledApps(),
-      );
-      if (mounted) {
-        setState(() {
-          _allApps = apps;
-          _filteredApps = apps;
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
-    }
-  }
-
-  void _filterApps(String query) {
-    setState(() {
-      _searchQuery = query;
-      if (query.trim().isEmpty) {
-        _filteredApps = _allApps;
-      } else {
-        _filteredApps = _allApps
-            .where(
-              (app) => app.name.toLowerCase().contains(query.toLowerCase()),
-            )
-            .toList();
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final double scale = widget.scale;
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: EdgeInsets.symmetric(
-        horizontal: 60.0 * scale,
-        vertical: 40.0 * scale,
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF0F0E17).withOpacity(0.85),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withOpacity(0.08), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.5),
-              blurRadius: 20,
-              spreadRadius: 5,
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: Padding(
-              padding: EdgeInsets.all(20.0 * scale),
-              child: Column(
-                children: [
-                  // Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.apps_rounded,
-                            color: const Color(0xFF00F5D4),
-                            size: 24.0 * scale,
-                          ),
-                          SizedBox(width: 10.0 * scale),
-                          Text(
-                            '설치된 앱 목록',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 18.0 * scale,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.close_rounded,
-                          color: Colors.white60,
-                          size: 22.0 * scale,
-                        ),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 15.0 * scale),
-                  // Search Box
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.04),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: _filterApps,
-                      style: GoogleFonts.notoSansKr(
-                        color: Colors.white,
-                        fontSize: 13.0 * scale,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: '앱 이름 검색...',
-                        hintStyle: GoogleFonts.notoSansKr(
-                          color: Colors.white38,
-                          fontSize: 13.0 * scale,
-                        ),
-                        prefixIcon: Icon(
-                          Icons.search_rounded,
-                          color: Colors.white38,
-                          size: 18.0 * scale,
-                        ),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: Icon(
-                                  Icons.clear_rounded,
-                                  color: Colors.white38,
-                                  size: 18.0 * scale,
-                                ),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  _filterApps('');
-                                },
-                              )
-                            : null,
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(
-                          vertical: 12.0 * scale,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 15.0 * scale),
-                  // Grid List
-                  Expanded(
-                    child: _loading
-                        ? const Center(
-                            child: CircularProgressIndicator(
-                              color: Color(0xFF00F5D4),
-                            ),
-                          )
-                        : _filteredApps.isEmpty
-                        ? Center(
-                            child: Text(
-                              '검색 결과가 없습니다.',
-                              style: GoogleFonts.notoSansKr(
-                                color: Colors.white38,
-                                fontSize: 14.0 * scale,
-                              ),
-                            ),
-                          )
-                        : GridView.builder(
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 6,
-                                  childAspectRatio: 1.1,
-                                  crossAxisSpacing: 12.0 * scale,
-                                  mainAxisSpacing: 12.0 * scale,
-                                ),
-                            itemCount: _filteredApps.length,
-                            itemBuilder: (context, index) {
-                              final app = _filteredApps[index];
-                              final colors = [
-                                const Color(0xFF2EC4B6),
-                                const Color(0xFF00F5D4),
-                                const Color(0xFF2CB67D),
-                                const Color(0xFFFF007F),
-                                const Color(0xFF7F00FF),
-                              ];
-                              final accentColor =
-                                  colors[app.name.codeUnits.first %
-                                      colors.length];
-                              final avatar = app.name.length >= 2
-                                  ? app.name.substring(0, 2)
-                                  : app.name;
-                              final hasIcon = !kIsWeb &&
-                                  app.iconPath != null &&
-                                  app.iconPath!.isNotEmpty &&
-                                  File(app.iconPath!).existsSync();
-
-                              return Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: () {
-                                    if (app.appId.startsWith('boardest://')) {
-                                      final toolId = app.appId.replaceFirst(
-                                        'boardest://',
-                                        '',
-                                      );
-                                      if (toolId != 'main') {
-                                        widget.onLaunchTool?.call(toolId);
-                                      }
-                                      Navigator.of(context).pop();
-                                    } else {
-                                      SystemAppScanner.launchApp(app.appId);
-                                      Navigator.of(context).pop();
-                                    }
-                                  },
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.02),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: Colors.white.withOpacity(0.04),
-                                      ),
-                                    ),
-                                    padding: EdgeInsets.all(8.0 * scale),
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Container(
-                                          width: hasIcon
-                                              ? 42.0 * scale
-                                              : 32.0 * scale,
-                                          height: hasIcon
-                                              ? 42.0 * scale
-                                              : 32.0 * scale,
-                                          decoration: BoxDecoration(
-                                            color: hasIcon
-                                                ? Colors.transparent
-                                                : accentColor.withOpacity(0.15),
-                                            borderRadius: BorderRadius.circular(
-                                              8.0 * scale,
-                                            ),
-                                            border: hasIcon
-                                                ? null
-                                                : Border.all(
-                                                    color: accentColor
-                                                        .withOpacity(0.4),
-                                                    width: 1,
-                                                  ),
-                                          ),
-                                          child: hasIcon
-                                              ? ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                        8.0 * scale,
-                                                      ),
-                                                  child: Image.file(
-                                                    File(app.iconPath!),
-                                                    fit: BoxFit.contain,
-                                                    width: 42.0 * scale,
-                                                    height: 42.0 * scale,
-                                                  ),
-                                                )
-                                              : Center(
-                                                  child: Text(
-                                                    avatar,
-                                                    style:
-                                                        GoogleFonts.notoSansKr(
-                                                          fontSize: 10.0 * scale,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          color: accentColor,
-                                                        ),
-                                                  ),
-                                                ),
-                                        ),
-                                        SizedBox(height: 6.0 * scale),
-                                        Expanded(
-                                          child: Text(
-                                            app.name,
-                                            style: GoogleFonts.notoSansKr(
-                                              fontSize: 10.0 * scale,
-                                              color: Colors.white.withOpacity(
-                                                0.8,
-                                              ),
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

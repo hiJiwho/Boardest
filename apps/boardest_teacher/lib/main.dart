@@ -420,9 +420,9 @@ class _TeacherAppState extends State<TeacherApp> with WindowListener {
     return MaterialApp(
       title: 'Boardest Teacher',
       debugShowCheckedModeBanner: false,
-      theme: darkTheme,
+      theme: lightTheme,
       darkTheme: darkTheme,
-      themeMode: ThemeMode.dark,
+      themeMode: _themeMode == 'light' ? ThemeMode.light : (_themeMode == 'dark' ? ThemeMode.dark : ThemeMode.system),
       home: home,
     );
   }

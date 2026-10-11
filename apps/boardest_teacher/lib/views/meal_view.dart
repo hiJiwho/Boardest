@@ -83,7 +83,7 @@ class _MealViewState extends State<MealView> {
     try {
       final now = DateTime.now();
       _mealDateLabel = '${now.month}월 ${now.day}일 급식 식단';
-      final schoolName = _settings?.selectedSchool?.name ?? '양동중학교';
+      final schoolName = _settings?.selectedSchool?.name ?? '보데스트 중학교';
       final mealStr = await NeisService().fetchTodayMeal(schoolName, now);
       final dishes = mealStr.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
       if (mounted && dishes.isNotEmpty) {
@@ -105,41 +105,96 @@ class _MealViewState extends State<MealView> {
       final connName = _getSchoolConnName();
       final List<Map<String, dynamic>> parsed = [];
 
-      // 1. Cloudflare Worker 빠른 조회 (429 없음)
+      // 1. Firebase RTDB 직접 실시간 조회 (가장 빠르고 403 없음)
       try {
-        final workerUrl = 'https://boardest-cloud-token.jiwho.workers.dev/api/classrooms?schoolCode=$connName';
-        final workerRes = await http.get(Uri.parse(workerUrl)).timeout(const Duration(seconds: 3));
-        if (workerRes.statusCode == 200) {
-          final wData = json.decode(workerRes.body);
-          final wList = wData['classrooms'] as List? ?? [];
-          for (final c in wList) {
-            final docId = c['docId']?.toString() ?? '';
-            if (docId.isEmpty) continue;
-            final lastActiveStr = c['lastActive']?.toString() ?? '';
-            bool isOnline = true;
-            if (lastActiveStr.isNotEmpty) {
-              try {
-                final activeTime = DateTime.parse(lastActiveStr).toUtc();
-                final diffMin = DateTime.now().toUtc().difference(activeTime).inMinutes.abs();
-                isOnline = (diffMin <= 120);
-              } catch (_) {}
-            }
-            final grade = int.tryParse(c['grade']?.toString() ?? '') ?? 0;
-            final cls = int.tryParse(c['class']?.toString() ?? '') ?? 0;
-            final nickname = c['nickname']?.toString() ?? (grade > 0 ? '$grade학년 $cls반' : docId);
-            parsed.add({
-              'docId': docId,
-              'cafeteria': c['cafeteria']?.toString() ?? '1',
-              'grade': grade,
-              'class': cls,
-              'nickname': nickname,
-              'isCalled': c['called'] == true,
-              'isOnline': isOnline,
-              'lastActive': lastActiveStr,
+        final rtdbUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls.json';
+        final rtdbRes = await http.get(Uri.parse(rtdbUrl)).timeout(const Duration(seconds: 3));
+        if (rtdbRes.statusCode == 200 && rtdbRes.body != 'null') {
+          final rtdbData = json.decode(rtdbRes.body);
+          final schoolCode = (_settings?.selectedSchool?.code?.toString() ?? '').toLowerCase();
+          final schoolId = (_settings?.schoolId ?? '').trim().toLowerCase();
+          final schoolName = (_settings?.selectedSchool?.name ?? '').toLowerCase();
+
+          if (rtdbData is Map) {
+            rtdbData.forEach((key, val) {
+              if (val is! Map) return;
+              final docId = key.toString();
+              if (docId.isEmpty) return;
+
+              // 현재 학교 소속 필터링
+              final docSchoolCode = (val['schoolCode']?.toString() ?? '').toLowerCase();
+              final docSchoolName = (val['schoolName']?.toString() ?? '').toLowerCase();
+              bool isMatch = docId.toLowerCase().startsWith(connName.toLowerCase());
+              if (!isMatch && schoolCode.isNotEmpty) {
+                isMatch = docId.toLowerCase().startsWith(schoolCode) || docSchoolCode == schoolCode;
+              }
+              if (!isMatch && schoolId.isNotEmpty) {
+                isMatch = docId.toLowerCase().startsWith(schoolId) || docSchoolCode == schoolId;
+              }
+              if (!isMatch && schoolName.isNotEmpty && docSchoolName.isNotEmpty) {
+                isMatch = docSchoolName.contains(schoolName) || schoolName.contains(docSchoolName);
+              }
+              if (!isMatch) return; // 다른 학교 교실 제외
+
+              // 온라인 여부 확인
+              final isOnline = val['isOnline'] == true;
+              if (!isOnline) return; // 온라인 교실만 표시
+
+              final g = int.tryParse(val['grade']?.toString() ?? '') ?? 0;
+              final c = int.tryParse(val['classNum']?.toString() ?? val['class']?.toString() ?? '') ?? 0;
+              final nick = val['classNickname']?.toString() ?? (g > 0 ? '$g학년 $c반' : docId);
+              parsed.add({
+                'docId': docId,
+                'cafeteria': val['cafeteriaNum']?.toString() ?? val['cafeteria']?.toString() ?? '1',
+                'grade': g,
+                'class': c,
+                'nickname': nick,
+                'isCalled': val['called'] == true,
+                'isOnline': true,
+                'lastActive': val['lastActive']?.toString() ?? '',
+              });
             });
           }
         }
       } catch (_) {}
+
+      // 2. Cloudflare Worker 빠른 조회 (429 없음)
+      if (parsed.isEmpty) {
+        try {
+          final workerUrl = 'https://boardest-cloud-token.jiwho.workers.dev/api/classrooms?schoolCode=$connName';
+          final workerRes = await http.get(Uri.parse(workerUrl)).timeout(const Duration(seconds: 3));
+          if (workerRes.statusCode == 200) {
+            final wData = json.decode(workerRes.body);
+            final wList = wData['classrooms'] as List? ?? [];
+            for (final c in wList) {
+              final docId = c['docId']?.toString() ?? '';
+              if (docId.isEmpty) continue;
+              final lastActiveStr = c['lastActive']?.toString() ?? '';
+              bool isOnline = true;
+              if (lastActiveStr.isNotEmpty) {
+                try {
+                  final activeTime = DateTime.parse(lastActiveStr).toUtc();
+                  final diffMin = DateTime.now().toUtc().difference(activeTime).inMinutes.abs();
+                  isOnline = (diffMin <= 120);
+                } catch (_) {}
+              }
+              final grade = int.tryParse(c['grade']?.toString() ?? '') ?? 0;
+              final cls = int.tryParse(c['class']?.toString() ?? '') ?? 0;
+              final nickname = c['nickname']?.toString() ?? (grade > 0 ? '$grade학년 $cls반' : docId);
+              parsed.add({
+                'docId': docId,
+                'cafeteria': c['cafeteria']?.toString() ?? '1',
+                'grade': grade,
+                'class': cls,
+                'nickname': nickname,
+                'isCalled': c['called'] == true,
+                'isOnline': isOnline,
+                'lastActive': lastActiveStr,
+              });
+            }
+          }
+        } catch (_) {}
+      }
 
       // 2. Firestore fallback if worker list is empty
       if (parsed.isEmpty) {
@@ -273,22 +328,7 @@ class _MealViewState extends State<MealView> {
   Future<void> _callClass(String docId, bool call) async {
     setState(() => _isCalling = true);
     try {
-      const updateMask = 'updateMask.fieldPaths=called&updateMask.fieldPaths=lastCalledAt';
-      final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls/$docId?$updateMask&key=$_apiKey';
-      final payload = {
-        'fields': {
-          'called': {'booleanValue': call},
-          'lastCalledAt': {'stringValue': DateTime.now().toIso8601String()},
-        }
-      };
-
-      await http.patch(
-        Uri.parse(firestoreUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode(payload),
-      ).timeout(const Duration(seconds: 4));
-
-      // 2. RTDB 실시간 전송 (0.1초 즉시 전달, Firestore 읽기 0 소모)
+      // 1. RTDB 실시간 전송 (0.05초 즉시 전달)
       try {
         final rtdbUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/$docId.json';
         await http.patch(
@@ -298,8 +338,23 @@ class _MealViewState extends State<MealView> {
             'called': call,
             'lastCalledAt': DateTime.now().toIso8601String(),
           }),
-        ).timeout(const Duration(seconds: 4));
+        ).timeout(const Duration(seconds: 3));
       } catch (_) {}
+
+      // 2. Firestore 동기화 (비동기 처리)
+      const updateMask = 'updateMask.fieldPaths=called&updateMask.fieldPaths=lastCalledAt';
+      final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls/$docId?$updateMask&key=$_apiKey';
+      final payload = {
+        'fields': {
+          'called': {'booleanValue': call},
+          'lastCalledAt': {'stringValue': DateTime.now().toIso8601String()},
+        }
+      };
+      http.patch(
+        Uri.parse(firestoreUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(payload),
+      ).catchError((_) => http.Response('', 500));
 
       await _fetchOnlineClassrooms();
       if (mounted) {

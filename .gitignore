@@ -28,3 +28,4 @@ infra/*
 !infra/hub_web/
 !infra/demo_web/
 !infra/download_web/
+!infra/class_lite_web/

@@ -14,6 +14,8 @@ class MealDishItem {
   }) : classVotes = classVotes ?? {};
 
   String get allergyDisplay => allergies.isEmpty ? '' : '(${allergies.join(', ')})';
+  String get allergyInfo => allergies.join(', ');
+  int get votes => totalVotes;
 
   Map<String, dynamic> toJson() => {
         'name': name,

@@ -368,10 +368,10 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
 
   /// 프로필 적용 후 메인 교사 화면으로 진입
   Future<void> _applyProfileAndLaunch(Map<String, dynamic> profile) async {
-    final schoolName = profile['schoolName']?.toString() ?? '양동중학교';
-    final schoolId = profile['schoolId']?.toString() ?? 'ydm';
-    final teacherName = profile['teacherName']?.toString() ?? _userName;
-    final teacherId = profile['teacherId']?.toString() ?? (_userName.length >= 2 ? _userName.substring(0, 2) : '홍길');
+    final schoolName = profile['schoolName']?.toString() ?? '보데스트 중학교';
+    final schoolId = profile['schoolId']?.toString() ?? 'bst';
+    final teacherName = profile['teacherName']?.toString() ?? (_userName.isNotEmpty ? _userName : '김보데');
+    final teacherId = profile['teacherId']?.toString() ?? (_userName.length >= 2 ? _userName.substring(0, 2) : '김보');
     final isHomeroom = profile['isHomeroom'] == true || profile['isHomeroom'] == 'true';
     final grade = int.tryParse(profile['grade']?.toString() ?? '') ?? 1;
     final classNum = int.tryParse(profile['classNum']?.toString() ?? '') ?? 1;
@@ -465,8 +465,9 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
     });
 
     if (kIsWeb) {
-      // Web: OAuth 포털 리다이렉션 (/helper?web)
-      final portalUrl = 'https://boardest-teacher-oauth.web.app/helper?web$demoParam';
+      // Web: OAuth 포털 리다이렉션 (target=web&return_url=...)
+      final returnUrl = Uri.encodeComponent(Uri.base.toString());
+      final portalUrl = 'https://boardest-teacher-oauth.web.app/?target=web&return_url=$returnUrl$demoParam';
       try {
         await launchUrl(Uri.parse(portalUrl), webOnlyWindowName: '_self');
       } catch (e) {
@@ -476,8 +477,9 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
         });
       }
     } else {
-      // Windows / Desktop: 외부 브라우저(Chrome)로 OAuth 포털 실행 (/helper?win) -> 127.0.0.1:1217 루프백 수신
-      final url = 'https://boardest-teacher-oauth.web.app/helper?win$demoParam';
+      // Windows / Desktop: 외부 브라우저(Chrome)로 OAuth 포털 실행 (target=win&port=...) -> 127.0.0.1 루프백 수신
+      final port = CloudDriveService.instance.activePort;
+      final url = 'https://boardest-teacher-oauth.web.app/?target=win&port=$port$demoParam';
       try {
         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       } catch (e) {
@@ -893,7 +895,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                                 controller: _schoolSearchController,
                                 style: const TextStyle(color: Colors.white, fontSize: 13),
                                 decoration: InputDecoration(
-                                  hintText: '학교명 입력 (예: 양동중)',
+                                  hintText: '학교명 입력 (예: 보데스트 중)',
                                   hintStyle: const TextStyle(color: Colors.white38),
                                   filled: true,
                                   fillColor: const Color(0xFF16161A),

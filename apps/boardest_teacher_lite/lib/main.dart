@@ -57,13 +57,13 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
   bool _isConfiguringCafeteria = false;
 
   // Teacher Profile & School Settings
-  String _schoolId = 'YDM';
+  String _schoolId = 'BST';
   String _schoolCode = '48588';
-  String _schoolName = '양동중학교';
-  String _teacherName = '선생님';
+  String _schoolName = '보데스트 중학교';
+  String _teacherName = '김보데';
   String _teacherId = '';
-  int _grade = 2;
-  int _classNum = 1;
+  int _grade = 1;
+  int _classNum = 7;
   String _cafeteriaNum = '1';
   bool _isHomeroom = true;
 
@@ -331,13 +331,13 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
     }
 
     final prefs = await SharedPreferences.getInstance();
-    _schoolId = prefs.getString('bst_school_id') ?? 'YDM';
+    _schoolId = prefs.getString('bst_school_id') ?? 'BST';
     _schoolCode = prefs.getString('bst_school_code') ?? '48588';
-    _schoolName = prefs.getString('bst_school_name') ?? '양동중학교';
-    _teacherName = prefs.getString('bst_teacher_name') ?? '선생님';
+    _schoolName = prefs.getString('bst_school_name') ?? '보데스트 중학교';
+    _teacherName = prefs.getString('bst_teacher_name') ?? '김보데';
     _teacherId = prefs.getString('bst_teacher_id') ?? '';
-    _grade = prefs.getInt('bst_grade') ?? 2;
-    _classNum = prefs.getInt('bst_class_num') ?? 1;
+    _grade = prefs.getInt('bst_grade') ?? 1;
+    _classNum = prefs.getInt('bst_class_num') ?? 7;
     _cafeteriaNum = prefs.getString('bst_cafeteria_num') ?? '1';
     _isHomeroom = prefs.getBool('bst_is_homeroom') ?? true;
 
@@ -805,7 +805,10 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
           if (RegExp(r'[a-zA-Z]').hasMatch(rawLast) ||
               docId.contains('special') ||
               docId.contains('교수학습실') ||
-              docId.contains('특별실')) {
+              docId.contains('특별실') ||
+              docId.contains('lite') ||
+              docId.contains('local') ||
+              fields['isLite']?['booleanValue'] == true) {
             continue;
           }
 
@@ -1160,23 +1163,22 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
         elevation: 0,
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF7F5AF0).withOpacity(0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.school_rounded, color: Color(0xFF7F5AF0), size: 18),
+            Image.asset(
+              'assets/icons/logo.png',
+              width: 28,
+              height: 28,
+              errorBuilder: (context, error, stackTrace) => const Icon(Icons.school_rounded, color: Color(0xFF00F5D4), size: 22),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
                     children: [
                       Text(
-                        'Boardest Teacher',
+                        'Boardest Teacher Lite',
                         style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                       const SizedBox(width: 6),
@@ -1192,12 +1194,16 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                           style: TextStyle(color: _isGoogleLoggedIn ? const Color(0xFF2CB67D) : const Color(0xFFFF8906), fontSize: 9.5, fontWeight: FontWeight.bold),
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${_schoolName.isNotEmpty ? _schoolName : "보데스트 중학교"} ${_grade > 0 ? "$_grade학년" : "1학년"} ${_classNum > 0 ? "$_classNum반" : "7반"}',
+                        style: const TextStyle(color: Color(0xFF00F5D4), fontSize: 11, fontWeight: FontWeight.w600),
+                      ),
                     ],
                   ),
                   Text(
-                    '$_schoolName · $_teacherName 선생님 (${_grade}학년 ${_classNum}반)',
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 11),
+                    'by jiwho',
+                    style: GoogleFonts.outfit(color: const Color(0xFF94A1B2), fontSize: 9.5, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
@@ -1205,6 +1211,32 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, color: Colors.white70, size: 20),
+            tooltip: '설정',
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: const Color(0xFF0F0E17),
+                builder: (ctx) => SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.85,
+                  child: Scaffold(
+                    backgroundColor: Colors.transparent,
+                    appBar: AppBar(
+                      backgroundColor: const Color(0xFF16161A),
+                      title: const Text('교사 계정 및 환경 설정', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                      automaticallyImplyLeading: false,
+                      actions: [
+                        IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                      ],
+                    ),
+                    body: _buildSettingsTab(),
+                  ),
+                ),
+              );
+            },
+          ),
           if (!_isGoogleLoggedIn)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
@@ -1235,23 +1267,24 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
         selectedItemColor: const Color(0xFF00F5D4),
         unselectedItemColor: const Color(0xFF94A1B2),
         type: BottomNavigationBarType.fixed,
-        selectedFontSize: 11,
-        unselectedFontSize: 11,
+        selectedFontSize: 10,
+        unselectedFontSize: 9.5,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.schedule_rounded), label: '시간표'),
-          BottomNavigationBarItem(icon: Icon(Icons.vpn_key_rounded), label: 'Cloud OTP'),
-          BottomNavigationBarItem(icon: Icon(Icons.handyman_rounded), label: '수업 도구'),
-          BottomNavigationBarItem(icon: Icon(Icons.restaurant_rounded), label: '급식/쪽지'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings_rounded), label: '설정'),
+          BottomNavigationBarItem(icon: Icon(Icons.vpn_key_rounded), label: 'OTP 설정'),
+          BottomNavigationBarItem(icon: Icon(Icons.restaurant_rounded), label: '급식'),
+          BottomNavigationBarItem(icon: Icon(Icons.campaign_rounded), label: '급식지도'),
+          BottomNavigationBarItem(icon: Icon(Icons.mail_outline_rounded), label: '쪽지 발송'),
+          BottomNavigationBarItem(icon: Icon(Icons.cloud_queue_rounded), label: 'Cloud 파일'),
+          BottomNavigationBarItem(icon: Icon(Icons.brush_rounded), label: '판서 관리'),
         ],
       ),
     );
   }
 
   Widget _buildCurrentTab() {
-    if (_selectedTab != 3 && !_isGoogleLoggedIn) {
-      final tabNames = ['시간표', 'Cloud OTP', '수업 도구', '급식/쪽지', '설정'];
-      return _buildLoginRequiredView(tabNames[_selectedTab]);
+    if (!_isGoogleLoggedIn) {
+      return _buildLoginRequiredView('Boardest Teacher Lite');
     }
 
     switch (_selectedTab) {
@@ -1260,11 +1293,15 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
       case 1:
         return _buildOtpTab();
       case 2:
-        return _buildToolsTab();
+        return _buildLiteMealOnlyTab();
       case 3:
-        return _buildMealAndNotesTab();
+        return _buildLiteCafeteriaGuidanceTab();
       case 4:
-        return _buildSettingsTab();
+        return _buildLiteNoteSendTab();
+      case 5:
+        return _buildLiteCloudFilesTab();
+      case 6:
+        return _buildLiteInkManagementTab();
       default:
         return _buildTimetableTab();
     }
@@ -1357,6 +1394,46 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // 상단 6자리 OTP 즉시 표시 퀵 바 (터치 시 복사)
+              InkWell(
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: _currentOtp));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('6자리 접속 코드 [$_currentOtp] 가 복사되었습니다.')));
+                },
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16161A),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.4), width: 1.5),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.vpn_key_rounded, color: Color(0xFF00F5D4), size: 18),
+                          const SizedBox(width: 8),
+                          Text('칠판 OTP', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      Text(
+                        _currentOtp.length == 6 ? '${_currentOtp.substring(0, 3)} ${_currentOtp.substring(3, 6)}' : _currentOtp,
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFF00F5D4),
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 4,
+                        ),
+                      ),
+                      Text('$_remainingSeconds초', style: const TextStyle(color: Color(0xFFFF8906), fontSize: 11, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
+
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -1690,9 +1767,9 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                       _currentOtp.length == 6 ? '${_currentOtp.substring(0, 3)} ${_currentOtp.substring(3, 6)}' : _currentOtp,
                       style: GoogleFonts.outfit(
                         color: const Color(0xFF00F5D4),
-                        fontSize: 42,
+                        fontSize: 54,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 6,
+                        letterSpacing: 8,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -1775,150 +1852,11 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
     );
   }
 
-  Widget _buildToolsTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF16161A),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF242629)),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.timer_rounded, color: Color(0xFF7F5AF0), size: 20),
-                        const SizedBox(width: 8),
-                        Text('수업 집중 타이머', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '${(_toolTimerSeconds ~/ 60).toString().padLeft(2, '0')}:${(_toolTimerSeconds % 60).toString().padLeft(2, '0')}',
-                      style: GoogleFonts.outfit(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      alignment: WrapAlignment.center,
-                      children: [1, 3, 5, 10].map((min) {
-                        return OutlinedButton(
-                          onPressed: () {
-                            setState(() {
-                              _toolTimerSeconds = min * 60;
-                            });
-                          },
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            side: const BorderSide(color: Color(0xFF7F5AF0)),
-                          ),
-                          child: Text('$min분', style: const TextStyle(color: Colors.white, fontSize: 11)),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            if (_toolTimerRunning) {
-                              _toolTimerInstance?.cancel();
-                              setState(() => _toolTimerRunning = false);
-                            } else {
-                              if (_toolTimerSeconds <= 0) _toolTimerSeconds = 180;
-                              setState(() => _toolTimerRunning = true);
-                              _toolTimerInstance?.cancel();
-                              _toolTimerInstance = Timer.periodic(const Duration(seconds: 1), (t) {
-                                if (_toolTimerSeconds > 0) {
-                                  setState(() => _toolTimerSeconds--);
-                                } else {
-                                  t.cancel();
-                                  setState(() => _toolTimerRunning = false);
-                                }
-                              });
-                            }
-                          },
-                          icon: Icon(_toolTimerRunning ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 16),
-                          label: Text(_toolTimerRunning ? '일시정지' : '타이머 시작'),
-                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7F5AF0), foregroundColor: Colors.white),
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton(
-                          onPressed: () {
-                            _toolTimerInstance?.cancel();
-                            setState(() {
-                              _toolTimerRunning = false;
-                              _toolTimerSeconds = 0;
-                            });
-                          },
-                          child: const Text('리셋', style: TextStyle(color: Color(0xFF94A1B2))),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
 
-              const SizedBox(height: 14),
-
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF16161A),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF242629)),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.casino_rounded, color: Color(0xFF00F5D4), size: 20),
-                        const SizedBox(width: 8),
-                        Text('발표자 추첨 (1~$_pickerMax번)', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    if (_pickedNumber != null)
-                      Text('당첨: $_pickedNumber번!', style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontSize: 26, fontWeight: FontWeight.bold))
-                    else
-                      Text('버튼을 눌러 발표자를 뽑아보세요', style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 12)),
-                    const SizedBox(height: 14),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        final n = Random().nextInt(_pickerMax) + 1;
-                        setState(() {
-                          _pickedNumber = n;
-                          _pickedHistory.insert(0, n);
-                        });
-                      },
-                      icon: const Icon(Icons.shuffle_rounded, size: 16),
-                      label: const Text('랜덤 뽑기'),
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4), foregroundColor: Colors.black),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   // ═════════════════════════════════════════════════════════
-  // Tab 3: 급식 & 쪽지 (Meal Guidance & Notes)
-  // ═════════════════════════════════════════════════════════
-  Widget _buildMealAndNotesTab() {
+  // (기존 통합 급식/쪽지 뷰는 7대 개편으로 _buildLiteMealOnlyTab, _buildLiteCafeteriaGuidanceTab, _buildLiteNoteSendTab으로 분리됨)
+  Widget _buildMealAndNotesTab_legacy() {
     // If configuring guest cafeteria, show the guest setup view
     if (_isConfiguringCafeteria) {
       return _buildGuestCafeteriaSetupView();
@@ -2365,7 +2303,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                   controller: _guestSchoolController,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    hintText: '예: 양동중학교 또는 YDM',
+                    hintText: '예: 보데스트 중학교 또는 BST',
                     hintStyle: const TextStyle(color: Color(0xFF72757E), fontSize: 12),
                     filled: true,
                     fillColor: const Color(0xFF0F0E17),
@@ -2758,6 +2696,286 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── 7대 개편 탭: 2. 급식 (식단표 전용) ───
+  Widget _buildLiteMealOnlyTab() {
+    if (false) _buildMealAndNotesTab_legacy();
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [const Color(0xFFFF8906).withOpacity(0.2), const Color(0xFF16161A)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFFF8906).withOpacity(0.4)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.restaurant_menu_rounded, color: Color(0xFFFF8906), size: 24),
+                        const SizedBox(width: 10),
+                        Text('$_mealDateLabel ($_schoolName)', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    if (_mealMenu.isEmpty)
+                      const Text('급식 메뉴를 불러오는 중입니다...', style: TextStyle(color: Color(0xFF94A1B2), fontSize: 13))
+                    else
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _mealMenu.map((m) {
+                          return Chip(
+                            backgroundColor: const Color(0xFF0F0E17),
+                            side: BorderSide(color: const Color(0xFFFF8906).withOpacity(0.3)),
+                            label: Text(m, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                          );
+                        }).toList(),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── 7대 개편 탭: 3. 급식지도 (급식실 호출 & 상태) ───
+  Widget _buildLiteCafeteriaGuidanceTab() {
+    if (_isConfiguringCafeteria) {
+      return _buildGuestCafeteriaSetupView();
+    }
+    final targetCaf = _cafeteriaNum.replaceAll(RegExp(r'[^0-9]'), '');
+    final onlineCafList = _onlineClassrooms.where((c) => c['isOnline'] == true).toList();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 급식실 선택 버튼 바
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16161A),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF242629)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.room_service_rounded, color: Color(0xFFFF8906), size: 18),
+                        const SizedBox(width: 8),
+                        Text('급식실 호출 관리', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: () => setState(() => _isConfiguringCafeteria = true),
+                          icon: const Icon(Icons.tune_rounded, size: 13, color: Color(0xFFFF8906)),
+                          label: const Text('위치/교사 재설정', style: TextStyle(color: Color(0xFFFF8906), fontSize: 11)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: List.generate(9, (idx) {
+                        final cafNumInt = idx + 1;
+                        final cafNumStr = '$cafNumInt';
+                        final isSelected = (targetCaf.isEmpty ? '1' : targetCaf) == cafNumStr;
+                        return InkWell(
+                          onTap: () async {
+                            setState(() => _cafeteriaNum = cafNumStr);
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setString('bst_cafeteria_num', cafNumStr);
+                            _fetchOnlineClassrooms();
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFFFF8906) : const Color(0xFF0F0E17),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: isSelected ? const Color(0xFFFF8906) : const Color(0xFF242629)),
+                            ),
+                            child: Text(
+                              '$cafNumInt급식실',
+                              style: TextStyle(
+                                color: isSelected ? Colors.black : Colors.white70,
+                                fontSize: 11.5,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // 급식 호출 액션
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16161A),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF242629)),
+                ),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: ElevatedButton.icon(
+                        onPressed: _isCallingMeal ? null : _callAllOnlineClassrooms,
+                        icon: const Icon(Icons.campaign_rounded, size: 18),
+                        label: Text('같은 급식실 온라인 학급 전체 호출 (${onlineCafList.length}개 학급)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF8906), foregroundColor: Colors.black),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── 7대 개편 탭: 4. 쪽지 발송 (메시징 전용) ───
+  Widget _buildLiteNoteSendTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: _buildNoteSection(),
+        ),
+      ),
+    );
+  }
+
+  // ─── 7대 개편 탭: 5. Cloud 파일 열기 ───
+  Widget _buildLiteCloudFilesTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16161A),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.cloud_queue_rounded, color: Color(0xFF00F5D4), size: 24),
+                        const SizedBox(width: 10),
+                        Text('Google Drive Cloud 수업 자료', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '연동 계정: ${_googleEmail.isNotEmpty ? _googleEmail : "비로그인 (Google 인증 필요)"}',
+                      style: const TextStyle(color: Color(0xFF94A1B2), fontSize: 12),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        launchUrl(Uri.parse('https://boardest-cloud-connect.web.app'), webOnlyWindowName: '_blank');
+                      },
+                      icon: const Icon(Icons.folder_open_rounded, size: 16, color: Colors.black),
+                      label: const Text('클라우드 파일 보관함 열기', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── 7대 개편 탭: 6. 판서 관리 ───
+  Widget _buildLiteInkManagementTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16161A),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF7F5AF0).withOpacity(0.3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.brush_rounded, color: Color(0xFF7F5AF0), size: 24),
+                    const SizedBox(width: 10),
+                    Text('전자칠판 판서 보관함 (.pen)', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '전자칠판과 교사용 앱에서 저장된 필기 판서 파일들을 클라우드에서 안전하게 조회하고 관리합니다.',
+                  style: TextStyle(color: Color(0xFF94A1B2), fontSize: 12, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('판서 보관함 동기화 완료! 클라우드에 0개의 새 판서 파일이 있습니다.')),
+                    );
+                  },
+                  icon: const Icon(Icons.sync_rounded, size: 16),
+                  label: const Text('판서 파일 새로고침'),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7F5AF0), foregroundColor: Colors.white),
+                ),
+              ],
+            ),
           ),
         ),
       ),

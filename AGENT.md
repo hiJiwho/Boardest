@@ -1,8 +1,8 @@
 # 🤖 Boardest Platform — Core Agent Memory & Complete System Knowledge Base
 
-> **Current Platform Version**: `3.0.5-beta` (App: `3.0.5`, Web: `3.0.5`)  
+> **Current Platform Version**: `3.10.2` (App: `3.10.2`, Web: `3.10.2`)  
 > **버전 관리 규격**: 버전 변경 이력 및 상세 수정 내역은 [Ver.md](file:///c:/Users/jiwho/Documents/boardest/Ver.md) 파일에 매 작업 완료 시마다 반드시 기록하여 유지합니다.
-> 🚀 **[베타 버전] Boardest 3.0.5-beta**: 2026-10-07 부로 **Boardest v3.0.5-beta** (DB 쿼터 최적화, 교사 기능 복원, Beta/Normal 채널 분리)가 적용되었습니다.
+> 🚀 **[정식 릴리즈] Boardest v3.10.2**: 2026-10-10 부로 **Boardest v3.10.2** (전고 롱-사이즈 수업도구 독, 전용교실 교과/반 표기 최적화, 3원화 통합 인증 [Web QR + 6자리 Stegano OTP + Passkey], 교사용 차세대 Cloud Drive Viewer 탑재, RTDB 보안 강화 & OAuth 시크릿 환경변수화)가 전면 적용되었습니다.
 
 ---
 
@@ -11,7 +11,10 @@
 **Boardest(보디스트)**는 초·중·고등학교 교실의 전자칠판(전자교탁)과 교사용 PC/노트북 간의 유기적인 수업 진행, 판서 기록, 클라우드 교안 관리, 실시간 급식 지도 및 학내 메시징을 지원하는 **올인원 스마트 스쿨 플랫폼**입니다.
 
 ### 핵심 시스템 원칙
-1. **숄더 서핑(Shoulder Surfing) 원천 차단**: 교실에서 학생들이 교사의 입력을 훔쳐보더라도 비밀번호가 노출되지 않도록 **6자리 동적 자릿수 셔플(Steganography) OTP**를 적용합니다.
+1. **초호환성 3원화 인증 (3-Tier Auth)**:
+   - **Web QR**: 모바일 웹 1회용 세션 승인 (기본값, 공용 기기 영구 저장 원천 차단).
+   - **6자리 Stegano OTP**: 무선랜/블루투스가 없는 구형 PC, 미니PC, 구형 안드로이드 8.1 칠판에서도 칠판 가상 키패드로 100% 동작.
+   - **순정 패스키(Passkey)**: `boardest-cloud.web.app/passkey.html` 단일 RP ID 도메인으로 최신 기기 생체인식 지원.
 2. **크로스플랫폼 (Universal IO / FFI Stub)**: Windows 데스크톱, Web 브라우저, Android APK 환경에서 단일 메인 소스코드가 예외 없이 구동되도록 C++ FFI 및 Win32 의존성을 추상화합니다.
 3. **모달 닫기 시 세션 유지**: 전자칠판 클라우드 팝업창을 닫아도 토큰이 유지되며, 명시적인 [로그아웃] 버튼이나 수업 종료 3분 타이머 만료 시에만 세션이 안전하게 종료됩니다.
 4. **Google Drive 차분 동기화 & 드라이브 구조 일원화**: 모든 수업 교안은 `bst-save`, 학급별 판서 기록은 `bst-pen` 폴더로 1:1 대칭 관리됩니다.
@@ -31,10 +34,10 @@
 │  전자칠판 메인 앱 (Web/Win)│               │    교사용 앱 (Web/Win)    │               │  교사용 라이트 (모바일 PWA)│
 │  (apps/boardest)         │               │  (apps/boardest_teacher) │               │ (apps/boardest_teacher_lite│
 ├──────────────────────────┤               ├──────────────────────────┤               ├──────────────────────────┤
-│ - 급식 분리, 7:4 시간표  │              │ - 24:76 초슬림도구:탐색기│             │ - 급식 호출 원격 제어    │
-│ - PPT/HWP 외부 헬퍼 구동 │              │ - 대형 와이드 Drive 탐색 │             │ - 6자리 OTP & 클라우드   │
-│ - PDF, Canva 내장 판서   │               │ - 4버튼 콤팩트 액션 툴바 │             │ - 스마트폰 홈 화면 추가 PWA│
-│ - 시크릿 QR 기기 자동등록│               │ - 교과/반별 폴더 맵핑    │             │ - 가볍고 즉각적인 모바일 UI│
+│ - 교과서 좌측 밀착 배치  │              │ - 신규 고시인성 Cloud 뷰어│             │ - 급식 호출 원격 제어    │
+│ - 전고 롱-사이즈 도구 독 │              │ - 카드/리스트 토글 뷰    │             │ - 6자리 OTP & 클라우드   │
+│ - 전용교실 교과/반 강조  │              │ - 브레드크럼 & 확장자필터│             │ - 스마트폰 홈 화면 추가 PWA│
+│ - 3원화 통합 인증 모달   │               │ - 원클릭 전자칠판 전송   │             │ - 가볍고 즉각적인 모바일 UI│
 └──────────────────────────┘               └──────────────────────────┘               └──────────────────────────┘
               │                                         │                                         │
               └─────────────────────────────────────────┼─────────────────────────────────────────┘
@@ -51,14 +54,14 @@
 
 ### 1) `apps/boardest` (전자칠판 메인 앱)
 - **주요 기능**: 전자칠판 메인 뷰어, 화이트보드, PDF 보드(`pdfrx`), PPT 오버레이, Canva 뷰어, TBP 교과서 런처, 실시간 급식 호출 수신.
-- **레이아웃**: 급식 요소를 메인에서 완전 분리하여 '지금 시간표'를 63.6%(flex: 7)로 확대하고, 디지털 시계(flex: 5)와 광고판(flex: 4)을 안정적으로 배치.
-- **파일 실행 엄격 분리**: PPT/PPTX 및 HWP/HWPX 파일은 웹 뷰어 대신 네이티브 C#/WPF 오버레이 또는 OS 기본 프로그램(`launchUrl(Uri.file)`)으로 실행(웹 환경은 Drive 뷰어 직결). PDF/TBP/Canva는 Boardest 내장 전용 뷰어로 구동.
-- **시크릿 QR 자동 등록 & 401 자가 치유**: 8자리 텍스트 코드 대신 즉각적인 시크릿 QR 코드를 스캔하여 자동 로그인 기기 등록을 수행하며, Google Access Token 만료(401 Unauthorized) 시 Refresh Token을 통한 자가 치유(Self-healing) 재발급 지원.
+- **레이아웃**: 교과서 스트립(`BstTextbookStrip`) 좌측 밀착, 수업 도구 독(`BstToolsDock`)이 세로 전고(Full-height)로 확장되어 일과 시간표 및 시계 옆까지 상시 노출.
+- **전용 교실 모드**: 최상단 헤더에 교과명(예: `[음악 전용교실]`) 강조, 일과 시간표 스트립에 교과서 대신 입실 학급(예: `3-2반`) 대형 표시, Cloud 패널 연동 완전 지원.
+- **3원화 인증**: `BstCloudAuthModal`을 통해 Web QR(기본), 6자리 OTP 키패드, 패스키를 하나의 일관된 모달에서 선택 가능.
 - **웹 초기화 필수 사항**: `main.dart`의 `main()`에서 `WidgetsFlutterBinding.ensureInitialized()` 직후 `pdfrxFlutterInitialize()` 호출 필수.
 
 ### 2) `apps/boardest_teacher` (교사용 메인 앱)
-- **주요 기능**: 주간 시간표, 교실 쪽지 전송, 24:76 초슬림 OTP/Drive 제어 도구 & 초대형 클라우드 파일 탐색기.
-- **하단 도구 통합 및 와이드 탐색기**: 좌측 제어 영역을 `flex: 24`로 슬림화하고 [업로드 / Canva / 새 폴더 / 동기화] 4버튼 액션 툴바를 배치하여, 우측 Google Drive `bst-save` 파일 탐색기를 `flex: 76`으로 전폭 확장.
+- **주요 기능**: 주간 시간표, 교실 쪽지 전송, 차세대 고시인성 `BstCloudDriveViewer` 및 Google Drive `bst-save` 전체 탐색기.
+- **신규 Cloud 파일 뷰어**: 기존의 답답하고 작은 파일 목록을 시원한 대형 카드(그리드) 및 리스트 토글 뷰어로 전면 교체. 브레드크럼 폴더 탐색, 확장자별 필터(PDF/Canva/PPT/한글/판서), 전자칠판 원클릭 전송 탑재.
 - **Web PDF 에러 원천 해결**: `kIsWeb` 조건에서 `localF.existsSync()`를 우회하고 `CloudDriveService.webMemoryFiles` 바이트를 직접 `PdfBoardView`로 바인딩하여 브라우저에서도 PDF 즉시 로드.
 - **배포 타겟**: `boardest-teacher` (Firebase Hosting) 및 Windows 데스크톱 EXE/AppX.
 

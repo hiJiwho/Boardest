@@ -46,11 +46,11 @@ class DemoTimetableService {
     final classNum = parseClassNumber(classId);
     final Map<int, List<Lesson>> weekly = {};
 
-    // Days 1 (Mon) to 5 (Fri)
-    for (int day = 1; day <= 5; day++) {
+    // Days 1 (Mon) to 7 (Sun)
+    for (int day = 1; day <= 7; day++) {
       final List<Lesson> dayLessons = [];
-      // 6 or 7 periods per day (e.g. Mon, Wed, Fri: 6, Tue, Thu: 7)
-      final int periodsCount = (day == 2 || day == 4) ? 7 : 6;
+      // 8 periods per day (1교시 ~ 8교시)
+      const int periodsCount = 8;
 
       for (int period = 1; period <= periodsCount; period++) {
         // Latin square mapping: ensures no two classes share the same subject in the same period on the same day

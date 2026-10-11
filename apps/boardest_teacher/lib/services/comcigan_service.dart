@@ -177,7 +177,7 @@ class ComciganService {
             final int? code = int.tryParse(codeStr);
             if (code != null && code > 0) {
               result['schoolCode'] = code;
-              result['schoolName'] = schoolName.isNotEmpty ? schoolName : (cleanId == 'ydm' ? '양동중학교' : '학교');
+              result['schoolName'] = schoolName.isNotEmpty ? schoolName : (cleanId == 'ydm' ? '보데스트 중학교' : '보데스트 중학교');
               result['schoolId'] = cleanId;
               debugPrint('[ComciganService] 🎯 control_configs resolved: $cleanId -> $code (${result['schoolName']})');
               _schoolConfigCache[cleanId] = result;
@@ -193,7 +193,7 @@ class ComciganService {
     final int fallbackCode = fallbackMap[cleanId] ?? int.tryParse(cleanId) ?? 44134;
     final fallbackResult = {
       'schoolCode': fallbackCode,
-      'schoolName': cleanId == 'ydm' ? '양동중학교' : '학교',
+      'schoolName': cleanId == 'ydm' ? '보데스트 중학교' : '보데스트 중학교',
       'schoolId': cleanId,
     };
     _schoolConfigCache[cleanId] = fallbackResult;

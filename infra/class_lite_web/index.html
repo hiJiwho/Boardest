@@ -1,0 +1,3422 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Boardest Class Lite</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    :root {
+      --bg-color: #000000;
+      --text-main: #ffffff;
+      --text-sub: #a0a0a0;
+      --accent: #00bda5;
+      --accent-hover: #009b88;
+      --panel-bg: #1e1e1e;
+      --border-color: #333333;
+    }
+
+    @keyframes flash-bg {
+
+      0%,
+      50%,
+      100% {
+        background-color: var(--bg-color);
+      }
+
+      25%,
+      75% {
+        background-color: #ff4d4d;
+      }
+    }
+
+    .flashing {
+      animation: flash-bg 1s infinite !important;
+    }
+
+    body.cli-mode {
+      background-color: #000 !important;
+      color: #00ff00 !important;
+      font-family: 'Consolas', 'Courier New', monospace !important;
+      overflow: hidden;
+    }
+
+    body.cli-mode * {
+      background-color: transparent !important;
+      border-color: #004400 !important;
+      box-shadow: none !important;
+    }
+
+    #cli-terminal-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+      z-index: 25000;
+      padding: 3vh 3vw;
+      box-sizing: border-box;
+      display: none;
+      flex-direction: column;
+      font-size: 1.8vh;
+      line-height: 1.2;
+      overflow: hidden;
+    }
+
+    body.cli-mode #cli-terminal-container {
+      display: none;
+      /* Hide the full-screen one, we use boxes now */
+    }
+
+    body.cli-mode .left-pane,
+    body.cli-mode .right-pane {
+      display: flex !important;
+      background: #000 !important;
+    }
+
+    body.cli-mode #overlay,
+    body.cli-mode #settings-overlay,
+    body.cli-mode .usb-toast {
+      display: none !important;
+    }
+
+    /* Terminal Window Style for Hybrid Layout */
+    .terminal-window {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      border: 2px solid #004400;
+      margin: 1vh;
+      padding: 1.5vh;
+      background: #000;
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.05);
+    }
+
+    body.cli-mode .terminal-window {
+      display: flex;
+    }
+
+    .terminal-header {
+      background: #004400;
+      color: #00ff00;
+      padding: 0.3vh 1vw;
+      font-size: 1.4vh;
+      font-weight: bold;
+      margin: -1.5vh -1.5vh 1.5vh -1.5vh;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .terminal-content {
+      flex: 1;
+      white-space: pre;
+      color: #00ff00;
+      text-shadow: 0 0 5px #00ff00;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 1.6vh;
+      overflow: hidden;
+    }
+
+    #cli-content-left {
+      /* Dynamic font size assigned via JS */
+      line-height: 1.1 !important;
+    }
+
+    #cli-content-bottom-right,
+    #cli-content-top-right {
+      font-size: 0.5vh !important;
+      line-height: 0.7 !important; /* Tightened for more density */
+      color: #00ff00;
+      background: #000;
+      overflow: hidden; 
+    }
+
+    .ascii-grid-container {
+      display: flex;
+      flex: 1;
+      gap: 1.5vw;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .ascii-blue-box {
+      flex: 1.2; /* Left side for textbook */
+      height: 100%;
+      overflow: hidden;
+      border: 1px solid rgba(0, 255, 0, 0.1);
+    }
+
+    .ascii-purple-stack {
+      flex: 1; /* Right side for stacked text */
+      display: flex;
+      flex-direction: column;
+      gap: 1vh;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    #cli-terminal-top-right {
+      width: 100% !important;
+      flex: none !important;
+      height: 25vh !important;
+    }
+
+    /* Hide modern UI elements in CLI mode */
+    body.cli-mode .left-header,
+    body.cli-mode .daily-list-container,
+    body.cli-mode #school-display,
+    body.cli-mode .clock-container,
+    body.cli-mode #date-display,
+    body.cli-mode #current-class-container,
+    body.cli-mode #special-event-container,
+    body.cli-mode #no-class-message {
+      display: none !important;
+    }
+
+    .cli-buffer {
+      flex: 1;
+      white-space: pre;
+      overflow-y: auto;
+      margin-bottom: 2vh;
+      color: #00ff00;
+      text-shadow: 0 0 5px #00ff00;
+      font-family: 'Consolas', 'Courier New', monospace;
+    }
+
+    .cli-input-line {
+      display: flex;
+      align-items: center;
+      gap: 1ch;
+      border-top: 1px solid #004400;
+      padding-top: 1vh;
+      flex-shrink: 0;
+    }
+
+    .cli-prompt {
+      color: #00ff00;
+      font-weight: bold;
+    }
+
+    #cli-input {
+      background: transparent;
+      border: none;
+      color: #00ff00;
+      font-family: inherit;
+      font-size: inherit;
+      flex: 1;
+      outline: none;
+    }
+
+    .scanlines-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%),
+        linear-gradient(90deg, rgba(255, 0, 0, 0.04), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.04));
+      background-size: 100% 3px, 2px 100%;
+      z-index: 26000;
+      pointer-events: none;
+      opacity: 0.4;
+      display: none;
+    }
+
+    body.cli-mode .scanlines-overlay {
+      display: block;
+    }
+
+    .cli-highlight {
+      color: #00ff00 !important;
+      background-color: #000000 !important;
+      font-weight: bold;
+      display: inline-block;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* Layout: Left (25%) and Right (75%) */
+    .left-pane {
+      width: 25vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border-color);
+      background-color: var(--panel-bg);
+      position: relative;
+      padding: 0;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    .right-pane {
+      width: 75vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Left Header with Menu */
+    .left-header {
+      padding: 1.5vh 1.2vw;
+      background: #111;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 1vw;
+      flex-shrink: 0;
+    }
+
+    .menu-container {
+      position: relative;
+    }
+
+    .menu-trigger {
+      width: 4.2vh;
+      height: 4.2vh;
+      background: #252525;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 0.6vw;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #fff;
+      transition: all 0.2s;
+    }
+
+    .menu-trigger:hover {
+      background: #333;
+      border-color: var(--accent);
+    }
+
+    .menu-dropdown {
+      position: absolute;
+      top: 105%;
+      left: 0;
+      background: #252525;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 0.8vw;
+      padding: 0.8vh;
+      display: none;
+      flex-direction: column;
+      gap: 0.5vh;
+      box-shadow: 0 1vh 3vh rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      backdrop-filter: blur(10px);
+    }
+
+    .menu-dropdown.active {
+      display: flex;
+    }
+
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 0.8vw;
+      padding: 1.2vh 1.2vw;
+      border-radius: 0.5vw;
+      color: #ccc;
+      font-size: 1.7vh;
+      font-weight: 500;
+      white-space: nowrap;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .menu-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--accent);
+    }
+
+    .menu-item svg {
+      width: 2.2vh;
+      height: 2.2vh;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+    }
+
+    .quit-item:hover {
+      color: #ff4d4d !important;
+      background: rgba(255, 77, 77, 0.1) !important;
+    }
+
+    .brand-info {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.1;
+    }
+
+    .brand-name {
+      font-size: 2.8vh;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .beta-tag {
+      font-size: 1.4vh;
+      color: #777;
+      margin-left: 0.4vw;
+      font-weight: 600;
+      vertical-align: baseline;
+    }
+
+    .brand-author {
+      font-size: 1.3vh;
+      color: var(--accent);
+      opacity: 0.9;
+      font-weight: 500;
+    }
+
+    /* Daily List */
+    .daily-list-container {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 0.6vw;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4vh;
+    }
+
+    .daily-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #252525;
+      border-radius: 0.8vw;
+      padding: 0.5vh 0.8vw;
+      border: 2px solid transparent;
+      transition: all 0.25s ease;
+      height: 8.5vh;
+      cursor: pointer;
+    }
+
+    .daily-item:hover {
+      background: #2d2d2d;
+    }
+
+    .daily-item.highlight {
+      border: 2px solid var(--accent);
+      background: #1a1a1a;
+      box-shadow: 0 0 1.5vw rgba(0, 189, 165, 0.2);
+    }
+
+    .daily-item.overridden {
+      border: 2px solid #ff4d4d !important;
+    }
+
+    .daily-item-left {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0.2vh;
+      width: 7.5vw;
+      flex-shrink: 0;
+    }
+
+    .di-period {
+      font-size: 1.5vh;
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .di-teacher {
+      font-size: 1.3vh;
+      color: #888;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .daily-item-middle {
+      flex-grow: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 0 0.5vw;
+    }
+
+    .di-subject {
+      font-size: 3vh;
+      font-weight: 900;
+      color: #fff;
+      line-height: 1.1;
+      word-break: keep-all;
+    }
+
+    .daily-item-right {
+      width: 7.5vh;
+      height: 7.5vh;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .daily-item-thumb {
+      width: 100%;
+      height: 100%;
+      border-radius: 0.6vw;
+      object-fit: cover;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Right Pane Components */
+    .top-right {
+      flex: 3;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #181818 0%, #0a0a0a 100%);
+      position: relative;
+    }
+
+    .bottom-right {
+      flex: 5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--panel-bg);
+      padding: 2vw;
+      box-sizing: border-box;
+      position: relative;
+    }
+
+    .clock-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 90%;
+      gap: 2vw;
+      margin-top: 2vh;
+    }
+
+    #time-display {
+      flex: 3;
+      font-size: 14vh;
+      font-weight: 800;
+      line-height: 1;
+      color: #ffffff;
+      letter-spacing: -4px;
+      text-align: center;
+    }
+
+    .countdown-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 2vh 1vw;
+      border-radius: 2vw;
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      min-height: 12vh;
+    }
+
+    #countdown-label {
+      font-size: 1.8vh;
+      color: var(--accent);
+      font-weight: bold;
+      margin-bottom: 0.5vh;
+      opacity: 0.8;
+    }
+
+    #countdown-timer {
+      font-size: 5vh;
+      font-weight: 800;
+      color: #fff;
+      margin-left: 0;
+    }
+
+    #school-display {
+      position: absolute;
+      top: 3vh;
+      left: 3vh;
+      font-size: 2.2vh;
+      color: var(--text-sub);
+      font-weight: 500;
+    }
+
+    /* Teacher Name Suppression */
+    .di-teacher,
+    #class-teacher,
+    #special-event-teacher {
+      display: none !important;
+    }
+
+    /* Split Layout for Class and Meal */
+    #class-main-split {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      justify-content: space-between;
+      width: 100%;
+      height: 100%;
+      gap: 1.5vw;
+    }
+
+    #current-class-card {
+      flex: 1.15;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 1.2vw;
+      padding: 1.5vh 1.5vw;
+      box-sizing: border-box;
+      position: relative;
+    }
+
+    /* Subject Display in Bottom Pane */
+    #current-class-container {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 2vw;
+      width: 100%;
+    }
+
+    #class-status {
+      font-size: 2.2vh;
+      color: var(--accent);
+      margin-bottom: 0.5vh;
+      font-weight: 700;
+    }
+
+    #class-subject {
+      font-size: 8vh;
+      font-weight: 900;
+      margin: 0;
+      line-height: 1.1;
+      color: #fff;
+    }
+
+    #class-time-range {
+      font-size: 1.8vh;
+      color: #888;
+      margin-top: 0.8vh;
+      font-weight: bold;
+    }
+
+    #image-container {
+      max-width: 22vw;
+      max-height: 42vh;
+      border-radius: 1.2vw;
+      overflow: hidden;
+      box-shadow: 0 1.5vh 4vh rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .book-cover {
+      width: auto;
+      height: 40vh;
+      max-width: 20vw;
+      object-fit: contain;
+      border-radius: 1vw;
+    }
+
+    #special-event-image-container {
+      max-width: 22vw;
+      max-height: 42vh;
+      border-radius: 1.2vw;
+      overflow: hidden;
+      box-shadow: 0 1.5vh 4vh rgba(0, 0, 0, 0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .info-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      flex: 1;
+    }
+
+    /* Special Event Display */
+    #special-event-container {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+    }
+
+    #special-event-text {
+      font-size: 14vh;
+      font-weight: 950;
+      color: #fff;
+      line-height: 1;
+    }
+
+    /* Meal Panel & Voting Styles */
+    #meal-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 1.2vw;
+      padding: 1.8vh 1.5vw;
+      box-sizing: border-box;
+      justify-content: space-between;
+    }
+
+    .meal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 1vh;
+      margin-bottom: 1vh;
+    }
+
+    .meal-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.6vw;
+    }
+
+    .meal-icon {
+      font-size: 2.5vh;
+    }
+
+    .meal-title {
+      font-size: 2.2vh;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .meal-cal-badge {
+      font-size: 1.4vh;
+      color: var(--accent);
+      background: rgba(0, 189, 165, 0.15);
+      padding: 0.4vh 0.8vw;
+      border-radius: 0.8vw;
+      font-weight: 700;
+    }
+
+    .meal-menu-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8vh;
+      padding: 0.5vh 0;
+    }
+
+    .meal-dish-item {
+      display: flex;
+      align-items: center;
+      gap: 0.8vw;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 0.8vh 1vw;
+      border-radius: 0.6vw;
+      font-size: 1.8vh;
+      font-weight: 600;
+      color: #eee;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .meal-dish-bullet {
+      color: var(--accent);
+      font-size: 1.4vh;
+    }
+
+    .meal-vote-section {
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 1.2vh;
+      margin-top: 1vh;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8vh;
+    }
+
+    .meal-vote-title {
+      font-size: 1.5vh;
+      color: var(--text-sub);
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .meal-vote-btns {
+      display: flex;
+      gap: 0.8vw;
+      justify-content: stretch;
+    }
+
+    .vote-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.3vh;
+      background: #252525;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 0.8vw;
+      padding: 0.8vh 0.4vw;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .vote-btn:hover {
+      background: #333;
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .vote-btn.active {
+      background: rgba(0, 189, 165, 0.2);
+      border-color: var(--accent);
+      box-shadow: 0 0 10px rgba(0, 189, 165, 0.4);
+    }
+
+    .vote-emoji {
+      font-size: 2.2vh;
+    }
+
+    .vote-label {
+      font-size: 1.2vh;
+      font-weight: 600;
+      color: #ccc;
+    }
+
+    .vote-count {
+      font-size: 1.3vh;
+      font-weight: 800;
+      color: var(--accent);
+    }
+
+    /* Meal Call Modal Overlay */
+    .meal-call-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 30000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(10px);
+      animation: pulse-bg 1s infinite alternate;
+    }
+
+    @keyframes pulse-bg {
+      0% { background: rgba(0, 0, 0, 0.85); }
+      100% { background: rgba(255, 137, 6, 0.3); }
+    }
+
+    .meal-call-box {
+      background: #1a1a1a;
+      border: 3px solid #ff8906;
+      border-radius: 2vw;
+      padding: 4vh 4vw;
+      text-align: center;
+      box-shadow: 0 0 50px rgba(255, 137, 6, 0.6);
+      max-width: 600px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2vh;
+    }
+
+    .meal-call-icon-pulse {
+      font-size: 10vh;
+      animation: bell-shake 0.8s infinite;
+    }
+
+    @keyframes bell-shake {
+      0%, 100% { transform: rotate(0deg); }
+      20%, 60% { transform: rotate(15deg); }
+      40%, 80% { transform: rotate(-15deg); }
+    }
+
+    .meal-call-title {
+      font-size: 4.5vh;
+      font-weight: 900;
+      color: #ff8906;
+      margin: 0;
+    }
+
+    .meal-call-desc {
+      font-size: 2.2vh;
+      color: #eee;
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    .meal-call-confirm-btn {
+      background: linear-gradient(135deg, #ff8906, #ff5470);
+      color: #fff;
+      border: none;
+      border-radius: 1vw;
+      padding: 1.5vh 3vw;
+      font-size: 2.2vh;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 10px 20px rgba(255, 137, 6, 0.4);
+      transition: all 0.2s;
+    }
+
+    .meal-call-confirm-btn:hover {
+      transform: scale(1.05);
+    }
+
+    .lunch-tool {
+      margin-top: 5vh;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 3vh;
+      border-radius: 2vw;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2vh;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .lunch-tool-title {
+      font-size: 2.5vh;
+      color: var(--accent);
+      font-weight: bold;
+    }
+
+    .lunch-tool-input-row {
+      display: flex;
+      align-items: center;
+      gap: 1vw;
+    }
+
+    .lunch-tool-input {
+      background: #000;
+      border: 1px solid #444;
+      color: #fff;
+      padding: 1.5vh;
+      border-radius: 1vw;
+      font-size: 3vh;
+      text-align: center;
+      width: 15vw;
+    }
+
+    #lunch-tool-result {
+      font-size: 4vh;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    /* Settings Overlay */
+    #settings-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.9);
+      backdrop-filter: blur(20px);
+      z-index: 40000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 5vh 5vw;
+      box-sizing: border-box;
+    }
+
+    .bst-settings-modal {
+      background: #16161a;
+      width: 100%;
+      max-width: 68vw;
+      height: 68vh;
+      border-radius: 1.5vw;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      display: flex;
+      overflow: hidden;
+    }
+
+    .bst-settings-sidebar {
+      width: 22vw;
+      background: rgba(0, 0, 0, 0.35);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      padding: 3vh 1.5vw;
+      gap: 1vh;
+      box-sizing: border-box;
+    }
+
+    .bst-sidebar-header {
+      margin-bottom: 2.5vh;
+      padding-left: 0.5vw;
+    }
+
+    .bst-logo-title {
+      font-size: 2.8vh;
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+
+    .bst-logo-sub {
+      font-size: 1.4vh;
+      color: var(--accent);
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .bst-tab-btn {
+      display: flex;
+      align-items: center;
+      gap: 1vw;
+      padding: 1.4vh 1vw;
+      border-radius: 0.8vw;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: transparent;
+      border: 1px solid transparent;
+    }
+
+    .bst-tab-btn:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .bst-tab-btn.active {
+      background: rgba(0, 189, 165, 0.12);
+      border-color: rgba(0, 189, 165, 0.3);
+    }
+
+    .bst-tab-icon {
+      font-size: 2.2vh;
+    }
+
+    .bst-tab-text {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .bst-tab-main {
+      font-size: 1.6vh;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    .bst-tab-btn.active .bst-tab-main {
+      color: var(--accent);
+    }
+
+    .bst-tab-desc {
+      font-size: 1.2vh;
+      color: #888;
+    }
+
+    .bst-settings-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 3.5vh 3vw;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+
+    .bst-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 3vh;
+    }
+
+    .bst-modal-header h2 {
+      font-size: 3vh;
+      margin: 0;
+      color: #fff;
+      font-weight: 800;
+    }
+
+    .bst-close-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: none;
+      color: #fff;
+      width: 3.8vh;
+      height: 3.8vh;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.8vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .bst-close-btn:hover {
+      background: rgba(239, 69, 101, 0.3);
+      color: #ff6b6b;
+    }
+
+    .bst-tab-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2.5vh;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 1vh;
+      flex: 1;
+    }
+
+    .form-group label {
+      font-size: 1.8vh;
+      color: #888;
+      font-weight: bold;
+    }
+
+    .form-group input,
+    .form-group select {
+      background: #111;
+      border: 1px solid #444;
+      color: #fff;
+      padding: 1.5vh;
+      border-radius: 0.8vw;
+      font-size: 2vh;
+    }
+
+    .row {
+      display: flex;
+      gap: 2vw;
+      width: 100%;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 1vw;
+      margin-top: 2vh;
+    }
+
+    button.primary {
+      background: var(--accent);
+      color: #000;
+      font-weight: 800;
+      border: none;
+      padding: 2vh 4vw;
+      border-radius: 1vw;
+      font-size: 2.2vh;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    button.secondary {
+      background: #333;
+      color: #fff;
+      font-weight: bold;
+      border: none;
+      padding: 2vh 3vw;
+      border-radius: 1vw;
+      font-size: 2vh;
+      cursor: pointer;
+    }
+
+    button:hover {
+      opacity: 0.9;
+      transform: translateY(-3px);
+    }
+
+    /* Overlay */
+    #overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+      z-index: 30000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .loader {
+      border: 0.8vh solid #222;
+      border-top: 0.8vh solid var(--accent);
+      border-radius: 50%;
+      width: 8vh;
+      height: 8vh;
+      animation: spin 1s linear infinite;
+      margin-bottom: 4vh;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* Override Modal */
+    .override-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 10002;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .override-content {
+      background: #222;
+      border: 1px solid #444;
+      border-radius: 1vw;
+      padding: 3vh;
+      width: 30vw;
+      max-height: 70vh;
+      display: flex;
+      flex-direction: column;
+      gap: 2vh;
+    }
+
+    .override-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #444;
+      padding-bottom: 1vh;
+    }
+
+    .override-header span {
+      font-size: 2.5vh;
+      font-weight: bold;
+    }
+
+    .override-list {
+      overflow-y: auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5vw;
+    }
+
+    .override-btn {
+      background: #333;
+      color: #fff;
+      border: 1px solid #555;
+      padding: 1vh 1.5vw;
+      border-radius: 0.5vw;
+      font-size: 1.8vh;
+      cursor: pointer;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 3vh;
+      cursor: pointer;
+    }
+
+    /* Floating Controls Bar at the bottom right of right-pane */
+    .floating-controls {
+      position: absolute;
+      bottom: 3vh;
+      right: 3vh;
+      display: flex;
+      gap: 1vh;
+      z-index: 2000;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 0.8vh;
+      border-radius: 1.2vh;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .control-btn {
+      width: 4.5vh;
+      height: 4.5vh;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 0.8vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #fff;
+      transition: all 0.2s;
+    }
+
+    .control-btn:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .control-btn svg {
+      width: 2.2vh;
+      height: 2.2vh;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2.5;
+    }
+
+    /* USB Notification Toast */
+    .usb-toast {
+      position: fixed;
+      top: 3vh;
+      right: 3vh;
+      background: rgba(0, 189, 165, 0.9);
+      color: #000;
+      padding: 2vh 3vw;
+      border-radius: 1vw;
+      font-weight: 900;
+      font-size: 2.5vh;
+      display: flex;
+      align-items: center;
+      gap: 1.5vw;
+      box-shadow: 0 1vh 3vh rgba(0, 189, 165, 0.4);
+      z-index: 50000;
+      transform: translateX(120%);
+      transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      backdrop-filter: blur(10px);
+    }
+
+    .usb-toast.active {
+      transform: translateX(0);
+    }
+
+    .usb-toast.usb-purple {
+      background: rgba(155, 89, 182, 0.9);
+      box-shadow: 0 1vh 3vh rgba(155, 89, 182, 0.4);
+    }
+
+    .usb-toast.usb-blue {
+      background: rgba(52, 152, 219, 0.9);
+      box-shadow: 0 1vh 3vh rgba(52, 152, 219, 0.4);
+    }
+
+    .usb-toast.usb-mint {
+      background: rgba(46, 204, 113, 0.9);
+      box-shadow: 0 1vh 3vh rgba(46, 204, 113, 0.4);
+    }
+
+    .usb-toast svg {
+      width: 4vh;
+      height: 4vh;
+      fill: #000;
+    }
+
+    .usb-update-status {
+      font-size: 1.5vh;
+      opacity: 0.8;
+      margin-top: 0.5vh;
+    }
+
+    /* USB Explorer Modal */
+    #usb-explorer-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(15px);
+      z-index: 45000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .explorer-container {
+      background: #1a1a1a;
+      width: 50vw;
+      max-height: 80vh;
+      border-radius: 1.5vw;
+      border: 1px solid #333;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 2vh 5vh rgba(0, 0, 0, 0.5);
+    }
+
+    .explorer-header {
+      padding: 2vh 2vw;
+      background: #252525;
+      border-bottom: 1px solid #333;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .explorer-header h2 {
+      margin: 0;
+      font-size: 2.5vh;
+      color: var(--accent);
+    }
+
+    .explorer-list {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 1vh 1vw;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(10vw, 1fr));
+      gap: 1vh;
+    }
+
+    .explorer-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 1.5vh;
+      border-radius: 1vw;
+      cursor: pointer;
+      transition: all 0.2s;
+      gap: 1vh;
+    }
+
+    .explorer-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .explorer-item svg {
+      width: 5vh;
+      height: 5vh;
+      fill: var(--accent);
+    }
+
+    .explorer-item span {
+      font-size: 1.4vh;
+      word-break: break-all;
+      color: #eee;
+    }
+
+    .explorer-footer {
+      padding: 2vh 2vw;
+      border-top: 1px solid #333;
+      display: flex;
+      justify-content: center;
+      gap: 1vw;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- CLI Terminal Elements -->
+  <div id="cli-terminal-container">
+    <div class="cli-buffer" id="cli-buffer"></div>
+    <div class="cli-input-line">
+      <span class="cli-prompt">C:\Users\Student&gt;</span>
+      <input type="text" id="cli-input" spellcheck="false" autocomplete="off">
+    </div>
+  </div>
+  <div class="scanlines-overlay"></div>
+
+  <div id="overlay">
+    <div class="loader"></div>
+    <h1 id="overlay-title" style="font-size: 4vh;">BoardCast 준비 중...</h1>
+    <p id="overlay-desc" style="color: #666; font-size: 2vh;">데이터 서버와 통신하고 있습니다.</p>
+    <button id="reload-btn" onclick="location.reload()"
+      style="display:none; margin-top:2vh; padding:1vh 2vw; cursor:pointer;">다시 시도</button>
+  </div>
+
+  <div id="settings-overlay">
+    <div class="bst-settings-modal">
+      <div class="bst-settings-sidebar">
+        <div class="bst-sidebar-header">
+          <div class="bst-logo-title">Boardest</div>
+          <div class="bst-logo-sub">Lite 설정</div>
+        </div>
+        <div class="bst-tab-btn active" onclick="switchSettingsTab('school')" id="tab-btn-school">
+          <span class="bst-tab-icon">🏫</span>
+          <div class="bst-tab-text">
+            <div class="bst-tab-main">학교 및 학급</div>
+            <div class="bst-tab-desc">학교, 학년, 반 설정</div>
+          </div>
+        </div>
+        <div class="bst-tab-btn" onclick="switchSettingsTab('routine')" id="tab-btn-routine">
+          <span class="bst-tab-icon">⏰</span>
+          <div class="bst-tab-text">
+            <div class="bst-tab-main">일과 및 시간표</div>
+            <div class="bst-tab-desc">시작/수업/쉬는시간</div>
+          </div>
+        </div>
+        <div class="bst-tab-btn" onclick="switchSettingsTab('textbook')" id="tab-btn-textbook">
+          <span class="bst-tab-icon">📚</span>
+          <div class="bst-tab-text">
+            <div class="bst-tab-main">교과서 이미지</div>
+            <div class="bst-tab-desc">과목 표지 연결</div>
+          </div>
+        </div>
+        <div class="bst-tab-btn" onclick="switchSettingsTab('reset')" id="tab-btn-reset">
+          <span class="bst-tab-icon">⚙️</span>
+          <div class="bst-tab-text">
+            <div class="bst-tab-main">데이터 및 초기화</div>
+            <div class="bst-tab-desc">설정 리셋, 데이터 삭제</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bst-settings-main">
+        <div class="bst-modal-header">
+          <h2 id="settings-tab-title">학교 및 학급</h2>
+          <button class="bst-close-btn" onclick="closeSettings()" title="닫기">✕</button>
+        </div>
+
+        <div class="bst-tab-content" id="tab-pane-school">
+          <div class="row" style="background: rgba(0, 245, 212, 0.08); padding: 1.2vh; border-radius: 0.8vw; border: 1px solid rgba(0, 245, 212, 0.3); margin-bottom: 1.5vh;">
+            <div class="form-group" style="flex: 1;">
+              <label style="color: #00F5D4; font-weight: bold;">⚡ 학교 ID로 초간편 자동 연결 (예: ydm)</label>
+              <div style="display: flex; gap: 0.6vw;">
+                <input type="text" id="set-school-id" placeholder="학교 ID 입력 (예: ydm)" style="flex: 1; font-weight: bold; color: #00F5D4; background: rgba(0,0,0,0.5);">
+                <button type="button" onclick="lookupSchoolId()" style="background: #00F5D4; color: #000; font-weight: 900; border: none; border-radius: 0.4vw; padding: 0 1.2vw; cursor: pointer; white-space: nowrap;">조회 및 자동완성 🔍</button>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="form-group"><label>지역 (예: 서울)</label><input type="text" id="set-region"></div>
+            <div class="form-group"><label>학교명 (예: 양동중학교)</label><input type="text" id="set-school"></div>
+          </div>
+          <div class="row">
+            <div class="form-group"><label>학년</label><input type="number" id="set-grade" min="1" max="6"></div>
+            <div class="form-group"><label>반</label><input type="number" id="set-class" min="1" max="20"></div>
+          </div>
+        </div>
+
+        <div class="bst-tab-content" id="tab-pane-routine" style="display:none;">
+          <div class="row">
+            <div class="form-group"><label>1교시 시작시간</label><input type="time" id="set-starttime"></div>
+            <div class="form-group"><label>쉬는시간 (분)</label><input type="number" id="set-breaktime" placeholder="10"></div>
+          </div>
+          <div class="row">
+            <div class="form-group"><label>수업시간 (분)</label><input type="number" id="set-classduration" placeholder="45"></div>
+            <div class="form-group"><label>점심시간 길이 (분)</label><input type="number" id="set-lunchtime" placeholder="50"></div>
+          </div>
+          <div class="row" style="margin-top: 1vh;">
+            <div class="form-group" style="flex-direction:row; align-items:center; gap:0.5vw;">
+              <input type="checkbox" id="set-devmode" style="width:2vh; height:2vh;">
+              <label for="set-devmode" style="margin:0; cursor:pointer;">개발자 모드 (실행 시 개발자 도구 열기)</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="bst-tab-content" id="tab-pane-textbook" style="display:none;">
+          <button class="secondary" onclick="importImages()" id="import-btn">📂 교과서 이미지 폴더 가져오기...</button>
+          <div id="import-status" style="font-size:1.4vh; color:var(--accent); margin-top:1vh;"></div>
+          <div id="image-mapping-container" style="max-height:35vh; overflow-y:auto; margin-top:1.5vh; padding-right:1vw;"></div>
+        </div>
+
+        <div class="bst-tab-content" id="tab-pane-reset" style="display:none;">
+          <div style="background:rgba(239, 69, 101, 0.1); border:1px solid rgba(239,69,101,0.3); border-radius:1vw; padding:2vh; color:#fff;">
+            <div style="font-weight:bold; color:#ef4565; font-size:2vh; margin-bottom:1vh;">⚠️ 설정 초기화 및 데이터 리셋</div>
+            <p style="font-size:1.5vh; color:#ccc; line-height:1.6;">학교 설정, 시간표 캐시, 교과서 이미지 매핑 등 모든 저장된 데이터가 초기화되고 초기 마법사 상태로 돌아갑니다.</p>
+            <button type="button" style="background:#ef4565; color:#fff; border:none; padding:1.2vh 2.5vw; border-radius:0.6vw; font-weight:bold; font-size:1.6vh; margin-top:2vh; cursor:pointer;" onclick="resetAllSettings()">전체 데이터 초기화 🗑️</button>
+          </div>
+        </div>
+
+        <div id="step1-error" style="color:#ff4d4d; font-size:1.8vh; font-weight:bold; margin-top:1vh;"></div>
+
+        <div class="btn-row" style="margin-top:auto; padding-top:2vh; border-top:1px solid rgba(255,255,255,0.08);">
+          <button class="primary" onclick="proceedToStep2()">저장 및 적용 ✅</button>
+          <button class="secondary" onclick="closeSettings()">닫기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- USB Explorer Overlay (DEPRECATED: Now using standalone window) -->
+  <div id="usb-explorer-overlay" style="display:none !important;"></div>
+
+  <div class="left-pane">
+    <div class="left-header">
+      <div class="brand-info" style="margin-left: 0.5vw;">
+        <div class="brand-name">Boardest<span class="beta-tag">Lite</span></div>
+        <div class="brand-author">by Jiwho</div>
+      </div>
+    </div>
+    <div id="daily-list-container" class="daily-list-container">
+      <!-- Timetable items injected here -->
+    </div>
+    <div id="cli-terminal-left" class="terminal-window">
+      <div class="terminal-header">[TIMETABLE_DUMP]</div>
+      <div id="cli-content-left" class="terminal-content"></div>
+    </div>
+  </div>
+
+  <div class="right-pane">
+    <div class="top-right">
+      <div id="school-display">정보를 불러오는 중...</div>
+      <div class="clock-container">
+        <div id="time-display">00:00:00</div>
+        <div class="countdown-section">
+          <div id="countdown-label">다음 시간까지</div>
+          <div id="countdown-timer">0:00</div>
+        </div>
+      </div>
+      <div id="date-display" style="margin-top: 2vh; font-size: 3vh; color: var(--text-sub);">날짜 로드 중...</div>
+      <div id="cli-terminal-top-right" class="terminal-window">
+        <div class="terminal-header">[CLOCK_SYNC]</div>
+        <div id="cli-content-top-right" class="terminal-content"></div>
+      </div>
+    </div>
+    <div class="bottom-right">
+      <div id="class-main-split">
+        <!-- Left: Current Class -->
+        <div id="current-class-card">
+          <div id="current-class-container">
+            <div id="image-container"></div>
+            <div class="info-column">
+              <div id="class-status"></div>
+              <h1 id="class-subject"></h1>
+              <div id="class-teacher" style="display:none !important;"></div>
+              <div id="class-time-range"></div>
+            </div>
+          </div>
+          <div id="special-event-container" style="display: none;">
+            <div id="special-event-image-container"></div>
+            <div class="info-column">
+              <div id="special-event-text"></div>
+              <div id="special-event-teacher" style="display:none !important;"></div>
+              <div id="lunch-departure-display"
+                style="display:none; margin-top: 2vh; font-size: 8vh; font-weight: 900; color: #ffeb3b; text-shadow: 0 0 20px rgba(255, 235, 59, 0.4);">
+                00:00 출발
+              </div>
+              <div id="lunch-tool-container" class="lunch-tool" style="display:none; margin-top: 2vh;">
+                <div class="lunch-tool-title">⏱️ 급식실 출발 시간 설정</div>
+                <div class="lunch-tool-input-row">
+                  <input type="time" id="lunch-tool-input" class="lunch-tool-input" oninput="updateLunchDepartureTime()">
+                </div>
+                <div id="lunch-tool-result" style="font-size: 2vh; color: #888;">시간을 입력하면 화면에 상시 표시됩니다.</div>
+              </div>
+            </div>
+          </div>
+          <div id="no-class-message" style="display:none; font-size:5vh; font-weight:bold; color:#555;">수업 정보가 없습니다.</div>
+        </div>
+
+        <!-- Right: Today's Lunch & Satisfaction Vote -->
+        <div id="meal-panel">
+          <div class="meal-header">
+            <div class="meal-title-wrap">
+              <span class="meal-icon">🍱</span>
+              <span class="meal-title">오늘의 급식</span>
+            </div>
+            <span id="meal-cal-badge" class="meal-cal-badge">칼로리 정보 조회 중...</span>
+          </div>
+          <div id="meal-menu-list" class="meal-menu-list">
+            <div class="meal-loading" style="color:#888; font-size:1.6vh; text-align:center; padding:3vh 0;">급식 정보를 불러오는 중입니다...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Realtime Meal Call Modal -->
+      <div id="meal-call-modal" class="meal-call-overlay" style="display:none;">
+        <div class="meal-call-box">
+          <div class="meal-call-icon-pulse">🔔</div>
+          <h2 class="meal-call-title">급식실로 이동하세요!</h2>
+          <p class="meal-call-desc">지금 급식실 배식이 시작되었습니다.<br>선생님 지도에 따라 질서 있게 이동해 주세요.</p>
+          <button type="button" class="meal-call-confirm-btn" onclick="dismissMealCall()">확인했습니다 ✅</button>
+        </div>
+      </div>
+
+      <div id="cli-terminal-bottom-right" class="terminal-window">
+        <div class="terminal-header">[CURRENT_CLASS_VIEW]</div>
+        <div id="cli-content-bottom-right" class="terminal-content">
+          <div class="ascii-grid-container">
+            <div id="cli-zone-blue" class="ascii-blue-box"></div>
+            <div class="ascii-purple-stack">
+              <div id="cli-zone-purple-top" class="ascii-purple-box"></div>
+              <div id="cli-zone-purple-bottom" class="ascii-purple-box"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Floating Controls Bar (Only Settings button) -->
+      <div class="floating-controls">
+        <div class="control-btn" onclick="openSettings()" title="설정">
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z">
+            </path>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let isInitStarted = false;
+    let timetableData = [];
+    let currentPeriodIndex = -1;
+    let lastSystemLayout = null;
+    let currentLayout = null;
+    let weeklySubjects = [];
+    let debugOffset = 0;
+    let lunchDepartureTime = null;
+    let isFlashing = false;
+
+    // --- April Fools 2026 CLI Mode Implementation ---
+    const ASCII_FONT = {
+      '0': [" 000 ", "0   0", "0   0", "0   0", " 000 "],
+      '1': ["  1  ", " 11  ", "  1  ", "  1  ", "11111"],
+      '2': [" 222 ", "2   2", "   2 ", "  2  ", "22222"],
+      '3': [" 333 ", "    3", "  33 ", "    3", " 333 "],
+      '4': ["   4 ", "  44 ", " 4 4 ", "44444", "   4 "],
+      '5': ["55555", "5    ", "5555 ", "    5", "5555 "],
+      '6': [" 666 ", "6    ", "6666 ", "6   6", " 666 "],
+      '7': ["77777", "    7", "   7 ", "  7  ", "  7  "],
+      '8': [" 888 ", "8   8", " 888 ", "8   8", " 888 "],
+      '9': [" 999 ", "9   9", " 9999", "    9", " 999 "],
+      ':': ["     ", "  :  ", "     ", "  :  ", "     "],
+      ' ': ["     ", "     ", "     ", "     ", "     "],
+      '-': ["     ", "     ", "-----", "     ", "     "]
+    };
+
+    function getBigText(text) {
+      let lines = ["", "", "", "", ""];
+      for (const char of text) {
+        const font = ASCII_FONT[char] || ASCII_FONT[' '];
+        // Maximum spacing for ultra-wide look
+        const spacing = (char === ':') ? "            " : "          ";
+        for (let i = 0; i < 5; i++) lines[i] += font[i] + spacing;
+      }
+      return lines.join("\n");
+    }
+
+    /**
+     * Renders each character in separate blocks and merges them.
+     */
+    async function textToASCII(text, fontSize = 200, charWidth = 25, minHeight = 35) {
+      const charsList = text.split("");
+      const blocks = await Promise.all(charsList.map(char => renderCharToASCII(char, fontSize, charWidth, minHeight)));
+      return mergeASCIIBlocks(blocks, (text.includes(":") ? 1 : 2));
+    }
+
+    async function renderCharToASCII(char, fontSize, width, height) {
+      return new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.font = `bold ${fontSize}px "Orbitron", "Courier New", monospace`;
+        
+        const metrics = ctx.measureText(char);
+        const charActualWidth = Math.ceil(metrics.width) || fontSize * 0.6;
+        canvas.width = charActualWidth;
+        canvas.height = fontSize;
+
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "white";
+        ctx.textBaseline = "top";
+        ctx.textAlign = "center";
+        ctx.fillText(char, canvas.width / 2, 0);
+
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = width;
+        outCanvas.height = height;
+        const outCtx = outCanvas.getContext('2d');
+        outCtx.imageSmoothingEnabled = false;
+        outCtx.drawImage(canvas, 0, 0, width, height);
+        const outData = outCtx.getImageData(0, 0, width, height).data;
+
+        const charSet = " .:-=+*#%@";
+        let ascii = "";
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * 4;
+            const b = (outData[i] + outData[i + 1] + outData[i + 2]) / 3;
+            ascii += charSet[Math.floor(b / 256 * charSet.length)];
+          }
+          ascii += "\n";
+        }
+        resolve(ascii);
+      });
+    }
+
+    function mergeASCIIBlocks(blocks, gap = 2) {
+      if (blocks.length === 0) return "";
+      const allLines = blocks.map(b => b.split('\n'));
+      const maxLines = Math.max(...allLines.map(lines => lines.length));
+      
+      let merged = "";
+      for (let i = 0; i < maxLines; i++) {
+        let line = "";
+        allLines.forEach((lines, bIdx) => {
+          const currentLine = (lines[i] || "");
+          line += currentLine + (bIdx === blocks.length - 1 ? "" : " ".repeat(gap));
+        });
+        merged += line + "\n";
+      }
+      return merged;
+    }
+
+    const FUNNY_SUBJECTS = {
+      "수학": "졸음과의 사투 (루트 지옥)",
+      "국어": "훈민정음 서바이벌",
+      "영어": "외계어 입문 (ABC 놀이)",
+      "과학": "현대 연금술 실습",
+      "사회": "방구석 세계 일주",
+      "체육": "E-스포츠 (피지컬 단련)",
+      "미술": "피카소 빙의하기",
+      "음력": "고대의 시간 측정",
+      "음악": "쇼미더머니 고등래퍼",
+      "기술": "아이언맨 슈트 제작",
+      "가정": "백종원 따라잡기",
+      "정보": "코드 닌자 수련법",
+      "도덕": "성인군자 시뮬레이션",
+      "한문": "천자문 래퍼",
+      "일본어": "이세계 소환 대화법",
+      "중국어": "성조 마스터"
+    };
+
+    function mergeASCII(left, right, gap = 4) {
+      const leftLines = left.split('\n');
+      const rightLines = right.split('\n');
+      const maxLines = Math.max(leftLines.length, rightLines.length);
+      const leftWidth = leftLines.reduce((max, l) => Math.max(max, l.length), 0);
+
+      let merged = "";
+      for (let i = 0; i < maxLines; i++) {
+        const l = (leftLines[i] || "").padEnd(leftWidth, " ");
+        const r = (rightLines[i] || "");
+        merged += l + " ".repeat(gap) + r + "\n";
+      }
+      return merged;
+    }
+
+    let isCLIMode = false;
+    let cliUpdateTimer = null;
+    let isCLIInitialRender = true;
+    let lastRenderedTime = "";
+
+    function checkAprilFools() {
+      const now = getCurrentTime();
+      return (now.getMonth() === 3 && now.getDate() === 1);
+    }
+
+    async function imageToASCII(imgUrl, width = 60) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          // Prioritize filling the 45vh box height (90 lines at 0.5vh)
+          let targetHeight = 90;
+          let aspectAdjust = 0.5; 
+          let calculatedWidth = Math.floor((targetHeight / (img.height / img.width)) / aspectAdjust);
+          // Set final dimensions
+          canvas.width = calculatedWidth;
+          canvas.height = targetHeight;
+          ctx.drawImage(img, 0, 0, calculatedWidth, targetHeight);
+          const data = ctx.getImageData(0, 0, calculatedWidth, targetHeight).data;
+          const chars = "@%#*+=-:. ";
+          let ascii = "";
+          for (let y = 0; y < targetHeight; y++) {
+            for (let x = 0; x < calculatedWidth; x++) {
+              const i = (y * calculatedWidth + x) * 4;
+              const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+              ascii += chars[Math.floor(brightness / 256 * chars.length)];
+            }
+            ascii += "\n";
+          }
+          resolve(ascii);
+        };
+        img.onerror = () => resolve("[SYSTEM] IMAGE_CONVERSION_FAILED");
+        img.src = imgUrl;
+      });
+    }
+
+    async function renderTerminalLeft(schedule) {
+      const buffer = document.getElementById('cli-content-left');
+      if (!buffer || !schedule) return;
+
+      let contentLines = [];
+      const info = window.appInfo || {};
+      contentLines.push(`[STATION] ${info.schoolName || "???"}`);
+      contentLines.push(`[ROOM] Grade: ${info.grade} | Class: ${info.class}`);
+      contentLines.push("==========================================");
+
+      if (timetableData && timetableData.length > 0) {
+        timetableData.forEach((item, idx) => {
+          const sch = (schedule && schedule[idx]) ? schedule[idx] : null;
+          const isCurrent = (currentPeriodIndex === idx);
+          const status = isCurrent ? ">>" : "  ";
+          const border = isCurrent ? ">> [PERIOD " + (idx + 1) + "] " + "=".repeat(23) : "   [PERIOD " + (idx + 1) + "] " + "-".repeat(23);
+
+          contentLines.push(""); // Spacing
+          contentLines.push(border);
+          contentLines.push(`${status} Subject : ${item.subject}`);
+          if (sch) contentLines.push(`${status} Time    : ${formatMinutes(sch.start)} ~ ${formatMinutes(sch.end)}`);
+          else contentLines.push(`${status} Time    : --:--`);
+          contentLines.push(isCurrent ? ">>" + "=".repeat(38) : "   " + "-".repeat(38));
+        });
+      } else {
+        contentLines.push("");
+        contentLines.push("   [SYSTEM] STATUS_STANDBY");
+        contentLines.push("   [BUFFER] NO_DATA_STREAM");
+      }
+      buffer.innerHTML = contentLines.map(l => `<div>${l}</div>`).join("");
+    }
+
+    async function renderTerminalTopRight() {
+      const buffer = document.getElementById('cli-content-top-right');
+      if (!buffer) return;
+      const now = getCurrentTime();
+      const timeStr = now.toTimeString().split(' ')[0];
+
+      let contentLines = [];
+      contentLines.push(`[DATE] ${now.toLocaleDateString()}`);
+      contentLines.push("");
+      // Fill 25vh box exactly with 50 lines at 0.5vh
+      const bigClock = await textToASCII(timeStr, 250, 60, 50); 
+      buffer.innerHTML = `<div style="font-size:0.5vh; line-height:1.0; display:flex; flex-direction:column; justify-content:flex-start; align-items:center; height:100%; color:#00ff00;">` + 
+                         `<div style="white-space:pre; text-align:center;">${bigClock}</div>` + 
+                         `</div>`;
+    }
+
+    async function renderTerminalBottomRight(schedule, isBreakTime, specialEventText) {
+      const buffer = document.getElementById('cli-content-bottom-right');
+      if (!buffer) return;
+
+      // 1. Special Event Priority
+      if (specialEventText) {
+        let displayTitle = specialEventText;
+        if (specialEventText === '조회') displayTitle = "[ASSEMBLY]";
+        else if (specialEventText === '점심') displayTitle = "[LUNCH]";
+        else if (specialEventText === '종례') displayTitle = "[DISMISSAL]";
+
+        const eventBig = await textToASCII(displayTitle, 300, 100, 80);
+        const blue = document.getElementById('cli-zone-blue');
+        const p1 = document.getElementById('cli-zone-purple-top');
+        const p2 = document.getElementById('cli-zone-purple-bottom');
+        
+        if (blue) blue.innerHTML = `<div style="font-size:1.6vh; color:var(--accent); border-bottom:1px solid rgba(0,255,0,0.5);">[SYSTEM_STATUS: ${displayTitle}]</div>\n<div style="font-size:0.5vh; line-height:1.0; white-space:pre;">${eventBig}</div>`;
+        if (p1) p1.innerHTML = `<div style="font-size:1.6vh; color:var(--accent); border-bottom:1px solid rgba(0,255,0,0.5);">[EVENT_STREAM]</div>\n<div style="font-size:0.5vh; line-height:1.0; white-space:pre;">${eventBig}</div>`;
+        if (p2) p2.innerHTML = `<div style="font-size:1.6vh; color:var(--accent); border-bottom:1px solid rgba(0,255,0,0.5);">[ALERT_LOG]</div>\n<div style="font-size:0.5vh; line-height:1.0; white-space:pre;">${eventBig}</div>`;
+        return;
+      }
+
+      // 2. Class / Break Preview
+      if (currentPeriodIndex !== -1 && timetableData[currentPeriodIndex]) {
+        const item = timetableData[currentPeriodIndex];
+        const statusLabel = isBreakTime ? "[UPCOMING_SUBJECT]" : "[ACTIVE_SUBJECT]";
+        const leftContent = (item.subjectImage && !item.hideImage) ? 
+                            await imageToASCII(item.subjectImage, 280) : 
+                            "[!] NO_IMAGE_STREAM\n".repeat(90);
+
+        const subjectBig = await textToASCII(item.subject, 300, 100, 45);
+        const timeStr = (schedule && schedule[currentPeriodIndex]) ? `${formatMinutes(schedule[currentPeriodIndex].start)}~${formatMinutes(schedule[currentPeriodIndex].end)}` : `${currentPeriodIndex + 1} PERIOD`;
+        const timeBig = await textToASCII(timeStr, 300, 100, 45);
+
+        const blue = document.getElementById('cli-zone-blue');
+        const p1 = document.getElementById('cli-zone-purple-top');
+        const p2 = document.getElementById('cli-zone-purple-bottom');
+        
+        // Exact 45vh and 22.5vh fits with 1.0 line-height
+        if (blue) blue.innerHTML = `<div style="font-size:1.6vh; color:var(--accent); border-bottom:1px solid rgba(0,255,0,0.5); padding-bottom:2px;">[TEXTBOOK_SCAN]</div>\n<div style="font-size:0.5vh; line-height:1.0; white-space:pre; flex:1;">${leftContent}</div>`;
+        if (p1) p1.innerHTML = `<div style="font-size:1.6vh; color:var(--accent); border-bottom:1px solid rgba(0,255,0,0.5); padding-bottom:2px;">[SUBJECT_ID]</div>\n<div style="font-size:0.5vh; line-height:1.0; white-space:pre; flex:1;">${subjectBig}</div>`;
+        if (p2) p2.innerHTML = `<div style="font-size:1.6vh; color:var(--accent); border-bottom:1px solid rgba(0,255,0,0.5); padding-bottom:2px;">[PERIOD_TIME]</div>\n<div style="font-size:0.5vh; line-height:1.0; white-space:pre; flex:1;">${timeBig}</div>`;
+      } else {
+        buffer.innerHTML = "<div>[STATUS] STANDBY_MODE</div>";
+      }
+    }
+
+    function initCLI() {
+      if (isCLIMode) return;
+      isCLIMode = true;
+      document.body.classList.add('cli-mode');
+
+      // Initial render attempt to avoid empty boxes
+      if (typeof updateCurrentClassDisplay === 'function') {
+        updateCurrentClassDisplay();
+      } else {
+        renderTerminalLeft();
+        renderTerminalTopRight();
+        renderTerminalBottomRight();
+      }
+    }
+
+    const applauseAudio = new Audio('https://www.soundjay.com/misc/sounds/applause-01.mp3');
+    function playApplause() {
+      applauseAudio.currentTime = 0;
+      applauseAudio.play().catch(e => console.warn("Audio play failed:", e));
+    }
+
+    // --- End of CLI Implementation ---
+
+    function getCurrentTime() {
+      if (debugOffset === 0) return new Date();
+      return new Date(Date.now() + debugOffset);
+    }
+
+    // Debug Tools for Console
+    window.Debug = {
+      Time: function (h, m) {
+        const target = new Date();
+        target.setHours(h, m, 0, 0);
+        debugOffset = target.getTime() - Date.now();
+        updateClock();
+        updateCurrentClassDisplay();
+        console.log(`[Debug] Time offset set. Virtual time: ${target.toLocaleTimeString()}`);
+      },
+      Day: function (m, d) {
+        const target = new Date();
+        target.setMonth(m - 1, d);
+        debugOffset = target.getTime() - Date.now();
+        updateClock();
+        if (isCLIMode) {
+          renderTerminalLeft();
+          renderTerminalTopRight();
+          renderTerminalBottomRight();
+        }
+        else updateCurrentClassDisplay();
+        console.log(`[Debug] Date offset set. Virtual date: ${target.toLocaleDateString()}`);
+      },
+      Set: function (m, d, h, min) {
+        const target = new Date();
+        target.setMonth(m - 1, d);
+        target.setHours(h, min || 0, 0, 0);
+        debugOffset = target.getTime() - Date.now();
+        updateClock();
+        if (checkAprilFools() && !isCLIMode) initCLI();
+        else if (isCLIMode) {
+          renderTerminalLeft();
+          renderTerminalTopRight();
+          renderTerminalBottomRight();
+        }
+        else updateCurrentClassDisplay();
+        console.log(`[Debug] Time/Date override set: ${target.toLocaleString()}`);
+      },
+      Reset: function () {
+        debugOffset = 0;
+        updateClock();
+        if (isCLIMode) {
+          isCLIMode = false;
+          document.body.classList.remove('cli-mode');
+        }
+        updateCurrentClassDisplay();
+        console.log("[Debug] Time reset to system clock.");
+      }
+    };
+
+    // Cross-platform API bridge
+    const isElectron = !!(window.api && window.api.getTimetable);
+
+    // Polyfill window.api for non-Electron environments (Android/Browser)
+    if (!isElectron) {
+      console.log("[System] Non-Electron environment detected. Using LocalStorage polyfill.");
+      window.api = {
+        getTimetable: async () => {
+          const info = JSON.parse(localStorage.getItem('appSettings') || '{}');
+          if (!info.schoolName) return { success: false, needsMapping: true, message: "초기 설정이 필요합니다." };
+
+          if (info.schoolName.toLowerCase() === 'demo') {
+            const demoTimetable = [
+              { classTime: 1, subject: "국어", originalSubject: "국어" },
+              { classTime: 2, subject: "수학", originalSubject: "수학" },
+              { classTime: 3, subject: "영어", originalSubject: "영어" },
+              { classTime: 4, subject: "사회", originalSubject: "사회" },
+              { classTime: 5, subject: "과학", originalSubject: "과학" },
+              { classTime: 6, subject: "체육", originalSubject: "체육" },
+              { classTime: 7, subject: "음악", originalSubject: "음악" },
+              { classTime: 8, subject: "미술", originalSubject: "미술" },
+            ];
+            return { success: true, timetable: demoTimetable, info: info };
+          }
+
+          try {
+            // 1. Search school to get Comcigan school code
+            let schoolCode = info.schoolCode;
+            if (!schoolCode) {
+              try {
+                const searchUrl = `https://comcigan.jiwho.workers.dev/api/comcigan/search?school=${encodeURIComponent(info.schoolName)}`;
+                const searchRes = await fetch(searchUrl);
+                if (searchRes.ok) {
+                  const searchJson = await searchRes.json();
+                  const found = (searchJson.schools || searchJson.results || [])[0];
+                  if (found && found.code) {
+                    schoolCode = found.code;
+                    info.schoolCode = schoolCode;
+                    localStorage.setItem('appSettings', JSON.stringify(info));
+                  }
+                }
+              } catch (_) {}
+            }
+
+            // Fallback to Firestore control_configs
+            if (!schoolCode) {
+              try {
+                const cfgUrl = `https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/control_configs/${encodeURIComponent(info.schoolName.toLowerCase())}?key=AIzaSyBMoJZHMBN4eYJtiZR2iGePcmIB7bg8wGo`;
+                const cfgRes = await fetch(cfgUrl);
+                if (cfgRes.ok) {
+                  const cfgJson = await cfgRes.json();
+                  const cCode = cfgJson?.fields?.comciganCode?.integerValue || cfgJson?.fields?.comciganCode?.stringValue;
+                  if (cCode) {
+                    schoolCode = cCode;
+                    info.schoolCode = schoolCode;
+                    localStorage.setItem('appSettings', JSON.stringify(info));
+                  }
+                }
+              } catch (_) {}
+            }
+
+            if (!schoolCode) {
+              const numCode = parseInt(info.schoolName);
+              if (!isNaN(numCode)) schoolCode = numCode;
+            }
+
+            if (!schoolCode) {
+              throw new Error("학교를 찾을 수 없습니다. 학교명을 확인해주세요.");
+            }
+
+            // 2. Fetch timetable from worker
+            const lookupUrl = `https://comcigan.jiwho.workers.dev/api/comcigan/lookup?code=${schoolCode}`;
+            const lookupRes = await fetch(lookupUrl);
+            if (!lookupRes.ok) throw new Error("시간표 서버 응답 오류 (" + lookupRes.status + ")");
+            const lookupJson = await lookupRes.json();
+
+            const data = lookupJson.data || {};
+            const parsed = data.parsed || {};
+            const lessons = parsed.lessons || [];
+
+            // Weekday: 1=Mon .. 5=Fri
+            let todayDay = new Date().getDay();
+            if (todayDay < 1 || todayDay > 5) todayDay = 1;
+
+            const targetLessons = lessons.filter(l =>
+              Number(l.grade) === Number(info.grade) &&
+              Number(l.classNum) === Number(info.class) &&
+              Number(l.weekday) === Number(todayDay)
+            ).sort((a, b) => a.classTime - b.classTime);
+
+            const timetable = targetLessons.map(l => ({
+              classTime: l.classTime,
+              subject: l.subject,
+              originalSubject: l.subject
+            }));
+
+            if (timetable.length > 0) {
+              localStorage.setItem('timetableData', JSON.stringify(timetable));
+              return { success: true, timetable: timetable, info: info };
+            }
+
+            const savedTimetable = localStorage.getItem('timetableData');
+            if (savedTimetable) return { success: true, timetable: JSON.parse(savedTimetable), info: info };
+
+            return { success: false, error: "해당 학급(" + info.grade + "학년 " + info.class + "반)의 오늘 시간표 데이터가 없습니다." };
+          } catch (e) {
+            console.error("[Lite Timetable] Fetch error:", e);
+            const savedTimetable = localStorage.getItem('timetableData');
+            if (savedTimetable) return { success: true, timetable: JSON.parse(savedTimetable), info: info };
+            return { success: false, error: "시간표 조회 실패: " + e.message };
+          }
+        },
+        getSettings: async () => {
+          return {
+            info: JSON.parse(localStorage.getItem('appSettings') || '{}'),
+            tbImageArr: JSON.parse(localStorage.getItem('tbImageArr') || '[]')
+          };
+        },
+        saveSettings: async (data) => {
+          if (data.info) localStorage.setItem('appSettings', JSON.stringify(data.info));
+          if (data.tbImageArr) localStorage.setItem('tbImageArr', JSON.stringify(data.tbImageArr));
+          return { success: true };
+        },
+        setWindowLayout: () => { }, // No-op on Android
+        controlExplorer: () => { }, // No-op on Android
+        appQuit: () => { }, // No-op on Android
+        onUSBEvent: () => { }, // Not used on Android as requested
+      };
+    }
+
+    async function safeInvoke(channel, ...args) {
+      if (!window.api || !window.api[channel]) return null;
+      try { return await window.api[channel](...args); } catch (err) { console.error(`IPC Error [${channel}]:`, err); return null; }
+    }
+
+    async function getTimetable() { return await safeInvoke('getTimetable'); }
+
+    function updateClock() {
+      const now = getCurrentTime();
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      const s = String(now.getSeconds()).padStart(2, '0');
+      document.getElementById('time-display').innerText = `${h}:${m}:${s}`;
+      const weekdays = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+      document.getElementById('date-display').innerText = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 ${weekdays[now.getDay()]}`;
+
+      if (countdownTargetDate) {
+        const diff = countdownTargetDate - now;
+        if (diff > 0) {
+          const totalS = Math.floor(diff / 1000);
+          document.getElementById('countdown-timer').innerText = `${Math.floor(totalS / 60)}:${String(totalS % 60).padStart(2, '0')}`;
+        } else {
+          document.getElementById('countdown-timer').innerText = `0:00`;
+        }
+      } else {
+        document.getElementById('countdown-timer').innerText = "--:--";
+      }
+    }
+    let countdownTargetDate = null;
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    function getMinutes(timeStr) {
+      const [h, m] = timeStr.split(':').map(Number);
+      return h * 60 + m;
+    }
+    function formatMinutes(m) {
+      return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+    }
+
+    async function updateCurrentClassDisplay() {
+      try {
+        const now = getCurrentTime();
+        const curMins = now.getHours() * 60 + now.getMinutes();
+
+        if (!timetableData || timetableData.length === 0) return;
+
+        let statusText = "수업 준비 중";
+        let isBreakTime = true;
+        let isBeforeSchool = true;
+        let isAfterSchool = false;
+        let specialEventText = null;
+
+        const info = window.appInfo || {};
+        const breakMins = info.Breaktime || 10;
+        const classDur = info.ClassDuration || 45;
+        const startTime = info.StartTime || "09:00";
+        const startMins = getMinutes(startTime);
+
+        let schedule = [];
+        let marker = startMins;
+        timetableData.forEach((item, i) => {
+          if (String(item.classTime) === '5' && i > 0) {
+            const lunchDur = info.LunchDuration || 50;
+            marker += (lunchDur > breakMins ? lunchDur - breakMins : 0);
+          }
+          const start = marker;
+          const end = start + classDur;
+          schedule.push({ start, end });
+          marker = end + breakMins;
+        });
+
+        for (let i = 0; i < schedule.length; i++) {
+          const sch = schedule[i];
+          // 1. Before School / Assembly / 1st Period Preview logic
+          if (i === 0 && curMins < sch.start) {
+            currentPeriodIndex = 0;
+            isBeforeSchool = true;
+            isBreakTime = true;
+
+            const target = new Date(now.getTime());
+            target.setHours(Math.floor(sch.start / 60), sch.start % 60, 0, 0);
+            countdownTargetDate = target;
+
+            const minBeforeStart = sch.start - curMins;
+
+            if (minBeforeStart <= breakMins) {
+              // BT분 전부터는 1교시 예고 (isBeforeSchool=false to show class info)
+              specialEventText = null;
+              isBeforeSchool = false;
+              isBreakTime = true; // Still countdown to start
+              statusText = "수업 예정";
+            } else if (minBeforeStart <= 2 * breakMins) {
+              // 2BT ~ 1BT 전까지는 조회
+              specialEventText = "조회";
+              statusText = "아침조회";
+            } else {
+              // 그 외 아침
+              specialEventText = "아침시간";
+              statusText = "수업 준비 중";
+            }
+            break;
+          }
+
+          // 2. During Class
+          if (curMins >= sch.start && curMins < sch.end) {
+            currentPeriodIndex = i;
+            isBreakTime = false;
+            isBeforeSchool = false;
+            statusText = "현재 수업 중";
+            const target = new Date(now.getTime());
+            target.setHours(Math.floor(sch.end / 60), sch.end % 60, 0, 0);
+            countdownTargetDate = target;
+            break;
+          }
+
+          // 3. Breakthrough/Lunch/After School
+          const nextStart = (i + 1 < schedule.length) ? schedule[i + 1].start : 1440;
+          if (curMins >= sch.end && curMins < nextStart) {
+            if (i + 1 < schedule.length) {
+              currentPeriodIndex = i + 1;
+              isBreakTime = true;
+              isBeforeSchool = false;
+              const nextSch = schedule[i + 1];
+              const target = new Date(now.getTime());
+              target.setHours(Math.floor(nextSch.start / 60), nextSch.start % 60, 0, 0);
+              countdownTargetDate = target;
+
+              const isLunchPeriod = (nextStart - sch.end > breakMins + 10);
+
+              if (isLunchPeriod) {
+                // 점심시간인 경우: 5교시 BT분 전 전까지는 "점심" 표시
+                if (curMins < nextStart - breakMins) {
+                  specialEventText = "점심";
+                  statusText = "점심";
+                } else {
+                  // 5교시 BT분 전부터는 5교시 예고
+                  specialEventText = null;
+                  statusText = "수업 예정";
+                }
+              } else {
+                statusText = "쉬는 시간";
+              }
+            } else {
+              currentPeriodIndex = i;
+              isAfterSchool = true;
+              specialEventText = "종례";
+              statusText = "하교 안내";
+            }
+            break;
+          }
+        }
+
+        // Flashing & Alert Logic
+        handleLunchAlert(curMins);
+
+        // Update countdown label based on state
+        const cdLabel = document.getElementById('countdown-label');
+        const cdSection = document.querySelector('.countdown-section');
+
+        // Revised Countdown Visibility rules:
+        // - 1교시 BT전부터 ~ 마지막 교시 수업 (전체화면 일때만)
+        const lastSch = schedule[schedule.length - 1];
+        const firstSch = schedule[0];
+        const isWithinCountdownRange = (curMins >= firstSch.start - breakMins && curMins < lastSch.end);
+
+        if (isBreakTime || isBeforeSchool || (specialEventText && specialEventText !== '종례')) {
+          cdLabel.innerText = "수업 시작까지";
+        } else if (isAfterSchool || specialEventText === '종례') {
+          cdLabel.innerText = "하교 안내 중";
+        } else {
+          cdLabel.innerText = "수업 종료까지";
+        }
+
+        const classContainer = document.getElementById('current-class-container');
+        const specContainer = document.getElementById('special-event-container');
+        const noClass = document.getElementById('no-class-message');
+
+        if (specialEventText) {
+          classContainer.style.display = 'none'; specContainer.style.display = 'flex'; noClass.style.display = 'none';
+          document.getElementById('special-event-text').innerText = specialEventText;
+          document.getElementById('special-event-teacher').innerText = "";
+          document.getElementById('lunch-tool-container').style.display = (specialEventText === '점심' ? 'flex' : 'none');
+
+          const specImgCont = document.getElementById('special-event-image-container');
+          specImgCont.style.display = 'none'; // No icons for special events as requested
+
+          if (specialEventText === '점심') {
+            document.getElementById('special-event-text').style.fontSize = '25vh';
+          } else {
+            document.getElementById('special-event-text').style.fontSize = '20vh';
+          }
+        } else if (currentPeriodIndex !== -1 && !isAfterSchool) {
+          classContainer.style.display = 'flex'; specContainer.style.display = 'none'; noClass.style.display = 'none';
+          const item = timetableData[currentPeriodIndex];
+          document.getElementById('class-status').innerText = statusText;
+          document.getElementById('class-subject').innerText = item.subject;
+          document.getElementById('class-subject').style.fontSize = item.subject.length > 5 ? '6vh' : '9vh';
+          document.getElementById('class-teacher').innerText = "";
+          document.getElementById('class-time-range').innerText = `${currentPeriodIndex + 1}교시 (${formatMinutes(schedule[currentPeriodIndex].start)} 시작)`;
+          const coverUrl = item.subjectImage || getSubjectCover(item.subject);
+          const imgCont = document.getElementById('image-container');
+          imgCont.innerHTML = (coverUrl && !item.hideImage) ? `<img src="${coverUrl}" class="book-cover">` : '';
+          imgCont.style.display = (imgCont.innerHTML ? 'flex' : 'none');
+        } else {
+          classContainer.style.display = 'none'; specContainer.style.display = 'none'; noClass.style.display = 'block';
+        }
+
+        // Layout Control: Break, Assembly, Lunch, and Dismissal are Fullscreen. Regular Class is Desktop. (PC ONLY)
+        const targetLayout = (isBreakTime || isAfterSchool || specialEventText) ? 'break' : 'class';
+        if (isElectron && targetLayout !== lastSystemLayout && window.api) {
+          window.api.setWindowLayout(targetLayout);
+          window.api.controlExplorer(targetLayout === 'break' ? 'kill' : 'start');
+          lastSystemLayout = targetLayout;
+          currentLayout = targetLayout;
+        }
+
+        // Countdown Section Visibility: Only in Fullscreen (break mode) AND within range
+        // Countdown Section Visibility: Visible during school hours (break or class)
+        const cdSectionInDOM = document.querySelector('.countdown-section');
+        if (cdSectionInDOM) {
+          // Visible if within range (from before 1st period to end of last period)
+          cdSectionInDOM.style.display = (isWithinCountdownRange ? 'flex' : 'none');
+        }
+
+        // --- April Fools 2026: Applause on Class End ---
+        if (checkAprilFools() && countdownTargetDate) {
+          const diff = countdownTargetDate - now;
+          if (diff <= 0 && diff > -5000) { // triggered within 5 seconds of end
+            if (!window._classEndApplausePlayed) {
+              playApplause();
+              window._classEndApplausePlayed = true;
+              setTimeout(() => { window._classEndApplausePlayed = false; }, 60000);
+            }
+          }
+        }
+
+        if (checkAprilFools() && !isCLIMode) {
+          initCLI();
+          return; // initCLI will handle further rendering
+        }
+
+        if (isCLIMode) {
+          renderTerminalLeft(schedule);
+          renderTerminalTopRight();
+          renderTerminalBottomRight(schedule, isBreakTime, specialEventText);
+        } else {
+          renderSidebar(schedule, isBreakTime, specialEventText, isBeforeSchool, isAfterSchool);
+        }
+
+      } catch (err) { console.error("Update Loop Error:", err); }
+      setTimeout(updateCurrentClassDisplay, isCLIMode ? 1000 : 30000);
+    }
+
+    function renderSidebar(schedule, isBreakTime, specialEventText, isBeforeSchool, isAfterSchool) {
+      const container = document.getElementById('daily-list-container');
+      container.innerHTML = '';
+
+      // Assembly
+      const assemblyActive = specialEventText === '조회';
+      const assemblyEl = document.createElement('div');
+      assemblyEl.className = `daily-item ${assemblyActive ? 'highlight' : ''}`;
+      assemblyEl.style.height = '8vh';
+      assemblyEl.innerHTML = `<div class="daily-item-left"><div class="di-period">08:40-09:00</div></div><div class="daily-item-middle"><div class="di-subject" style="color:var(--accent); font-size:3vh;">조회</div></div><div style="width:9vh;"></div>`;
+      container.appendChild(assemblyEl);
+
+      timetableData.forEach((item, idx) => {
+        const sch = schedule[idx];
+        const isActive = (currentPeriodIndex === idx && !isBreakTime && !specialEventText);
+
+        if (idx === 4) {
+          const lunchActive = specialEventText === '점심';
+          const lunchEl = document.createElement('div');
+          lunchEl.className = `daily-item ${lunchActive ? 'highlight' : ''}`;
+          lunchEl.style.height = '8vh';
+          lunchEl.innerHTML = `<div class="daily-item-left"><div class="di-period">${formatMinutes(schedule[3].end)}-${formatMinutes(schedule[4].start)}</div></div><div class="daily-item-middle"><div class="di-subject" style="color:var(--accent); font-size:3vh;">점심</div></div><div style="width:9vh;"></div>`;
+          container.appendChild(lunchEl);
+        }
+
+        const itemEl = document.createElement('div');
+        itemEl.className = `daily-item ${isActive ? 'highlight' : ''}`;
+        if (item.isOverridden) itemEl.classList.add('overridden');
+
+        const coverUrl = item.subjectImage || getSubjectCover(item.subject);
+        const thumbHtml = (coverUrl && !item.hideImage) ? `<img src="${coverUrl}" class="daily-item-thumb">` : '';
+
+        itemEl.innerHTML = `
+          <div class="daily-item-left">
+            <div class="di-period">${idx + 1}교시 (${formatMinutes(sch.start)}~${formatMinutes(sch.end)})</div>
+          </div>
+          <div class="daily-item-middle">
+            <div class="di-subject">${item.subject}</div>
+          </div>
+          <div class="daily-item-right">${thumbHtml}</div>
+        `;
+        container.appendChild(itemEl);
+      });
+
+      // Dismissal
+      const dismissalActive = specialEventText === '종례' || isAfterSchool;
+      const dismissalEl = document.createElement('div');
+      dismissalEl.className = `daily-item ${dismissalActive ? 'highlight' : ''}`;
+      dismissalEl.style.height = '8vh';
+      dismissalEl.innerHTML = `<div class="daily-item-left"><div class="di-period">${formatMinutes(schedule[schedule.length - 1].end)} ~</div></div><div class="daily-item-middle"><div class="di-subject" style="color:var(--accent); font-size:3vh;">종례</div></div><div style="width:9vh;"></div>`;
+      container.appendChild(dismissalEl);
+    }
+
+    function quitApp() { if (window.api && window.api.appQuit) window.api.appQuit(); }
+    async function refreshDashboard() { isInitStarted = false; await initDashboard(); }
+    function openSettings() { document.getElementById('settings-overlay').style.display = 'flex'; }
+    function closeSettings() { document.getElementById('settings-overlay').style.display = 'none'; }
+
+    function handleCloseClick() { quitApp(); }
+    function handleFileClick() {
+      const target = (currentLayout === 'break' ? 'class' : 'break');
+      if (window.api) {
+        window.api.setWindowLayout(target);
+        window.api.controlExplorer(target === 'break' ? 'kill' : 'start');
+        currentLayout = target;
+
+        // Update Countdown visibility immediately on toggle
+        const cdSectionInDOM = document.querySelector('.countdown-section');
+        const now = getCurrentTime();
+        const curMins = now.getHours() * 60 + now.getMinutes();
+        const info = window.appInfo || {};
+        const startTime = info.StartTime || "09:00";
+        const startMins = getMinutes(startTime);
+        const breakMins = info.Breaktime || 10;
+        const classDur = info.ClassDuration || 45;
+
+        let marker = startMins;
+        let lastEnd = 0;
+        if (timetableData) {
+          timetableData.forEach((item, i) => {
+            if (String(item.classTime) === '5' && i > 0) {
+              const lunchDur = info.LunchDuration || 50;
+              marker += (lunchDur > breakMins ? lunchDur - breakMins : 0);
+            }
+            lastEnd = marker + classDur;
+            marker = lastEnd + breakMins;
+          });
+        }
+
+        const isWithinCountdownRange = (curMins >= startMins - breakMins && curMins < lastEnd);
+
+        if (cdSectionInDOM) {
+          cdSectionInDOM.style.display = (isWithinCountdownRange ? 'flex' : 'none');
+        }
+      }
+    }
+
+    // USB Sync Logic
+    function showUSBNotification(message, subMessage = "", colorClass = "") {
+      let toast = document.getElementById('usb-toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'usb-toast';
+        toast.className = 'usb-toast';
+        toast.innerHTML = `
+          <svg viewBox="0 0 24 24"><path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93 0-1.21-.99-2.2-2.2-2.2-1.21 0-2.2.99-2.2 2.2 0 .85.5 1.56 1.2 1.93V13c0 1.11.89 2 2 2h3v3.05c-.71.37-1.2 1.1-1.2 1.95 0 1.21.99 2.2 2.2 2.2 1.21 0 2.2-.99 2.2-2.2 0-.85-.49-1.58-1.2-1.95V15h3c1.11 0 2-.89 2-2v-2h1V7h-4z"/></svg>
+          <div>
+            <div id="usb-msg-main">USB 인식됨</div>
+            <div id="usb-msg-sub" class="usb-update-status"></div>
+          </div>
+        `;
+        document.body.appendChild(toast);
+      }
+
+      toast.className = 'usb-toast ' + colorClass;
+      document.getElementById('usb-msg-main').innerText = message;
+      document.getElementById('usb-msg-sub').innerText = subMessage;
+      toast.classList.add('active');
+
+      // Auto close after 3 seconds as requested
+      setTimeout(() => toast.classList.remove('active'), 3000);
+    }
+
+    let currentUSBDrive = null;
+
+    function openUSBShortcut() {
+      if (currentUSBDrive && window.api) {
+        window.api.openUSBExplorer(currentUSBDrive);
+      }
+    }
+
+    if (window.api && window.api.onUSBEvent) {
+      window.api.onUSBEvent((event, data) => {
+        console.log("[USB Event]", data);
+
+        if (data.type === 'removed') {
+          if (currentUSBDrive === data.drive) {
+            currentUSBDrive = null;
+            document.getElementById('usb-shortcut-btn').style.display = 'none';
+            showUSBNotification("USB 제거됨", "연결이 해제되었습니다.", "usb-purple");
+          }
+          return;
+        }
+
+        if (data.drive) {
+          currentUSBDrive = data.drive;
+          document.getElementById('usb-shortcut-btn').style.display = 'flex';
+        }
+
+        if (data.type === 'inserted') {
+          showUSBNotification("USB 인식됨", "자체 탐색기를 실행합니다.", "usb-mint");
+        } else if (data.type === 'updater-detected') {
+          showUSBNotification("BoardCastUpdater 인식됨", "업데이트를 확인합니다.", "usb-blue");
+        } else if (data.type === 'boardbook-detected') {
+          showUSBNotification("BoardBook 인식됨", "교과서 연동이 가능합니다.", "usb-purple");
+          if (checkAprilFools()) playApplause();
+        } else if (data.type === 'update-start') {
+          showUSBNotification("업데이트 시작", "곧 프로그램이 재시작됩니다.", "usb-blue");
+        }
+      });
+    }
+
+    // Textbook Mapping & Cover Generators
+    window._textbookMap = {};
+
+    function generateTextbookSvg(subject) {
+      const s = (subject || '').trim();
+      let bgGrad1 = '#1e3c72', bgGrad2 = '#2a5298', icon = '📖', tag = '교과서';
+
+      if (/국어|문학|독서|화법|작문/i.test(s)) {
+        bgGrad1 = '#800020'; bgGrad2 = '#ba133a'; icon = '📖'; tag = '국어';
+      } else if (/수학|대수|기하|미적/i.test(s)) {
+        bgGrad1 = '#0f2b5c'; bgGrad2 = '#1d5fa8'; icon = '📐'; tag = '수학';
+      } else if (/영어|회화|english/i.test(s)) {
+        bgGrad1 = '#3a1c71'; bgGrad2 = '#6930c3'; icon = '🔤'; tag = '영어';
+      } else if (/과학|물리|화학|생명|지구/i.test(s)) {
+        bgGrad1 = '#004e64'; bgGrad2 = '#00a896'; icon = '🧪'; tag = '과학';
+      } else if (/사회|지리|일반사회/i.test(s)) {
+        bgGrad1 = '#386641'; bgGrad2 = '#6a994e'; icon = '🌍'; tag = '사회';
+      } else if (/역사|한국사|동아시아/i.test(s)) {
+        bgGrad1 = '#6f1d1b'; bgGrad2 = '#99582a'; icon = '🏛️'; tag = '역사';
+      } else if (/도덕|윤리/i.test(s)) {
+        bgGrad1 = '#4a4e69'; bgGrad2 = '#22223b'; icon = '⚖️'; tag = '도덕';
+      } else if (/음악/i.test(s)) {
+        bgGrad1 = '#7209b7'; bgGrad2 = '#b5179e'; icon = '🎵'; tag = '음악';
+      } else if (/미술/i.test(s)) {
+        bgGrad1 = '#d90429'; bgGrad2 = '#f77f00'; icon = '🎨'; tag = '미술';
+      } else if (/체육|스포츠/i.test(s)) {
+        bgGrad1 = '#1b4332'; bgGrad2 = '#2d6a4f'; icon = '⚽'; tag = '체육';
+      } else if (/기술|가정|정보|컴퓨터|코딩/i.test(s)) {
+        bgGrad1 = '#14213d'; bgGrad2 = '#0077b6'; icon = '💻'; tag = '정보';
+      } else if (/한문|중국어|일본어/i.test(s)) {
+        bgGrad1 = '#5c4d3c'; bgGrad2 = '#8c7851'; icon = '📜'; tag = '한문';
+      } else if (/자율|진로|동아리|봉사/i.test(s)) {
+        bgGrad1 = '#005f73'; bgGrad2 = '#0a9396'; icon = '🌱'; tag = '창체';
+      }
+
+      const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="420" viewBox="0 0 300 420">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${bgGrad1}" />
+      <stop offset="100%" stop-color="${bgGrad2}" />
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+  <rect width="300" height="420" rx="16" fill="url(#bg)" filter="url(#shadow)"/>
+  <rect x="0" y="0" width="24" height="420" rx="4" fill="rgba(0,0,0,0.25)"/>
+  <line x1="24" y1="0" x2="24" y2="420" stroke="rgba(255,255,255,0.15)" stroke-width="2"/>
+  <rect x="50" y="40" width="80" height="28" rx="14" fill="rgba(255,255,255,0.2)"/>
+  <text x="90" y="59" fill="#fff" font-size="14" font-weight="bold" font-family="sans-serif" text-anchor="middle">${tag}</text>
+  <text x="165" y="220" font-size="70" text-anchor="middle">${icon}</text>
+  <text x="165" y="320" fill="#ffffff" font-size="34" font-weight="900" font-family="'Segoe UI', sans-serif" text-anchor="middle">${s}</text>
+  <rect x="60" y="350" width="210" height="2" fill="rgba(255,255,255,0.3)"/>
+  <text x="165" y="380" fill="rgba(255,255,255,0.7)" font-size="13" font-weight="600" font-family="sans-serif" text-anchor="middle">Boardest Digital Textbook</text>
+</svg>`.trim();
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    function getSubjectStem(subject) {
+      let cleaned = (subject || '').trim();
+      if (!cleaned) return '';
+      if (/^[a-zA-Z]_/.test(cleaned)) {
+        cleaned = cleaned.substring(2);
+      }
+      cleaned = cleaned.replace(/[^a-zA-Z0-9가-힣]/g, '').toUpperCase();
+      if (!cleaned) return '';
+      while (cleaned.length > 1) {
+        if (/\d$/.test(cleaned)) {
+          cleaned = cleaned.substring(0, cleaned.length - 1);
+          continue;
+        }
+        if (/[IVX]$/.test(cleaned)) {
+          cleaned = cleaned.substring(0, cleaned.length - 1);
+          continue;
+        }
+        if (/[A-Z]$/.test(cleaned)) {
+          cleaned = cleaned.substring(0, cleaned.length - 1);
+          continue;
+        }
+        break;
+      }
+      return cleaned;
+    }
+
+    function getSubjectCover(subject) {
+      if (!subject) return '';
+      const s = subject.trim();
+      const stem = getSubjectStem(s);
+      const info = window.appInfo || JSON.parse(localStorage.getItem('appSettings') || '{}');
+      const grade = info.grade || 1;
+      const gradeKey = `${grade}_${stem}`;
+
+      if (window._textbookMap) {
+        if (window._textbookMap[gradeKey]) return window._textbookMap[gradeKey];
+        if (window._textbookMap[stem]) return window._textbookMap[stem];
+        if (window._textbookMap[s]) return window._textbookMap[s];
+        for (const k in window._textbookMap) {
+          if (k === stem || k.includes(stem) || stem.includes(k)) {
+            return window._textbookMap[k];
+          }
+        }
+      }
+
+      const tbArr = JSON.parse(localStorage.getItem('tbImageArr') || '[]');
+      const found = tbArr.find(t => t.subject === s || getSubjectStem(t.subject) === stem);
+      if (found && found.image && found.image !== 'none') {
+        return found.image;
+      }
+      return generateTextbookSvg(s);
+    }
+
+    async function loadTextbookAssets() {
+      const info = window.appInfo || JSON.parse(localStorage.getItem('appSettings') || '{}');
+      const schoolId = (info.schoolId || info.schoolCode || info.schoolName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const grade = info.grade || 1;
+      if (!schoolId) return;
+
+      try {
+        let zipUrl = '';
+        const fsUrl = `https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/control_configs/${schoolId}?key=AIzaSyBMoJZHMBN4eYJtiZR2iGePcmIB7bg8wGo`;
+        const fsRes = await fetch(fsUrl);
+        if (fsRes.ok) {
+          const fsJson = await fsRes.json();
+          const f = fsJson.fields || {};
+          zipUrl = (f[`textbookZip${grade}`]?.stringValue || f['textbookZip']?.stringValue || '').trim();
+        }
+
+        if (!zipUrl && (schoolId === 'ydm' || schoolId === 'my' || schoolId === '44134' || (info.schoolName && info.schoolName.includes('양동')))) {
+          zipUrl = `https://raw.githubusercontent.com/hiJiwho/TB22-ydms/main/${grade}%ED%95%99%EB%85%84.zip`;
+        }
+
+        if (!zipUrl || typeof JSZip === 'undefined') return;
+
+        console.log('[Lite Textbooks] Fetching ZIP from:', zipUrl);
+        const zipRes = await fetch(zipUrl);
+        if (!zipRes.ok) return;
+        const arrayBuf = await zipRes.arrayBuffer();
+        const zip = await JSZip.loadAsync(arrayBuf);
+
+        const files = Object.keys(zip.files);
+        for (const filename of files) {
+          const file = zip.files[filename];
+          if (file.dir) continue;
+          const cleanName = filename.split('/').pop();
+          if (cleanName.startsWith('.') || !/\.(png|jpg|jpeg|webp)$/i.test(cleanName)) continue;
+
+          const dotIdx = cleanName.lastIndexOf('.');
+          const rawStem = cleanName.substring(0, dotIdx).replace(/^[\d_]+/, '').trim();
+          const stem = getSubjectStem(rawStem);
+          const blob = await file.async('blob');
+          const blobUrl = URL.createObjectURL(blob);
+          window._textbookMap[rawStem] = blobUrl;
+          window._textbookMap[stem] = blobUrl;
+          window._textbookMap[`${grade}_${stem}`] = blobUrl;
+          console.log(`[Lite Textbooks] Mapped ${stem} -> ${blobUrl}`);
+        }
+
+        if (Object.keys(window._textbookMap).length > 0) {
+          updateCurrentClassDisplay();
+        }
+      } catch (e) {
+        console.warn('[Lite Textbooks] ZIP sync failed:', e);
+      }
+    }
+
+    // ─── NEIS Meal Fetcher ───
+    async function initNeisMeal() {
+      const info = window.appInfo || JSON.parse(localStorage.getItem('appSettings') || '{}');
+      const schoolName = (info.schoolName || '').trim();
+      const listEl = document.getElementById('meal-menu-list');
+      const badgeEl = document.getElementById('meal-cal-badge');
+      if (!listEl) return;
+
+      const now = getCurrentTime();
+      const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+
+      const cacheKey = `bst_lite_meal_${schoolName}_${ymd}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const data = JSON.parse(cached);
+          renderMealUI(data.dishes, data.calories);
+          return;
+        } catch (_) {}
+      }
+
+      if (schoolName.toLowerCase() === 'demo' || !schoolName) {
+        const demoDishes = ['친환경혼합잡곡밥', '쇠고기미역국', '수제돼지갈비찜', '오이도라지생채', '배추김치', '유기농사과주스'];
+        renderMealUI(demoDishes, '645.2 Kcal');
+        return;
+      }
+
+      listEl.innerHTML = '<div class="meal-loading" style="color:#888; font-size:1.6vh; text-align:center; padding:3vh 0;">급식 정보를 불러오는 중입니다...</div>';
+
+      try {
+        const searchUrl = `https://open.neis.go.kr/hub/schoolInfo?KEY=821179541cf54b6288d51741f30e1c90&Type=json&pIndex=1&pSize=5&SCHUL_NM=${encodeURIComponent(schoolName)}`;
+        const sRes = await fetch(searchUrl);
+        if (!sRes.ok) throw new Error('나이스 학교 정보 통신 오류');
+        const sJson = await sRes.json();
+        const sRows = sJson?.schoolInfo?.[1]?.row || [];
+        if (sRows.length === 0) throw new Error('등록된 학교를 찾을 수 없습니다.');
+
+        const officeCode = sRows[0].ATPT_OFCDC_SC_CODE;
+        const schoolCode = sRows[0].SD_SCHUL_CODE;
+
+        const mealUrl = `https://open.neis.go.kr/hub/mealServiceDietInfo?KEY=821179541cf54b6288d51741f30e1c90&Type=json&pIndex=1&pSize=1&ATPT_OFCDC_SC_CODE=${officeCode}&SD_SCHUL_CODE=${schoolCode}&MLSV_YMD=${ymd}&MMEAL_SC_CODE=2`;
+        const mRes = await fetch(mealUrl);
+        if (!mRes.ok) throw new Error('급식 정보를 받아올 수 없습니다.');
+        const mJson = await mRes.json();
+        const mRows = mJson?.mealServiceDietInfo?.[1]?.row || [];
+
+        if (mRows.length === 0) {
+          renderMealUI([], '');
+          return;
+        }
+
+        const rawDdish = mRows[0].DDISH_NM || '';
+        const calInfo = mRows[0].CAL_INFO || '';
+
+        const dishes = rawDdish
+          .split(/<br\s*\/?>/i)
+          .map(d => d.replace(/\([0-9\.\s]+\)/g, '').trim())
+          .filter(d => d.length > 0);
+
+        localStorage.setItem(cacheKey, JSON.stringify({ dishes, calories: calInfo }));
+        renderMealUI(dishes, calInfo);
+      } catch (err) {
+        console.warn('[Lite Meal] Fetch error:', err);
+        listEl.innerHTML = `<div style="color:#777; font-size:1.6vh; text-align:center; padding:3vh 0;">오늘 급식 정보가 없거나 주말/공휴일입니다.</div>`;
+        if (badgeEl) badgeEl.innerText = '-';
+      }
+    }
+
+    function renderMealUI(dishes, calories) {
+      const listEl = document.getElementById('meal-menu-list');
+      const badgeEl = document.getElementById('meal-cal-badge');
+      if (badgeEl) badgeEl.innerText = calories ? `⚡ ${calories}` : '칼로리 정보 없음';
+
+      if (!dishes || dishes.length === 0) {
+        listEl.innerHTML = `<div style="color:#777; font-size:1.6vh; text-align:center; padding:3vh 0;">오늘 등록된 급식 메뉴가 없습니다.</div>`;
+        return;
+      }
+
+      listEl.innerHTML = dishes.map(d => `
+        <div class="meal-dish-item">
+          <span class="meal-dish-bullet">●</span>
+          <span>${d}</span>
+        </div>
+      `).join('');
+    }
+
+    // ─── Meal Satisfaction Voting ───
+    async function initMealVotes() {
+      const info = window.appInfo || JSON.parse(localStorage.getItem('appSettings') || '{}');
+      const schoolCode = (info.schoolCode || info.schoolName || 'default').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const now = getCurrentTime();
+      const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+
+      const myVote = localStorage.getItem(`bst_lite_meal_voted_${ymd}`);
+      ['good', 'soso', 'bad'].forEach(t => {
+        const btn = document.getElementById(`vote-${t}-btn`);
+        if (btn) {
+          if (myVote === t) btn.classList.add('active');
+          else btn.classList.remove('active');
+        }
+      });
+
+      try {
+        const url = `https://jiwhosboardest-default-rtdb.firebaseio.com/meal_votes/${schoolCode}/${ymd}/satisfaction.json`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json() || {};
+          document.getElementById('vote-good-count').innerText = data.good || 0;
+          document.getElementById('vote-soso-count').innerText = data.soso || 0;
+          document.getElementById('vote-bad-count').innerText = data.bad || 0;
+        }
+      } catch (e) {
+        console.warn('[Lite Vote] Fetch failed:', e);
+      }
+    }
+
+    async function submitMealVote(type) {
+      const info = window.appInfo || JSON.parse(localStorage.getItem('appSettings') || '{}');
+      const schoolCode = (info.schoolCode || info.schoolName || 'default').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const now = getCurrentTime();
+      const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+      const voteKey = `bst_lite_meal_voted_${ymd}`;
+
+      const existingVote = localStorage.getItem(voteKey);
+      if (existingVote) {
+        alert('오늘 급식 만족도 투표에 이미 참여하셨습니다!');
+        return;
+      }
+
+      localStorage.setItem(voteKey, type);
+      const cntEl = document.getElementById(`vote-${type}-count`);
+      const currentCount = parseInt(cntEl.innerText || '0') + 1;
+      cntEl.innerText = currentCount;
+
+      ['good', 'soso', 'bad'].forEach(t => {
+        const btn = document.getElementById(`vote-${t}-btn`);
+        if (btn) {
+          if (t === type) btn.classList.add('active');
+          else btn.classList.remove('active');
+        }
+      });
+
+      try {
+        const url = `https://jiwhosboardest-default-rtdb.firebaseio.com/meal_votes/${schoolCode}/${ymd}/satisfaction/${type}.json`;
+        await fetch(url, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentCount)
+        });
+      } catch (e) {
+        console.warn('[Lite Vote] Submit failed:', e);
+      }
+    }
+
+    // ─── Realtime Meal Call Reception & Audio Chime ───
+    let mealAudioCtx = null;
+    function playMealCallChime() {
+      try {
+        if (!mealAudioCtx) mealAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (mealAudioCtx.state === 'suspended') mealAudioCtx.resume();
+
+        const osc1 = mealAudioCtx.createOscillator();
+        const gain1 = mealAudioCtx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, mealAudioCtx.currentTime);
+        osc1.frequency.exponentialRampToValueAtTime(880, mealAudioCtx.currentTime + 0.18);
+        gain1.gain.setValueAtTime(0.35, mealAudioCtx.currentTime);
+        gain1.gain.exponentialRampToValueAtTime(0.001, mealAudioCtx.currentTime + 0.4);
+        osc1.connect(gain1);
+        gain1.connect(mealAudioCtx.destination);
+        osc1.start();
+
+        setTimeout(() => {
+          const osc2 = mealAudioCtx.createOscillator();
+          const gain2 = mealAudioCtx.createGain();
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(880, mealAudioCtx.currentTime);
+          osc2.frequency.exponentialRampToValueAtTime(1174.66, mealAudioCtx.currentTime + 0.22);
+          gain2.gain.setValueAtTime(0.4, mealAudioCtx.currentTime);
+          gain2.gain.exponentialRampToValueAtTime(0.001, mealAudioCtx.currentTime + 0.55);
+          osc2.connect(gain2);
+          gain2.connect(mealAudioCtx.destination);
+          osc2.start();
+        }, 180);
+      } catch (e) {
+        console.warn('[Lite Chime] Error:', e);
+      }
+    }
+
+    let isMealCallModalOpen = false;
+
+    async function pollMealCall() {
+      const info = window.appInfo || JSON.parse(localStorage.getItem('appSettings') || '{}');
+      if (!info.schoolCode && !info.schoolName) return;
+      const sCode = (info.schoolCode || info.schoolName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const grade = String(info.grade || 1);
+      const classNum = String(info.class || 1);
+
+      const targetDocIds = [
+        `${sCode}_1_${grade}_${classNum}`,
+        `${sCode}_1_${grade}_${classNum}_lite`
+      ];
+
+      for (const docId of targetDocIds) {
+        try {
+          const url = `https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/${docId}.json`;
+          const res = await fetch(url, { cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.called === true) {
+              if (!isMealCallModalOpen) {
+                isMealCallModalOpen = true;
+                document.getElementById('meal-call-modal').style.display = 'flex';
+                playMealCallChime();
+              }
+              return;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    async function dismissMealCall() {
+      isMealCallModalOpen = false;
+      document.getElementById('meal-call-modal').style.display = 'none';
+
+      const info = window.appInfo || JSON.parse(localStorage.getItem('appSettings') || '{}');
+      const sCode = (info.schoolCode || info.schoolName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const grade = String(info.grade || 1);
+      const classNum = String(info.class || 1);
+
+      const targetDocIds = [
+        `${sCode}_1_${grade}_${classNum}`,
+        `${sCode}_1_${grade}_${classNum}_lite`
+      ];
+
+      for (const docId of targetDocIds) {
+        try {
+          const url = `https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/${docId}.json`;
+          await fetch(url, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ called: false })
+          });
+        } catch (_) {}
+      }
+    }
+
+    // ─── Realtime Presence Heartbeat (Isolate from message list via @lite.school.boardest.local) ───
+    async function sendLiteHeartbeat() {
+      const info = window.appInfo || JSON.parse(localStorage.getItem('appSettings') || '{}');
+      if (!info.schoolCode && !info.schoolName) return;
+      const sCode = (info.schoolCode || info.schoolName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const grade = String(info.grade || 1);
+      const classNum = String(info.class || 1);
+      const docId = `${sCode}_1_${grade}_${classNum}_lite`;
+      const email = `${sCode}_g${grade}c${classNum}@lite.school.boardest.local`;
+
+      const payload = {
+        docId: docId,
+        schoolCode: sCode,
+        schoolName: info.schoolName || sCode,
+        grade: grade,
+        classNum: classNum,
+        cafeteria: "1",
+        cafeteriaNum: "1",
+        isOnline: true,
+        isLite: true,
+        email: email,
+        lastActive: Date.now(),
+        called: false
+      };
+
+      try {
+        await fetch(`https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/${docId}.json`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch (e) {
+        console.warn('[Lite Heartbeat] Failed:', e);
+      }
+    }
+
+    function startLiteRealtimePresence() {
+      sendLiteHeartbeat();
+      setInterval(sendLiteHeartbeat, 25000);
+    }
+
+    function startMealCallListener() {
+      pollMealCall();
+      setInterval(pollMealCall, 4000);
+    }
+
+    // ─── Dashboard Initialization ───
+    async function initDashboard() {
+      if (isInitStarted) return; isInitStarted = true;
+      try {
+        console.log("initDashboard: Starting...");
+        const res = await getTimetable();
+        console.log("initDashboard: Timetable response", res);
+
+        if (!res || (!res.success && !res.needsMapping)) {
+          const savedInfo = JSON.parse(localStorage.getItem('appSettings') || '{}');
+          if (!savedInfo.schoolName) {
+            document.getElementById('overlay').style.display = 'none';
+            await openSettings(1);
+            return;
+          }
+          document.getElementById('overlay-title').innerText = '오류 발생';
+          document.getElementById('overlay-desc').innerText = res ? (res.error || '알 수 없는 오류') : '응답 없음 (네트워크 확인)';
+          document.getElementById('reload-btn').style.display = 'block';
+          isInitStarted = false;
+          return;
+        }
+
+        if (res.needsMapping) {
+          console.log("initDashboard: Needs mapping, opening settings");
+          document.getElementById('overlay').style.display = 'none';
+          await openSettings(1);
+          return;
+        }
+
+        console.log("initDashboard: Dashboard data loaded, hiding overlay.");
+        document.getElementById('overlay').style.display = 'none';
+        document.getElementById('settings-overlay').style.display = 'none';
+
+        window.appInfo = res.info;
+
+        const info = res.info || {};
+        const schoolName = info.schoolName || "학교 정보 없음";
+        const grade = info.grade ? `${info.grade}학년 ` : "";
+        const classNum = info.class ? `${info.class}반` : "";
+        document.getElementById('school-display').innerText = `${schoolName} ${grade}${classNum}`.trim();
+
+        timetableData = res.timetable || [];
+
+        if (checkAprilFools()) {
+          initCLI();
+        } else {
+          updateCurrentClassDisplay();
+        }
+
+        initNeisMeal();
+        initMealVotes();
+        startLiteRealtimePresence();
+        startMealCallListener();
+        loadTextbookAssets();
+
+        setTimeout(() => {
+          if (document.getElementById('overlay').style.display !== 'none') {
+            document.getElementById('overlay').style.display = 'none';
+          }
+        }, 500);
+      } catch (err) {
+        console.error("initDashboard Critical Error:", err);
+        document.getElementById('overlay-title').innerText = '치명적 오류';
+        document.getElementById('overlay-desc').innerText = err.message;
+        document.getElementById('reload-btn').style.display = 'block';
+        isInitStarted = false;
+      }
+    }
+
+    function switchSettingsTab(tab) {
+      const tabs = ['school', 'routine', 'textbook', 'reset'];
+      tabs.forEach(t => {
+        const btn = document.getElementById('tab-btn-' + t);
+        const pane = document.getElementById('tab-pane-' + t);
+        if (btn) btn.classList.toggle('active', t === tab);
+        if (pane) pane.style.display = (t === tab ? 'flex' : 'none');
+      });
+      const titles = {
+        school: '학교 및 학급',
+        routine: '일과 및 시간표',
+        textbook: '교과서 이미지',
+        reset: '데이터 및 초기화'
+      };
+      const titleEl = document.getElementById('settings-tab-title');
+      if (titleEl) titleEl.innerText = titles[tab] || '설정';
+      if (tab === 'textbook') renderImageMappingUI();
+    }
+
+    function resetAllSettings() {
+      if (confirm("정말 모든 설정을 초기화하고 처음부터 다시 시작하시겠습니까?")) {
+        localStorage.clear();
+        location.reload();
+      }
+    }
+
+    async function lookupSchoolId() {
+      const idInput = document.getElementById('set-school-id');
+      const schoolId = (idInput.value || '').trim().toLowerCase();
+      if (!schoolId) {
+        alert("학교 ID를 입력해주세요 (예: ydm)");
+        return;
+      }
+      try {
+        const fsUrl = `https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/control_configs/${schoolId}?key=AIzaSyBMoJZHMBN4eYJtiZR2iGePcmIB7bg8wGo`;
+        const res = await fetch(fsUrl);
+        if (res.ok) {
+          const data = await res.json();
+          const fields = data.fields || {};
+          const schoolName = fields.schoolName?.stringValue || fields.school_name?.stringValue || '';
+          const region = fields.region?.stringValue || '서울';
+          const comciganCode = parseInt(fields.comciganCode?.integerValue || fields.comcigan_code?.integerValue || fields.schoolCode?.stringValue || 0);
+
+          if (schoolName) document.getElementById('set-school').value = schoolName;
+          if (region) document.getElementById('set-region').value = region;
+
+          const timeSettings = fields.timeSettings?.mapValue?.fields;
+          if (timeSettings) {
+            const startStr = timeSettings.firstClassStart?.stringValue || timeSettings.StartTime?.stringValue;
+            const classDur = parseInt(timeSettings.classDuration?.integerValue || timeSettings.ClassDuration?.integerValue || 45);
+            const breakDur = parseInt(timeSettings.breakDuration?.integerValue || timeSettings.Breaktime?.integerValue || 10);
+            const lunchDur = parseInt(timeSettings.lunchDuration?.integerValue || timeSettings.LunchDuration?.integerValue || 50);
+
+            if (startStr) document.getElementById('set-starttime').value = startStr;
+            if (classDur) document.getElementById('set-classduration').value = classDur;
+            if (breakDur) document.getElementById('set-breaktime').value = breakDur;
+            if (lunchDur) document.getElementById('set-lunchtime').value = lunchDur;
+          }
+
+          window._lookedUpSchoolCode = comciganCode;
+          window._lookedUpSchoolId = schoolId;
+          alert(`✅ [${schoolId}] ${schoolName} 정보 및 시정표가 자동 완성되었습니다!`);
+        } else {
+          alert(`❌ 학교 ID "${schoolId}" 등록 데이터를 찾을 수 없습니다.`);
+        }
+      } catch (e) {
+        alert("학교 ID 조회 오류: " + e.message);
+      }
+    }
+
+    async function openSettings(tab = 'school') {
+      const data = await safeInvoke('getSettings');
+      if (!data) return;
+      const info = data.info || {};
+      if (document.getElementById('set-school-id')) {
+        document.getElementById('set-school-id').value = info.schoolId || "";
+      }
+      document.getElementById('set-region').value = info.region || "";
+      document.getElementById('set-school').value = info.schoolName || "";
+      document.getElementById('set-grade').value = info.grade || 1;
+      document.getElementById('set-class').value = info.class || 1;
+      document.getElementById('set-starttime').value = info.StartTime || "09:00";
+      document.getElementById('set-breaktime').value = info.Breaktime || 10;
+      document.getElementById('set-classduration').value = info.ClassDuration || 45;
+      document.getElementById('set-lunchtime').value = info.LunchDuration || 50;
+      document.getElementById('set-devmode').checked = !!info.Dev;
+
+      document.getElementById('settings-overlay').style.display = 'flex';
+      switchSettingsTab(tab === 2 || tab === 'textbook' ? 'textbook' : 'school');
+    }
+
+    function showStep(s) {
+      switchSettingsTab(s === 2 ? 'textbook' : 'school');
+    }
+
+    async function proceedToStep2() {
+      try {
+        console.log("proceedToStep2: Saving settings...");
+        const nextBtn = document.querySelector('.bst-settings-main .primary');
+        if (nextBtn) { nextBtn.innerText = "저장 중..."; nextBtn.disabled = true; }
+
+        const schoolNameInput = document.getElementById('set-school').value.trim();
+        if (!schoolNameInput) {
+          alert("학교명을 입력해주세요.");
+          if (nextBtn) { nextBtn.innerText = "저장 및 시작 ✅"; nextBtn.disabled = false; }
+          return;
+        }
+
+        const schoolIdVal = (document.getElementById('set-school-id')?.value || window._lookedUpSchoolId || '').trim().toLowerCase();
+        const info = {
+          schoolId: schoolIdVal,
+          region: document.getElementById('set-region').value.trim(),
+          schoolName: schoolNameInput,
+          schoolCode: window._lookedUpSchoolCode || undefined,
+          grade: parseInt(document.getElementById('set-grade').value) || 1,
+          class: parseInt(document.getElementById('set-class').value) || 1,
+          StartTime: document.getElementById('set-starttime').value || "09:00",
+          Breaktime: parseInt(document.getElementById('set-breaktime').value) || 10,
+          ClassDuration: parseInt(document.getElementById('set-classduration').value) || 45,
+          LunchDuration: parseInt(document.getElementById('set-lunchtime').value) || 50,
+          Dev: document.getElementById('set-devmode').checked
+        };
+
+        if (!info.schoolCode) {
+          try {
+            const searchUrl = `https://comcigan.jiwho.workers.dev/api/comcigan/search?school=${encodeURIComponent(info.schoolName)}`;
+            const sRes = await fetch(searchUrl);
+            if (sRes.ok) {
+              const sJson = await sRes.json();
+              const found = (sJson.schools || sJson.results || [])[0];
+              if (found && found.code) {
+                info.schoolCode = found.code;
+              }
+            }
+          } catch (_) {}
+        }
+
+        const saveRes = await safeInvoke('saveSettings', { info });
+        console.log("proceedToStep2: Save result", saveRes);
+
+        document.getElementById('settings-overlay').style.display = 'none';
+        document.getElementById('overlay').style.display = 'none';
+        location.reload();
+      } catch (err) {
+        console.error("proceedToStep2 Error:", err);
+        alert("데이터 저장 중 오류가 발생했습니다: " + err.message);
+        const nextBtn = document.querySelector('#settings-step-1 .primary');
+        if (nextBtn) { nextBtn.innerText = "다시 시도 ➡️"; nextBtn.disabled = false; }
+      }
+    }
+
+    async function renderImageMappingUI() {
+      try {
+        console.log("renderImageMappingUI: Starting...");
+        showStep(2);
+        const data = await safeInvoke('getSettings');
+        if (!data) { console.error("renderImageMappingUI: Failed to get settings"); return; }
+
+        const subjects = data.tbImageArr || [];
+        const cont = document.getElementById('image-mapping-container');
+        if (!cont) return;
+        cont.innerHTML = "";
+
+        const uniqueSubjs = [...new Set(subjects.map(s => s.subject))].filter(Boolean).sort();
+
+        uniqueSubjs.forEach(subj => {
+          const row = document.createElement('div');
+          row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.justifyContent = 'space-between';
+          row.style.padding = '1vh 0'; row.style.borderBottom = '1px solid #333';
+          row.innerHTML = `
+            <span style="font-size:1.8vh; font-weight:bold;">${subj}</span>
+            <select id="img-select-${subj}" style="width:15vw; background:#111; color:#fff; border:1px solid #444; padding:0.5vh; border-radius:4px;">
+              <option value="none">자동 생성 표지</option>
+            </select>
+          `;
+          cont.appendChild(row);
+        });
+
+        const existingFiles = await safeInvoke('getTbimagesList');
+        updateImageSelects(existingFiles);
+
+        uniqueSubjs.forEach(subj => {
+          const entry = subjects.find(s => s.subject === subj);
+          if (entry && entry.image && entry.image !== 'none') {
+            const sel = document.getElementById(`img-select-${subj}`);
+            if (sel) sel.value = entry.image;
+          }
+        });
+      } catch (err) {
+        console.error("renderImageMappingUI Critical Error:", err);
+      }
+    }
+
+    async function importImages() {
+      const result = await safeInvoke('importTBImages');
+      if (result && result.success) {
+        document.getElementById('import-status').innerText = `${result.count}개의 이미지를 불러왔습니다.`;
+        updateImageSelects(result.files);
+      }
+    }
+
+    function findBestMatch(subject, files) {
+      if (!files || files.length === 0) return "none";
+      const cleanSubj = subject.replace(/[\dABab]+$/, '').trim().toLowerCase();
+
+      let match = files.find(f => {
+        const name = f.split('.').slice(0, -1).join('.').toLowerCase();
+        return name === cleanSubj;
+      });
+      if (match) return match;
+
+      match = files.find(f => {
+        const name = f.split('.').slice(0, -1).join('.').toLowerCase();
+        return name.includes(cleanSubj) || cleanSubj.includes(name);
+      });
+      return match || "none";
+    }
+
+    function updateImageSelects(files) {
+      if (!files) return;
+      const selects = document.querySelectorAll('[id^="img-select-"]');
+      selects.forEach(sel => {
+        const subject = sel.id.replace('img-select-', '');
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="none">자동 생성 표지</option>';
+        files.forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = f; opt.innerText = f;
+          sel.appendChild(opt);
+        });
+
+        if (currentVal === "none" || !currentVal) {
+          const match = findBestMatch(subject, files);
+          sel.value = match;
+        } else {
+          sel.value = currentVal;
+        }
+      });
+    }
+
+    async function finishSettings() {
+      const data = await safeInvoke('getSettings');
+      if (!data) return;
+      let tbImageArr = data.tbImageArr || [];
+      const info = data.info || {};
+
+      tbImageArr.forEach(item => {
+        const imgSel = document.getElementById(`img-select-${item.subject}`);
+        if (imgSel) item.image = imgSel.value;
+      });
+
+      await window.api.saveSettings({ info, tbImageArr });
+      location.reload();
+    }
+
+    function backToStep1() { showStep(1); }
+    function backToStep2() { showStep(2); }
+
+    function updateLunchDepartureTime() {
+      const input = document.getElementById('lunch-tool-input').value;
+      if (!input) {
+        lunchDepartureTime = null;
+        document.getElementById('lunch-departure-display').style.display = 'none';
+        return;
+      }
+      lunchDepartureTime = input;
+      document.getElementById('lunch-departure-display').innerText = `${input} 출발`;
+      document.getElementById('lunch-departure-display').style.display = 'block';
+    }
+
+    function handleLunchAlert(curMins) {
+      if (!lunchDepartureTime) {
+        stopFlashing();
+        return;
+      }
+
+      const [dH, dM] = lunchDepartureTime.split(':').map(Number);
+      const departureMins = dH * 60 + dM;
+
+      const isLunchNow = (document.getElementById('special-event-text').innerText === '점심');
+
+      if (!isLunchNow) {
+        stopFlashing();
+        return;
+      }
+
+      if (curMins === departureMins) {
+        startFlashing();
+      } else {
+        stopFlashing();
+      }
+    }
+
+    function startFlashing() {
+      if (isFlashing) return;
+      isFlashing = true;
+      document.body.classList.add('flashing');
+    }
+
+    function stopFlashing() {
+      if (!isFlashing) return;
+      isFlashing = false;
+      document.body.classList.remove('flashing');
+    }
+
+    document.addEventListener('DOMContentLoaded', initDashboard);
+  </script>
+</body>
+
+</html>

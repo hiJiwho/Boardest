@@ -15,11 +15,13 @@ import 'package:universal_io/io.dart';
 import 'services/app_paths.dart';
 import 'services/storage_service.dart';
 import 'services/bst_save_service.dart';
+import 'services/bst_cloud_service.dart';
 import 'services/auth_service.dart';
 import 'services/meal_call_service.dart';
 import 'config/app_config.dart';
 import 'views/setup_wizard_view.dart';
 import 'views/dashboard_view.dart';
+import 'views/boardest_tools_view.dart';
 import 'services/demo_class_allocator_service.dart';
 import 'helpers/startup_helper.dart';
 import 'package:window_manager/window_manager.dart';
@@ -59,6 +61,8 @@ void main(List<String> args) async {
 
   WidgetsFlutterBinding.ensureInitialized();
   AppConfig.initDemoMode(args);
+  AppConfig.initLiteMode(args);
+  AppConfig.initToolsMode(args);
   try {
     pdfrxFlutterInitialize();
   } catch (e) {
@@ -110,6 +114,15 @@ void main(List<String> args) async {
     debugPrint('[Boardest Startup] Running in Demo mode: ${settings.classNickname}');
   }
 
+  // Tools 모드일 경우 무설치 수업도구 즉시 실행 세팅
+  if (AppConfig.isToolsMode) {
+    settings = settings.copyWith(
+      isSetupComplete: true,
+      selectedSchool: School(id: 0, code: 0, name: 'Boardest Tools', region: '전국'),
+    );
+    debugPrint('[Boardest Startup] Running in Tools mode');
+  }
+
   // Dynamic Comcigan school code lookup
   if (settings.isSetupComplete && settings.schoolId.isNotEmpty && !AppConfig.isDemoMode) {
     try {
@@ -138,7 +151,38 @@ void main(List<String> args) async {
 
   if (kIsWeb && !AppConfig.isDemoMode) {
     final uri = Uri.base;
-    if (uri.queryParameters['oobe_callback'] == 'true') {
+    if (uri.queryParameters['auth'] == 'success') {
+      final email = uri.queryParameters['email'] ?? '';
+      final token = uri.queryParameters['token'] ?? '';
+      final teacherName = uri.queryParameters['teacherName'] ?? '';
+      final teacherId = uri.queryParameters['teacherId'] ?? '';
+      final schoolId = uri.queryParameters['schoolId'] ?? '44134';
+      final schoolCode = uri.queryParameters['schoolCode'] ?? schoolId;
+      final schoolName = uri.queryParameters['schoolName'] ?? '교사 연구실';
+      final grade = int.tryParse(uri.queryParameters['grade'] ?? '1') ?? 1;
+      final classNum = int.tryParse(uri.queryParameters['classNum'] ?? '1') ?? 1;
+      final cafeteria = uri.queryParameters['cafeteriaNum'] ?? '1';
+      final codeInt = int.tryParse(schoolCode) ?? int.tryParse(schoolId) ?? 44134;
+
+      settings = settings.copyWith(
+        selectedSchool: School(id: codeInt, code: codeInt, name: schoolName, region: '서울'),
+        schoolId: schoolId,
+        selectedGrade: grade,
+        selectedClass: classNum,
+        selectedTeacher: teacherName,
+        selectedTeacherId: teacherId.isNotEmpty ? teacherId : teacherName,
+        selectedTeacherName: teacherName,
+        specialClassroomMode: true,
+        specialClassroomType: 2,
+        classNickname: teacherName.isNotEmpty ? '$teacherName 선생님' : 'Class Teacher',
+        cafeteriaNum: cafeteria,
+        isSetupComplete: true,
+      );
+      if (token.isNotEmpty) {
+        BstCloudService.instance.setDirectAccessToken(token, teacherName: teacherName, ownerEmail: email);
+      }
+      await storage.saveSettings(settings);
+    } else if (uri.queryParameters['oobe_callback'] == 'true') {
       final code = int.tryParse(uri.queryParameters['code'] ?? '') ?? 31415;
       final grade = int.tryParse(uri.queryParameters['grade'] ?? '') ?? 2;
       final classNum = int.tryParse(uri.queryParameters['class'] ?? '') ?? 1;
@@ -159,8 +203,8 @@ void main(List<String> args) async {
   final authService = AuthService();
   var currentUser = await authService.getCurrentUser();
 
-  // 로그인 검증 및 미로그인 시 샌드박스 정리 & 로그인 요구 (데모 모드 시 우회)
-  if (currentUser == null && !AppConfig.isDemoMode) {
+  // 로그인 검증 및 미로그인 시 샌드박스 정리 & 로그인 요구 (데모 및 툴즈 모드 시 우회)
+  if (currentUser == null && !AppConfig.isDemoMode && !AppConfig.isToolsMode) {
     if (settings.isSetupComplete && settings.selectedSchool != null) {
       try {
         final err = await authService.loginOrSignupClass(
@@ -184,7 +228,7 @@ void main(List<String> args) async {
     }
 
     // 여전히 로그인이 안 되어있으면 샌드박스 내부 임시 데이터 소거 및 로그인 요구창 진입
-    if (currentUser == null && !AppConfig.isDemoMode) {
+    if (currentUser == null && !AppConfig.isDemoMode && !AppConfig.isToolsMode) {
       debugPrint('[Boardest Startup] Not logged in. Purging sandbox data and prompting login...');
       try {
         final tempDir = Directory(AppPaths.bstCldTempDirSync);
@@ -295,14 +339,18 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget home;
-    if (!settings.isSetupComplete) {
+    if (AppConfig.isToolsMode) {
+      home = const BoardestToolsView();
+    } else if (AppConfig.isDemoMode) {
+      home = DashboardView(initialTool: initialTool, pptFullscreen: pptFullscreen);
+    } else if (!settings.isSetupComplete) {
       home = const SetupWizardView();
     } else {
       home = DashboardView(initialTool: initialTool, pptFullscreen: pptFullscreen);
     }
 
     return MaterialApp(
-      title: 'Boardest',
+      title: AppConfig.editionTitle,
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
         final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;

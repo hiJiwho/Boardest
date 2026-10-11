@@ -116,7 +116,7 @@ class StorageService {
             return recovered;
           }
 
-          final schoolName = data['schoolName']?.toString() ?? '양동중학교';
+          final schoolName = data['schoolName']?.toString() ?? '보데스트 중학교';
           final schoolId = data['schoolId']?.toString() ?? 'ydm';
           final schoolCode = int.tryParse(data['schoolCode']?.toString() ?? '') ?? 44134;
           final grade = int.tryParse(data['grade']?.toString() ?? '') ?? 1;

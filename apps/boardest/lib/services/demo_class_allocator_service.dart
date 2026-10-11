@@ -82,13 +82,17 @@ class DemoClassAllocatorService {
       region: '서울',
     );
 
+    final randomGrade = Random().nextInt(3) + 1; // 1~3학년
+    final sampleClasses = [1, 2, 3, 4, 5, 6, 7, 8, 12, 124];
+    final randomClass = sampleClasses[Random().nextInt(sampleClasses.length)];
+
     final newSettings = currentSettings.copyWith(
       selectedSchool: demoSchool,
       schoolId: 'Demo',
-      selectedGrade: 1,
-      selectedClass: chosenNumber,
-      specialClassroomMode: true,
-      classNickname: _assignedClassId,
+      selectedGrade: randomGrade,
+      selectedClass: randomClass,
+      specialClassroomMode: false,
+      classNickname: '$randomGrade학년 $randomClass반',
       isSetupComplete: true,
     );
     // 데모 설정은 메모리 상에서만 유지하여 실제 학교 설정이 덮어써지지 않도록 보호

@@ -31,24 +31,128 @@
 
   <title>boardest</title>
   <link rel="manifest" href="manifest.json">
-  <!-- Cache & ServiceWorker Purge Helper -->
+  <!-- Hot-Swap Service Worker & Version Auto-Updater -->
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for (let reg of registrations) {
-          if (!reg.active || !reg.active.scriptURL.includes('firebase-messaging-sw.js')) {
-            reg.unregister();
+    (async function() {
+      async function purgeAllCachesAndSW() {
+        try {
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
           }
+          if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (let reg of regs) {
+              if (!reg.active || !reg.active.scriptURL.includes('firebase-messaging-sw.js')) {
+                await reg.unregister();
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[VersionHotSwap] Purge error:', e);
         }
-      });
-    }
-    if ('caches' in window) {
-      caches.keys().then(function(names) {
-        for (let name of names) {
-          caches.delete(name);
+      }
+
+      try {
+        const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+        if (res.ok) {
+          const vData = await res.json();
+          const currentVersion = (vData.version || '3.0.5') + '.' + (vData.build_number || '0');
+          const lastVersion = localStorage.getItem('bst_deployed_version');
+          if (lastVersion && lastVersion !== currentVersion) {
+            console.log('[VersionHotSwap] New version detected:', currentVersion, '(was:', lastVersion, '). Purging cache & hot-reloading...');
+            localStorage.setItem('bst_deployed_version', currentVersion);
+            await purgeAllCachesAndSW();
+            window.location.reload(true);
+            return;
+          }
+          localStorage.setItem('bst_deployed_version', currentVersion);
         }
-      });
-    }
+      } catch (err) {
+        console.log('[VersionHotSwap] Version fetch skipped:', err);
+      }
+
+      purgeAllCachesAndSW();
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('controllerchange', function() {
+          console.log('[SW] Controller changed, updating view...');
+          window.location.reload();
+        });
+      }
+    })();
+  </script>
+  <!-- 순정 FIDO2 / WebAuthn Cross-Device 패스키 발동 헬퍼 -->
+  <script>
+    window.triggerNativePasskeyCreate = async function(email, displayName) {
+      if (!window.PublicKeyCredential) {
+        throw new Error('이 브라우저는 FIDO2 WebAuthn 패스키를 지원하지 않습니다.');
+      }
+      const challengeBytes = new Uint8Array(32);
+      crypto.getRandomValues(challengeBytes);
+      const userIdBytes = new TextEncoder().encode(email || 'class@boardest.local');
+
+      const createOptions = {
+        publicKey: {
+          challenge: challengeBytes,
+          rp: {
+            name: "BOARDEST",
+            id: window.location.hostname
+          },
+          user: {
+            id: userIdBytes,
+            name: email || 'class@boardest.local',
+            displayName: displayName || '교실 전자칠판'
+          },
+          pubKeyCredParams: [
+            { alg: -7, type: "public-key" },  // ES256
+            { alg: -257, type: "public-key" } // RS256
+          ],
+          authenticatorSelection: {
+            userVerification: "preferred",
+            residentKey: "preferred"
+          },
+          timeout: 60000,
+          attestation: "none"
+        }
+      };
+
+      const cred = await navigator.credentials.create(createOptions);
+      return cred ? true : false;
+    };
+
+    window.triggerNativePasskeyGet = async function() {
+      if (!window.PublicKeyCredential) {
+        throw new Error('이 브라우저는 FIDO2 WebAuthn 패스키를 지원하지 않습니다.');
+      }
+      const challengeBytes = new Uint8Array(32);
+      crypto.getRandomValues(challengeBytes);
+      const getOptions = {
+        publicKey: {
+          challenge: challengeBytes,
+          timeout: 60000,
+          userVerification: "preferred",
+          rpId: window.location.hostname
+        }
+      };
+      try {
+        const assertion = await navigator.credentials.get(getOptions);
+        if (assertion) {
+          let userEmail = '';
+          if (assertion.response && assertion.response.userHandle) {
+            userEmail = new TextDecoder().decode(assertion.response.userHandle);
+          }
+          return JSON.stringify({
+            id: assertion.id,
+            email: userEmail,
+            success: true
+          });
+        }
+      } catch (e) {
+        console.warn('Native passkey get error:', e);
+      }
+      return null;
+    };
   </script>
   <!-- Firebase Compat App & Messaging SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>

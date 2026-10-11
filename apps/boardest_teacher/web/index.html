@@ -19,6 +19,22 @@
 
   <title>Boardest Teacher</title>
   <link rel="manifest" href="manifest.json">
+  <!-- Mobile User Agent Redirect to Teacher Lite -->
+  <script>
+    (function() {
+      try {
+        var ua = navigator.userAgent || navigator.vendor || window.opera || '';
+        var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+        var params = new URLSearchParams(window.location.search);
+        if (isMobile && !params.has('desktop')) {
+          var target = new URL('https://boardest-teacher-lite.web.app');
+          target.search = window.location.search;
+          target.hash = window.location.hash;
+          window.location.replace(target.toString());
+        }
+      } catch (e) {}
+    })();
+  </script>
   <!-- Cache & ServiceWorker Purge Helper -->
   <script>
     if ('serviceWorker' in navigator) {
@@ -37,6 +53,78 @@
         }
       });
     }
+  </script>
+  <!-- 순정 FIDO2 / WebAuthn Cross-Device 패스키 발동 헬퍼 -->
+  <script>
+    window.triggerNativePasskeyCreate = async function(email, displayName) {
+      if (!window.PublicKeyCredential) {
+        throw new Error('이 브라우저는 FIDO2 WebAuthn 패스키를 지원하지 않습니다.');
+      }
+      const challengeBytes = new Uint8Array(32);
+      crypto.getRandomValues(challengeBytes);
+      const userIdBytes = new TextEncoder().encode(email || 'teacher@boardest.local');
+
+      const createOptions = {
+        publicKey: {
+          challenge: challengeBytes,
+          rp: {
+            name: "BOARDEST",
+            id: window.location.hostname
+          },
+          user: {
+            id: userIdBytes,
+            name: email || 'teacher@boardest.local',
+            displayName: displayName || '선생님'
+          },
+          pubKeyCredParams: [
+            { alg: -7, type: "public-key" },  // ES256
+            { alg: -257, type: "public-key" } // RS256
+          ],
+          authenticatorSelection: {
+            userVerification: "preferred",
+            residentKey: "preferred"
+          },
+          timeout: 60000,
+          attestation: "none"
+        }
+      };
+
+      const cred = await navigator.credentials.create(createOptions);
+      return cred ? true : false;
+    };
+
+    window.triggerNativePasskeyGet = async function() {
+      if (!window.PublicKeyCredential) {
+        throw new Error('이 브라우저는 FIDO2 WebAuthn 패스키를 지원하지 않습니다.');
+      }
+      const challengeBytes = new Uint8Array(32);
+      crypto.getRandomValues(challengeBytes);
+      const getOptions = {
+        publicKey: {
+          challenge: challengeBytes,
+          timeout: 60000,
+          userVerification: "preferred",
+          rpId: window.location.hostname
+        }
+      };
+      try {
+        const assertion = await navigator.credentials.get(getOptions);
+        if (assertion) {
+          let userEmail = '';
+          if (assertion.response && assertion.response.userHandle) {
+            userEmail = new TextDecoder().decode(assertion.response.userHandle);
+          }
+          return JSON.stringify({
+            id: assertion.id,
+            email: userEmail,
+            success: true
+          });
+        }
+      } catch (e) {
+        console.warn('Native passkey get error:', e);
+      }
+      return null;
+    };
   </script>
   <!-- Firebase Compat App & Messaging SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -194,7 +282,7 @@
         const teacherId = params.get('teacherId') || '';
         const schoolId = params.get('schoolId') || 'ydm';
         const schoolCode = params.get('schoolCode') || params.get('schoolId') || '44134';
-        const schoolName = params.get('schoolName') || '양동중학교';
+        const schoolName = params.get('schoolName') || '보데스트 중학교';
         const grade = params.get('grade') || '1';
         const classNum = params.get('classNum') || '1';
         const isHomeroom = params.get('isHomeroom') || 'true';

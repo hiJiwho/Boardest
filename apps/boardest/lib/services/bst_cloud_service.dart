@@ -161,8 +161,39 @@ class BstCloudService {
   static String get _apiKey => AppConfig.firebaseApiKey;
   static String get _firestoreBase => AppConfig.firestoreBase;
 
-  /// 1. 모든 드라이브 연동 완료된 교사 리스트 조회 (현재 학교 필터링 지원)
-  Future<List<BstCloudTeacher>> getCloudTeachers({String? targetSchoolCode, String? targetSchoolName}) async {
+  DateTime? _lastTeachersFetchTime;
+  List<BstCloudTeacher>? _cachedTeachers;
+  Future<List<BstCloudTeacher>>? _ongoingTeachersFetchFuture;
+
+  /// 1. 모든 드라이브 연동 완료된 교사 리스트 조회 (현재 학교 필터링 지원 & 10초 캐시 & 중복 요청 차단)
+  Future<List<BstCloudTeacher>> getCloudTeachers({
+    String? targetSchoolCode, 
+    String? targetSchoolName, 
+    bool forceRefresh = false,
+  }) {
+    if (!forceRefresh && _cachedTeachers != null && _lastTeachersFetchTime != null &&
+        DateTime.now().difference(_lastTeachersFetchTime!).inSeconds < 10) {
+      return Future.value(_cachedTeachers!.where((t) => _isSchoolMatched(t, targetSchoolCode, targetSchoolName)).toList());
+    }
+
+    if (_ongoingTeachersFetchFuture != null) {
+      return _ongoingTeachersFetchFuture!.then((teachers) => 
+        teachers.where((t) => _isSchoolMatched(t, targetSchoolCode, targetSchoolName)).toList()
+      );
+    }
+
+    final future = _fetchAllCloudTeachers();
+    _ongoingTeachersFetchFuture = future;
+    return future.then((teachers) {
+      _cachedTeachers = teachers;
+      _lastTeachersFetchTime = DateTime.now();
+      return teachers.where((t) => _isSchoolMatched(t, targetSchoolCode, targetSchoolName)).toList();
+    }).whenComplete(() {
+      _ongoingTeachersFetchFuture = null;
+    });
+  }
+
+  Future<List<BstCloudTeacher>> _fetchAllCloudTeachers() async {
     final teachers = <BstCloudTeacher>[];
     try {
       final url = '$_firestoreBase/teacher_cloud_tokens?key=$_apiKey';
@@ -175,9 +206,7 @@ class BstCloudService {
           final fields = doc['fields'] as Map<String, dynamic>?;
           if (fields != null && docName.isNotEmpty) {
             final t = BstCloudTeacher.fromFirestore(fields, Uri.decodeComponent(docName));
-            if (_isSchoolMatched(t, targetSchoolCode, targetSchoolName)) {
-              teachers.add(t);
-            }
+            teachers.add(t);
           }
         }
       }
@@ -197,9 +226,7 @@ class BstCloudService {
           final fields = doc['fields'] as Map<String, dynamic>?;
           if (fields != null && name.isNotEmpty) {
             final t = BstCloudTeacher.fromFirestore(fields, Uri.decodeComponent(name));
-            if (_isSchoolMatched(t, targetSchoolCode, targetSchoolName)) {
-              teachers.add(t);
-            }
+            teachers.add(t);
           }
         }
       }
@@ -726,28 +753,78 @@ class BstCloudService {
     saveSyncState(cloudFileName, iwbData);
   }
 
-  /// 9. Refresh Token -> Google 임시 Access Token 교환
+  static final Map<String, ({String token, DateTime expiresAt})> _tokenCache = {};
+  static final Map<String, Future<String?>> _ongoingTokenExchanges = {};
+
+  /// 9. Refresh Token -> Google 임시 Access Token 교환 (인플라이트 중복 제거 & 10분 캐시 & Worker CORS 폴백)
   Future<String?> exchangeRefreshTokenForAccessToken(String refreshToken) async {
     if (refreshToken.isEmpty) return null;
+
+    final cached = _tokenCache[refreshToken];
+    if (cached != null && DateTime.now().isBefore(cached.expiresAt)) {
+      return cached.token;
+    }
+
+    if (_ongoingTokenExchanges.containsKey(refreshToken)) {
+      return _ongoingTokenExchanges[refreshToken]!;
+    }
+
+    final future = _executeTokenExchange(refreshToken);
+    _ongoingTokenExchanges[refreshToken] = future;
+    try {
+      final token = await future;
+      if (token != null && token.isNotEmpty) {
+        _tokenCache[refreshToken] = (
+          token: token,
+          expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+        );
+      }
+      return token;
+    } finally {
+      _ongoingTokenExchanges.remove(refreshToken);
+    }
+  }
+
+  Future<String?> _executeTokenExchange(String refreshToken) async {
+    // 1. Direct Google OAuth (Windows/Native)
+    if (!kIsWeb) {
+      try {
+        final res = await http.post(
+          Uri.parse('https://oauth2.googleapis.com/token'),
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          body: {
+            'client_id': AppConfig.googleClientId,
+            'client_secret': AppConfig.googleClientSecret,
+            'refresh_token': refreshToken,
+            'grant_type': 'refresh_token',
+          },
+        ).timeout(const Duration(seconds: 8));
+
+        if (res.statusCode == 200) {
+          final data = json.decode(res.body) as Map<String, dynamic>;
+          return data['access_token'] as String?;
+        }
+      } catch (e) {
+        debugPrint('[BstCloudService] Direct token exchange failed: $e');
+      }
+    }
+
+    // 2. Stateless Worker Proxy (Web & CORS Bypass)
     try {
       final res = await http.post(
-        Uri.parse('https://oauth2.googleapis.com/token'),
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: {
-          'client_id': AppConfig.googleClientId,
-          'client_secret': AppConfig.googleClientSecret,
-          'refresh_token': refreshToken,
-          'grant_type': 'refresh_token',
-        },
-      ).timeout(const Duration(seconds: 10));
+        Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/token/refresh'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refreshToken': refreshToken}),
+      ).timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body) as Map<String, dynamic>;
-        return data['access_token'] as String?;
+        return data['accessToken'] as String?;
       }
     } catch (e) {
-      debugPrint('[BstCloudService] exchangeRefreshTokenForAccessToken error: $e');
+      debugPrint('[BstCloudService] Worker token refresh fallback error: $e');
     }
+
     return null;
   }
 
@@ -1179,6 +1256,12 @@ class BstCloudService {
     );
   }
 
+  void setDirectAccessToken(String token, {String teacherName = '선생님', String ownerEmail = ''}) {
+    activeToken = token;
+    activeTeacherName = teacherName;
+    activeOwnerEmail = ownerEmail;
+  }
+
   static const String _boardPairedSecretKey = 'bst_board_paired_secret';
   static const String _boardPairedKeyIdKey = 'bst_board_paired_key_id';
 
@@ -1321,8 +1404,22 @@ class BstCloudService {
     );
   }
 
-  /// 1. 6자리 동적 자릿수 셔플 (Steganography) OTP 검증 (Cloudflare Worker 1차 + Firestore 직접 Fallback 2차)
-  Future<({bool success, String? accessToken, String? teacherName, String? email, String? errorMessage})> verify6DigitSteganoOtp(String fullCode, {String? teacherId2}) async {
+  Future<({bool success, String? accessToken, String? teacherName, String? email, String? errorMessage})>? _ongoingOtpVerificationFuture;
+
+  /// 1. 6자리 동적 자릿수 셔플 (Steganography) OTP 검증 (Cloudflare Worker 1차 + Firestore 직접 Fallback 2차 & 인플라이트 중복 방지)
+  Future<({bool success, String? accessToken, String? teacherName, String? email, String? errorMessage})> verify6DigitSteganoOtp(String fullCode, {String? teacherId2}) {
+    if (_ongoingOtpVerificationFuture != null) {
+      debugPrint('[BstCloudService] 🔄 Reusing ongoing verify6DigitSteganoOtp Future...');
+      return _ongoingOtpVerificationFuture!;
+    }
+    final future = _executeVerify6DigitSteganoOtp(fullCode, teacherId2: teacherId2);
+    _ongoingOtpVerificationFuture = future;
+    return future.whenComplete(() {
+      _ongoingOtpVerificationFuture = null;
+    });
+  }
+
+  Future<({bool success, String? accessToken, String? teacherName, String? email, String? errorMessage})> _executeVerify6DigitSteganoOtp(String fullCode, {String? teacherId2}) async {
     try {
       var cleanCode = fullCode.replaceAll(RegExp(r'\s+'), '');
       if (cleanCode.length == 4 && teacherId2 != null && teacherId2.trim().isNotEmpty) {

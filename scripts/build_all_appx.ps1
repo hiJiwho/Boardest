@@ -34,7 +34,8 @@ Copy-Item (Join-Path $RootDir "certs\install_certificate.bat") (Join-Path $AppxO
 foreach ($manifestPath in @(
     (Join-Path $DistDir "packages\boardest\AppxManifest.xml"),
     (Join-Path $DistDir "packages\bst-teacher\AppxManifest.xml"),
-    (Join-Path $DistDir "packages\bst-overlay-panser\AppxManifest.xml")
+    (Join-Path $DistDir "packages\bst-overlay-panser\AppxManifest.xml"),
+    (Join-Path $DistDir "packages\boardest-class-lite\AppxManifest.xml")
 )) {
     if (Test-Path $manifestPath) {
         $xml = Get-Content $manifestPath -Raw -Encoding UTF8
@@ -261,6 +262,39 @@ if ($LASTEXITCODE -ne 0) { throw "SignTool failed for BST Overlay Panser" }
 Write-Host "-> Successfully created and signed bst-overlay-panser.appx" -ForegroundColor Green
 
 
+# 5.5 Package: Boardest Class Lite (Sandboxed WebView2 App)
+Write-Host "`nPackaging Boardest Class Lite (jiwho.boardest.classlite)..." -ForegroundColor Yellow
+$LitePkgDir = Join-Path $DistDir "packages\boardest-class-lite"
+Copy-Item (Join-Path $RootDir "infra\class_lite_web\index.html") (Join-Path $LitePkgDir "index.html") -Force
+
+$LiteAppx = Join-Path $AppxOutDir "boardest-class-lite.appx"
+& $MakeAppx pack /d $LitePkgDir /p $LiteAppx /o
+if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed for Boardest Class Lite" }
+& $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $LiteAppx
+if ($LASTEXITCODE -ne 0) { throw "SignTool failed for Boardest Class Lite" }
+Write-Host "-> Successfully created and signed boardest-class-lite.appx" -ForegroundColor Green
+
+# Package Boardest Class Lite Beta
+Write-Host "-> Packaging Boardest Class Lite Beta (jiwho.boardest.classlite.beta)..." -ForegroundColor Cyan
+$normalLiteManifest = Get-Content (Join-Path $LitePkgDir "AppxManifest.xml") -Raw -Encoding UTF8
+$betaLiteManifest = $normalLiteManifest `
+    -replace 'Name="jiwho.boardest.classlite"', 'Name="jiwho.boardest.classlite.beta"' `
+    -replace '<DisplayName>Boardest Class Lite</DisplayName>', '<DisplayName>Boardest Class Lite (Beta)</DisplayName>' `
+    -replace '<uap:VisualElements DisplayName="Boardest Class Lite"', '<uap:VisualElements DisplayName="Boardest Class Lite (Beta)"'
+
+try {
+    [System.IO.File]::WriteAllText((Join-Path $LitePkgDir "AppxManifest.xml"), $betaLiteManifest, $utf8NoBom)
+    $LiteBetaAppx = Join-Path $AppxOutDir "boardest-class-lite-beta.appx"
+    & $MakeAppx pack /d $LitePkgDir /p $LiteBetaAppx /o
+    if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed for Boardest Class Lite Beta" }
+    & $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $LiteBetaAppx
+    if ($LASTEXITCODE -ne 0) { throw "SignTool failed for Boardest Class Lite Beta" }
+    Write-Host "-> Successfully created and signed boardest-class-lite-beta.appx" -ForegroundColor Green
+} finally {
+    [System.IO.File]::WriteAllText((Join-Path $LitePkgDir "AppxManifest.xml"), $normalLiteManifest, $utf8NoBom)
+}
+
+
 # 6. Synchronize .appinstaller manifests to infra/download_web and infra/welcome_web
 Write-Host "`n[5/6] Synchronizing .appinstaller files to web distribution directories..." -ForegroundColor Yellow
 $DownloadWebDir = Join-Path $RootDir "infra\download_web"
@@ -282,6 +316,10 @@ if (Test-Path $DownloadWebDir) {
     Copy-Item (Join-Path $AppxOutDir "bst-teacher.appx") (Join-Path $DownloadWebDir "bst-teacher.appx") -Force
     Copy-Item (Join-Path $AppxOutDir "bst-teacher-beta.appx") (Join-Path $DownloadWebDir "bst-teacher-beta.appx") -Force
     Copy-Item (Join-Path $AppxOutDir "bst-overlay-panser.appx") (Join-Path $DownloadWebDir "bst-overlay-panser.appx") -Force
+    Copy-Item (Join-Path $AppxOutDir "boardest-class-lite.appx") (Join-Path $DownloadWebDir "boardest-class-lite.appx") -Force
+    Copy-Item (Join-Path $AppxOutDir "boardest-class-lite-beta.appx") (Join-Path $DownloadWebDir "boardest-class-lite-beta.appx") -Force
+    Copy-Item (Join-Path $AppxOutDir "boardest-class-lite.appx") (Join-Path $RootDir "infra\hub_web\boardest-class-lite.appx") -Force
+    Copy-Item (Join-Path $AppxOutDir "boardest-class-lite-beta.appx") (Join-Path $RootDir "infra\hub_web\boardest-class-lite-beta.appx") -Force
     Copy-Item (Join-Path $AppxOutDir "BoardestCert.cer") (Join-Path $DownloadWebDir "BoardestCert.cer") -Force
     Write-Host "-> Synchronized all manifests and appx packages to infra/download_web" -ForegroundColor Green
 }

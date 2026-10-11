@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Boardest Demo — 가상 체험관</title>
+  <title>Boardest 데모 & 체험 가이드 — Boardest Demo</title>
   <link rel="icon" type="image/png" href="https://boardest-teacher.web.app/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,7 +44,7 @@
     }
 
     .container {
-      max-width: 960px;
+      max-width: 860px;
       width: 100%;
       margin: 0 auto;
     }
@@ -70,7 +70,7 @@
 
     .brand-title {
       font-family: var(--font-brand);
-      font-size: 48px;
+      font-size: 42px;
       font-weight: 900;
       letter-spacing: -1px;
       line-height: 1.1;
@@ -78,319 +78,193 @@
 
     .brand-sub {
       color: var(--primary-neon);
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 600;
+      margin-top: 6px;
     }
 
     .hero-desc {
       margin-top: 14px;
-      font-size: 16px;
+      font-size: 15px;
       color: var(--text-sub);
       line-height: 1.6;
     }
 
-    .nav-bar {
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-      margin-top: 20px;
-      flex-wrap: wrap;
-    }
-
-    .nav-link {
-      color: var(--text-sub);
-      text-decoration: none;
-      font-size: 13.5px;
-      font-weight: 600;
-      padding: 6px 14px;
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.05);
-      transition: all 0.2s ease;
-    }
-
-    .nav-link:hover {
-      color: #fff;
-      background: rgba(255, 255, 255, 0.12);
-    }
-
-    .section-title {
-      font-size: 20px;
-      font-weight: 800;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px;
-      margin-bottom: 36px;
-    }
-
-    .card {
+    .guide-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
       border-radius: 20px;
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      transition: all 0.25s ease;
-      position: relative;
+      padding: 26px 30px;
+      margin-bottom: 20px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
     }
 
-    .card:hover {
-      transform: translateY(-4px);
-      border-color: rgba(255, 137, 6, 0.4);
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
-    }
-
-    .card-top {
+    .guide-title {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
+      font-size: 19px;
+      font-weight: 800;
+      color: #FFF;
       margin-bottom: 12px;
     }
 
-    .card-icon {
-      width: 44px;
-      height: 44px;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+    .guide-icon {
+      font-size: 24px;
     }
 
-    .card-title h3 {
-      font-size: 18px;
-      font-weight: 800;
+    .guide-body {
+      color: #CBD5E1;
+      font-size: 14.5px;
+      line-height: 1.65;
     }
 
-    .card-title p {
-      font-size: 13px;
-      color: var(--text-sub);
+    .guide-body ul {
+      margin-left: 20px;
+      margin-top: 8px;
     }
 
-    .card-desc {
-      font-size: 13.5px;
-      color: var(--text-sub);
-      line-height: 1.6;
-      margin-bottom: 20px;
+    .guide-body li {
+      margin-bottom: 6px;
     }
 
-    .card-badge {
+    .guide-highlight {
       display: inline-block;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 3px 8px;
+      padding: 2px 8px;
       border-radius: 6px;
-      margin-bottom: 8px;
+      background: rgba(255, 137, 6, 0.2);
+      color: var(--primary-neon);
+      font-weight: 700;
     }
 
-    .btn-enter {
+    .action-row {
       display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 32px;
+      flex-wrap: wrap;
+    }
+
+    .btn-action {
+      display: inline-flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 12px 18px;
-      border-radius: 12px;
-      font-size: 14px;
-      font-weight: 700;
+      gap: 8px;
+      padding: 14px 26px;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 800;
       text-decoration: none;
       transition: all 0.2s ease;
-    }
-
-    .btn-class {
-      background: #00F5D4;
-      color: #0C0F17;
-    }
-    .btn-class:hover {
-      background: #38EF7D;
-    }
-
-    .btn-teacher {
-      background: #7F5AF0;
-      color: #FFFFFF;
-    }
-    .btn-teacher:hover {
-      background: #9D7BFC;
-    }
-
-    /* Windows 데모 앱 설치 카드 */
-    .win-demo-card {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 20px;
-      padding: 24px;
-      margin-bottom: 36px;
-    }
-
-    .code-box {
-      background: #05080C;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 10px;
-      padding: 14px 16px;
-      font-family: Consolas, monospace;
-      font-size: 13px;
-      color: #00F5D4;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin: 14px 0;
-      overflow-x: auto;
-    }
-
-    .btn-copy {
-      background: rgba(0, 245, 212, 0.15);
-      color: #00F5D4;
-      font-size: 12px;
-      padding: 6px 12px;
-      border-radius: 6px;
-      border: none;
       cursor: pointer;
-      font-weight: 700;
-      white-space: nowrap;
     }
 
-    .btn-copy:hover {
-      background: rgba(0, 245, 212, 0.3);
+    .btn-action.orange {
+      background: var(--primary);
+      color: #000;
+    }
+    .btn-action.orange:hover {
+      background: var(--primary-neon);
+      transform: translateY(-2px);
     }
 
-    /* Info Callout */
-    .callout {
-      background: rgba(255, 137, 6, 0.08);
-      border-left: 3px solid var(--primary);
-      padding: 16px 20px;
-      border-radius: 0 12px 12px 0;
-      font-size: 13.5px;
-      color: #CBD5E1;
-      line-height: 1.6;
-      margin-bottom: 30px;
-    }
-
-    .callout strong {
+    .btn-action.secondary {
+      background: rgba(255, 255, 255, 0.08);
       color: #FFF;
+      border: 1px solid var(--card-border);
+    }
+    .btn-action.secondary:hover {
+      background: rgba(255, 255, 255, 0.16);
     }
 
     footer {
       text-align: center;
-      font-size: 13px;
+      margin-top: 50px;
       color: var(--text-sub);
-      padding-top: 30px;
-      border-top: 1px solid var(--card-border);
-      width: 100%;
-      margin-top: auto;
+      font-size: 13px;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <div class="demo-pill">✨ No Setup Required</div>
-      <div class="brand-title">Boardest Demo</div>
-      <div class="brand-sub">가상 체험관</div>
+      <div class="demo-pill">📖 DEMO &amp; SIMULATION GUIDE</div>
+      <div class="brand-title">Boardest 체험 가이드</div>
+      <div class="brand-sub">가상 학급 시뮬레이션 &amp; 데모 이용 방법</div>
       <p class="hero-desc">
-        별도 회원가입이나 교실 설정 없이 브라우저에서 바로 Boardest의 모든 기능을 체험하세요.<br>
-        1~10번 가상 학급이 온라인 기기별로 겹치지 않게 스마트 배정되며 더미 시간표 및 급식 데이터가 즉시 제공됩니다.
+        기존 분리 운영되던 가상 체험관이 <strong>Boardest Class 통합 앱</strong>으로 완전 단일화되었습니다.<br>
+        실제 학교 등록 없이 간편하게 Boardest의 모든 기능을 둘러보는 방법을 안내합니다.
       </p>
-      <div class="nav-bar">
-        <a href="https://boardest.web.app" class="nav-link">← 소개 메인</a>
-        <a href="https://boardest.web.app/web" class="nav-link">🌐 웹서비스 전문관</a>
-        <a href="https://boardest-downloads.web.app" class="nav-link">📥 앱 다운로드 센터</a>
-      </div>
     </header>
 
-    <div class="section-title">🚀 브라우저에서 즉시 체험하기</div>
-    <div class="grid">
-      <!-- 1. 교실 전자칠판 데모 -->
-      <div class="card">
-        <div>
-          <span class="card-badge" style="background: rgba(0, 245, 212, 0.15); color: #00F5D4;">Classroom Screen</span>
-          <div class="card-top">
-            <div class="card-icon" style="color: #00F5D4;">🏫</div>
-            <div class="card-title">
-              <h3>전자칠판 화면 체험</h3>
-              <p>boardest-demo.web.app/class</p>
-            </div>
-          </div>
-          <p class="card-desc">
-            가상 학급 대시보드, 더미 시간표, 자동 계산된 데모 급식표, 1:1 페어링 코드 생성 및 수업 타이머를 바로 체험합니다.
-          </p>
-        </div>
-        <a href="/class" class="btn-enter btn-class">
-          <span>교실 화면 체험 입장 (/class)</span>
-          <span>→</span>
-        </a>
+    <!-- 1. Class Demo 안내 -->
+    <div class="guide-card" style="border-color: rgba(255, 137, 6, 0.3);">
+      <div class="guide-title">
+        <span class="guide-icon">🏫</span>
+        <span>1. Boardest Class 가상 학급 데모 체험</span>
       </div>
-
-      <!-- 2. 교사용 도구 데모 -->
-      <div class="card">
-        <div>
-          <span class="card-badge" style="background: rgba(127, 90, 240, 0.15); color: #B8A2FF;">Teacher Tools</span>
-          <div class="card-top">
-            <div class="card-icon" style="color: #7F5AF0;">👩‍🏫</div>
-            <div class="card-title">
-              <h3>교사용 도구 체험</h3>
-              <p>boardest-demo.web.app/teacher</p>
-            </div>
-          </div>
-          <p class="card-desc">
-            준비된 데모 교사 계정으로 자동 로그인되어 교실 원격 제어, 긴급 공지 송출, 시간표 변경 기능을 시뮬레이션합니다.
-          </p>
-        </div>
-        <a href="/teacher" class="btn-enter btn-teacher">
-          <span>교사 도구 체험 입장 (/teacher)</span>
-          <span>→</span>
-        </a>
+      <div class="guide-body">
+        <ul>
+          <li><strong>웹 브라우저 접속</strong>: <a href="https://boardest-class.web.app?demo=yes" style="color: var(--primary-neon); text-decoration: underline;" target="_blank">boardest-class.web.app?demo=yes</a> 로 접속하시면 학교 설정 없이 <span class="guide-highlight">Demo-class 1~10</span> 비겹침 가상 학급이 자동 배정되어 즉시 대시보드가 열립니다.</li>
+          <li><strong>설치형 앱 (Windows / Android)</strong>: 앱 최초 실행 시 나타나는 시작 마법사(Setup Wizard) 1단계에서 <span class="guide-highlight">Class PRO Demo</span> 카드를 선택하고 [데모 체험 시작]을 누르면 즉시 가상 교실로 진입합니다.</li>
+          <li>가상 시간표, 실시간 데모 급식표, 14종 수업 도구(타이머, 주사위, 추첨기 등)를 자유롭게 체험하실 수 있습니다.</li>
+        </ul>
       </div>
     </div>
 
-    <!-- Windows 데모 전용 앱 원클릭 설치 (안드로이드는 불가, 윈도우만 지원) -->
-    <div class="win-demo-card">
-      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-        <div>
-          <h3 style="font-size: 17px; font-weight: 800; color: #FFF; display: flex; align-items: center; gap: 8px;">
-            <span>🪟 Windows PC 데모 전용 앱 원클릭 설치</span>
-            <span style="font-size: 11px; background: rgba(0, 186, 242, 0.2); color: #00BAF2; padding: 2px 8px; border-radius: 4px;">Windows Only</span>
-          </h3>
-          <p style="font-size: 13px; color: var(--text-sub); margin-top: 4px;">
-            웹 브라우저를 넘어 실제 전자칠판 Windows 환경과 동일한 네이티브 앱 형태로 데모를 설치해 사용해보실 수 있습니다. (안드로이드는 웹 데모만 지원)
-          </p>
-        </div>
+    <!-- 2. Demo 탈출 안내 -->
+    <div class="guide-card" style="border-color: rgba(239, 69, 101, 0.3);">
+      <div class="guide-title">
+        <span class="guide-icon">🚪</span>
+        <span>2. 데모 모드 탈출 (초기 설정 OOBE 복귀)</span>
       </div>
-      <div class="code-box">
-        <span id="cmd-demo-win">irm https://bst-installer.web.app/install-demo.ps1 | iex</span>
-        <button class="btn-copy" onclick="copyDemoCmd()">복사하기</button>
+      <div class="guide-body">
+        <ul>
+          <li><strong>탈출 방법</strong>: 대시보드 하단 바에 위치한 <span class="guide-highlight">⚙️ [설정] 버튼을 1초 이상 길게 꾹 누릅니다 (Long-press)</span>.</li>
+          <li>팝업되는 <strong>"Demo 탈출"</strong> 확인창에서 [Demo 탈출] 버튼을 클릭하면 가상 데모 상태가 초기화되고, 정식 시작 마법사(Setup Wizard)로 즉시 복귀합니다.</li>
+          <li>일반 [설정] 클릭 시에도 우측 상단 토스트 알림을 통해 원클릭 탈출이 가능합니다.</li>
+        </ul>
       </div>
-      <p style="font-size: 12px; color: #64748B;">PowerShell에 붙여넣기만 하면 보안 인증서 등록과 함께 바탕화면에 데모 바로가기가 생성됩니다.</p>
     </div>
 
-    <!-- 체험 안내 -->
-    <div class="callout">
-      <strong>💡 가상 체험 안내사항:</strong><br>
-      • 데모 모드에서는 실제 학교 DB 및 개인 클라우드 데이터에 접근하지 않으며, 전용 가상 시뮬레이션 데이터를 제공합니다.<br>
-      • <strong>?Demo</strong> 파라미터가 있는 상태에서는 일반 계정 로그인이 차단되며 안전하게 데모 계정만 사용됩니다.<br>
-      • 실제 학교에서 정식으로 운용하시려면 <a href="https://boardest.web.app" style="color: #00F5D4;">소개 메인</a> 또는 <a href="https://boardest-downloads.web.app" style="color: #00F5D4;">앱 다운로드 센터</a>에서 정식 버전을 설치하세요.
+    <!-- 3. 교사 데모 계정 안내 -->
+    <div class="guide-card" style="border-color: rgba(127, 90, 240, 0.3);">
+      <div class="guide-title">
+        <span class="guide-icon">👩‍🏫</span>
+        <span>3. 교사 데모 계정 (?create-Demo=1)</span>
+      </div>
+      <div class="guide-body">
+        <ul>
+          <li>교사용 Google OAuth 로그인 시 주소창 파라미터로 <code>?create-Demo=1</code> 이 전달되면 임시 데모 교사로 가입 및 분류됩니다 (단, 이미 등록된 정회원은 보호되어 무시됩니다).</li>
+          <li>데모 교사 계정으로 로그인 시 교실 데모 모드와 동일하게 시뮬레이션 환경으로 자동 연결됩니다.</li>
+          <li>교사 데모 계정은 실제 정규 특별실의 실시간 데이터 덮어쓰기가 제한된 안전 모드로 운영됩니다.</li>
+        </ul>
+        <div style="margin-top: 18px;">
+          <a href="https://boardest-teacher-oauth.web.app?create-Demo=1" class="btn-action" style="background: rgba(127,90,240,0.25); border: 1px solid rgba(127,90,240,0.5); color: #E0B0FF; text-align: center; justify-content: center;" target="_blank">
+            <span>🔑 데모 교사 계정 바로 만들기 (create-Demo=1) ➔</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 버튼 -->
+    <div class="action-row">
+      <a href="https://boardest-class.web.app?demo=yes" class="btn-action orange" target="_blank">
+        <span>🚀 Boardest Class 데모 지금 체험하기</span>
+        <span>→</span>
+      </a>
+      <a href="https://boardest-teacher-oauth.web.app?create-Demo=1" class="btn-action" style="background: rgba(127,90,240,0.2); border: 1px solid rgba(127,90,240,0.4); color: #E0B0FF;" target="_blank">
+        <span>🔑 교사용 데모 계정 생성</span>
+        <span>→</span>
+      </a>
+      <a href="https://boardest.web.app" class="btn-action secondary">
+        <span>🏠 Boardest 메인 포털</span>
+      </a>
     </div>
 
     <footer>
-      <p>© 2026 Boardest by Jiwho. All rights reserved.</p>
+      <p>© 2026 Boardest Platform by Jiwho. All rights reserved.</p>
     </footer>
   </div>
-
-  <script>
-    function copyDemoCmd() {
-      const code = document.getElementById('cmd-demo-win').innerText;
-      navigator.clipboard.writeText(code).then(() => {
-        alert('데모 설치 명령어가 클립보드에 복사되었습니다!\nPowerShell 창에서 우클릭하여 실행하세요.');
-      });
-    }
-  </script>
 </body>
 </html>

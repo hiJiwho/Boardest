@@ -1,7 +1,335 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v3.0.5-beta** (App: v3.0.5 / Web: v3.0.5)  
+> **현재 시스템 버전**: **v3.10.2 (Boardest 3.10.2)** (App: v3.10.2 / Teacher: v3.10.2 / Lite: v3.10.2 / Web: v3.10.2)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 v3.10.2 (2026-10-10) — 🚀 칠판 전고 롱-사이즈 수업도구 독, 전용교실 최적화, 3원화 통합 인증(OTP 부활 + Web QR + Passkey) & 교사용 신규 클라우드 뷰어 전면 교체
+
+### 1. 🖥️ 전자칠판 레이아웃 전면 개선 (`apps/boardest`)
+- **교과서 좌측 밀착 & 수업도구 독 전고(Full-height) 상시 확장**:
+  - 교과서(`BstTextbookStrip`)를 좌측 끝으로 완전 밀착 배치.
+  - 수업 도구 독(`BstToolsDock`)이 세로로 길게 늘어나서 상단 일과 시간표 옆부터 하단 디지털 시계 옆까지 전고(Full-height)로 상시 노출되도록 재구성.
+- **전용 교실 모드 대폭 강화**:
+  - 최상단 헤더(`BstAppHeader`)에 교과명(예: `[음악 전용교실]`) 전용 뱃지 대형 강조 표기.
+  - 일과 시간표 스트립(`BstTodayTimetableStrip`)에서 교과서 대신 들어오는 입실 학급(반, 예: `3-2반`)을 대형 폰트로 즉시 표시.
+  - 전용 교실 모드 진입 시 Cloud 창이 뜨지 않던 문제를 `cloudFilesWidget` 인라인 독 연동을 통해 완전 해결.
+
+### 2. 🔐 3원화 인증 체계 확립 (`BstCloudAuthModal`)
+- **현장 기기(무선랜/블루투스 없는 데스크톱, 구형 안드로이드 8.1 칠판) 100% 호환 보장**:
+  - **탭 0. 📱 Web QR 간편 로그인 (기본값)**: 모바일 브라우저로 1초 원터치 승인 (공용 기기 영구 저장 방지, 1회용 세션).
+  - **탭 1. 🔢 6자리 Stegano OTP 키패드 부활**: 무선랜이나 블루투스가 없거나 패스키 생체 인증이 불가능한 구형 기기를 위해 전자칠판 가상 키패드 및 6자리 OTP 완전 복원.
+  - **탭 2. 🔑 순정 패스키(Passkey)**: `boardest-cloud.web.app/passkey.html` 단일 RP ID 도메인으로 일원화하여 패스키 지원 기기에서 안전하게 패턴/생체 인증 사용.
+
+### 3. 👩‍🏫 Teacher 앱 고시인성 '신규 클라우드 뷰어' (`BstCloudDriveViewer`)
+- **답답하고 작은 파일 목록 전면 개편**:
+  - `apps/boardest_teacher`의 기존 작은 리스트 뷰를 시원한 대형 카드(그리드) & 상세 리스트 토글 뷰어로 전면 교체.
+  - 브레드크럼 폴더 탐색기, 확장자별(PDF, Canva, PPT, HWP, .pen) 원클릭 카테고리 필터, 실시간 파일 검색.
+  - 교실 전자칠판으로 원클릭 즉시 파일 전송(`onSendToBoard`) 및 다이렉트 뷰어 구동 연결.
+
+### 4. 🛡️ 보안 취약점 패치 및 소스 모듈화
+- **Firebase RTDB 보안 규칙 강화 (`database.rules.json`)**: 루트 `/passkey` 덤프 차단, 세션 ID 기반 접근 제어(`$session_id`), 90초 만료 자동 소각(Burn on read).
+- **Google OAuth 시크릿 유출 차단 (`infra/boardest_auth_worker/src/index.js`)**: 하드코딩된 Client Secret 제거 및 환경변수(`env.GOOGLE_CLIENT_SECRET`) 적용.
+- **스파게티 코드 분리**: `dashboard_view.dart`에서 `ClassroomDiceModal`, `NoiseMeterModal`, `TimerModal`, `AppDrawerDialog`를 독립 모달 위젯 파일로 추출.
+
+---
+
+## 📌 v3.10.1 Beta (2026-10-09) — 🔑 패스키(Passkey) QR 잠금해제 & PRO 전용 등록 기기 즉시 열기 이원화 (OTP 완전 폐지)
+
+### 1. 🚫 6자리 OTP 완전 제거 (Legacy 번호 입력 폐지)
+- 번거롭고 유출 위험이 있던 6자리 OTP 입력 UI 및 동적 코드 생성 체계를 전 앱에서 전면 제거.
+- 전자칠판 키패드 입력 과정 자체를 없애고 **카메라 스캔 + 생체인식(지문/FaceID)** 기반으로 전환.
+
+### 2. ⚡ 이원화 잠금해제 아키텍처 확립
+- **방식 1. 🔑 패스키(Passkey) QR 잠금해제 (Web / PRO 공통)**:
+  - 칠판이 90초 유효한 1회용 챌린지 세션을 생성하고 QR 표시.
+  - 교사 스마트폰 기본 카메라 또는 Teacher 앱으로 비추어 지문/FaceID 인증 시 1초 만에 칠판 잠금해제!
+  - 세션 인증 완료 시 Firebase RTDB 세션 노드를 즉시 소각(Burn on read)하여 보안 보장.
+- **방식 2. 🏫 등록된 기기 한해 바로 열기 (Boardest PRO 전용)**:
+  - 교사 동의 하에 PRO 전자칠판 로컬 금고(`SharedPreferences`/DPAPI)에 교사 계정 보관.
+  - [등록된 선생님] 목록에서 `[⚡ 바로 열기]` 원클릭으로 구글 드라이브 수업 자료 즉시 활성화.
+  - Web 버전에서는 로컬 토큰 저장을 원천 차단하고 오직 1회용 패스키 QR만 제공.
+
+### 3. 👨‍🏫 Teacher 앱에서 패스키 등록 수행
+- Teacher 앱(`boardest_teacher`)의 클라우드 설정 탭에서 `[🔑 이 기기에서 내 패스키 등록하기]` 원클릭 제공.
+- Firebase RTDB `/passkey/vaults/` 및 로컬 자격증명에 안전하게 연동.
+
+---
+
+## 📌 v3.10.0 (2026-10-09) — 🌟 Boardest 3.10: 전면 모듈화 완료, 1:2:3 골든 레이아웃, 급식실 1~9 지원 & Firestore R/W 제로 최적화
+
+### 1. 🏗️ 대규모 코드 모듈화 (Spaghetti Code 해체 & BstComponent 체계화)
+- **`BstClassMainLayout` (1:2:3 골든 높이 비율)**:
+  - 1행 (flex 1): 상단 바 `BstAppHeader` — `logo.png` + `BOARDEST Class | 보데스트 중학교 1학년 7반 by jiwho` + 실시간 시간표 교시 스트립.
+  - 2행 (flex 2): `BstGiantClock` (좌측 2/3, 최대 폰트 중앙 정렬, 초 단위 동일 폰트 크기 `HH:mm:ss`, 날짜/상태 제외) + `BstAcademicScheduleCard` (우측 1/3, 상단 오늘 날짜 및 실시간 남은 수업 시간 칩, 하단 학사일정 D-day 목록).
+  - 3행 (flex 3): `BstLessonInfoCard` (좌측 1/2, 현재 수업 정보 및 Cloud 뷰 전환) + `BstDualMealCard` (우측 1/2, 오늘/내일 2열 동시 식단표).
+- **`BstDualMealCard` 고도화**:
+  - 오늘/내일 2열 동시 급식 표시로 급식 종료 시각 이후에도 다음 날 식단 즉시 확인 가능.
+  - 메뉴 탭 시 알레르기 안내 및 내 알레르기 형광펜 하이라이트 모달 지원.
+  - 점심시간 시작 ~ 종료 10분 전까지 [오늘의 최애 메뉴 투표], 종료 9분 전부터 실시간 결과 투표 집계 발표.
+  - 상단 `📆 월간 식단표` 토글 버튼 탑재로 전체 월간 급식표 원클릭 확인 지원.
+- **수업 도구 우측 독 (`BstToolsDock`) 분기**:
+  - Web 버전: 1열 슬림 독 (판서, 계산기, 타이머, 발표자 등).
+  - Windows PRO / Android PRO: 2열 확장 독 (1열 수업 도구, 2열 빈 슬롯 + `➕ 앱 추가` 버튼).
+  - Windows 시스템 컨트롤: 2열 하단에 `─` (최소화) 및 `✕` (종료) 배치 (안드로이드 런처는 닫기 미배치).
+  - 커튼 및 소음계 제거, 판서 파일 포맷 `.pen` 일원화.
+- **`BstTeacherMainLayout`**:
+  - 좌측 상단 도구 독 (수업 바로 시작: 노트북 화면 표시, Canva, 교사용 메모, 급식실 호출, `.pen` 판서 보관함, 환경설정).
+  - 상단 안전 OTP 발급 카드 (`742 819`) 및 듀얼 주간 시간표 (내 시간표 + 담임 학급 시간표).
+
+### 2. ⚡ 서버 쿼터 사용량 혁신 (Firestore R/W = 0) & Cloudflare KV 아키텍처
+- **R/W 2.5만 회 한도 고갈 원천 차단**:
+  - 교사 구글 OAuth 리프레시 토큰을 Cloudflare Worker KV(`boardest-cloud-token.jiwho.workers.dev`)에 격리 저장.
+  - 칠판-교사 간 OTP 페어링 시 Cloudflare KV 직결 검증을 통해 일회성 엑세스 토큰을 클라이언트 RAM에만 상주.
+  - Firestore 상시 읽기/쓰기를 일체 발생시키지 않아(Firestore R/W = 0) 학교 계정 100개 제한 및 쿼터 초과 문제 완전 박멸.
+  - 교사 본인이나 제3자 누구도 교사 토큰을 직접 볼 수 없는 무권한 클라우드 보안 격리 모델 확립.
+
+### 3. 🍱 급식실 1~9 선택 설정 & 월간 식단표 지원
+- `SettingsFullscreenView` 설정 화면에 `급식실 1` ~ `급식실 9` ChoiceChip 선택 UI 구현 (`AppSettings.cafeteriaNum`).
+- 학급별 급식실 위치에 맞춰 급식 이동 알림 및 호출이 독립 라우팅되도록 보장.
+- 급식 카드 상단에 `📆 월간 식단표` 전환 토글 탑재.
+
+### 4. 🏷️ 전 앱 표준 브랜딩 & 예시 명칭 정제
+- **전 앱 좌측 상단 브랜드 표준 통일**:
+  - `logo.png` + `BOARDEST {앱 이름}` + 학교명 + 학년-반 배지 + 하단 `by jiwho`.
+- **예시 명칭 통일**:
+  - 예시 학교명: `보데스트 중학교`
+  - 예시 학급: `1학년 7반`
+  - 예시 교사명: `김보데`
+  - 실존 학교 명칭(`양동중학교` 등) 전면 제거 완료.
+
+### 5. 🧹 호스팅 서버 청소 및 레거시 프로토타입 삭제
+- 서버에 남아있던 구버전 임시 프로토타입 파일(`preview.html`) 완전 삭제 및 Firebase Hosting 타깃 재정리 완료.
+
+---
+
+### 1. 🔐 Google OAuth Windows 루프백 & Class Teacher 자동 연동 복구
+- **루프백 서버 & Top-level Navigation 연동**: Windows 앱 구글 로그인 시 Private Network Access 차단을 우회하기 위해 `window.location.href = http://127.0.0.1:${port}/oauth-callback` 최상위 이동 폴백을 탑재하여 100% 신뢰성 있는 인증 토큰 수신 보장.
+- **Class Teacher 원클릭 자동 설정**: 교사 구글 로그인 즉시 OAuth 포털에서 학교 ID, 학교명, 교사명, 담임 학급을 자동 추출하여 Class Teacher 대시보드로 수동 입력 절차 없이 즉시 진입.
+
+### 2. 🍱 Boardest Class Lite (`infra/class_lite_web`) 전면 개편
+- **나이스(NEIS) 급식 열람 복원**: 시간표 우측 분할 패널(`meal-panel`)에 오늘의 급식 메뉴 리스트 및 칼로리 정보 실시간 렌더링.
+- **급식 만족도 실시간 투표**: [👍 맛있어요], [😐 보통이에요], [👎 아쉬워요] 3종 투표 버튼과 Firebase RTDB 실시간 집계 카운트 연동 (일 1회 로컬 중복 방지).
+- **실시간 급식실 이동 호출 수신**: 급식지도교사가 호출 시 🔔 차임 사운드(Web Audio API)와 함께 풀스크린 이동 안내 모달 팝업 및 원클릭 확인 처리.
+- **Lite 전용 이메일 격리**: `${schoolCode}_g${grade}c${classNum}@lite.school.boardest.local` 및 `isLite: true` 식별자로 RTDB 하트비트를 전송하여 정규 교실 계정과 분리.
+- **교과서 자동 연동 & 교사명 일체 제거**: 학교 전용 교과서 ZIP 다운로드 및 고품질 SVG 디지털 교과서 표지 자동 생성 연동. 모든 화면과 설정에서 교사 이름 입력 및 출력을 완전히 제거.
+
+### 3. 💬 교사용 쪽지(메모) 수신처 정밀화 & 🔔 급식 호출 동시 브로드캐스트
+- **진짜 온라인 교실만 쪽지 수신 대상 노출**: 3분 이내 RTDB 하트비트가 확인된 온라인 교실만 수신자 목록에 등장하도록 엄격 필터링(`diffSec <= 200`), 모든 Lite 계정(`isLite: true`, `@lite.`, `_lite`)은 쪽지 수신 목록에서 영구 제외.
+- **급식 호출 멀티 디바이스 동시 발송**: 같은 학교/같은 학급에 Class PRO와 Class Lite가 모두 온라인 상태일 경우, 급식 호출 시 두 기기 모두 신호를 동시 수신하도록 `boardest_eat_web` 다중 대상 브로드캐스트 파이프라인 구현.
+
+---
+
+### 1. 🌐 Class Lite CORS 해결 & 교사 입력 완전 배제
+- `comcigan.jiwho.workers.dev` 직결 API 연동으로 브라우저 CORS 문제 완전 해소.
+- 초기 설정 및 대시보드에서 불필요한 교사 이름/담임 입력 절차를 완전히 제거하고 [저장 및 시작] 원클릭으로 시간표 즉시 표시.
+- `boardest-class-lite.appx` 패키지 재빌드 및 코드사이닝 서명 완료.
+
+### 2. 🧰 순수 수업도구 전용 `BoardestToolsView` Flutter 신규 탑재
+- `boardest-tools.web.app` 접속 시 일반 교실 대시보드/시간표/위저드 없이 **순수 수업도구 전용 UI**로 즉시 진입.
+- 상단 탭: [🎨 판서 칠판], [⏱️ 타이머 & 스톱워치], [🔢 공학 계산기], [🎲 주사위 & 번호 추첨], [☁️ Cloud OTP/QR 연동].
+
+### 3. 🏛️ `boardest.web.app` 통합 포털 2행 구조 전면 재설계
+- **윗줄 (Class 라인업)**: Class (Web) `boardest-class.web.app`, Class PRO (Windows/APK), Class Lite `boardest-class-lite.web.app`.
+- **아랫줄 (Teacher & Tools 라인업)**: Teacher (Web) `boardest-teacher.web.app` (선생님 전용 웹 앱 직결), Teacher PRO (Windows 가이드/다운로드), Boardest Tools `boardest-tools.web.app`.
+
+### 4. 👨‍🏫 Class Teacher 교사 성함 수동 기입 제거 & 데모 탈출 방식 통일
+- 교사용 모드 설정 시 성함 입력 필드를 제거하고 구글 로그인 프로필에서 자동 수신.
+- 데모 모드 진입 시 하단 바/토스트의 'Demo 탈출' 버튼을 일체 제거하고 **[설정] 1.5초 롱프레스(Long-press)**로만 탈출하도록 통일.
+
+### 5. 🔄 설정 내 학교 ID/반 변경 통합 & 교실 운영 모드 변경 시 데이터 전면 초기화
+- "설정 > 학교 및 학급"에서 인라인 학교 ID 검증 및 연결 지원.
+- 교실 운영 모드(Class PRO ↔ Class Teacher) 변경 시 확인 팝업 안내 후 모든 로컬 데이터 및 캐시를 완전히 소거하고 대상 모드의 초기 설정(로그인) 마법사로 안전하게 이동.
+
+### 6. 📖 데모 가이드 교사 데모 계정 생성 직결 링크 탑재
+- `boardest-demo.web.app`에 `?create-Demo=1` 교사 데모 계정 원클릭 생성 버튼 배치.
+
+---
+
+## 📌 v3.0.5.5 (2026-10-08) — 🛠️ Flutter 기반 Boardest Tools 통합, 6대 플랫폼 포털 개편, BoardCast 1.0 순수 UI 포팅 & 데모 탈출 지원
+
+### 1. 🧰 Flutter 기반 Boardest Tools (`boardest-tools.web.app`) 단독 구동
+- **무로그인 즉시 도구 사용**: 판서(전자칠판), 타이머, 스톱워치, 계산기, 주사위 등 모든 도구를 학교 ID나 로그인 없이 즉시 사용 가능.
+- **클라우드 연동 모달 지원**: 우하단 [Cloud] 클릭 시 QR 코드 스캔 또는 학교 ID + 6자리 OTP 연동 창 팝업.
+- **Firebase 배포 타깃 통합**: `apps/boardest/build/web`을 단일 Flutter 웹 소스로 공유하며 도메인(`boardest-tools.web.app`) 자동 인식으로 동작.
+
+### 2. 🏛️ `boardest.web.app` 통합 포털 6대 플랫폼 카드 체계 재편
+- 메인 포털 카드를 6종으로 명확하게 전면 재배치:
+  1. **Boardest Class (Web)**: `https://boardest-class.web.app`
+  2. **Class PRO (APK, Windows)**: 전자칠판 및 태블릿 전용 PRO 앱 다운로드/가이드
+  3. **Boardest Teacher (Web)**: `https://boardest-class.web.app?mode=teacher`
+  4. **Teacher PRO (Windows)**: `https://bst-installer.web.app/bst-teacher.appx`
+  5. **Bst Tools (Web)**: `https://boardest-tools.web.app`
+  6. **Bst Class Lite (Web, Windows)**: 웹 (`https://boardest-class-lite.web.app`) & Windows (`boardest-class-lite.appx`)
+- 가상 시뮬레이터 임베드 섹션을 폐쇄하고 **Boardest 데모 & 체험 가이드**(`https://boardest-demo.web.app`)로 단일화.
+
+### 3. 🚪 Boardest Class Demo 안내 및 탈출 기능
+- **데모 진입 시 탈출 방법 툴팁/스낵바 자동 안내**.
+- **[설정] 버튼 롱프레스(Long-press) 탈출 지원**: 1.5초 이상 누를 시 즉시 데모 탈출 확인 팝업 및 OOBE(초기 설정 마법사) 복귀.
+- 데모 중 설정 모달 접근 시에도 상단 스낵바에 [Demo 탈출] 액션 버튼 동시 제공.
+
+### 4. 🔑 Google OAuth 데모 계정 생성 플래그 (`?create-Demo=1`)
+- `apps/boardest_teacher_oauth`: `?create-Demo=1` (또는 `?create-demo=1`) 감지 시 구글 로그인 계정을 가상 데모 계정으로 자동 태깅.
+- 기존 정회원은 데모 플래그를 무시하여 안전하게 보호하며, 가상 데모 교사는 특별실 실시간 Cloud 스토리지 진입 차단.
+
+### 5. 🍃 BoardCast 1.0 오리지널 엔진 & UI 완전 복원 (Class Lite)
+- 사용자가 제공한 원본 `BoardCast-App`의 UI 스타일, 레이아웃, 시계 롱프레스 디버그 모달, 실시간 교시 진도 표시 로직을 100% 동일하게 복원하여 `boardest-class-lite.web.app` 및 `boardest-class-lite.appx`로 패키징.
+
+---
+
+## 📌 v3.0.5.4 (2026-10-08) — 🚀 3모드 통합 체계, 서비스워커 핫스왑 자동업데이트 & Class Lite AppX 배포
+
+### 1. 🎯 단일 설치 앱 3모드 체계 확립 (Setup Wizard 1단계 3선택)
+- **최초 실행 시 3개 모드 즉시 분기**:
+  - **Class PRO (웹: Class)**: 정식 일반 학급 전자칠판용 (학교 ID 연동, 실시간 시간표/급식, 교실 도구, OTP 연동).
+  - **Class PRO Demo (웹: Class Demo)**: 가상 시뮬레이션 체험 모드. 실제 학교 ID나 설정 없이 `DemoClassAllocatorService`를 통해 `Demo-class 1~10` 비겹침 가상 학급 자동 배정 및 오류 없이 즉시 대시보드 진입.
+  - **Class PRO Teacher (웹: Class Teacher)**: 교사 1인 특별실/연구실. 학교 ID 절차를 완전히 생략하고 구글 계정 직접 로그인으로 구글 드라이브 Cloud 직결.
+
+### 2. ⚡ 서비스 워커 & 버전 자동 감지 Hot-Swap 로직 구축
+- **브라우저 구버전 캐시 고임 원천 차단**:
+  - `version.json?t={timestamp}` (`no-store`)를 통해 서버의 배포 버전을 실시간 감지.
+  - 새 버전 배포 감지 시: 브라우저 캐시(`caches.delete`) 전면 파기, 구버전 서비스 워커 즉시 등록 해제, 최신 버전 자동 리로드.
+  - `firebase.json`에서 `version.json`, `index.html`, 정적 에셋에 `no-cache, no-store, must-revalidate` 헤더를 강제하여 브라우저 강제 새로고침(Ctrl+F5) 없이도 항상 최신 빌드 유지.
+
+### 3. 🍃 BoardCast 1.0 엔진 포팅 & Class Lite Windows AppX 네이티브 패키징
+- **순수 HTML Class Lite 확립**:
+  - 기존 BoardCast 1.0의 교시별 진도율 계산 알고리즘, NEIS 급식 조회, 시간표 파서를 순수 바닐라 HTML/JS로 결합.
+  - Firebase 0% 의존성, 시계 롱프레스(Long-press) 시간/학교 디버그 모달 탑재.
+- **`boardest-class-lite.appx` 네이티브 빌드 & 서명**:
+  - Windows Kit `makeappx.exe`와 C# 경량 윈도우 런처를 결합하여 설치형 UWP/AppX 패키지 생성 완료 (`BoardestCert.pfx` SHA256 서명).
+  - 초경량 수 MB 용량으로 Windows 네이티브 환경에서 즉시 설치 및 실행 가능.
+
+---
+
+## 📌 v3.0.5.3 (2026-10-08) — 👨‍🏫 Class Teacher 학교 ID 없는 구글 다이렉트 로그인, 에디션 최상단 분리 & 순수 HTML Class Lite 확립
+
+### 1. 🔑 Class (PRO) Teacher 구글 계정 다이렉트 로그인 (학교 ID 절차 완전 배제)
+- **학교 ID 불필요 원클릭 로그인**:
+  - 교사 1인 특별실/연구실 모드(`Class Teacher` / `Class Teacher PRO`) 선택 시 학교 ID 입력 필드와 컴시간 검색창을 완전히 숨김.
+  - 대형 Google 로그인 버튼(`Google 계정으로 로그인 (수업자료 & Cloud 연동)`)을 즉시 노출하여 학교 ID 절차 없이 개인 구글 계정으로 직결.
+  - 로그인 후 [다음] 클릭 시 학교 ID 검증 단계를 자동으로 건너뛰고 기본 특별실 설정으로 즉시 대시보드 진입.
+
+### 2. 🌐 웹/앱 에디션 선택 OOBE 마법사 최상단 전진 배치
+- **에디션 선택을 최초 질문으로 승격**:
+  - 기존에 학교를 연결해야만 나타나던 에디션 선택 카드를 마법사 Step 1의 가장 첫 번째 최상단으로 전진 배치.
+  - **웹 접속 시**: `Boardest Class` vs `Boardest Class Teacher` 명확한 2종 분기 제시.
+  - **앱 접속 시**: `Boardest Class PRO` vs `Boardest Class Teacher PRO` 명확한 2종 분기 제시.
+
+### 3. 🍃 순수 바닐라 HTML Boardest Class Lite 단독 배포 확립
+- **`boardest-class-lite.web.app`**:
+  - `firebase.json` 호스팅 대상을 Flutter 빌드가 아닌 순수 바닐라 HTML/CSS/JS 디렉터리(`infra/class_lite_web`)로 직결.
+  - 0% Firebase 의존성, 7교시 그리드, NEIS 실시간 급식 메뉴, 대형 시계 롱프레스(Long-press) 시간/날짜 디버그 모달 탑재.
+- **🪟 Windows용 초경량 WebView2 러너 아키텍처 제안**:
+  - OS 내장 Edge WebView2 런타임을 활용하여 엔진 번들 없이 수 MB 용량으로 `index.html`을 즉시 렌더링하는 Windows 전용 초경량 독립 앱 패키징 체계 수립.
+
+### 4. 🛡️ 학교 정보 외 비학교(개인) 로컬 저장 일절 배제
+- 디바이스 로컬 스토리지에는 오직 학교 및 학급 식별자(`selectedSchool`, `schoolId`, `selectedGrade`, `selectedClass`, `scaleFactor`)만 유지하고, 불필요한 개인정보 및 잔여 캐시 흔적을 원천 격리.
+
+---
+
+## 📌 v3.0.5.2 (2026-10-08) — 🎨 설정창 리뉴얼, Class PRO/Teacher 통합, 시계 롱클릭 시간변경 & 소개관 전면 개편
+
+### 1. ⚙️ 설정창 전면 리뉴얼 (Modern Glassmorphic UI) & Demo 모드 설정 보호
+- **설정창 리뉴얼**:
+  - 기존의 단조롭고 투박했던 설정을 세련된 다크 글래스모피즘(0xFF0F121C, 16px 블러, 은은한 네온 민트 보더, 글로우 섀도우)으로 전면 교체.
+  - 카테고리별 그룹화 적용: 🚀 **핵심 기능 설정** (앱 설정, 특별실 전환), 🖥️ **화면 및 디스플레이** (DPI 배율, 자동 절전, 홈 런처, 시스템 업데이트), 🔒 **계정 및 세션** (로그아웃, 회원 탈퇴).
+  - 직관적인 아이콘 그라디언트 뱃지 및 상태 요약 서브타이틀 탑재.
+- **데모 모드 설정 잠금**:
+  - 데모 모드 접속 중 설정 진입 시 `🔒 데모 모드에서는 설정을 변경할 수 없습니다.` 토스트 알림을 띄우고 임의 수정을 안전하게 차단.
+  - OOBE(Setup Wizard)는 데모 모드 진입 시 0초 자동 패스하여 완성된 대시보드로 즉시 전환.
+
+### 2. ⏰ 전자칠판 대형 시계 롱클릭(Long-Press) 디버그 날짜·시간 설정
+- **시계 꾹 눌러 시간 조작**:
+  - Boardest Class 상단 대형 디지털 시계를 길게 탭하면 즉시 날짜/시간 변경 다이얼로그(`_setDebugTime()`) 호출.
+  - 연/월/일, AM/PM, 시, 분을 버튼으로 손쉽게 조작하여 다양한 수업 시간대 및 시간표 전환 테스트 지원.
+  - 디버그 시간 적용 중 손쉽게 원래 현재 시각으로 되돌릴 수 있는 `실시간 복원` 원클릭 버튼 제공.
+
+### 3. 🏫 Class PRO & Class Teacher 단일 앱 통합 및 최초 설치 선택 모달
+- **단일 앱 패키징**:
+  - Class PRO와 Class Teacher를 별도 앱으로 분리하지 않고 하나의 통합 앱으로 패키징.
+  - **신규 설치 시**: 학교 ID 입력 후 즉시 `Class PRO (일반 교실 전자칠판용)` vs `Class Teacher (교사 1인 특별실/연구실)` 중 선택하는 대형 인터랙티브 카드 제공.
+  - **업데이트 시**: 기존 설정이 유지되며 기본값은 `Class PRO`로 자동 계승.
+- **Class Teacher 모드**:
+  - 교사 1인 전용 공간으로서 구글 계정 직접 로그인을 지원하며, 교실 OTP 승인 절차 없이 구글 드라이브 Cloud(`bst-save`, `bst-pen`, Canva)를 상시 직결 동기화.
+
+### 4. 🌐 `boardest-class-pro.web.app` 런처 배포 & Firebase 호스팅 정리
+- **`boardest-class-pro.web.app`**:
+  - 네이티브 윈도우/안드로이드 앱을 브라우저에서 원클릭 호출하는 `boardest://dashboard` 딥링크 런처 사이트 구축 및 배포 완료.
+- **호스팅 네임스페이스 정리**:
+  - 오타 도메인 `boarest-tools` 호스팅 사이트 Firebase 영구 삭제 완료 (`boardest-` 접두사 사이트만 단일 유지).
+
+### 5. 🛠️ `boardest-tools.web.app` & 🍃 `boardest-class-lite.web.app` 분리 런칭
+- **Boardest Tools (`boardest-tools.web.app`)**:
+  - 로그인 없이도 기본 판서, 카운트다운 타이머, 번호 뽑기 즉시 실행. QR/OTP 연결 시 Google Drive Cloud 동기화 지원.
+- **Boardest Class Lite (`boardest-class-lite.web.app`)**:
+  - 교과서 사진 및 Firebase 의존성을 완전히 제거(0%)한 초경량 시간표 에디션. 학교/학년/반 입력만으로 번개처럼 구동.
+
+### 6. 🏠 `boardest.web.app` (플랫폼 소개 가이드) 전면 리뉴얼
+- 신규 4대 플랫폼(Class PRO, Class Teacher, Boardest Tools, Class Lite)을 직관적으로 비교하고 즉시 실행할 수 있는 플래그십 카드 그리드 및 네이티브 앱 다운로드 가이드 전면 개편.
+
+---
+
+### 1. 🏫 Class 앱 라인업 체계화 (Pro / Class / Lite)
+- **Boardest Class PRO (`class pro`)**:
+  - 네이티브 앱 (Windows EXE / Android APK).
+  - 시간표 + 전자칠판 판서 + 로컬 캐시 + Cloud Drive + Canva + 교과서 Pro 전체 탑재 전문 전자칠판 스위트.
+- **Boardest Class (`class`)**:
+  - 웹 버전 (`https://boardest-class.web.app`).
+  - 시간표 및 풀 기능 웹 전자칠판.
+- **Boardest Class Lite (`class lite`) 신규 출시**:
+  - 웹 버전 (`https://boardest-class-lite.web.app`).
+  - 시간표 도구 "만" 표시되는 초경량 모드 (`AppConfig.isLiteMode`).
+  - 급식 지도, 조종례 공지, 학사일정, 시계, 날씨 등 필수 교실 편의 기능은 완벽 지원하며, 판서/Cloud 패널을 숨겨 가볍고 빠른 시간표 전용 대시보드 제공.
+
+### 2. 🛠️ 미설치 학급용 `Boardest Tools` 단독 웹 런칭
+- **배포 도메인**: `https://boardest-tools.web.app` (보조 도메인: `https://boarest-tools.web.app`)
+- **즉시 사용 파이프라인 (0초 설치/로그인)**:
+  - 1단계: 학교 ID (예: `ydm`) 입력 (로컬에 최근 학교 자동 기억).
+  - 2단계: 교사용 6자리 OTP 입력 (동적 스테가노그래피 & 표준 TOTP 지원).
+  - 3단계: **즉시 바로 사용!**
+    - 🎨 스마트 전자칠판 판서 (부드러운 터치/펜, 형광펜, 지우개, 구글 드라이브 `bst-pen` 원클릭 저장).
+    - 📁 교사 Google Drive `bst-save` 수업자료함 (PDF/이미지/Canva 인앱 뷰어).
+    - ⏱️ 수업 보조 도구함 (카운트다운 타이머 & 벨소리, 스톱워치, 무작위 발표자 번호 뽑기, 집중 모드 암전).
+
+### 3. ⚙️ Demo 모드 설정 차단 버그 수정
+- `apps/boardest/lib/views/dashboard_view.dart` 내 `_openSettingsWizard()`에서 데모 모드 접속 시 설정을 열지 못하게 하던 차단 가드 제거.
+- 이제 데모 모드에서도 설정 메뉴 바텀시트, 화면 배율(DPI), 시간표 레이아웃 등 모든 설정을 자유롭게 체험 가능.
+
+---
+
+## 📌 v3.0.5-patch1 (2026-10-08) — ☁️ Cloud Drive 401 Self-Healing & Cloudflare Worker Quota Optimization
+
+### 1. 🔑 Google Drive API 401 Unauthorized 자가 치유(Self-Healing)
+- **세션 초기화 시 토큰 유효성 사전 검증 (`ensureValidAccessToken`)**:
+  - 교사용 앱(`apps/boardest_teacher`) 시작 또는 세션 전달 시 Google userinfo로 토큰 상태를 즉시 점검.
+  - 토큰 만료(401) 감지 시 Cloudflare Worker 토큰 갱신 프록시(`/api/auth/token/refresh`)를 통해 백그라운드에서 신규 액세스 토큰으로 자가 치유(Self-healing) 발급.
+- **Drive API 401 응답 시 자동 재시도 전면 적용**:
+  - `_getOrCreateFolder`(`bst-save` 폴더 탐색 및 생성), `uploadBytesToDrive`, `createFolderInDrive`, `renameDriveFile`, `deleteDriveFile`에 401 감지 및 1회 자동 토큰 갱신 후 재호출 파이프라인 추가.
+- **OAuth Hub(`apps/boardest_teacher_oauth`) 만료 토큰 전달 원천 차단**:
+  - 브라우저 환경에서 직접 `oauth2.googleapis.com` 호출 시 발생하는 CORS 문제를 해결하기 위해 Cloudflare Worker를 통한 토큰 갱신 폴백 추가.
+  - 갱신되지 않은 만료된 과거 토큰(`cachedToken`)이 Teacher 앱 URL 쿼리로 넘어가지 않도록 차단.
+
+### 2. ⚡ Cloudflare Worker 무상태화 & IP Rate Limiter (무료 한도 고갈 차단)
+- **인메모리 슬라이딩 윈도우 IP Rate Limiter 탑재**:
+  - Worker에 10초당 35회 이상의 급격한 폭주/연타 접속 발생 시 HTTP 429 ("Too Many Requests") 즉시 차단 응답 반환. 무한 폴링이나 중복 요청으로 인한 일일 무료 한도 고갈 완벽 방어.
+- **`/api/auth/token/refresh` 100% 무상태(Stateless) 프록시 전환**:
+  - 요청 바디에 `refreshToken`이 포함된 경우 KV 읽기/쓰기를 일절 수행하지 않고 Google OAuth 서버와 직접 교환하여 반환 (KV 소비 0회).
+- **단순 조회(GET) 시 중복 `KV.put()` 전면 제거 및 안전 처리(Graceful Fallback)**:
+  - `/api/auth/profile/get`에서 이미 `shortId`가 존재하는 경우 `KV.put()`을 수행하지 않고 순수 읽기(GET)로 반환.
+  - 교사용 앱에서 `shortId`가 로컬 캐시에 존재할 경우 `/api/auth/device/register` 및 `/api/auth/profile/get` 반복 호출을 건너뛰도록 최적화.
+  - 일일 쓰기 한도(1,000회) 초과 시에도 500 Internal Server Error로 앱이 중단되지 않도록 `try-catch`로 감싸 정상 200 응답 유지.
+
+### 3. 🛡️ Firestore 데이터 단일화 & 양방향 인플라이트(In-Flight) 중복 요청 차단
+- **교사용 앱 (`apps/boardest_teacher`)**:
+  - `refreshAccessToken()`에 `_ongoingRefreshFuture` 인플라이트 락 적용: 병렬 호출 시 단 1개의 토큰 갱신 Future를 공유하여 중복 발급 차단.
+  - `syncTeacherCloudTokenToFirestore()`에 5초 쿨다운 타이머 및 인플라이트 락 적용: 연타 및 잦은 UI 이벤트에도 Firestore 쓰기 쿼터 안전 보호.
+- **교실 전자칠판 앱 (`apps/boardest`)**:
+  - `verify6DigitSteganoOtp()`에 인플라이트 락 적용: 전자칠판에서 버튼 연타 시 중복 OTP 검증 차단.
+  - `getCloudTeachers()`에 10초 로컬 메모리 캐시 및 인플라이트 락 적용: 화면 진입 시 다중 위젯 마운트로 인한 중복 Firestore Read 차단.
+  - `exchangeRefreshTokenForAccessToken()`에 10분 토큰 캐시 및 인플라이트 락, Cloudflare Worker CORS 폴백 적용.
+- **웹 빌드 및 정적 분석 검증 완료**:
+  - `apps/boardest_teacher` (Web Release), `apps/boardest` (Web Release) 2개 앱 모두 빌드 성공 검증 완료 (Exit Code 0).
 
 ---
 

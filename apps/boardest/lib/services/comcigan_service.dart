@@ -21,12 +21,30 @@ class TimetableResult {
     required this.homeroomTeachers,
   });
 
-  /// 특별실 모드: 특정 교시에 특정 교사(약칭)가 수업하는 학급을 역추적합니다.
+  /// 컴시간 시간표에 등장하는 모든 교사 목록 (정렬, 중복 제거)
+  List<String> get allTeachers {
+    final set = <String>{};
+    for (final l in lessons) {
+      final t = l.teacher.replaceAll('*', '').trim();
+      if (t.isNotEmpty) set.add(t);
+    }
+    for (final m in homeroomTeachers.values) {
+      for (final t in m.values) {
+        final sanitized = t.replaceAll('*', '').trim();
+        if (sanitized.isNotEmpty) set.add(sanitized);
+      }
+    }
+    final list = set.toList();
+    list.sort();
+    return list;
+  }
+
+  /// 특별실 모드: 특정 교시에 특정 교사(약칭 또는 성함)가 수업하는 학급을 역추적합니다.
   /// 한 교사는 동시에 한 반만 가르칠 수 있으므로 첫 번째 매칭 결과를 반환합니다.
   /// 
   /// [weekday]: 1=월요일 ~ 5=금요일
   /// [period]: 교시 번호 (1~8)
-  /// [teacherAbbr]: 컴시간에서 온 교사 약칭 (예: "김희", "이정" 등 2글자)
+  /// [teacherAbbr]: 컴시간에서 온 교사 약칭 또는 성함 (예: "김희", "이정", "홍길동" 등)
   /// 
   /// 반환: { 'grade': X, 'classNum': Y } 또는 null (찾을 수 없는 경우)
   Map<String, int>? findClassByTeacherAndPeriod({
@@ -35,14 +53,18 @@ class TimetableResult {
     required String teacherAbbr,
   }) {
     if (teacherAbbr.isEmpty) return null;
-    final sanitized = teacherAbbr.replaceAll('*', '').trim();
+    final sanitized = teacherAbbr.replaceAll('*', '').replaceAll(' ', '').trim();
     if (sanitized.isEmpty) return null;
 
     for (final lesson in lessons) {
-      if (lesson.weekday == weekday &&
-          lesson.classTime == period &&
-          lesson.teacher.replaceAll('*', '').trim() == sanitized) {
-        return {'grade': lesson.grade, 'classNum': lesson.classNum};
+      if (lesson.weekday == weekday && lesson.classTime == period) {
+        final lTeacher = lesson.teacher.replaceAll('*', '').replaceAll(' ', '').trim();
+        if (lTeacher.isEmpty) continue;
+        if (lTeacher == sanitized ||
+            (sanitized.length >= 2 && lTeacher.startsWith(sanitized)) ||
+            (lTeacher.length >= 2 && sanitized.startsWith(lTeacher))) {
+          return {'grade': lesson.grade, 'classNum': lesson.classNum};
+        }
       }
     }
     return null;

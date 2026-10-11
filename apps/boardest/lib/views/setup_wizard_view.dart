@@ -21,10 +21,13 @@ import '../services/auth_service.dart';
 import '../services/system_app_scanner.dart';
 import 'timetable_view.dart';
 import 'dashboard_view.dart';
+import '../services/demo_class_allocator_service.dart';
+import '../services/bst_cloud_service.dart';
 
 class SetupWizardView extends StatefulWidget {
   final bool startWithStepList;
-  const SetupWizardView({super.key, this.startWithStepList = false});
+  final int? initialEditionMode;
+  const SetupWizardView({super.key, this.startWithStepList = false, this.initialEditionMode});
 
   @override
   State<SetupWizardView> createState() => _SetupWizardViewState();
@@ -127,6 +130,12 @@ class _SetupWizardViewState extends State<SetupWizardView> {
   bool _isSignUpMode = false;
   String _authEmail = '';
   String _authPassword = '';
+  int _selectedEditionMode = 0; // 0: Class PRO (웹: Class), 1: Class PRO Demo (웹: Class Demo), 2: Class PRO Teacher (웹: Class Teacher)
+  int _specialRoomSubTab = 0; // 0: 원클릭 구글 로그인, 1: 학교 ID + 컴시간 교사 목록 선택
+  final TextEditingController _specialSchoolIdController = TextEditingController();
+  bool _isLoadingTeachers = false;
+  List<String> _comciganTeachers = [];
+  String? _selectedTeacherDropdown;
   bool _specialClassroomMode = false;
   List<School> _schoolSearchResults = [];
   bool _isSearchingSchool = false;
@@ -144,7 +153,298 @@ class _SetupWizardViewState extends State<SetupWizardView> {
     super.initState();
     _pageController = PageController();
     _showStepList = widget.startWithStepList;
+    if (widget.initialEditionMode != null) {
+      _selectedEditionMode = widget.initialEditionMode!;
+      if (_selectedEditionMode == 2) {
+        _specialClassroomMode = true;
+      }
+    }
+    if (kIsWeb) {
+      final uri = Uri.base;
+      if (uri.queryParameters['auth'] == 'success') {
+        _applyWebOAuthParams(uri.queryParameters);
+      }
+    }
     _loadExistingSettings();
+  }
+
+  HttpServer? _classTeacherLoopbackServer;
+
+  Future<void> _applyWebOAuthParams(Map<String, String> query) async {
+    final email = query['email'] ?? '';
+    final token = query['token'] ?? '';
+    final teacherName = query['teacherName'] ?? '';
+    final teacherId = query['teacherId'] ?? '';
+    final schoolId = query['schoolId'] ?? '44134';
+    final schoolCode = query['schoolCode'] ?? schoolId;
+    final schoolName = query['schoolName'] ?? '교사 연구실';
+    final cafeteria = query['cafeteriaNum'] ?? '1';
+    final codeInt = int.tryParse(schoolCode) ?? int.tryParse(schoolId) ?? 44134;
+
+    final roomId = _specialIdController.text.trim().isNotEmpty
+        ? _specialIdController.text.trim()
+        : (query['roomId'] ?? query['room'] ?? 'Music 1');
+
+    if (token.isNotEmpty) {
+      BstCloudService.instance.activeToken = token;
+      BstCloudService.instance.activeTeacherName = teacherName.isNotEmpty ? teacherName : '교사';
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('teacher_drive_token', token);
+    }
+
+    _selectedSchool = School(id: codeInt, code: codeInt, name: schoolName, region: '서울');
+    _schoolSearchController.text = schoolName;
+    _teacherNameController.text = teacherName;
+    _teacherIdController.text = teacherId;
+    _specialTeacherController.text = teacherName;
+    _classNicknameController.text = roomId;
+    _specialIdController.text = roomId;
+    _selectedGrade = 1; // 교사 담임반 무시, Room ID 기준
+    _selectedClass = 1;
+    _selectedCafeteria = cafeteria;
+    _specialClassroomMode = true;
+    _specialClassroomType = 2;
+    _selectedEditionMode = 2;
+
+    await _finishSetup();
+  }
+
+  Future<void> _startClassTeacherGoogleLogin() async {
+    if (kIsWeb) {
+      final returnUrl = Uri.encodeComponent(Uri.base.toString());
+      final oauthUrl = Uri.parse('https://boardest-teacher-oauth.web.app/?target=web&return_url=$returnUrl');
+      await launchUrl(oauthUrl, webOnlyWindowName: '_self');
+      return;
+    }
+
+    // Windows Native: Start local loopback HTTP server
+    try {
+      if (_classTeacherLoopbackServer != null) {
+        try {
+          await _classTeacherLoopbackServer!.close(force: true);
+        } catch (_) {}
+        _classTeacherLoopbackServer = null;
+      }
+
+      int port = 1217;
+      try {
+        _classTeacherLoopbackServer = await HttpServer.bind(InternetAddress.loopbackIPv4, port, shared: true);
+      } catch (_) {
+        try {
+          _classTeacherLoopbackServer = await HttpServer.bind(InternetAddress.anyIPv4, port, shared: true);
+        } catch (_) {
+          _classTeacherLoopbackServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0, shared: true);
+          port = _classTeacherLoopbackServer!.port;
+        }
+      }
+      port = _classTeacherLoopbackServer!.port;
+
+      _classTeacherLoopbackServer!.listen((HttpRequest request) async {
+        request.response.headers.add('Access-Control-Allow-Origin', '*');
+        request.response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        request.response.headers.add('Access-Control-Allow-Headers', '*');
+        request.response.headers.add('Access-Control-Allow-Private-Network', 'true');
+
+        if (request.method == 'OPTIONS') {
+          request.response.statusCode = HttpStatus.ok;
+          await request.response.close();
+          return;
+        }
+
+        if (request.uri.path == '/oauth-callback') {
+          final query = request.uri.queryParameters;
+          final email = query['email'] ?? '';
+          final token = query['token'] ?? '';
+          final teacherName = query['teacherName'] ?? '';
+          final teacherId = query['teacherId'] ?? '';
+          final schoolId = query['schoolId'] ?? '44134';
+          final schoolCode = query['schoolCode'] ?? schoolId;
+          final schoolName = query['schoolName'] ?? '교사 연구실';
+          final grade = int.tryParse(query['grade'] ?? '1') ?? 1;
+          final classNum = int.tryParse(query['classNum'] ?? '1') ?? 1;
+          final cafeteria = query['cafeteriaNum'] ?? '1';
+          final codeInt = int.tryParse(schoolCode) ?? int.tryParse(schoolId) ?? 44134;
+
+          request.response.headers.contentType = ContentType.html;
+          request.response.write('''
+            <!DOCTYPE html>
+            <html><head><meta charset="utf-8"><title>인증 완료</title></head>
+            <body style="background:#0f0e17; color:#00f5d4; font-family:sans-serif; text-align:center; padding:40px;">
+              <h2>🎉 교사 인증 및 세션 연동이 완료되었습니다!</h2>
+              <p style="color:#94a1b2;">Class Teacher 앱으로 세션이 전달되었습니다. 이 창을 닫으셔도 됩니다.</p>
+              <script>setTimeout(() => window.close(), 1200);</script>
+            </body></html>
+          ''');
+          await request.response.close();
+
+          try {
+            await _classTeacherLoopbackServer?.close(force: true);
+          } catch (_) {}
+          _classTeacherLoopbackServer = null;
+
+          final roomId = _specialIdController.text.trim().isNotEmpty
+              ? _specialIdController.text.trim()
+              : (query['roomId'] ?? query['room'] ?? 'Music 1');
+
+          if (token.isNotEmpty) {
+            BstCloudService.instance.activeToken = token;
+            BstCloudService.instance.activeTeacherName = teacherName.isNotEmpty ? teacherName : '교사';
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('teacher_drive_token', token);
+          }
+
+          if (mounted) {
+            setState(() {
+              _selectedSchool = School(id: codeInt, code: codeInt, name: schoolName, region: '서울');
+              _schoolSearchController.text = schoolName;
+              _teacherNameController.text = teacherName;
+              _teacherIdController.text = teacherId;
+              _specialTeacherController.text = teacherName;
+              _classNicknameController.text = roomId;
+              _specialIdController.text = roomId;
+              _selectedGrade = 1; // 교사 담임반 무시, Room ID 기준
+              _selectedClass = 1;
+              _selectedCafeteria = cafeteria;
+              _specialClassroomMode = true;
+              _specialClassroomType = 2;
+              _selectedEditionMode = 2;
+            });
+            await _finishSetup();
+          }
+        }
+      });
+
+      final oauthUrl = Uri.parse('https://boardest-teacher-oauth.web.app/?target=win&port=$port');
+      if (await canLaunchUrl(oauthUrl)) {
+        await launchUrl(oauthUrl, mode: LaunchMode.externalApplication);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Google 로그인 페이지가 열렸습니다. 인증 완료 시 자동으로 설정됩니다.'),
+            backgroundColor: Color(0xFF7B61FF),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[ClassTeacher OAuth] Error: $e');
+    }
+  }
+
+  /// 교과 전용실: 학교 ID로 컴시간 시간표를 조회하여 모든 교사 목록 로드
+  Future<void> _loadSpecialSchoolTeachers() async {
+    final schoolId = _specialSchoolIdController.text.trim().toLowerCase();
+    if (schoolId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('학교 ID를 입력해주세요.'), backgroundColor: Color(0xFFEF4565)),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoadingTeachers = true;
+      _comciganTeachers = [];
+      _selectedTeacherDropdown = null;
+    });
+
+    try {
+      final url = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/control_configs/$schoolId?key=${AppConfig.firebaseApiKey}';
+      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
+
+      int comciganCode = 0;
+      String schoolName = '';
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        final fields = data['fields'] as Map<String, dynamic>?;
+        if (fields != null) {
+          schoolName = fields['schoolName']?['stringValue']?.toString() ?? '';
+          final codeStr = fields['comciganCode']?['integerValue']?.toString() ??
+              fields['comciganCode']?['stringValue']?.toString() ?? '0';
+          comciganCode = int.tryParse(codeStr) ?? 0;
+        }
+      }
+
+      if (comciganCode == 0) {
+        // 숫자 코드로 직접 입력된 경우 fallback
+        comciganCode = int.tryParse(schoolId) ?? 0;
+      }
+
+      if (comciganCode <= 0) {
+        throw Exception('해당 학교 ID의 컴시간 코드를 찾을 수 없습니다.');
+      }
+
+      final rawData = await _comciganService.fetchTimetableRaw(comciganCode);
+      final timetable = _comciganService.parseTimetable(rawData);
+      _timetableResult = timetable;
+
+      final teachers = timetable.allTeachers;
+      if (teachers.isEmpty) {
+        throw Exception('컴시간에서 교사 목록을 불러오지 못했습니다.');
+      }
+
+      final school = School(
+        id: comciganCode,
+        code: comciganCode,
+        name: schoolName.isNotEmpty ? schoolName : timetable.schoolName,
+        region: '전국',
+      );
+
+      setState(() {
+        _selectedSchool = school;
+        _schoolSearchController.text = school.name;
+        _comciganTeachers = teachers;
+        _selectedTeacherDropdown = teachers.first;
+        _isLoadingTeachers = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ ${teachers.length}명의 교사 명단을 불러왔습니다. 본인 성함을 선택해주세요.'),
+            backgroundColor: const Color(0xFF2EC4B6),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[loadSpecialSchoolTeachers] error: $e');
+      setState(() => _isLoadingTeachers = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('교사 목록 조회 실패: $e'), backgroundColor: const Color(0xFFEF4565)),
+        );
+      }
+    }
+  }
+
+  /// 선택한 교사 정보로 교과전용실 설정 완료
+  Future<void> _applySelectedSpecialTeacher() async {
+    if (_selectedTeacherDropdown == null || _selectedTeacherDropdown!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('교사를 선택해주세요.'), backgroundColor: Color(0xFFEF4565)),
+      );
+      return;
+    }
+
+    final teacher = _selectedTeacherDropdown!;
+    final roomId = _specialIdController.text.trim().isNotEmpty
+        ? _specialIdController.text.trim()
+        : 'special';
+
+    setState(() {
+      _teacherNameController.text = teacher;
+      _teacherIdController.text = teacher;
+      _specialTeacherController.text = teacher;
+      _classNicknameController.text = roomId;
+      _specialIdController.text = roomId;
+      _selectedGrade = 1;
+      _selectedClass = 1;
+      _specialClassroomMode = true;
+      _specialClassroomType = 2; // 교사 고정 특별실
+      _selectedEditionMode = 2;
+    });
+
+    await _finishSetup();
   }
 
   Future<void> _loadExistingSettings() async {
@@ -239,6 +539,9 @@ class _SetupWizardViewState extends State<SetupWizardView> {
     for (var controller in _teacherControllers.values) {
       controller.dispose();
     }
+    try {
+      _classTeacherLoopbackServer?.close(force: true);
+    } catch (_) {}
     super.dispose();
   }
 
@@ -351,9 +654,43 @@ class _SetupWizardViewState extends State<SetupWizardView> {
     }
   }
 
+  Future<void> _startDemoModeImmediately() async {
+    setState(() => _isLoading = true);
+    try {
+      AppConfig.isDemoMode = true;
+      final current = _existingSettings ?? AppSettings();
+      final demoSettings = await DemoClassAllocatorService.instance.allocateDemoSettings(current);
+      await _storageService.saveSettings(demoSettings);
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const DashboardView()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('데모 모드 진입 중 오류 발생: $e'),
+            backgroundColor: const Color(0xFFEF4565),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _nextStep() async {
     // Step 0 (Index 0): 학교 ID 및 학년/반 입력 검증
     if (_currentStep == 0) {
+      if (_selectedEditionMode == 1) {
+        await _startDemoModeImmediately();
+        return;
+      }
+      if (_specialClassroomMode || _selectedEditionMode == 2) {
+        _selectedSchool ??= School(id: 0, code: 0, name: '교사용 연구실', region: '전국');
+        await _finishSetup();
+        return;
+      }
       if (_selectedSchool == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1984,7 +2321,7 @@ class _SetupWizardViewState extends State<SetupWizardView> {
         children: [
           SizedBox(height: 20 * scale),
           Text(
-            '학교 ID 입력',
+            kIsWeb ? 'Boardest 시작하기' : 'Boardest 시작 마법사',
             style: GoogleFonts.outfit(
               fontSize: 28 * scale,
               fontWeight: FontWeight.bold,
@@ -1993,7 +2330,7 @@ class _SetupWizardViewState extends State<SetupWizardView> {
           ),
           SizedBox(height: 8 * scale),
           Text(
-            '학교 ID를 입력하면 학교명과 시간표를 자동으로 가져옵니다.',
+            '학급 운영 모드에 맞는 에디션을 선택해 주세요.',
             style: GoogleFonts.notoSansKr(
               fontSize: 13 * scale,
               color: const Color(0xFF94A1B2),
@@ -2001,200 +2338,741 @@ class _SetupWizardViewState extends State<SetupWizardView> {
           ),
           SizedBox(height: 16 * scale),
 
-          if (_selectedSchool == null) ...[
-            // ── 학교 ID 입력 (중앙제어 방식) ──
-            Container(
-              padding: EdgeInsets.all(16 * scale),
-              decoration: BoxDecoration(
-                color: const Color(0xFF16161A),
-                borderRadius: BorderRadius.circular(16 * scale),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '학교 ID',
-                    style: GoogleFonts.notoSansKr(
-                      color: Colors.white70,
-                      fontSize: 12 * scale,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 8 * scale),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _schoolSearchController,
-                          style: GoogleFonts.outfit(
-                            color: Colors.white,
-                            fontSize: 20 * scale,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.5,
-                          ),
-                          textCapitalization: TextCapitalization.none,
-                          decoration: InputDecoration(
-                            hintText: 'school-id',
-                            hintStyle: GoogleFonts.outfit(
-                              color: const Color(0xFF72757E),
-                              fontSize: 20 * scale,
-                            ),
-                            filled: true,
-                            fillColor: const Color(0xFF0F0E17),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12 * scale),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16 * scale,
-                              vertical: 14 * scale,
-                            ),
-                          ),
-                          onSubmitted: (_) => _loadSchoolFromId(),
-                        ),
-                      ),
-                      SizedBox(width: 12 * scale),
-                      SizedBox(
-                        height: 52 * scale,
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2EC4B6),
-                            padding: EdgeInsets.symmetric(horizontal: 20 * scale),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12 * scale),
-                            ),
-                          ),
-                          onPressed: _isSearchingSchool ? null : _loadSchoolFromId,
-                          icon: _isSearchingSchool
-                              ? SizedBox(
-                                  width: 18 * scale, height: 18 * scale,
-                                  child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                )
-                              : Icon(Icons.cloud_download_rounded, color: Colors.white, size: 20 * scale),
-                          label: Text(
-                            _isSearchingSchool ? '조회 중...' : '학교 연결',
-                            style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13 * scale),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 10 * scale),
-                  Text(
-                    '💡 학교 ID는 관리자(boardest-control.web.app)에서 확인하세요.',
-                    style: GoogleFonts.notoSansKr(
-                      color: const Color(0xFF72757E),
-                      fontSize: 11 * scale,
-                    ),
-                  ),
-                  SizedBox(height: 6 * scale),
-                  InkWell(
-                    onTap: () => launchUrl(Uri.parse('https://comcigan.jiwho.workers.dev')),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.search, size: 14 * scale, color: const Color(0xFF7F5AF0)),
-                        SizedBox(width: 4 * scale),
-                        Text(
-                          '🔍 컴시간 학교 코드 검색 (comcigan.jiwho.workers.dev)',
-                          style: GoogleFonts.notoSansKr(
-                            color: const Color(0xFF7F5AF0),
-                            fontSize: 11 * scale,
-                            fontWeight: FontWeight.bold,
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+          // ── 학급 유형 선택: Class PRO vs Class PRO Demo vs Class PRO Teacher ──
+          Container(
+            padding: EdgeInsets.all(16 * scale),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16161A),
+              borderRadius: BorderRadius.circular(16 * scale),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
-          ] else ...[
-            // 이미 학교가 선택된 상태
-            Container(
-              padding: EdgeInsets.all(12 * scale),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2EC4B6).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12 * scale),
-                border: Border.all(
-                  color: const Color(0xFF2EC4B6).withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _selectedSchool!.name,
-                          style: GoogleFonts.notoSansKr(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16 * scale,
-                          ),
-                        ),
-                        SizedBox(height: 2 * scale),
-                        Text(
-                          '${_selectedSchool!.region} | 코드: ${_selectedSchool!.code}',
-                          style: GoogleFonts.notoSansKr(
-                            color: Colors.white70,
-                            fontSize: 12 * scale,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _selectedSchool = null;
-                        _schoolSearchResults.clear();
-                      });
-                    },
-                    child: Text(
-                      '변경',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.hub_rounded, color: const Color(0xFF2EC4B6), size: 18 * scale),
+                    SizedBox(width: 8 * scale),
+                    Text(
+                      '운영 에디션 선택',
                       style: GoogleFonts.notoSansKr(
-                        color: const Color(0xFFEF4565),
+                        color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 14 * scale,
                       ),
                     ),
+                  ],
+                ),
+                SizedBox(height: 12 * scale),
+                Row(
+                  children: [
+                    // 1. Class PRO (일반 교실)
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() {
+                          _selectedEditionMode = 0;
+                          _specialClassroomMode = false;
+                          _specialClassroomType = 0;
+                        }),
+                        borderRadius: BorderRadius.circular(12 * scale),
+                        child: Container(
+                          padding: EdgeInsets.all(14 * scale),
+                          decoration: BoxDecoration(
+                            color: _selectedEditionMode == 0
+                                ? const Color(0xFF2EC4B6).withValues(alpha: 0.15)
+                                : const Color(0xFF0F0E17),
+                            borderRadius: BorderRadius.circular(12 * scale),
+                            border: Border.all(
+                              color: _selectedEditionMode == 0
+                                  ? const Color(0xFF2EC4B6)
+                                  : Colors.white12,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.school_rounded,
+                                      color: _selectedEditionMode == 0
+                                          ? const Color(0xFF2EC4B6)
+                                          : Colors.white60,
+                                      size: 20 * scale),
+                                  SizedBox(width: 8 * scale),
+                                  Text(
+                                    kIsWeb ? 'Class' : 'Class PRO',
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14 * scale,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 6 * scale),
+                              Text(
+                                '정식 일반 학급용\n학교 ID 연동, 실시간 시간표/급식',
+                                style: GoogleFonts.notoSansKr(
+                                  color: const Color(0xFF94A1B2),
+                                  fontSize: 11 * scale,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 10 * scale),
+                    // 2. Class PRO Demo (가상 시뮬레이션 체험)
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() {
+                          _selectedEditionMode = 1;
+                        }),
+                        borderRadius: BorderRadius.circular(12 * scale),
+                        child: Container(
+                          padding: EdgeInsets.all(14 * scale),
+                          decoration: BoxDecoration(
+                            color: _selectedEditionMode == 1
+                                ? const Color(0xFFFF9F1C).withValues(alpha: 0.15)
+                                : const Color(0xFF0F0E17),
+                            borderRadius: BorderRadius.circular(12 * scale),
+                            border: Border.all(
+                              color: _selectedEditionMode == 1
+                                  ? const Color(0xFFFF9F1C)
+                                  : Colors.white12,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.play_circle_fill_rounded,
+                                      color: _selectedEditionMode == 1
+                                          ? const Color(0xFFFF9F1C)
+                                          : Colors.white60,
+                                      size: 20 * scale),
+                                  SizedBox(width: 8 * scale),
+                                  Text(
+                                    kIsWeb ? 'Class Demo' : 'Class PRO Demo',
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14 * scale,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 6 * scale),
+                              Text(
+                                '가상 시뮬레이션 체험\n설정 없이 즉시 대시보드 둘러보기',
+                                style: GoogleFonts.notoSansKr(
+                                  color: const Color(0xFF94A1B2),
+                                  fontSize: 11 * scale,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 10 * scale),
+                    // 3. Class PRO Teacher (교사 1인 특별실)
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() {
+                          _selectedEditionMode = 2;
+                          _specialClassroomMode = true;
+                          _specialClassroomType = 2;
+                          _selectedSchool ??= School(id: 0, code: 0, name: '교사용 연구실', region: '전국');
+                        }),
+                        borderRadius: BorderRadius.circular(12 * scale),
+                        child: Container(
+                          padding: EdgeInsets.all(14 * scale),
+                          decoration: BoxDecoration(
+                            color: _selectedEditionMode == 2
+                                ? const Color(0xFF7B61FF).withValues(alpha: 0.15)
+                                : const Color(0xFF0F0E17),
+                            borderRadius: BorderRadius.circular(12 * scale),
+                            border: Border.all(
+                              color: _selectedEditionMode == 2
+                                  ? const Color(0xFF7B61FF)
+                                  : Colors.white12,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.person_pin_rounded,
+                                      color: _selectedEditionMode == 2
+                                          ? const Color(0xFFA78BFA)
+                                          : Colors.white60,
+                                      size: 20 * scale),
+                                  SizedBox(width: 8 * scale),
+                                  Text(
+                                    kIsWeb ? 'Class Teacher' : 'Class Teacher PRO',
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14 * scale,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 6 * scale),
+                              Text(
+                                '교사 1인 특별실/연구실\n학교 ID 불필요, 구글 로그인 직결',
+                                style: GoogleFonts.notoSansKr(
+                                  color: const Color(0xFF94A1B2),
+                                  fontSize: 11 * scale,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: 16 * scale),
+
+          if (_selectedEditionMode == 1) ...[
+            // ── Class PRO Demo: 즉시 가상 학급 배정 및 대시보드 진입 ──
+            Container(
+              padding: EdgeInsets.all(20 * scale),
+              decoration: BoxDecoration(
+                color: const Color(0xFF16161A),
+                borderRadius: BorderRadius.circular(16 * scale),
+                border: Border.all(color: const Color(0xFFFF9F1C).withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8 * scale),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF9F1C).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(10 * scale),
+                        ),
+                        child: Icon(Icons.sports_esports_rounded, color: const Color(0xFFFF9F1C), size: 24 * scale),
+                      ),
+                      SizedBox(width: 12 * scale),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '가상 시뮬레이션 체험 모드',
+                              style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16 * scale),
+                            ),
+                            Text(
+                              '학교 설정 없이 Demo-class 1~10 비겹침 가상 학급으로 즉시 시작됩니다.',
+                              style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 12 * scale),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16 * scale),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52 * scale,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF9F1C),
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12 * scale)),
+                      ),
+                      onPressed: _startDemoModeImmediately,
+                      icon: const Icon(Icons.rocket_launch_rounded, color: Colors.black),
+                      label: Text(
+                        '🚀 지금 바로 데모 체험 시작하기',
+                        style: GoogleFonts.notoSansKr(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 15 * scale),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-            SizedBox(height: 16 * scale),
-            // 학급 유형 선택: 일반 학급 vs 특별실
-            Row(
-              children: [
-                Expanded(
-                  child: ChoiceChip(
-                    label: Center(child: Text('🏫 일반 학급', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold, fontSize: 13 * scale))),
-                    selected: !_specialClassroomMode,
-                    selectedColor: const Color(0xFF2EC4B6),
-                    backgroundColor: const Color(0xFF16161A),
-                    checkmarkColor: Colors.black,
-                    onSelected: (val) => setState(() => _specialClassroomMode = !val),
+          ] else if (_selectedEditionMode == 2 || _specialClassroomMode) ...[
+            // ── 교과 전용관: 2분할 진입 (1. 원클릭 구글 로그인 VS 2. 학교 ID + 컴시간 교사 선택) ──
+            Container(
+              padding: EdgeInsets.all(20 * scale),
+              decoration: BoxDecoration(
+                color: const Color(0xFF16161A),
+                borderRadius: BorderRadius.circular(16 * scale),
+                border: Border.all(color: const Color(0xFF7B61FF).withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(8 * scale),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF7B61FF).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(10 * scale),
+                        ),
+                        child: Icon(Icons.meeting_room_rounded, color: const Color(0xFFA78BFA), size: 24 * scale),
+                      ),
+                      SizedBox(width: 12 * scale),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '교과 전용관 / 연구실 설정',
+                              style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16 * scale),
+                            ),
+                            Text(
+                              '원클릭 구글 로그인(클라우드 직결) 또는 학교 ID로 컴시간 교사 목록을 불러와 연결하세요.',
+                              style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 12 * scale),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                SizedBox(width: 12 * scale),
-                Expanded(
-                  child: ChoiceChip(
-                    label: Center(child: Text('🔬 특별실 모드', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold, fontSize: 13 * scale))),
-                    selected: _specialClassroomMode,
-                    selectedColor: const Color(0xFF7B61FF),
-                    backgroundColor: const Color(0xFF16161A),
-                    checkmarkColor: Colors.white,
-                    onSelected: (val) => setState(() => _specialClassroomMode = val),
+                  SizedBox(height: 16 * scale),
+
+                  // 서브탭 2분할 셀렉터
+                  Container(
+                    padding: EdgeInsets.all(4 * scale),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F0E17),
+                      borderRadius: BorderRadius.circular(12 * scale),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => setState(() => _specialRoomSubTab = 0),
+                            borderRadius: BorderRadius.circular(8 * scale),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(vertical: 10 * scale),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: _specialRoomSubTab == 0 ? const Color(0xFF7B61FF) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8 * scale),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.g_mobiledata_rounded,
+                                      color: _specialRoomSubTab == 0 ? Colors.white : Colors.white60,
+                                      size: 20 * scale),
+                                  SizedBox(width: 4 * scale),
+                                  Text(
+                                    '원클릭 구글 로그인 (Cloud 직결)',
+                                    style: GoogleFonts.notoSansKr(
+                                      color: _specialRoomSubTab == 0 ? Colors.white : Colors.white70,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12.5 * scale,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 6 * scale),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => setState(() => _specialRoomSubTab = 1),
+                            borderRadius: BorderRadius.circular(8 * scale),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(vertical: 10 * scale),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: _specialRoomSubTab == 1 ? const Color(0xFF2EC4B6) : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8 * scale),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.badge_rounded,
+                                      color: _specialRoomSubTab == 1 ? Colors.white : Colors.white60,
+                                      size: 18 * scale),
+                                  SizedBox(width: 6 * scale),
+                                  Text(
+                                    '학교 ID + 교사이름 선택',
+                                    style: GoogleFonts.notoSansKr(
+                                      color: _specialRoomSubTab == 1 ? Colors.white : Colors.white70,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12.5 * scale,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+
+                  SizedBox(height: 16 * scale),
+                  Text(
+                    '특별실 / 연구실 식별 Room ID',
+                    style: GoogleFonts.notoSansKr(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13 * scale,
+                    ),
+                  ),
+                  SizedBox(height: 6 * scale),
+                  TextField(
+                    controller: _specialIdController,
+                    style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 13 * scale),
+                    decoration: InputDecoration(
+                      hintText: '예: Music 1, 과학실, 음악실, 연구실 3',
+                      hintStyle: GoogleFonts.notoSansKr(color: Colors.white30, fontSize: 13 * scale),
+                      fillColor: Colors.white.withValues(alpha: 0.05),
+                      filled: true,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 14 * scale, vertical: 12 * scale),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10 * scale),
+                        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 16 * scale),
+
+                  if (_specialRoomSubTab == 0) ...[
+                    // ── [방법 1] 원클릭 구글 로그인 ──
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52 * scale,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF7B61FF),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12 * scale)),
+                        ),
+                        onPressed: _startClassTeacherGoogleLogin,
+                        icon: const Icon(Icons.login_rounded, color: Colors.white),
+                        label: Text(
+                          'Google 계정으로 원클릭 로그인 (드라이브 & Cloud)',
+                          style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14 * scale),
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 10 * scale),
+                    Container(
+                      padding: EdgeInsets.all(10 * scale),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF7B61FF).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8 * scale),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.cloud_done_rounded, color: const Color(0xFFA78BFA), size: 16 * scale),
+                          SizedBox(width: 8 * scale),
+                          Expanded(
+                            child: Text(
+                              '💡 구글 로그인 시 학교 ID 없이 Google Drive(수업자료/판서)와 Cloud가 즉시 연동됩니다.',
+                              style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 11 * scale),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    // ── [방법 2] 학교 ID 입력 + 컴시간 교사 목록 드롭다운 ──
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _specialSchoolIdController,
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontSize: 16 * scale,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: '학교 ID (예: hansung, 44134)',
+                              hintStyle: GoogleFonts.outfit(color: Colors.white30, fontSize: 15 * scale),
+                              filled: true,
+                              fillColor: Colors.white.withValues(alpha: 0.05),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 14 * scale, vertical: 12 * scale),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10 * scale),
+                                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                              ),
+                            ),
+                            onSubmitted: (_) => _loadSpecialSchoolTeachers(),
+                          ),
+                        ),
+                        SizedBox(width: 10 * scale),
+                        SizedBox(
+                          height: 48 * scale,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2EC4B6),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * scale)),
+                            ),
+                            onPressed: _isLoadingTeachers ? null : _loadSpecialSchoolTeachers,
+                            icon: _isLoadingTeachers
+                                ? SizedBox(
+                                    width: 16 * scale, height: 16 * scale,
+                                    child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.search_rounded, color: Colors.white, size: 18),
+                            label: Text(
+                              _isLoadingTeachers ? '불러오는 중...' : '교사 목록 조회',
+                              style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12 * scale),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_comciganTeachers.isNotEmpty) ...[
+                      SizedBox(height: 14 * scale),
+                      Text(
+                        '컴시간 교사 명단에서 본인 선택',
+                        style: GoogleFonts.notoSansKr(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13 * scale,
+                        ),
+                      ),
+                      SizedBox(height: 6 * scale),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 14 * scale),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F0E17),
+                          borderRadius: BorderRadius.circular(10 * scale),
+                          border: Border.all(color: const Color(0xFF2EC4B6).withValues(alpha: 0.5)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedTeacherDropdown,
+                            isExpanded: true,
+                            dropdownColor: const Color(0xFF16161A),
+                            items: _comciganTeachers.map((t) {
+                              return DropdownMenuItem<String>(
+                                value: t,
+                                child: Text(
+                                  '선생님: $t',
+                                  style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14 * scale),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() => _selectedTeacherDropdown = val);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 16 * scale),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50 * scale,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2EC4B6),
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12 * scale)),
+                          ),
+                          onPressed: _applySelectedSpecialTeacher,
+                          icon: const Icon(Icons.check_circle_rounded, color: Colors.black),
+                          label: Text(
+                            '선택한 교사(${_selectedTeacherDropdown ?? ""})로 전용실 시작',
+                            style: GoogleFonts.notoSansKr(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 14 * scale),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
             ),
-            if (!_specialClassroomMode) ...[
+          ] else ...[
+            // ── Class / Class PRO 전용: 학교 ID 입력 ──
+            if (_selectedSchool == null) ...[
+              // ── 학교 ID 입력 (중앙제어 방식) ──
+              Container(
+                padding: EdgeInsets.all(16 * scale),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16161A),
+                  borderRadius: BorderRadius.circular(16 * scale),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '학교 ID',
+                      style: GoogleFonts.notoSansKr(
+                        color: Colors.white70,
+                        fontSize: 12 * scale,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 8 * scale),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _schoolSearchController,
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontSize: 20 * scale,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                            ),
+                            textCapitalization: TextCapitalization.none,
+                            decoration: InputDecoration(
+                              hintText: 'school-id',
+                              hintStyle: GoogleFonts.outfit(
+                                color: const Color(0xFF72757E),
+                                fontSize: 20 * scale,
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFF0F0E17),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12 * scale),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16 * scale,
+                                vertical: 14 * scale,
+                              ),
+                            ),
+                            onSubmitted: (_) => _loadSchoolFromId(),
+                          ),
+                        ),
+                        SizedBox(width: 12 * scale),
+                        SizedBox(
+                          height: 52 * scale,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2EC4B6),
+                              padding: EdgeInsets.symmetric(horizontal: 20 * scale),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12 * scale),
+                              ),
+                            ),
+                            onPressed: _isSearchingSchool ? null : _loadSchoolFromId,
+                            icon: _isSearchingSchool
+                                ? SizedBox(
+                                    width: 18 * scale, height: 18 * scale,
+                                    child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                  )
+                                : Icon(Icons.cloud_download_rounded, color: Colors.white, size: 20 * scale),
+                            label: Text(
+                              _isSearchingSchool ? '조회 중...' : '학교 연결',
+                              style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13 * scale),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 10 * scale),
+                    Text(
+                      '💡 학교 ID는 관리자(boardest-control.web.app)에서 확인하세요.',
+                      style: GoogleFonts.notoSansKr(
+                        color: const Color(0xFF72757E),
+                        fontSize: 11 * scale,
+                      ),
+                    ),
+                    SizedBox(height: 6 * scale),
+                    InkWell(
+                      onTap: () => launchUrl(Uri.parse('https://comcigan.jiwho.workers.dev')),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.search, size: 14 * scale, color: const Color(0xFF7F5AF0)),
+                          SizedBox(width: 4 * scale),
+                          Text(
+                            '🔍 컴시간 학교 코드 검색 (comcigan.jiwho.workers.dev)',
+                            style: GoogleFonts.notoSansKr(
+                              color: const Color(0xFF7F5AF0),
+                              fontSize: 11 * scale,
+                              fontWeight: FontWeight.bold,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              // 이미 학교가 선택된 상태
+              Container(
+                padding: EdgeInsets.all(12 * scale),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2EC4B6).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12 * scale),
+                  border: Border.all(
+                    color: const Color(0xFF2EC4B6).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _selectedSchool!.name,
+                            style: GoogleFonts.notoSansKr(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16 * scale,
+                            ),
+                          ),
+                          SizedBox(height: 2 * scale),
+                          Text(
+                            '${_selectedSchool!.region} | 코드: ${_selectedSchool!.code}',
+                            style: GoogleFonts.notoSansKr(
+                              color: Colors.white70,
+                              fontSize: 12 * scale,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _selectedSchool = null;
+                          _schoolSearchResults.clear();
+                        });
+                      },
+                      child: Text(
+                        '변경',
+                        style: GoogleFonts.notoSansKr(
+                          color: const Color(0xFFEF4565),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14 * scale,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               SizedBox(height: 20 * scale),
               Text(
                 '학년 선택',
@@ -2291,160 +3169,6 @@ class _SetupWizardViewState extends State<SetupWizardView> {
                     ),
                   );
                 },
-              ),
-            ] else ...[
-              SizedBox(height: 16 * scale),
-              Container(
-                padding: EdgeInsets.all(16 * scale),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF7B61FF).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14 * scale),
-                  border: Border.all(color: const Color(0xFF7B61FF).withValues(alpha: 0.3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('🔬 특별실 고유 식별 ID (학교 내 중복 불허)', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13 * scale)),
-                    SizedBox(height: 6 * scale),
-                    TextField(
-                      controller: _specialIdController,
-                      style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 13 * scale),
-                      decoration: InputDecoration(
-                        hintText: '예: music2, science1, art_lab',
-                        hintStyle: GoogleFonts.notoSansKr(color: Colors.white38),
-                        filled: true,
-                        fillColor: const Color(0xFF16161A),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10 * scale)),
-                      ),
-                    ),
-                    SizedBox(height: 14 * scale),
-                    Text('📋 교실 운영 유형', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13 * scale)),
-                    SizedBox(height: 6 * scale),
-                    Wrap(
-                      spacing: 8 * scale,
-                      runSpacing: 8 * scale,
-                      children: [
-                        ChoiceChip(
-                          label: Text('🎒 일반 교실', style: GoogleFonts.notoSansKr(fontSize: 12 * scale)),
-                          selected: !_specialClassroomMode || _specialClassroomType == 0,
-                          selectedColor: const Color(0xFF2EC4B6),
-                          backgroundColor: const Color(0xFF16161A),
-                          onSelected: (v) => setState(() {
-                            _specialClassroomMode = false;
-                            _specialClassroomType = 0;
-                          }),
-                        ),
-                        ChoiceChip(
-                          label: Text('🏫 교수학습실', style: GoogleFonts.notoSansKr(fontSize: 12 * scale)),
-                          selected: _specialClassroomMode && _specialClassroomType == 1,
-                          selectedColor: const Color(0xFF2EC4B6),
-                          backgroundColor: const Color(0xFF16161A),
-                          onSelected: (v) => setState(() {
-                            _specialClassroomMode = true;
-                            _specialClassroomType = 1;
-                          }),
-                        ),
-                        ChoiceChip(
-                          label: Text('👨‍🏫 교사 전용 교실', style: GoogleFonts.notoSansKr(fontSize: 12 * scale)),
-                          selected: _specialClassroomMode && _specialClassroomType == 2,
-                          selectedColor: const Color(0xFF2EC4B6),
-                          backgroundColor: const Color(0xFF16161A),
-                          onSelected: (v) => setState(() {
-                            _specialClassroomMode = true;
-                            _specialClassroomType = 2;
-                          }),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 10 * scale),
-                    if (_specialClassroomType == 1) ...[
-                      // 🏫 교수학습실: 교실명 입력 (수업 없음, 쪽지 수신 + BST 도구 사용 가능, 급식 쪽지 미지원)
-                      TextField(
-                        controller: _classNicknameController,
-                        style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 13 * scale),
-                        decoration: InputDecoration(
-                          labelText: '교수학습실 명칭 (예: 교수학습실, 본관교무실)',
-                          hintText: '교수학습지원실',
-                          hintStyle: GoogleFonts.notoSansKr(color: Colors.white38),
-                          filled: true,
-                          fillColor: const Color(0xFF16161A),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10 * scale)),
-                        ),
-                      ),
-                      SizedBox(height: 10 * scale),
-                      Container(
-                        padding: EdgeInsets.all(10 * scale),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2EC4B6).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8 * scale),
-                          border: Border.all(color: const Color(0xFF2EC4B6).withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline, color: const Color(0xFF2EC4B6), size: 18 * scale),
-                            SizedBox(width: 8 * scale),
-                            Expanded(
-                              child: Text(
-                                '💡 교수학습실은 정규 수업 시간표가 없으며, 교내 쪽지 수신 및 BST 스마트 도구(판서, 타이머 등) 전용으로 운영됩니다. (급식 쪽지는 수신되지 않습니다)',
-                                style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 11 * scale, height: 1.4),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ] else if (_specialClassroomType == 2) ...[
-                      TextField(
-                        controller: _selectedTeacherController,
-                        style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 13 * scale),
-                        decoration: InputDecoration(
-                          labelText: '담당 선생님 성함 (시간표 자동 합성)',
-                          hintText: '예: 홍길동',
-                          filled: true,
-                          fillColor: const Color(0xFF16161A),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10 * scale)),
-                        ),
-                      ),
-                    ] else ...[
-                      Row(
-                        children: [
-                          // 학년 선택 드롭다운
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: 12 * scale),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF16161A),
-                              borderRadius: BorderRadius.circular(10 * scale),
-                              border: Border.all(color: Colors.white24),
-                            ),
-                            child: DropdownButton<int>(
-                              value: _selectedGrade,
-                              dropdownColor: const Color(0xFF16161A),
-                              underline: const SizedBox.shrink(),
-                              style: GoogleFonts.outfit(color: Colors.white, fontSize: 14 * scale, fontWeight: FontWeight.bold),
-                              items: [1, 2, 3].map((g) => DropdownMenuItem(value: g, child: Text('$g학년'))).toList(),
-                              onChanged: (v) {
-                                if (v != null) setState(() => _selectedGrade = v);
-                              },
-                            ),
-                          ),
-                          SizedBox(width: 8 * scale),
-                          Expanded(
-                            child: TextField(
-                              controller: _selectedSubjectController,
-                              style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 13 * scale),
-                              decoration: InputDecoration(
-                                labelText: '담당 과목명',
-                                hintText: '예: 미술, 과학',
-                                filled: true,
-                                fillColor: const Color(0xFF16161A),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10 * scale)),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
               ),
             ],
           ],
@@ -4634,6 +5358,9 @@ class _SetupWizardViewState extends State<SetupWizardView> {
   }
 
   Future<void> _finishSetup() async {
+    if (_specialClassroomMode && _selectedSchool == null) {
+      _selectedSchool = School(id: 0, code: 0, name: '교사용 연구실', region: '전국');
+    }
     if (_selectedSchool == null) return;
     if (_isLoading) return; // 중복 호출 방지
     for (final entry in _teacherControllers.entries) {

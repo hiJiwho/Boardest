@@ -11,6 +11,15 @@
         "boardest-class": [
           "boardest-class"
         ],
+        "boardest-class-lite": [
+          "boardest-class-lite"
+        ],
+        "boardest-tools": [
+          "boardest-tools"
+        ],
+        "boardest-class-pro": [
+          "boardest-class-pro"
+        ],
         "boardest-demo": [
           "boardest-demo"
         ],
@@ -34,6 +43,9 @@
         ],
         "bst-installer": [
           "bst-installer"
+        ],
+        "boardest-cloud-connect": [
+          "boardest-cloud-connect"
         ]
       }
     },
