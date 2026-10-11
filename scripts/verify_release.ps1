@@ -16,10 +16,6 @@ $ExpectedAssets = @(
   'bst-teacher.apk',
   'bst-teacher-lite.apk',
   'boardest-class-lite.apk',
-  'boardest.appx',
-  'bst-teacher.appx',
-  'bst-overlay-panser.appx',
-  'boardest-class-lite.appx',
   'BoardestCert.cer'
 )
 $DownloadArtifacts = @(
@@ -34,7 +30,7 @@ $DownloadArtifacts = @(
   'BoardestCert.cer'
 )
 $VersionChecks = @{
-  'https://boardest.web.app' = "application-version`" content=`"$Version`""
+  'https://boardest-class.web.app' = "application-version`" content=`"$Version`""
   'https://boardest-teacher.web.app' = "application-version`" content=`"$Version`""
   'https://boardest-teacher.web.app/lite/' = "application-version`" content=`"$Version`""
   'https://boardest-class-lite.web.app' = "application-version`" content=`"$Version`""
