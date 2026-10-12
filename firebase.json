@@ -24,6 +24,8 @@
         }
       ],
       "rewrites": [
+        { "source": "/student", "destination": "/student/index.html" },
+        { "source": "/student/**", "destination": "/student/index.html" },
         { "source": "/web", "destination": "/web/index.html" },
         { "source": "**", "destination": "/index.html" }
       ]

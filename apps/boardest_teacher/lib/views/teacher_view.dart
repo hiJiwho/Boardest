@@ -1924,38 +1924,15 @@ class _TeacherViewState extends State<TeacherView> {
     final googleEmail = CloudDriveService.instance.userEmail ?? '';
     final email = googleEmail.isNotEmpty ? googleEmail : '${teacherName.toLowerCase()}@school.go.kr';
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('🔐 브라우저 순정 패스키 생성을 요청하는 중입니다...'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-
-    final ok = await PasskeyService.instance.registerPasskey(
+    await BstPasskeyQrDialog.show(
+      context,
       teacherName: teacherName,
-      email: email,
       schoolName: schoolName,
-      refreshToken: CloudDriveService.instance.refreshToken,
+      homeroomClass: '${_settings.selectedGrade}학년 ${_settings.selectedClass}반',
+      onRegistered: () {
+        if (mounted) setState(() {});
+      },
     );
-
-    if (mounted) {
-      if (ok) {
-        setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ 구글 계정($email) 귀속 순정 패스키가 등록되었습니다!'),
-            backgroundColor: const Color(0xFF10B981),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('패스키 등록이 취소되었거나 지원되지 않습니다.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    }
   }
 
   Widget _buildTeacherActiveContent(double scale) {
@@ -9555,6 +9532,23 @@ class _AuthManagementDialogState extends State<_AuthManagementDialog> {
     _ticker?.cancel();
     super.dispose();
   }
+
+  void _openPasskeyQrDialog() {
+    final cloud = CloudDriveService.instance;
+    final name = (cloud.userName != null && cloud.userName!.isNotEmpty) ? cloud.userName! : '선생님';
+    final school = cloud.schoolName ?? '양동중학교';
+    const homeroom = '1학년 1반';
+    BstPasskeyQrDialog.show(
+      context,
+      teacherName: name,
+      schoolName: school,
+      homeroomClass: homeroom,
+      onRegistered: () {
+        if (mounted) setState(() {});
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.scaleFactor;
@@ -9747,31 +9741,9 @@ class _AuthManagementDialogState extends State<_AuthManagementDialog> {
                   padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 12 * s),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * s)),
                 ),
-                onPressed: () async {
-                  final email = cloud.userEmail ?? '';
-                  if (email.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('⚠️ 먼저 Google 로그인을 진행해 주세요!')),
-                    );
-                    return;
-                  }
-                  final ok = await PasskeyService.instance.registerPasskey(
-                    teacherName: (cloud.userName != null && cloud.userName!.isNotEmpty) ? cloud.userName! : '김보데',
-                    email: email,
-                    schoolName: (cloud.schoolName != null && cloud.schoolName!.isNotEmpty) ? cloud.schoolName! : '보데스트 중학교',
-                    refreshToken: cloud.refreshToken,
-                  );
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(ok ? '🔑 패스키가 성공적으로 등록되었습니다!' : '패스키 등록 실패'),
-                        backgroundColor: ok ? const Color(0xFF00F5D4) : Colors.red,
-                      ),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.fingerprint_rounded, size: 18),
-                label: Text('🔑 이 기기에서 내 패스키 등록하기', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold, fontSize: 12.5 * s)),
+                onPressed: _openPasskeyQrDialog,
+                icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                label: Text('📱 스마트폰 QR로 내 패스키 등록하기', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold, fontSize: 12.5 * s)),
               ),
             ],
           ),

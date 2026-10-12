@@ -121,43 +121,24 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
       final teacherId = params['teacherId'] ?? '';
       final schoolId = params['schoolId'] ?? 'YDM';
       final schoolCode = params['schoolCode'] ?? params['schoolId'] ?? '44134';
-      final schoolName = params['schoolName'] ?? '';
+      String schoolName = params['schoolName'] ?? '';
       final grade = int.tryParse(params['grade'] ?? '1') ?? 1;
       final classNum = int.tryParse(params['classNum'] ?? '1') ?? 1;
       final cafeteria = params['cafeteriaNum'] ?? '1';
 
       if (isAuthSuccess || (token != null && token.isNotEmpty) || schoolName.isNotEmpty) {
-        // 데모 모드 및 일반 모드 계정 제약 검증
+        // 데모 모드 및 일반 모드 호환: 데모 요청 시 가상 데모 계정 프로필 자동 부여
         final isDemoReq = AppConfig.isDemoMode ||
             params.containsKey('Demo') ||
             params.containsKey('demo') ||
             Uri.base.queryParameters.containsKey('Demo') ||
-            Uri.base.queryParameters.containsKey('demo');
+            Uri.base.queryParameters.containsKey('demo') ||
+            email.toLowerCase().contains('demo') ||
+            name.toLowerCase().contains('데모') ||
+            schoolId.toLowerCase().contains('demo');
 
-        if (isDemoReq) {
-          final isDemoAccount = email.toLowerCase().contains('demo') ||
-              name.toLowerCase().contains('데모') ||
-              schoolId.toLowerCase().contains('demo');
-          if (!isDemoAccount) {
-            setState(() {
-              _isLoading = false;
-              _errorMessage = '❌ 데모 체험 버전에서는 데모 Google 계정만 로그인할 수 있습니다.\n(demo 계정으로 로그인해 주세요)';
-            });
-            await CloudDriveService.instance.logout();
-            return;
-          }
-        } else {
-          // 일반 모드에서는 데모 계정 사용 방지
-          if (email.toLowerCase().contains('demo') ||
-              schoolId.toLowerCase() == 'demo' ||
-              name.toLowerCase().contains('데모')) {
-            setState(() {
-              _isLoading = false;
-              _errorMessage = '❌ 일반 버전에서는 데모 계정을 사용할 수 없습니다.\n선생님의 정식 Google 계정으로 로그인해 주세요.';
-            });
-            await CloudDriveService.instance.logout();
-            return;
-          }
+        if (isDemoReq && schoolName.isEmpty) {
+          schoolName = 'Boardest 데모 중학교';
         }
 
         setState(() {
@@ -229,33 +210,11 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
 
   /// 구글 로그인 성공 후 Firestore 프로필 자동 조회
   Future<void> _onLoggedInSuccess(String email, String name) async {
-    // 데모 모드 및 일반 모드 계정 제약 검증
     final isDemoReq = AppConfig.isDemoMode ||
         Uri.base.queryParameters.containsKey('Demo') ||
-        Uri.base.queryParameters.containsKey('demo');
-
-    if (isDemoReq) {
-      final isDemoAccount = email.toLowerCase().contains('demo') ||
-          name.toLowerCase().contains('데모');
-      if (!isDemoAccount) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = '❌ 데모 체험 버전에서는 데모 Google 계정만 로그인할 수 있습니다.\n(demo 계정으로 로그인해 주세요)';
-        });
-        await CloudDriveService.instance.logout();
-        return;
-      }
-    } else {
-      // 일반 모드에서는 데모 계정 사용 방지
-      if (email.toLowerCase().contains('demo') || name.toLowerCase().contains('데모')) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = '❌ 일반 버전에서는 데모 계정을 사용할 수 없습니다.\n선생님의 정식 Google 계정으로 로그인해 주세요.';
-        });
-        await CloudDriveService.instance.logout();
-        return;
-      }
-    }
+        Uri.base.queryParameters.containsKey('demo') ||
+        email.toLowerCase().contains('demo') ||
+        name.toLowerCase().contains('데모');
 
     setState(() {
       _isLoggedIn = true;
@@ -309,6 +268,20 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
             break;
           }
         }
+      }
+
+      if (matchedProfile == null && isDemoReq) {
+        matchedProfile = {
+          'schoolId': '44134',
+          'schoolCode': '44134',
+          'schoolName': 'Boardest 데모 중학교',
+          'teacherName': name.isNotEmpty ? name : '데모교사',
+          'teacherId': '1',
+          'grade': 1,
+          'classNum': 1,
+          'cafeteriaNum': '1',
+          'isDemoTeacher': true,
+        };
       }
 
       if (matchedProfile != null) {
@@ -377,15 +350,27 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
     final classNum = int.tryParse(profile['classNum']?.toString() ?? '') ?? 1;
     final cafeteria = profile['cafeteriaNum']?.toString() ?? '1';
 
+    final bool isDemoTeacher = profile['isDemoTeacher'] == true ||
+        schoolName.toLowerCase().contains('demo') ||
+        schoolName.contains('데모') ||
+        schoolId.toLowerCase().contains('demo') ||
+        teacherName.toLowerCase().contains('demo') ||
+        teacherName.contains('데모');
+
+    final effectiveSchoolName = isDemoTeacher ? 'Boardest 데모 중학교' : schoolName;
+    final effectiveSchoolId = isDemoTeacher ? 'Demo' : schoolId;
     final rawCode = profile['schoolCode']?.toString() ?? profile['schoolId']?.toString() ?? '';
-    final codeInt = int.tryParse(rawCode) ?? 44134;
-    School school = School(id: codeInt, code: codeInt, name: schoolName, region: '서울');
-    try {
-      final schools = await _comcigan.searchSchool(schoolName);
-      if (schools.isNotEmpty) {
-        school = schools.first;
-      }
-    } catch (_) {}
+    final int effectiveCode = isDemoTeacher ? 11111 : (int.tryParse(rawCode) ?? 44134);
+
+    School school = School(id: effectiveCode, code: effectiveCode, name: effectiveSchoolName, region: '서울');
+    if (!isDemoTeacher) {
+      try {
+        final schools = await _comcigan.searchSchool(schoolName);
+        if (schools.isNotEmpty) {
+          school = schools.first;
+        }
+      } catch (_) {}
+    }
 
     final settings = AppSettings(
       selectedSchool: school,
@@ -395,7 +380,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
       selectedClass: classNum,
       cafeteriaNum: cafeteria,
       isSetupComplete: true,
-      schoolId: schoolId,
+      schoolId: effectiveSchoolId,
     );
 
     await _storage.saveSettings(settings);
@@ -824,7 +809,6 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                           ),
-                        ] else ...[
                           ElevatedButton.icon(
                             onPressed: _startGoogleLogin,
                             icon: const Icon(Icons.account_circle_rounded, color: Colors.black87),
@@ -834,6 +818,21 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                             ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
+                              foregroundColor: Colors.black87,
+                              minimumSize: const Size(double.infinity, 48),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          ElevatedButton.icon(
+                            onPressed: _loginAsDemoTeacher,
+                            icon: const Icon(Icons.play_arrow_rounded, color: Colors.black87),
+                            label: Text(
+                              '데모(DEMO) 교사 계정으로 즉시 체험',
+                              style: GoogleFonts.notoSansKr(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00F5D4),
                               foregroundColor: Colors.black87,
                               minimumSize: const Size(double.infinity, 48),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

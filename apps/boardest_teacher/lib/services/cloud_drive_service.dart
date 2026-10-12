@@ -592,7 +592,7 @@ class CloudDriveService with ChangeNotifier {
         } else if (path == '/start-cloud-oauth') {
           final authUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
               '?client_id=${AppConfig.googleClientIdWithDrive}'
-              '&redirect_uri=http://127.0.0.1:1217'
+              '&redirect_uri=http://127.0.0.1:$_activePort'
               '&response_type=code'
               '&scope=openid%20https://www.googleapis.com/auth/userinfo.profile%20https://www.googleapis.com/auth/userinfo.email%20https://www.googleapis.com/auth/drive.file%20https://www.googleapis.com/auth/drive.appdata'
               '&access_type=offline'
@@ -600,10 +600,11 @@ class CloudDriveService with ChangeNotifier {
           request.response.statusCode = HttpStatus.found;
           request.response.headers.add('Location', authUrl);
           
-        } else if (path == '/cloud-oauth-callback' || (path == '/' && query.containsKey('code') && !query.containsKey('state'))) {
+        } else if (path == '/cloud-oauth-callback' ||
+                   (path == '/' && query.containsKey('code') && _pendingSession.canvaCodeVerifier.isEmpty)) {
           final code = query['code'] ?? '';
           if (code.isNotEmpty) {
-            final usedRedirectUri = (path == '/') ? 'http://127.0.0.1:1217' : 'http://127.0.0.1:1217/cloud-oauth-callback';
+            final usedRedirectUri = (path == '/') ? 'http://127.0.0.1:$_activePort' : 'http://127.0.0.1:$_activePort/cloud-oauth-callback';
             await exchangeAuthorizationCode(
               code,
               redirectUri: usedRedirectUri,
@@ -636,7 +637,7 @@ class CloudDriveService with ChangeNotifier {
             'design:permission:write folder:permission:read folder:permission:write '
             'folder:read folder:write profile:read'
           );
-          const redirectUri = 'http://127.0.0.1:1217';
+          final redirectUri = 'http://127.0.0.1:$_activePort';
           _pendingSession.canvaRedirectUri = redirectUri;
 
           final authUrl = 'https://www.canva.com/api/oauth/authorize'
@@ -649,13 +650,14 @@ class CloudDriveService with ChangeNotifier {
           request.response.statusCode = HttpStatus.found;
           request.response.headers.add('Location', authUrl);
           
-        } else if (path == '/canva-oauth-callback' || (path == '/' && query.containsKey('code'))) {
+        } else if (path == '/canva-oauth-callback' ||
+                   (path == '/' && query.containsKey('code') && _pendingSession.canvaCodeVerifier.isNotEmpty)) {
           final code = query['code'] ?? '';
           if (code.isNotEmpty) {
             try {
               final redirectUri = _pendingSession.canvaRedirectUri.isNotEmpty
                   ? _pendingSession.canvaRedirectUri
-                  : 'http://127.0.0.1:1217';
+                  : 'http://127.0.0.1:$_activePort';
 
               final tokenBody = <String, String>{
                 'grant_type': 'authorization_code',

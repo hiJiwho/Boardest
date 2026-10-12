@@ -42,7 +42,7 @@ class BstDualMealCard extends StatefulWidget {
 class _BstDualMealCardState extends State<BstDualMealCard> {
   late List<MealDishItem> _todayList;
   final Set<String> _highlightedDishes = {};
-  String? _votedDish;
+  final Map<String, int> _voteCountsMap = {};
 
   @override
   void initState() {
@@ -82,12 +82,16 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
     final now = _now;
     final revealTime = DateTime(now.year, now.month, now.day, widget.lunchEndTime.hour, widget.lunchEndTime.minute - 9);
     final end = DateTime(now.year, now.month, now.day, widget.lunchEndTime.hour, widget.lunchEndTime.minute);
-    return !now.isBefore(revealTime) && !now.isBefore(end);
+    return !now.isBefore(revealTime) && now.isBefore(end);
   }
 
   Future<void> _recordVote(MealDishItem dish) async {
     await widget.onVote?.call(dish.name);
-    if (mounted) setState(() => _votedDish = dish.name);
+    if (mounted) {
+      setState(() {
+        _voteCountsMap[dish.name] = (_voteCountsMap[dish.name] ?? 0) + 1;
+      });
+    }
   }
 
   void _onDishTap(MealDishItem dish) {
@@ -98,7 +102,7 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
       builder: (ctx) {
-        final isVoted = _votedDish == dish.name;
+        final isVoted = (_voteCountsMap[dish.name] ?? 0) > 0;
         final isHigh = _highlightedDishes.contains(dish.name);
         final canVote = _isVotingActive();
 
@@ -252,7 +256,8 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
               ),
               const SizedBox(height: 12),
               ..._todayList.map((d) {
-                final voteCount = d.votes > 0 ? d.votes : (_votedDish == d.name ? 1 : 0);
+                final myClicks = _voteCountsMap[d.name] ?? 0;
+                final voteCount = d.votes > 0 ? d.votes : myClicks;
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Row(
@@ -590,35 +595,36 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
                             itemBuilder: (context, index) {
                               final dish = _todayList[index];
                               final isHigh = _highlightedDishes.contains(dish.name);
-                              final isVoted = _votedDish == dish.name;
+                              final localVoteCount = _voteCountsMap[dish.name] ?? 0;
+                              final totalServerVotes = MealVoteService.instance.getTotalVotes(dish.name);
 
-                                return InkWell(
+                              return InkWell(
                                 onTap: () async {
                                   if (_isVotingActive()) {
-                                      await _recordVote(dish);
-                                    } else {
-                                      _onDishTap(dish);
-                                    }
-                                  },
-                                  onLongPress: () {
-                                    if (_isResultRevealed()) {
-                                      widget.onShowVoteBreakdown?.call(dish.name);
-                                    } else {
-                                      _onDishTap(dish);
-                                    }
-                                  },
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: isHigh
-                                          ? const Color(0xFFFFD166).withOpacity(0.25)
-                                          : (isVoted ? Colors.redAccent.withOpacity(0.12) : Colors.transparent),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: isHigh
-                                          ? Border.all(color: const Color(0xFFFFD166))
-                                          : (isVoted ? Border.all(color: Colors.redAccent.withOpacity(0.4)) : null),
-                                    ),
+                                    await _recordVote(dish);
+                                  } else {
+                                    _onDishTap(dish);
+                                  }
+                                },
+                                onLongPress: () {
+                                  if (_isResultRevealed()) {
+                                    widget.onShowVoteBreakdown?.call(dish.name);
+                                  } else {
+                                    _onDishTap(dish);
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: isHigh
+                                        ? const Color(0xFFFFD166).withOpacity(0.25)
+                                        : (localVoteCount > 0 ? Colors.redAccent.withOpacity(0.12) : Colors.transparent),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: isHigh
+                                        ? Border.all(color: const Color(0xFFFFD166))
+                                        : (localVoteCount > 0 ? Border.all(color: Colors.redAccent.withOpacity(0.4)) : null),
+                                  ),
                                     child: Row(
                                       children: [
                                         Expanded(
@@ -664,22 +670,46 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
                                             ],
                                           ),
                                         ),
-                                        if (isVoted)
-                                          const Text(' ❤️', style: TextStyle(fontSize: 12)),
-                                        if (revealResult && MealVoteService.instance.getTotalVotes(dish.name) > 0)
+                                        if (localVoteCount > 0 && !revealResult)
                                           Container(
-                                            margin: const EdgeInsets.only(left: 4),
-                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                            margin: const EdgeInsets.only(left: 6),
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                                             decoration: BoxDecoration(
                                               color: Colors.redAccent.withOpacity(0.2),
-                                              borderRadius: BorderRadius.circular(4),
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(color: Colors.redAccent.withOpacity(0.5), width: 0.8),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.favorite, size: 10, color: Colors.redAccent),
+                                                const SizedBox(width: 3),
+                                                Text(
+                                                  '$localVoteCount',
+                                                  style: const TextStyle(
+                                                    fontSize: 10.5,
+                                                    color: Colors.redAccent,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        if (revealResult && totalServerVotes > 0)
+                                          Container(
+                                            margin: const EdgeInsets.only(left: 6),
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFFFD166).withOpacity(0.2),
+                                              borderRadius: BorderRadius.circular(6),
+                                              border: Border.all(color: const Color(0xFFFFD166), width: 1),
                                             ),
                                             child: Text(
-                                              '${MealVoteService.instance.getTotalVotes(dish.name)}표 👑',
+                                              '$totalServerVotes표 👑',
                                               style: const TextStyle(
-                                                fontSize: 10,
-                                                color: Colors.redAccent,
-                                                fontWeight: FontWeight.bold,
+                                                fontSize: 11,
+                                                color: Color(0xFFFFD166),
+                                                fontWeight: FontWeight.w900,
                                               ),
                                             ),
                                           ),
@@ -738,7 +768,7 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
                             itemBuilder: (context, index) {
                               final dish = widget.tomorrowDishes[index];
                               final isHigh = _highlightedDishes.contains(dish.name);
-                              final isVoted = _votedDish == dish.name;
+                              final isVoted = (_voteCountsMap[dish.name] ?? 0) > 0;
 
                               return InkWell(
                                 onTap: () {},

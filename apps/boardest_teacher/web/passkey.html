@@ -295,8 +295,8 @@
               { alg: -257, type: "public-key" } // RS256
             ],
             authenticatorSelection: {
-              authenticatorAttachment: "platform", // 아이폰 FaceID/TouchID 또는 안드로이드 순정 지문
-              userVerification: "required",
+              // authenticatorAttachment를 지정하지 않거나 유연하게 하여 다른 기기(스마트폰 QR/FIDO2)로도 등록 가능
+              userVerification: "preferred",
               residentKey: "preferred"
             },
             timeout: 60000,

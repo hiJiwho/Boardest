@@ -2566,14 +2566,14 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       morningEnd = DateTime(now.year, now.month, now.day, morningHEnd, morningMEnd);
     }
 
-    // 0. 조회 전 아침 시간 (07:00 ~ morningStart)
-    final morningEarly = DateTime(now.year, now.month, now.day, 7, 0);
-    if (morningStart.isAfter(morningEarly)) {
+    // 0. 조회 전 아침 시간 (00:00 ~ morningStart)
+    final morningMidnight = DateTime(now.year, now.month, now.day, 0, 0, 0);
+    if (morningStart.isAfter(morningMidnight)) {
       ranges.add(
         PeriodTimeRange(
           period: -3,
           label: '아침 시간',
-          start: morningEarly,
+          start: morningMidnight,
           end: morningStart,
           isClass: false,
         ),
@@ -2746,6 +2746,20 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         isClass: false,
       ),
     );
+
+    // 5. 종례 후 방과후 (afternoonEnd ~ 23:59:59)
+    final nightMidnight = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+    if (afternoonEnd.isBefore(nightMidnight)) {
+      ranges.add(
+        PeriodTimeRange(
+          period: -4,
+          label: '방과후',
+          start: afternoonEnd,
+          end: nightMidnight,
+          isClass: false,
+        ),
+      );
+    }
 
     // Sort ranges by start time
     ranges.sort((a, b) => a.start.compareTo(b.start));
@@ -5234,14 +5248,42 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 onClockLongPress: _openDebugDatePicker,
                 clockRemainingDetailText: clockRemainingDetailText,
                 clockRemainingProgress: clockRemainingProgress,
-                currentSubject: _currentLesson != null
-                    ? _currentLesson!.subject
-                    : (_nextLesson?.subject ?? '수업 없음'),
-                subjectDescription: _currentLesson != null
-                    ? '${_settings.selectedGrade}학년 교과서 • 수업 진행 중'
-                    : (_nextLesson != null
-                        ? '쉬는 시간 • ${_nextLesson!.classTime}교시 교과서 준비'
-                        : '오늘 수업 일과 종료'),
+                currentSubject: () {
+                  if (_currentPeriod != null) {
+                    if (_currentPeriod!.period == -3) return '아침시간';
+                    if (_currentPeriod!.period == -1) return '조회 시간';
+                    if (_currentPeriod!.period == -2) return '종례 시간';
+                    if (_currentPeriod!.period == -4) return '방과후';
+                    if (_currentPeriod!.label.contains('점심')) return '점심시간';
+                    if (!_currentPeriod!.isClass) {
+                      if (_currentPeriod!.label.contains('종례')) return '종례 시간';
+                      if (_currentPeriod!.label.contains('조회')) return '조회 시간';
+                    }
+                  }
+                  if (_currentLesson != null) {
+                    return _currentLesson!.subject;
+                  }
+                  if (_currentPeriod != null) {
+                    return _currentPeriod!.label;
+                  }
+                  return _nextLesson?.subject ?? '수업 없음';
+                }(),
+                subjectDescription: () {
+                  if (_currentPeriod != null) {
+                    if (_currentPeriod!.period == -3) return '00:00 ~ 조회 전 • 상쾌한 아침 맞이';
+                    if (_currentPeriod!.period == -1) return '학급 담임 선생님과 함께하는 아침 조회';
+                    if (_currentPeriod!.period == -2) return '하루 일과를 마무리하는 종례 시간';
+                    if (_currentPeriod!.period == -4) return '종례 후 방과후 자율 활동 및 귀가';
+                    if (_currentPeriod!.label.contains('점심')) return '맛있는 점심 식사 & 자유 투표 시간';
+                    if (!_currentPeriod!.isClass) return '쉬는 시간 • 다음 교시 준비';
+                  }
+                  if (_currentLesson != null) {
+                    return '${_settings.selectedGrade}학년 교과서 • 수업 진행 중';
+                  }
+                  return _nextLesson != null
+                      ? '쉬는 시간 • ${_nextLesson!.classTime}교시 교과서 준비'
+                      : '오늘 수업 일과 종료';
+                }(),
                 onLessonInfoTap: _openTextbookProModal,
                 nextSubject: _nextLesson?.subject ?? '일과 종료',
                 nextSubjectRoom: _nextLesson != null ? '${_nextLesson!.classTime}교시 예정' : '',

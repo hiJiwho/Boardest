@@ -72,12 +72,7 @@ class _BstPasskeyQrDialogState extends State<BstPasskeyQrDialog> {
       }
     });
 
-    // 다이얼로그 진입 즉시 브라우저 순정 FIDO2 / WebAuthn 다이얼로그 자동 호출
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _registerLocally();
-      }
-    });
+    // 스마트폰 카메라로 QR 코드를 스캔하여 폰에 직접 패스키를 저장하도록 대기합니다.
   }
 
   @override

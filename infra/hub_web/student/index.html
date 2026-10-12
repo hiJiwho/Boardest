@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0B0F19">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Boardest Student — 시간표 & 급식</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Noto+Sans+KR:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0B0F19;
+      --card-bg: rgba(22, 28, 45, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #00F5D4;
+      --primary-dim: rgba(0, 245, 212, 0.15);
+      --accent: #FF8906;
+      --text: #F1F5F9;
+      --text-muted: #94A3B8;
+      --active-card: rgba(0, 245, 212, 0.12);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans KR', 'Outfit', sans-serif;
+      min-height: 100vh;
+      padding: env(safe-area-inset-top, 16px) 16px env(safe-area-inset-bottom, 20px) 16px;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 4px 16px 4px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #00F5D4, #7F5AF0);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 17px;
+      color: #0B0F19;
+    }
+    .brand-title {
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+    }
+    .class-tag {
+      font-size: 12px;
+      color: var(--primary);
+      background: var(--primary-dim);
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-weight: 700;
+      border: 1px solid rgba(0, 245, 212, 0.3);
+      cursor: pointer;
+    }
+    /* Tabs */
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 4px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+    .tab-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: #1E293B;
+      color: var(--primary);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    .content-section { display: none; flex-direction: column; gap: 12px; }
+    .content-section.active { display: flex; }
+
+    /* Card */
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 18px;
+    }
+    .now-hero {
+      background: linear-gradient(135deg, rgba(0, 245, 212, 0.15), rgba(127, 90, 240, 0.1));
+      border: 1.5px solid rgba(0, 245, 212, 0.4);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .now-label {
+      font-size: 11.5px;
+      font-weight: 800;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .now-subject {
+      font-size: 26px;
+      font-weight: 900;
+      color: #FFF;
+    }
+    .now-room {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .now-time {
+      text-align: right;
+    }
+    .now-clock {
+      font-family: 'Outfit', monospace;
+      font-size: 22px;
+      font-weight: 800;
+      color: #FFF;
+    }
+    .now-date {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Timetable list */
+    .timetable-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .period-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 12px;
+      transition: all 0.2s;
+    }
+    .period-item.current {
+      background: var(--active-card);
+      border-color: rgba(0, 245, 212, 0.4);
+    }
+    .period-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .period-badge {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Outfit', monospace;
+      font-weight: 800;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .period-item.current .period-badge {
+      background: var(--primary);
+      color: #0B0F19;
+    }
+    .period-subject-name {
+      font-size: 15.5px;
+      font-weight: 800;
+      color: #FFF;
+    }
+    .period-teacher {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+    .period-time-range {
+      font-family: 'Outfit', monospace;
+      font-size: 11.5px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    /* Meal Section */
+    .meal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .meal-title {
+      font-size: 16px;
+      font-weight: 800;
+    }
+    .meal-kcal {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .dish-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .dish-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    .dish-item:active {
+      transform: scale(0.98);
+    }
+    .dish-name {
+      font-size: 15.5px;
+      font-weight: 800;
+      color: #FFF;
+    }
+    .dish-allergies {
+      font-size: 11px;
+      color: var(--accent);
+      margin-top: 2px;
+    }
+    .dish-vote-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #FFF;
+      border-radius: 20px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .dish-item.voted .dish-vote-btn {
+      background: rgba(255, 84, 112, 0.2);
+      border-color: #FF5470;
+      color: #FF5470;
+    }
+
+    /* Setup modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 100;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: #162032;
+      border: 1px solid rgba(0, 245, 212, 0.3);
+      border-radius: 20px;
+      padding: 24px;
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .input-field {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #FFF;
+      font-size: 14px;
+      outline: none;
+    }
+    .btn-save {
+      background: var(--primary);
+      color: #0B0F19;
+      border: none;
+      padding: 14px;
+      border-radius: 10px;
+      font-weight: 900;
+      font-size: 15px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-logo">B</div>
+      <div class="brand-title">Boardest Student</div>
+    </div>
+    <div class="class-tag" id="classTag" onclick="openClassSetup()">2학년 1반 ⚙️</div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('timetable')">📅 오늘 시간표</button>
+    <button class="tab-btn" onclick="switchTab('meal')">🍱 오늘의 급식</button>
+  </div>
+
+  <!-- 1. 시간표 탭 -->
+  <div class="content-section active" id="sec-timetable">
+    <div class="card now-hero">
+      <div>
+        <div class="now-label" id="currentPeriodLabel">현재 수업</div>
+        <div class="now-subject" id="currentSubject">국어</div>
+        <div class="now-room" id="currentRoom">우리반 교실 · 4교시</div>
+      </div>
+      <div class="now-time">
+        <div class="now-clock" id="liveClock">12:10</div>
+        <div class="now-date" id="liveDate">10.12 (월)</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-size: 13px; font-weight: 800; color: var(--text-muted); margin-bottom: 12px;">오늘의 수업 일정</div>
+      <div class="timetable-list" id="timetableList"></div>
+    </div>
+  </div>
+
+  <!-- 2. 급식 탭 -->
+  <div class="content-section" id="sec-meal">
+    <div class="card">
+      <div class="meal-header">
+        <div class="meal-title">🍱 오늘 점심 식단</div>
+        <div class="meal-kcal" id="mealKcal">745 kcal</div>
+      </div>
+      <div class="dish-list" id="dishList"></div>
+    </div>
+    <div style="font-size: 11.5px; color: var(--text-muted); text-align: center; margin-top: 4px;">
+      💡 메뉴를 터치하여 최애 메뉴에 투표해보세요!
+    </div>
+  </div>
+
+  <!-- 학급 설정 모달 -->
+  <div class="modal-overlay" id="setupModal">
+    <div class="modal-box">
+      <h2 style="font-size: 18px; font-weight: 800;">우리 반 설정</h2>
+      <p style="font-size: 12.5px; color: var(--text-muted);">학교 코드와 학년, 반을 입력하면 시간표와 급식이 자동으로 연동됩니다.</p>
+      <input type="text" id="inputSchoolCode" class="input-field" placeholder="컴시간 학교코드 (예: 44134)">
+      <input type="number" id="inputGrade" class="input-field" placeholder="학년 (예: 2)" min="1" max="6">
+      <input type="number" id="inputClass" class="input-field" placeholder="반 (예: 1)" min="1" max="20">
+      <button class="btn-save" onclick="saveClassSetup()">저장하고 시간표 불러오기</button>
+    </div>
+  </div>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+
+    let config = {
+      schoolCode: localStorage.getItem('bst_st_school') || '44134',
+      grade: parseInt(localStorage.getItem('bst_st_grade') || '2', 10),
+      classNum: parseInt(localStorage.getItem('bst_st_class') || '1', 10)
+    };
+
+    function updateHeaderTag() {
+      document.getElementById('classTag').innerText = `${config.grade}학년 ${config.classNum}반 ⚙️`;
+    }
+    updateHeaderTag();
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach((b, i) => {
+        b.classList.toggle('active', (name === 'timetable' && i === 0) || (name === 'meal' && i === 1));
+      });
+      document.getElementById('sec-timetable').classList.toggle('active', name === 'timetable');
+      document.getElementById('sec-meal').classList.toggle('active', name === 'meal');
+    }
+
+    function openClassSetup() {
+      document.getElementById('inputSchoolCode').value = config.schoolCode;
+      document.getElementById('inputGrade').value = config.grade;
+      document.getElementById('inputClass').value = config.classNum;
+      document.getElementById('setupModal').classList.add('open');
+    }
+
+    function saveClassSetup() {
+      config.schoolCode = document.getElementById('inputSchoolCode').value.trim() || '44134';
+      config.grade = parseInt(document.getElementById('inputGrade').value, 10) || 1;
+      config.classNum = parseInt(document.getElementById('inputClass').value, 10) || 1;
+      localStorage.setItem('bst_st_school', config.schoolCode);
+      localStorage.setItem('bst_st_grade', config.grade);
+      localStorage.setItem('bst_st_class', config.classNum);
+      updateHeaderTag();
+      document.getElementById('setupModal').classList.remove('open');
+      loadTimetable();
+      loadMeal();
+    }
+
+    function updateClock() {
+      const now = new Date();
+      const hrs = String(now.getHours()).padStart(2, '0');
+      const mins = String(now.getMinutes()).padStart(2, '0');
+      document.getElementById('liveClock').innerText = `${hrs}:${mins}`;
+      const days = ['일', '월', '화', '수', '목', '금', '토'];
+      document.getElementById('liveDate').innerText = `${now.getMonth() + 1}.${now.getDate()} (${days[now.getDay()]})`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // 시간표 로드
+    async function loadTimetable() {
+      const timetableList = document.getElementById('timetableList');
+      timetableList.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:16px;">시간표 동기화 중...</div>';
+
+      const sampleLessons = [
+        { period: 1, subject: '수학', teacher: '김수학', time: '09:00 - 09:45' },
+        { period: 2, subject: '영어', teacher: '이영어', time: '09:55 - 10:40' },
+        { period: 3, subject: '과학', teacher: '박과학', time: '10:50 - 11:35' },
+        { period: 4, subject: '국어', teacher: '홍국어', time: '11:45 - 12:30' },
+        { period: 5, subject: '체육', teacher: '최체육', time: '13:20 - 14:05' },
+        { period: 6, subject: '역사', teacher: '정역사', time: '14:15 - 15:00' }
+      ];
+
+      try {
+        const url = `https://comcigan.boardest.workers.dev/timetable/${config.schoolCode}`;
+        const res = await fetch(url).then(r => r.json()).catch(() => null);
+        let lessons = sampleLessons;
+        if (res && res.lessons) {
+          const weekday = new Date().getDay();
+          const targetDay = (weekday >= 1 && weekday <= 5) ? weekday : 1;
+          const filtered = res.lessons.filter(l => l.grade === config.grade && l.classNum === config.classNum && l.weekday === targetDay);
+          if (filtered.length > 0) {
+            lessons = filtered.map(l => ({
+              period: l.classTime,
+              subject: l.subject,
+              teacher: l.teacher || '담당 교사',
+              time: `${l.classTime}교시`
+            })).sort((a,b) => a.period - b.period);
+          }
+        }
+
+        timetableList.innerHTML = lessons.map(l => `
+          <div class="period-item ${l.period === 4 ? 'current' : ''}">
+            <div class="period-left">
+              <div class="period-badge">${l.period}</div>
+              <div>
+                <div class="period-subject-name">${l.subject}</div>
+                <div class="period-teacher">${l.teacher}</div>
+              </div>
+            </div>
+            <div class="period-time-range">${l.time}</div>
+          </div>
+        `).join('');
+      } catch (_) {
+        timetableList.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:16px;">시간표를 가져올 수 없습니다.</div>';
+      }
+    }
+
+    // 급식 로드 & 투표
+    let voteCounts = {};
+    async function loadMeal() {
+      const dishList = document.getElementById('dishList');
+      dishList.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:16px;">급식 식단표 로딩 중...</div>';
+
+      const sampleDishes = [
+        { name: '친환경현미밥', allergies: '' },
+        { name: '쇠고기미역국', allergies: '16' },
+        { name: '치즈닭갈비', allergies: '2, 5, 6, 15' },
+        { name: '해물파전', allergies: '1, 5, 6, 9, 17' },
+        { name: '배추김치', allergies: '9' },
+        { name: '멜론', allergies: '' }
+      ];
+
+      dishList.innerHTML = sampleDishes.map(d => `
+        <div class="dish-item" onclick="voteDish('${d.name}')" id="dish-${d.name}">
+          <div>
+            <div class="dish-name">${d.name}</div>
+            ${d.allergies ? `<div class="dish-allergies">알레르기: ${d.allergies}</div>` : ''}
+          </div>
+          <div class="dish-vote-btn" id="vote-badge-${d.name}">
+            <span>❤️</span>
+            <span id="vote-count-${d.name}">0</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function voteDish(name) {
+      voteCounts[name] = (voteCounts[name] || 0) + 1;
+      const countSpan = document.getElementById(`vote-count-${name}`);
+      const dishEl = document.getElementById(`dish-${name}`);
+      if (countSpan) countSpan.innerText = voteCounts[name];
+      if (dishEl) dishEl.classList.add('voted');
+    }
+
+    loadTimetable();
+    loadMeal();
+  </script>
+</body>
+</html>
