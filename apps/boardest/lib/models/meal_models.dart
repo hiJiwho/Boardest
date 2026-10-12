@@ -39,12 +39,26 @@ class MealDayInfo {
   final DateTime date;
   final List<MealDishItem> dishes;
   final List<String> footnotes;
+  final String calories;
 
   MealDayInfo({
     required this.date,
     required this.dishes,
     this.footnotes = const [],
+    this.calories = '',
   });
+
+  Set<int> get allAllergyIndexes {
+    final res = <int>{};
+    for (final dish in dishes) {
+      for (final a in dish.allergies) {
+        for (final entry in _allergyCodeMap.entries) {
+          if (entry.value == a) res.add(entry.key);
+        }
+      }
+    }
+    return res;
+  }
 
   String get dateLabel {
     final now = DateTime.now();

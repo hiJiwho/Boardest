@@ -94,8 +94,13 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
       if (_categoryFilter == '전체') return true;
       if (isFolder) return true; // 폴더는 카테고리 필터 중에도 표시
 
+      if (_categoryFilter == '📖 TBP' || _categoryFilter == 'TBP') {
+        return name.endsWith('.bsttbp') || name.endsWith('.tbp') || name.contains('교과서') || name.contains('tbp');
+      }
+      if (_categoryFilter == '🎨 Canva' || _categoryFilter == 'Canva') {
+        return name.endsWith('.canva') || name.endsWith('.canva.bst') || name.contains('canva');
+      }
       if (_categoryFilter == 'PDF') return name.endsWith('.pdf');
-      if (_categoryFilter == 'Canva') return name.endsWith('.canva') || name.endsWith('.canva.bst');
       if (_categoryFilter == 'PPT') return name.endsWith('.ppt') || name.endsWith('.pptx');
       if (_categoryFilter == '한글') return name.endsWith('.hwp') || name.endsWith('.hwpx');
       if (_categoryFilter == '판서') return name.endsWith('.pen') || name.endsWith('.iwb');
@@ -253,7 +258,7 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
 
   // ─── 2. 검색 & 필터 ───
   Widget _buildSearchAndFilters(double s) {
-    final categories = ['전체', 'PDF', 'Canva', 'PPT', '한글', '판서'];
+    final categories = ['전체', '📖 TBP', '🎨 Canva', 'PDF', 'PPT', '한글', '판서'];
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 8 * s),

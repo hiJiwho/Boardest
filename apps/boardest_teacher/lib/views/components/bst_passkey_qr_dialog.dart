@@ -45,61 +45,65 @@ class _BstPasskeyQrDialogState extends State<BstPasskeyQrDialog> {
   late String _challengeId;
   late String _registrationUrl;
   bool _isSuccess = false;
-  bool _isRegisteringLocally = false;
+  bool _isExpired = false;
+  int _remainingSeconds = 120; // 2분 유효시간 제한
+  Timer? _countdownTimer;
   Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
+    _startRegistrationSession();
+  }
+
+  void _startRegistrationSession() {
+    _countdownTimer?.cancel();
+    _pollTimer?.cancel();
+
     final now = DateTime.now().millisecondsSinceEpoch;
     _challengeId = 'PASSKEY-${now.toString().substring(5)}';
-    
-    // FIDO2 / W3C WebAuthn 국제 규격 모바일 등록 주소 (아이폰 Face ID / 안드로이드 지문 순정 등록)
+    _remainingSeconds = 120;
+    _isExpired = false;
+
+    // Boardest Cloud Connect 등록 주소 (클라우드 연동 전용, 2분 유효 파라미터 포함)
     final encTeacher = Uri.encodeComponent(widget.teacherName);
     final encSchool = Uri.encodeComponent(widget.schoolName);
-    final encEmail = Uri.encodeComponent('${widget.teacherName.toLowerCase()}@school.go.kr');
-    _registrationUrl = 'https://boardest-teacher.web.app/passkey.html?challenge=$_challengeId&teacher=$encTeacher&school=$encSchool&email=$encEmail';
+    final encDevice = Uri.encodeComponent(widget.homeroomClass);
+    _registrationUrl = 'https://boardest-cloud-connect.web.app/?action=register&key=$_challengeId&teacher=$encTeacher&school=$encSchool&device=$encDevice&t=$now';
 
-    // 2초 간격 등록 완료 폴링 (시뮬레이션 및 실제 서비스 연동)
+    // 1초 카운트다운 타이머 (2분 시간제한)
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return;
+      if (_remainingSeconds > 0) {
+        setState(() => _remainingSeconds--);
+      } else {
+        t.cancel();
+        _pollTimer?.cancel();
+        setState(() => _isExpired = true);
+      }
+    });
+
+    // 2초 간격 RTDB 및 Cloud 등록 완료 폴링
     _pollTimer = Timer.periodic(const Duration(seconds: 2), (t) async {
-      final isReg = await PasskeyService.instance.isPasskeyRegistered();
-      if (isReg && mounted && !_isSuccess) {
+      final isLocal = await PasskeyService.instance.isPasskeyRegistered();
+      final isRemote = !isLocal && await PasskeyService.instance.checkRemoteRegistration(widget.teacherName, _challengeId);
+      if ((isLocal || isRemote) && mounted && !_isSuccess) {
         setState(() => _isSuccess = true);
+        _countdownTimer?.cancel();
+        _pollTimer?.cancel();
         widget.onRegistered();
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) Navigator.of(context).pop();
         });
       }
     });
-
-    // 스마트폰 카메라로 QR 코드를 스캔하여 폰에 직접 패스키를 저장하도록 대기합니다.
   }
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     _pollTimer?.cancel();
     super.dispose();
-  }
-
-  Future<void> _registerLocally() async {
-    setState(() => _isRegisteringLocally = true);
-    final ok = await PasskeyService.instance.registerPasskey(
-      teacherName: widget.teacherName,
-      email: '${widget.teacherName.toLowerCase()}@school.go.kr',
-      schoolName: widget.schoolName,
-    );
-    if (mounted) {
-      setState(() {
-        _isRegisteringLocally = false;
-        _isSuccess = ok;
-      });
-      if (ok) {
-        widget.onRegistered();
-        Future.delayed(const Duration(milliseconds: 900), () {
-          if (mounted) Navigator.of(context).pop();
-        });
-      }
-    }
   }
 
   @override
@@ -178,7 +182,7 @@ class _BstPasskeyQrDialogState extends State<BstPasskeyQrDialog> {
 
             const SizedBox(height: 20),
 
-            // 2. QR 코드 카드
+            // 2. QR 코드 카드 (2분 유효시간 만료 처리)
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -192,40 +196,87 @@ class _BstPasskeyQrDialogState extends State<BstPasskeyQrDialog> {
                   ),
                 ],
               ),
-              child: QrImageView(
-                data: _registrationUrl,
-                version: QrVersions.auto,
-                size: 210.0,
-                backgroundColor: Colors.white,
-                eyeStyle: const QrEyeStyle(
-                  eyeShape: QrEyeShape.square,
-                  color: Color(0xFF0D1220),
-                ),
-                dataModuleStyle: const QrDataModuleStyle(
-                  dataModuleShape: QrDataModuleShape.square,
-                  color: Color(0xFF0D1220),
-                ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Opacity(
+                    opacity: _isExpired ? 0.15 : 1.0,
+                    child: QrImageView(
+                      data: _registrationUrl,
+                      version: QrVersions.auto,
+                      size: 210.0,
+                      backgroundColor: Colors.white,
+                      eyeStyle: const QrEyeStyle(
+                        eyeShape: QrEyeShape.square,
+                        color: Color(0xFF0D1220),
+                      ),
+                      dataModuleStyle: const QrDataModuleStyle(
+                        dataModuleShape: QrDataModuleShape.square,
+                        color: Color(0xFF0D1220),
+                      ),
+                    ),
+                  ),
+                  if (_isExpired)
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.timer_off_rounded, color: Colors.redAccent, size: 40),
+                        const SizedBox(height: 8),
+                        const Text(
+                          '2분 유효시간 만료',
+                          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w900, fontSize: 15),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          '보안을 위해 QR이 무효화되었습니다',
+                          style: TextStyle(color: Colors.black54, fontSize: 11),
+                        ),
+                        const SizedBox(height: 12),
+                        ElevatedButton.icon(
+                          onPressed: _startRegistrationSession,
+                          icon: const Icon(Icons.refresh_rounded, size: 16),
+                          label: const Text('QR 코드 재발급'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0D1220),
+                            foregroundColor: const Color(0xFF00F5D4),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
               ),
             ),
 
             const SizedBox(height: 16),
 
-            // 3. 안내 텍스트
+            // 3. 안내 텍스트 및 2분 카운트다운 타이머
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.04),
+                color: _isExpired ? Colors.redAccent.withOpacity(0.1) : Colors.white.withOpacity(0.04),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white10),
+                border: Border.all(color: _isExpired ? Colors.redAccent.withOpacity(0.3) : Colors.white10),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.verified_user_rounded, color: Color(0xFF00F5D4), size: 16),
+                  Icon(
+                    _isExpired ? Icons.lock_clock_rounded : Icons.timer_outlined,
+                    color: _isExpired ? Colors.redAccent : const Color(0xFF00F5D4),
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   Text(
-                    '아이폰(Face ID) · 안드로이드(지문) 순정 패스키 규격',
-                    style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 11.5, fontWeight: FontWeight.bold),
+                    _isExpired
+                        ? '유효시간 만료 (재발급 필요)'
+                        : '⏱️ 남은 유효시간: ${_remainingSeconds ~/ 60}분 ${(_remainingSeconds % 60).toString().padLeft(2, '0')}초',
+                    style: TextStyle(
+                      color: _isExpired ? Colors.redAccent : Colors.white.withOpacity(0.9),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
@@ -233,7 +284,7 @@ class _BstPasskeyQrDialogState extends State<BstPasskeyQrDialog> {
 
             const SizedBox(height: 8),
             Text(
-              'FIDO2 / WebAuthn 국제 표준 · 유효시간 3분',
+              'Boardest Cloud Connect · 스마트폰 패스키 등록 허브',
               style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
             ),
 
@@ -241,44 +292,19 @@ class _BstPasskeyQrDialogState extends State<BstPasskeyQrDialog> {
             const Divider(color: Colors.white12, height: 1),
             const SizedBox(height: 16),
 
-            // 4. 하단 액션 버튼
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: BorderSide(color: Colors.white.withOpacity(0.2)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('닫기', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                  ),
+            // 4. 하단 액션 버튼 (순정 패스키 로컬 버튼 제거 완료)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _isSuccess ? const Color(0xFF10B981) : const Color(0xFF00F5D4),
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onPressed: _isRegisteringLocally ? null : _registerLocally,
-                    child: _isRegisteringLocally
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
-                          )
-                        : Text(
-                            _isSuccess ? '✓ 등록 완료됨' : '🔐 순정 시스템 패스키 호출',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
-                          ),
-                  ),
-                ),
-              ],
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('닫기', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              ),
             ),
           ],
         ),

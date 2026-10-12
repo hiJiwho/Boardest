@@ -384,6 +384,9 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
       _isHomeroom = query['isHomeroom'] == 'true';
       _cafeteriaNum = query['cafeteriaNum'] ?? _cafeteriaNum;
 
+      _isGoogleLoggedIn = true;
+      if (mounted) setState(() {});
+
       await prefs.setString('bst_google_token', _googleToken);
       await prefs.setString('bst_google_email', _googleEmail);
 
@@ -403,6 +406,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
       await prefs.setString('bst_cafeteria_num', _cafeteriaNum);
 
       _isGoogleLoggedIn = true;
+      if (mounted) setState(() {});
       await _syncTeacherCloudTokens();
     } else if (_googleToken.isNotEmpty && _googleEmail.isNotEmpty) {
       _isGoogleLoggedIn = true;
@@ -455,14 +459,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
       final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/teacher_profiles/$docId?key=$_apiKey';
       final res = await http.get(Uri.parse(firestoreUrl)).timeout(const Duration(seconds: 4));
       if (res.statusCode == 404) {
-        // 계정 삭제됨 -> 자동 로그아웃
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.clear();
-        setState(() {
-          _isGoogleLoggedIn = false;
-          _googleToken = '';
-          _googleEmail = '';
-        });
+        // 프로필 문서가 아직 없거나 데모 계정인 경우: 쿼리/로컬에 저장된 세션 유지
         return;
       } else if (res.statusCode == 200) {
         final data = json.decode(res.body);
@@ -1139,7 +1136,10 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
   }
 
   void _navigateToOAuth() {
-    launchUrl(Uri.parse('https://boardest-teacher-oauth.web.app?web-lite'), webOnlyWindowName: '_self');
+    launchUrl(
+      Uri.parse('https://boardest-teacher-oauth.web.app?web-lite&return_url=https://boardest-teacher.web.app/lite/'),
+      webOnlyWindowName: '_self',
+    );
   }
 
   Future<void> _logout() async {
@@ -2659,7 +2659,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
                       onPressed: () {
-                        launchUrl(Uri.parse('https://boardest-teacher-oauth.web.app?re-login&web-lite'), webOnlyWindowName: '_self');
+                        launchUrl(Uri.parse('https://boardest-teacher-oauth.web.app?re-login&web-lite&return_url=https://boardest-teacher.web.app/lite/'), webOnlyWindowName: '_self');
                       },
                       icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.black),
                       label: const Text('⚡ Google 토큰 최신화 / 재인증', style: TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -2671,7 +2671,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
-                      onPressed: () => launchUrl(Uri.parse('https://boardest-teacher-oauth.web.app/edit?web-lite'), webOnlyWindowName: '_self'),
+                      onPressed: () => launchUrl(Uri.parse('https://boardest-teacher-oauth.web.app/edit?web-lite&return_url=https://boardest-teacher.web.app/lite/'), webOnlyWindowName: '_self'),
                       icon: const Icon(Icons.edit_note_rounded, size: 16, color: Color(0xFF2EC4B6)),
                       label: const Text('✏️ 계정 설정 변경 (포털)', style: TextStyle(color: Color(0xFF2EC4B6), fontSize: 12)),
                       style: OutlinedButton.styleFrom(

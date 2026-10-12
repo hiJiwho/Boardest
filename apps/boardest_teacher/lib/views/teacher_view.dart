@@ -286,6 +286,7 @@ class _TeacherViewState extends State<TeacherView> {
   }
 
   void _startOtpTimer() {
+    _otpTimer?.cancel();
     _updateOtp();
     _otpTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       final rem = TotpService.getRemainingSeconds(step: 60);
@@ -2722,7 +2723,7 @@ class _TeacherViewState extends State<TeacherView> {
 
   void _redirectToLite() {
     launchUrl(
-      Uri.parse('https://boardest-teacher-lite.web.app'),
+      Uri.parse('https://boardest-teacher.web.app/lite/'),
       webOnlyWindowName: '_self',
     );
   }

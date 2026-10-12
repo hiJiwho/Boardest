@@ -211,9 +211,9 @@ class BstClassMainLayout extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // 1. 일과 시간표 스트립 (세로 flex: 1)
-                          Expanded(
-                            flex: 1,
+                          // 1. 일과 시간표 스트립 (높이를 컴팩트하게 조절하여 7교시가 한눈에 들어오게 함)
+                          SizedBox(
+                            height: 74,
                             child: BstTodayTimetableStrip(
                               periods: periods,
                               onPeriodTap: onPeriodTap,
@@ -225,9 +225,9 @@ class BstClassMainLayout extends StatelessWidget {
 
                           const SizedBox(height: 10),
 
-                          // 2. 일과 시간표 아래 수업 도구함 (세로 flex: 2)
+                          // 2. 일과 시간표 아래 수업 도구함 (줄어든 시간표 높이를 가져가 넉넉하게 확장)
                           Expanded(
-                            flex: 2,
+                            flex: 3,
                             child: BstToolsDock(
                               isPro: isPro,
                               isWindows: isWindows,
@@ -246,6 +246,7 @@ class BstClassMainLayout extends StatelessWidget {
                             child: (isCloudActive && showCloudFiles && cloudFilesWidget != null)
                                 ? cloudFilesWidget!
                                 : BstDualMealCard(
+                                    schoolName: schoolName,
                                     todayDishes: todayDishes,
                                     todayCalories: todayCalories,
                                     tomorrowDishes: tomorrowDishes,

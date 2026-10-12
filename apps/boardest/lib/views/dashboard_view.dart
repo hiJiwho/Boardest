@@ -172,6 +172,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   int _onlineStatusCounter = 0;
   BoardestUser? _currentUser;
   Timer? _cloudAutoLogoutTimer;
+  bool _isReloading = false;
 
   void _scheduleCloudAutoLogout() {
     if (_cloudAutoLogoutTimer != null && _cloudAutoLogoutTimer!.isActive) return;
@@ -1546,11 +1547,15 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   }
 
   Future<void> _loadPreferencesAndFetch() async {
+    if (_isReloading) return;
+    _isReloading = true;
     try {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = null;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          _errorMessage = null;
+        });
+      }
 
       AppSettings? settings;
       try {
@@ -1566,9 +1571,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         if (settings == null) {
           throw Exception('Settings null after loading');
         }
-        setState(() {
-          _settings = settings!;
-        });
+        if (mounted) {
+          setState(() {
+            _settings = settings!;
+          });
+        }
 
         // Apply Special Classroom Mode on startup/load
         if (!kIsWeb && Platform.isWindows) {
@@ -1821,6 +1828,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           _isLoading = false;
         });
       }
+    } finally {
+      _isReloading = false;
     }
   }
 
@@ -3928,18 +3937,22 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     }
 
     _pauseDashboardTimer();
+    bool settingsChanged = false;
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => SettingsFullscreenView(
           settings: _settings,
           onSettingsChanged: () {
-            _loadPreferencesAndFetch();
+            settingsChanged = true;
           },
         ),
       ),
     );
+    if (!mounted) return;
     _resumeDashboardTimer();
-    _loadPreferencesAndFetch();
+    if (settingsChanged) {
+      await _loadPreferencesAndFetch();
+    }
   }
 
   void _showUpdateChannelDialog() {
@@ -5352,7 +5365,17 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       break;
                   }
                 },
-                onAddAppTap: _openAppDrawer,
+                onAddAppTap: () {
+                  int targetSlot = 0;
+                  final slots = _settings.launcherSlots;
+                  for (int i = 0; i < slots.length; i++) {
+                    if (slots[i].type == LauncherSlotType.empty) {
+                      targetSlot = i;
+                      break;
+                    }
+                  }
+                  _openAppSelectorForSlot(targetSlot);
+                },
                 onMinimizeTap: () async {
                   if (!kIsWeb && Platform.isWindows) {
                     await windowManager.minimize();
@@ -10522,7 +10545,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           ),
           SizedBox(height: 8 * scale),
 
-          // Cloud 상단 3-Tab 스위처: [📁 수업 자료 (Save)] | [📖 TBP 교과서] | [🎨 판서보드 (Free)]
+          // Cloud 상단 4-Tab 스위처: [📁 수업 자료] | [📖 TBP 교과서] | [🎨 Canva] | [✏️ 판서보드]
           Container(
             padding: EdgeInsets.all(2.5 * scale),
             decoration: BoxDecoration(
@@ -10551,7 +10574,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         child: Text(
                           '📁 수업 자료',
                           style: GoogleFonts.notoSansKr(
-                            fontSize: 10 * scale,
+                            fontSize: 9.5 * scale,
                             fontWeight: _cloudDockTab == 0 ? FontWeight.bold : FontWeight.normal,
                             color: _cloudDockTab == 0 ? Colors.white : Colors.white60,
                           ),
@@ -10579,7 +10602,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         child: Text(
                           '📖 TBP 교과서',
                           style: GoogleFonts.notoSansKr(
-                            fontSize: 10 * scale,
+                            fontSize: 9.5 * scale,
                             fontWeight: _cloudDockTab == 1 ? FontWeight.bold : FontWeight.normal,
                             color: _cloudDockTab == 1 ? Colors.white : Colors.white60,
                           ),
@@ -10600,16 +10623,44 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                     child: Container(
                       padding: EdgeInsets.symmetric(vertical: 4 * scale),
                       decoration: BoxDecoration(
-                        color: _cloudDockTab == 2 ? const Color(0xFF00F5D4) : Colors.transparent,
+                        color: _cloudDockTab == 2 ? const Color(0xFF00C4CC) : Colors.transparent,
                         borderRadius: BorderRadius.circular(6 * scale),
                       ),
                       child: Center(
                         child: Text(
-                          '🎨 판서보드',
+                          '🎨 Canva',
                           style: GoogleFonts.notoSansKr(
-                            fontSize: 10 * scale,
+                            fontSize: 9.5 * scale,
                             fontWeight: _cloudDockTab == 2 ? FontWeight.bold : FontWeight.normal,
                             color: _cloudDockTab == 2 ? Colors.black : Colors.white60,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        _cloudDockTab = 3;
+                        _refreshCloudFiles();
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(6 * scale),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: 4 * scale),
+                      decoration: BoxDecoration(
+                        color: _cloudDockTab == 3 ? const Color(0xFF00F5D4) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6 * scale),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '✏️ 판서',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 9.5 * scale,
+                            fontWeight: _cloudDockTab == 3 ? FontWeight.bold : FontWeight.normal,
+                            color: _cloudDockTab == 3 ? Colors.black : Colors.white60,
                           ),
                         ),
                       ),
@@ -10659,7 +10710,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 if (_cloudDockTab == 0) {
                   final files = allFiles.where((f) {
                     final name = f.name.toLowerCase();
-                    return !name.endsWith('.pen') && !name.endsWith('.bsttbp') && !name.endsWith('.tbp') && !name.endsWith('.json');
+                    return !name.endsWith('.pen') && !name.endsWith('.bsttbp') && !name.endsWith('.tbp') && !name.endsWith('.json') && !name.contains('canva');
                   }).toList();
 
                   if (files.isEmpty) {
@@ -10676,18 +10727,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                     separatorBuilder: (_, __) => SizedBox(height: 5 * scale),
                     itemBuilder: (ctx, idx) {
                       final f = files[idx];
-                      final isCanva = f.name.endsWith('.canva.bst');
                       final isPdf = f.name.endsWith('.pdf');
                       final isPpt = f.name.endsWith('.ppt') || f.name.endsWith('.pptx');
 
                       return InkWell(
-                        onTap: () {
-                          if (isCanva) {
-                            _openCloudCanvaFile(f);
-                          } else {
-                            _openDriveFileFromDock(f);
-                          }
-                        },
+                        onTap: () => _openDriveFileFromDock(f),
                         borderRadius: BorderRadius.circular(8 * scale),
                         child: Container(
                           padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 6 * scale),
@@ -10699,8 +10743,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                           child: Row(
                             children: [
                               Icon(
-                                isCanva ? Icons.palette_rounded : isPdf ? Icons.picture_as_pdf_rounded : isPpt ? Icons.slideshow_rounded : Icons.insert_drive_file_rounded,
-                                color: isCanva ? const Color(0xFF00C4CC) : isPdf ? Colors.redAccent : isPpt ? Colors.orangeAccent : const Color(0xFF00F5D4),
+                                isPdf ? Icons.picture_as_pdf_rounded : isPpt ? Icons.slideshow_rounded : Icons.insert_drive_file_rounded,
+                                color: isPdf ? Colors.redAccent : isPpt ? Colors.orangeAccent : const Color(0xFF00F5D4),
                                 size: 15 * scale,
                               ),
                               SizedBox(width: 6 * scale),
@@ -10722,7 +10766,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
                 // Tab 1: TBP 교과서 목록
                 if (_cloudDockTab == 1) {
-                  final tbpFiles = allFiles;
+                  final tbpFiles = allFiles.where((f) {
+                    final name = f.name.toLowerCase();
+                    return name.endsWith('.bsttbp') || name.endsWith('.tbp') || name.contains('tbp') || name.contains('교과서');
+                  }).toList();
+
                   if (tbpFiles.isEmpty) {
                     return Center(
                       child: Padding(
@@ -10755,10 +10803,18 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                     itemBuilder: (ctx, idx) {
                       final f = tbpFiles[idx];
                       return InkWell(
-                        onTap: () {
+                        onTap: () async {
+                          final token = BstCloudService.instance.activeToken ?? '';
+                          String targetPath = f.id;
+                          if (!kIsWeb) {
+                            try {
+                              final dl = await BstCloudService.instance.downloadDriveFile(f.id, f.name, token);
+                              if (dl != null && dl.isNotEmpty) targetPath = dl;
+                            } catch (_) {}
+                          }
                           _pushBoardRoute(
                             TbpViewerRoute(
-                              tbpFilePath: f.id,
+                              tbpFilePath: targetPath,
                               scaleFactor: _settings.scaleFactor,
                             ),
                           );
@@ -10791,8 +10847,76 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   );
                 }
 
-                // Tab 2: 🎨 판서보드 (Free) - 'bst-Free' 폴더의 .Free.pen 파일 목록
-                final freePenFiles = allFiles;
+                // Tab 2: 🎨 Canva 디자인 파일 목록
+                if (_cloudDockTab == 2) {
+                  final canvaFiles = allFiles.where((f) {
+                    final name = f.name.toLowerCase();
+                    return name.endsWith('.canva') || name.endsWith('.canva.bst') || name.contains('canva');
+                  }).toList();
+
+                  if (canvaFiles.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(8 * scale),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.palette_rounded, size: 28 * scale, color: const Color(0xFF00C4CC).withOpacity(0.5)),
+                            SizedBox(height: 6 * scale),
+                            Text(
+                              '등록된 Canva 디자인이 없습니다',
+                              style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 11 * scale, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                            SizedBox(height: 3 * scale),
+                            Text(
+                              '교사용 앱에서 Canva 링크 및 디자인을 Cloud에 등록해주세요.',
+                              style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 9.5 * scale),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  return ListView.separated(
+                    itemCount: canvaFiles.length,
+                    separatorBuilder: (_, __) => SizedBox(height: 5 * scale),
+                    itemBuilder: (ctx, idx) {
+                      final f = canvaFiles[idx];
+                      return InkWell(
+                        onTap: () => _openCloudCanvaFile(f),
+                        borderRadius: BorderRadius.circular(8 * scale),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 6 * scale),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00C4CC).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8 * scale),
+                            border: Border.all(color: const Color(0xFF00C4CC).withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.palette_rounded, color: const Color(0xFF00C4CC), size: 15 * scale),
+                              SizedBox(width: 6 * scale),
+                              Expanded(
+                                child: Text(
+                                  f.name,
+                                  style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 10.5 * scale, fontWeight: FontWeight.w600),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 10 * scale),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                }
+
+                // Tab 3: ✏️ 판서보드 (Free) - 'bst-Free' 폴더의 .Free.pen 파일 목록
+                final freePenFiles = allFiles.where((f) => f.name.endsWith('.pen')).toList();
                 if (freePenFiles.isEmpty) {
                   return Center(
                     child: Padding(
@@ -12724,11 +12848,45 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13.5 * scale),
                       ),
                       trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 14),
-                      onTap: () {
+                      onTap: () async {
                         Navigator.of(ctx).pop();
+                        String targetPath = file.id;
+                        if (!kIsWeb && !file.id.startsWith('http') && !file.id.startsWith('/') && !file.id.contains(Platform.pathSeparator)) {
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (c) => Center(
+                              child: Card(
+                                color: const Color(0xFF16161A),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16 * scale)),
+                                child: Padding(
+                                  padding: EdgeInsets.all(20 * scale),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const CircularProgressIndicator(color: Color(0xFF00F5D4)),
+                                      SizedBox(width: 16 * scale),
+                                      Text('교과서 다운로드 중...', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14 * scale)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                          try {
+                            final downloaded = await BstCloudService.instance.downloadDriveFile(file.id, file.name, token);
+                            if (mounted) Navigator.of(context).pop();
+                            if (downloaded != null && downloaded.isNotEmpty) {
+                              targetPath = downloaded;
+                            }
+                          } catch (e) {
+                            if (mounted) Navigator.of(context).pop();
+                            debugPrint('[TextbookDownload] error: $e');
+                          }
+                        }
                         _pushBoardRoute(
                           TbpViewerRoute(
-                            tbpFilePath: file.id,
+                            tbpFilePath: targetPath,
                             scaleFactor: _settings.scaleFactor,
                           ),
                         );

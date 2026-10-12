@@ -8,7 +8,7 @@ import 'package:universal_io/io.dart';
 /// Updates are distributed as signed AppX/APK files from the Boardest download
 /// page. The app checks the official release and never installs in background.
 class UpdateService {
-  static const String defaultVersion = '4.0.2';
+  static const String defaultVersion = '4.0.5';
   static const String _releaseApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String downloadPage = 'https://boardest-downloads.web.app';
@@ -79,18 +79,28 @@ class UpdateService {
   static void _showUpdateDialog(BuildContext context, String latest) {
     showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('업데이트 준비 완료'),
-        content: Text('v$latest 버전이 출시되었습니다. 다운로드 페이지에서 설치 파일을 받을 수 있습니다.'),
+        title: const Text('새 버전 업데이트 발견'),
+        content: Text('v$latest 버전이 출시되었습니다.\n설치 진행을 위해 앱이 종료되고 다운로드 페이지로 연결됩니다.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('나중에')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('나중에'),
+          ),
           FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF00F5D4),
+              foregroundColor: Colors.black,
+            ),
             onPressed: () async {
               Navigator.pop(dialogContext);
               await launchUrl(Uri.parse(downloadPage), mode: LaunchMode.externalApplication);
+              await Future.delayed(const Duration(milliseconds: 600));
+              exit(0);
             },
-            icon: const Icon(Icons.download),
-            label: const Text('다운로드 페이지 열기'),
+            icon: const Icon(Icons.download_rounded),
+            label: const Text('앱 종료 후 설치 다운로드'),
           ),
         ],
       ),

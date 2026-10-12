@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 export '../../models/meal_models.dart';
 import '../../models/meal_models.dart';
 import '../../services/meal_vote_service.dart';
+import '../../services/neis_service.dart';
 
 class BstDualMealCard extends StatefulWidget {
+  final String schoolName;
   final List<MealDishItem> todayDishes;
   final String todayCalories;
   final List<MealDishItem> tomorrowDishes;
@@ -21,6 +23,7 @@ class BstDualMealCard extends StatefulWidget {
 
   const BstDualMealCard({
     super.key,
+    this.schoolName = '양동중학교',
     required this.todayDishes,
     this.todayCalories = '745 kcal',
     required this.tomorrowDishes,
@@ -291,16 +294,19 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
   }
 
   bool _isMonthlyView = false;
+  Future<Map<int, MealDayInfo>>? _monthMealsFuture;
+
+  void _ensureMonthMealsLoaded() {
+    if (_monthMealsFuture == null) {
+      final now = widget.currentTime ?? DateTime.now();
+      _monthMealsFuture = NeisService().fetchMonthMeals(widget.schoolName, now.year, now.month);
+    }
+  }
 
   Widget _buildMonthlyMealGrid() {
-    // 월간 식단표 그리드 (월~금 주간 단위 리스트)
-    final sampleWeeklyMenus = [
-      {'date': '10/12 (월)', 'menu': '발아현미밥, 얼큰콩나물국(5), 안동찜닭(5,6,15), 시금치무침, 깍두기(9)', 'kcal': '682 kcal', 'allergies': [5, 6, 9, 15]},
-      {'date': '10/13 (화)', 'menu': '차수수밥, 돈육김치찌개(9,10), 삼치데리야끼구이(5,6), 계란말이(1), 총각김치(9)', 'kcal': '715 kcal', 'allergies': [1, 5, 6, 9, 10]},
-      {'date': '10/14 (수)', 'menu': '카레라이스(2,5,6,12,13,16,18), 팽이버섯된장국(5,6), 수제치킨텐더(1,5,6,15), 오이양파무침, 깍두기(9)', 'kcal': '760 kcal', 'allergies': [1, 2, 5, 6, 9, 12, 13, 15, 16, 18]},
-      {'date': '10/15 (목)', 'menu': '기장밥, 쇠고기뭇국(16), 매콤돼지갈비찜(5,6,10), 숙주나물, 배추김치(9)', 'kcal': '698 kcal', 'allergies': [5, 6, 9, 10, 16]},
-      {'date': '10/16 (금)', 'menu': '혼합잡곡밥(5), 순두부찌개(1,5,9,18), 오리훈제채소볶음, 쌈무, 깍두기(9)', 'kcal': '730 kcal', 'allergies': [1, 5, 9, 18]},
-    ];
+    _ensureMonthMealsLoaded();
+    final now = widget.currentTime ?? DateTime.now();
+    const weekdayLabels = ['월', '화', '수', '목', '금'];
 
     final allergyLabels = {
       1: '1.난류', 2: '2.우유', 5: '5.대두', 6: '6.밀', 9: '9.토마토/김치', 10: '10.돼지', 15: '15.닭', 16: '16.소'
@@ -323,9 +329,9 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
             ),
             child: Row(
               children: [
-                const Text(
-                  '📆 월간 급식 달력 & 알레르기 필터',
-                  style: TextStyle(
+                Text(
+                  '📆 ${now.month}월 월간 급식 달력 (${widget.schoolName})',
+                  style: const TextStyle(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w800,
                     color: Color(0xFF00F5D4),
@@ -374,63 +380,113 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
             ),
           ),
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.all(8),
-              itemCount: sampleWeeklyMenus.length,
-              separatorBuilder: (_, __) => const Divider(height: 10, color: Colors.white10),
-              itemBuilder: (context, index) {
-                final item = sampleWeeklyMenus[index];
-                final allergies = (item['allergies'] as List<int>?) ?? [];
-                final isHighlighted = _selectedAllergyFilter != null && allergies.contains(_selectedAllergyFilter);
+            child: FutureBuilder<Map<int, MealDayInfo>>(
+              future: _monthMealsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)));
+                }
+                final monthMap = snapshot.data ?? {};
+                final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+                final List<Map<String, dynamic>> monthlyItems = [];
 
-                return Container(
-                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
-                  decoration: BoxDecoration(
-                    color: isHighlighted ? const Color(0xFFFFD166).withOpacity(0.18) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(6),
-                    border: isHighlighted ? Border.all(color: const Color(0xFFFFD166), width: 1.2) : null,
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 72,
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: isHighlighted ? const Color(0xFFFFD166).withOpacity(0.25) : const Color(0xFF00F5D4).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          item['date'] as String,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w800,
-                            color: isHighlighted ? const Color(0xFFFFD166) : const Color(0xFF00F5D4),
+                for (int d = 1; d <= daysInMonth; d++) {
+                  final curDate = DateTime(now.year, now.month, d);
+                  // 평일(월~금)만 급식 목록에 추가
+                  if (curDate.weekday >= 1 && curDate.weekday <= 5) {
+                    final dayInfo = monthMap[d];
+                    final dateLabel = '${now.month}/$d (${weekdayLabels[curDate.weekday - 1]})';
+                    final menuStr = dayInfo != null && dayInfo.dishes.isNotEmpty
+                        ? dayInfo.dishes.map((e) => e.name).join(', ')
+                        : '급식 정보가 없습니다';
+                    final kcalStr = dayInfo != null && dayInfo.calories.isNotEmpty ? dayInfo.calories : '';
+                    final allergies = dayInfo?.allAllergyIndexes.toList() ?? [];
+
+                    monthlyItems.add({
+                      'day': d,
+                      'date': dateLabel,
+                      'menu': menuStr,
+                      'kcal': kcalStr,
+                      'allergies': allergies,
+                      'isToday': d == now.day,
+                    });
+                  }
+                }
+
+                if (monthlyItems.isEmpty) {
+                  return Center(
+                    child: Text('이번 달 등록된 급식 식단표가 없습니다.', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                  );
+                }
+
+                return ListView.separated(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: monthlyItems.length,
+                  separatorBuilder: (_, __) => const Divider(height: 10, color: Colors.white10),
+                  itemBuilder: (context, index) {
+                    final item = monthlyItems[index];
+                    final allergies = (item['allergies'] as List<int>?) ?? [];
+                    final isHighlighted = _selectedAllergyFilter != null && allergies.contains(_selectedAllergyFilter);
+                    final isToday = item['isToday'] == true;
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                      decoration: BoxDecoration(
+                        color: isHighlighted
+                            ? const Color(0xFFFFD166).withOpacity(0.18)
+                            : (isToday ? const Color(0xFF00F5D4).withOpacity(0.08) : Colors.transparent),
+                        borderRadius: BorderRadius.circular(6),
+                        border: isHighlighted
+                            ? Border.all(color: const Color(0xFFFFD166), width: 1.2)
+                            : (isToday ? Border.all(color: const Color(0xFF00F5D4).withOpacity(0.4), width: 1) : null),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 72,
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isHighlighted
+                                  ? const Color(0xFFFFD166).withOpacity(0.25)
+                                  : (isToday ? const Color(0xFF00F5D4) : const Color(0xFF00F5D4).withOpacity(0.12)),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              item['date'] as String,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: isHighlighted ? const Color(0xFFFFD166) : (isToday ? Colors.black : const Color(0xFF00F5D4)),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          item['menu'] as String,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: isHighlighted ? FontWeight.w900 : FontWeight.w600,
-                            color: isHighlighted ? const Color(0xFFFFD166) : const Color(0xFFE2E8F0),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              item['menu'] as String,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: isHighlighted || isToday ? FontWeight.w900 : FontWeight.w600,
+                                color: isHighlighted ? const Color(0xFFFFD166) : (isToday ? Colors.white : const Color(0xFFE2E8F0)),
+                              ),
+                            ),
                           ),
-                        ),
+                          if ((item['kcal'] as String).isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              item['kcal'] as String,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.white.withOpacity(0.4),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        item['kcal'] as String,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.white.withOpacity(0.4),
-                        ),
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 );
               },
             ),

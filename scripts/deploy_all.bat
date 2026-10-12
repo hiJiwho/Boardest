@@ -1,8 +1,8 @@
 @echo off
 setlocal
 cd /d "%~dp0.."
-set "VERSION=4.0.3-bata"
-set "APPX_VERSION=4.0.3.0"
+set "VERSION=4.0.5"
+set "APPX_VERSION=4.0.5.0"
 set "PROJECT=jiwhosboardest"
 
 echo [1/7] Building Boardest and Teacher web releases...
@@ -65,7 +65,7 @@ echo [7/7] Verifying GitHub release assets and every published website...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\verify_release.ps1 -Version %VERSION% || goto :fail
 echo Completed: v%VERSION% source, Windows, Android, web, hosting, and GitHub uploads verified.
 echo Shutting down Windows in 2 minutes. Run "shutdown /a" to cancel.
-shutdown.exe /s /t 120 /c "Boardest v%VERSION% release complete. Run shutdown.exe /a to cancel."
+rem shutdown.exe /s /t 120 /c "Boardest v%VERSION% release complete. Run shutdown.exe /a to cancel."
 exit /b 0
 
 :fail

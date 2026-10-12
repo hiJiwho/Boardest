@@ -268,10 +268,8 @@ bool FlutterWindow::OnCreate() {
           DWM_WINDOW_CORNER_PREFERENCE corner = (window_frame_style_ == "win7") ? DWMWCP_DONOTROUND : DWMWCP_ROUND;
           DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
 
-          SetWindowTheme(hwnd, nullptr, nullptr);
           LONG current_style = GetWindowLong(hwnd, GWL_STYLE);
-          current_style &= ~(WS_CAPTION | WS_SYSMENU);
-          current_style |= (WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+          current_style |= (WS_OVERLAPPEDWINDOW | WS_THICKFRAME | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
           SetWindowLong(hwnd, GWL_STYLE, current_style);
           SetWindowPos(hwnd, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
 
@@ -320,9 +318,8 @@ bool FlutterWindow::OnCreate() {
     special_classroom_type_ = start_special;
 
     LONG style = original_style_;
-    SetWindowTheme(hwnd, nullptr, nullptr);
-    style &= ~(WS_CAPTION | WS_SYSMENU);
-    style |= (WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+    if (style == 0) style = WS_OVERLAPPEDWINDOW;
+    style |= (WS_OVERLAPPEDWINDOW | WS_THICKFRAME | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
 
     #ifndef DWMWA_WINDOW_CORNER_PREFERENCE
     #define DWMWA_WINDOW_CORNER_PREFERENCE 33
@@ -353,11 +350,15 @@ bool FlutterWindow::OnCreate() {
                      screenHeight,
                      SWP_FRAMECHANGED | SWP_SHOWWINDOW);
       } else {
+        int winWidth = 1200;
+        int winHeight = 800;
+        int left = mi.rcWork.left + (mi.rcWork.right - mi.rcWork.left - winWidth) / 2;
+        int top = mi.rcWork.top + (mi.rcWork.bottom - mi.rcWork.top - winHeight) / 2;
         SetWindowPos(hwnd, HWND_NOTOPMOST,
-                     mi.rcWork.left,
-                     mi.rcWork.top,
-                     mi.rcWork.right - mi.rcWork.left,
-                     mi.rcWork.bottom - mi.rcWork.top,
+                     left,
+                     top,
+                     winWidth,
+                     winHeight,
                      SWP_FRAMECHANGED | SWP_SHOWWINDOW);
       }
     }

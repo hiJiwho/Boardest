@@ -241,6 +241,7 @@ void main(List<String> args) async {
       await windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.setBackgroundColor(Colors.transparent);
         await windowManager.setPreventClose(true);
+        await windowManager.setResizable(true);
         await windowManager.show();
       });
 

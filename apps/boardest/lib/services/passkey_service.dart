@@ -52,8 +52,8 @@ class PasskeyService {
       debugPrint('[PasskeyService] Failed to create challenge on RTDB: $e');
     }
 
-    // QR 코드에 탑재할 URL (스마트폰 카메라 또는 교사 폰으로 스캔)
-    final qrPayload = 'https://boardest-cloud-connect.web.app/?key=$sessionId&school=${Uri.encodeComponent(schoolName)}&device=${Uri.encodeComponent(roomName)}';
+    // QR 코드에 탑재할 URL (스마트폰 카메라 또는 교사 폰으로 스캔, 2분 유효 타임스탬프 탑재)
+    final qrPayload = 'https://boardest-cloud-connect.web.app/?key=$sessionId&school=${Uri.encodeComponent(schoolName)}&device=${Uri.encodeComponent(roomName)}&t=$now';
 
     return (
       sessionId: sessionId,

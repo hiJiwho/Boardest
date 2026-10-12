@@ -19,6 +19,48 @@ class PasskeyService {
     return prefs.containsKey(_passkeyCredentialKey);
   }
 
+  /// Cloud Connect(스마트폰)에서 등록 완료되었는지 Firebase RTDB 원격 확인
+  Future<bool> checkRemoteRegistration(String teacherName, String challengeId) async {
+    try {
+      if (challengeId.isNotEmpty) {
+        final pairRes = await http.get(
+          Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/passkey_pairs/$challengeId.json'),
+        ).timeout(const Duration(seconds: 2));
+        if (pairRes.statusCode == 200 && pairRes.body.isNotEmpty && pairRes.body != 'null') {
+          final data = jsonDecode(pairRes.body);
+          if (data is Map && (data['status'] == 'registered' || data['status'] == 'approved')) {
+            await _markLocalRegistration(teacherName);
+            return true;
+          }
+        }
+      }
+      final enc = Uri.encodeComponent(teacherName);
+      final vaultRes = await http.get(
+        Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/passkey_vaults/$enc.json'),
+      ).timeout(const Duration(seconds: 2));
+      if (vaultRes.statusCode == 200 && vaultRes.body.isNotEmpty && vaultRes.body != 'null') {
+        final data = jsonDecode(vaultRes.body);
+        if (data is Map && data['credId'] != null) {
+          await _markLocalRegistration(teacherName);
+          return true;
+        }
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<void> _markLocalRegistration(String teacherName) async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final credential = {
+      'teacherName': teacherName,
+      'createdAt': now,
+      'registered': true,
+      'source': 'cloud_connect',
+    };
+    await prefs.setString(_passkeyCredentialKey, jsonEncode(credential));
+  }
+
   /// 선생님 기기에서 패스키 등록 (로컬 보안 등록 & Firebase Vault에 메타데이터 게시)
   Future<bool> registerPasskey({
     required String teacherName,
