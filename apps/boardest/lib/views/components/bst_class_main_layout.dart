@@ -211,9 +211,9 @@ class BstClassMainLayout extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // 1. 일과 시간표 스트립 (높이를 컴팩트하게 조절하여 7교시가 한눈에 들어오게 함)
+                          // 1. 일과 시간표 스트립 (높이 2배로 확장: 148px)
                           SizedBox(
-                            height: 74,
+                            height: 148,
                             child: BstTodayTimetableStrip(
                               periods: periods,
                               onPeriodTap: onPeriodTap,

@@ -396,23 +396,6 @@ class MealCallService {
       } catch (re) {
         debugPrint('[MealCallService] RTDB heartbeat error: $re');
       }
-
-      // 2. Cloudflare Worker KV 동기화 (eat 웹 폴백 소스)
-      try {
-        await http.post(
-          Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/classrooms/heartbeat'),
-          headers: {"Content-Type": "application/json"},
-          body: json.encode({
-            'docId': docId,
-            'schoolCode': schoolCode,
-            'schoolName': schoolName,
-            'cafeteria': cafeteria,
-            'grade': _currentSettings!.selectedGrade,
-            'class': _currentSettings!.selectedClass,
-            'nickname': classNickname,
-          }),
-        ).timeout(const Duration(seconds: 3));
-      } catch (_) {}
     } catch (e) {
       debugPrint('Error registering classroom for meal call: $e');
     }

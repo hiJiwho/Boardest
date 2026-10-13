@@ -114,6 +114,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
   AppSettings _settings = AppSettings();
   final Map<String, Uint8List> _inMemoryTextbookBytes = {};
+  bool _isTextbookZipDownloading = false;
   TimetableResult? _timetableResult;
   bool _isLoading = true;
   String? _errorMessage;
@@ -11340,6 +11341,18 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       debugPrint('[TextbookSync] 🛑 Demo mode active: skipping external textbook ZIP download.');
       return;
     }
+    // 이미 다운로드 진행 중이면 중복 요청 차단
+    if (_isTextbookZipDownloading) {
+      debugPrint('[TextbookSync] ⏳ Textbook ZIP download already in progress. Skipping duplicate request.');
+      return;
+    }
+    // 이미 메모리에 교과서 표지가 등록되어 있다면 재다운로드 불필요
+    if (_inMemoryTextbookBytes.isNotEmpty) {
+      debugPrint('[TextbookSync] ⚡ In-memory textbooks already present. Skipping re-download.');
+      return;
+    }
+
+    _isTextbookZipDownloading = true;
     try {
       final grade = _settings.selectedGrade > 0 ? _settings.selectedGrade : 1;
       final zipKey = 'textbookZip$grade';
@@ -11491,6 +11504,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       }
     } catch (e, st) {
       debugPrint('[TextbookSync] Error during ZIP extraction: $e\n$st');
+    } finally {
+      _isTextbookZipDownloading = false;
     }
   }
 

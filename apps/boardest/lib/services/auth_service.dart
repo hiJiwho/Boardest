@@ -639,14 +639,23 @@ class AuthService {
     }
   }
 
+  static String? _lastSavedSettingsJson;
+  static DateTime? _lastOnlineStatusUpdated;
+
   /// Firestore 계정에 환경 설정(AppSettings) 백업 저장
   Future<bool> saveUserSettings(String email, AppSettings settings) async {
     if (email.isEmpty) return false;
+    final currentJson = json.encode(settings.toJson());
+    // 설정이 변경되지 않았으면 네트워크 호출을 건너뜁니다 (0 Firestore Writes)
+    if (_lastSavedSettingsJson == currentJson) {
+      return true;
+    }
+
     final url = '$_firestoreBase/users/${_encodeDocId(email)}?updateMask.fieldPaths=settingsJson&key=$_apiKey';
     try {
       final body = {
         'fields': {
-          'settingsJson': {'stringValue': json.encode(settings.toJson())},
+          'settingsJson': {'stringValue': currentJson},
         }
       };
       final res = await http.patch(
@@ -655,6 +664,7 @@ class AuthService {
         body: json.encode(body),
       ).timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
+        _lastSavedSettingsJson = currentJson;
         debugPrint('[AuthService] Successfully backed up AppSettings to Firestore for $email');
         return true;
       }
@@ -676,6 +686,7 @@ class AuthService {
         final settingsStr = (fields?['settingsJson'] as Map?)?['stringValue'] as String?;
         if (settingsStr != null && settingsStr.isNotEmpty) {
           final settingsMap = json.decode(settingsStr) as Map<String, dynamic>;
+          _lastSavedSettingsJson = settingsStr; // 캐시 동기화
           return AppSettings.fromJson(settingsMap);
         }
       }
@@ -685,8 +696,14 @@ class AuthService {
     return null;
   }
 
-  /// Firestore에 사용자의 lastActive 시간만 업데이트 (온라인 상태 알림용)
+  /// Firestore에 사용자의 lastActive 시간만 업데이트 (온라인 상태 알림용 - 30분 쿨다운)
   Future<void> updateOnlineStatus(String email) async {
+    if (email.isEmpty) return;
+    if (_lastOnlineStatusUpdated != null &&
+        DateTime.now().difference(_lastOnlineStatusUpdated!).inMinutes < 30) {
+      return; // 30분 이내 중복 쓰기 방지 (0 Firestore Writes)
+    }
+
     final url = '$_firestoreBase/users/${_encodeDocId(email)}?updateMask.fieldPaths=lastActive&key=$_apiKey';
     try {
       final body = {
@@ -702,6 +719,7 @@ class AuthService {
       ).timeout(const Duration(seconds: 5));
       
       if (res.statusCode == 200) {
+        _lastOnlineStatusUpdated = DateTime.now();
         debugPrint('[AuthService] Successfully updated online status for $email');
       } else {
         debugPrint('[AuthService] Failed to update online status: ${res.body}');

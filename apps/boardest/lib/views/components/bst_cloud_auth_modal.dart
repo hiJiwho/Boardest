@@ -310,7 +310,7 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
               ),
             ),
 
-            // 2. 탭 바 (4원화: 1. Web QR, 2. 6자리 OTP, 3. 등록된 교사, 4. 순정 Passkey)
+            // 2. 탭 바 (3원화: 1. Web QR, 2. 6자리 OTP, 3. 등록된 교사)
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 24 * s),
               child: Container(
@@ -325,7 +325,6 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
                     _buildTabItem(0, '📱 Web QR', '1초 즉시 승인', s),
                     _buildTabItem(1, '🔢 6자리 OTP', '구형칠판 호환', s),
                     _buildTabItem(2, '👨‍🏫 등록된 교사', '원클릭 연동', s),
-                    _buildTabItem(3, '🔑 순정 패스키', 'FIDO2 생체인증', s),
                   ],
                 ),
               ),
@@ -343,7 +342,6 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
                     _buildWebQrTab(s),
                     _buildOtpKeypadTab(s),
                     _buildSavedTeachersTab(s),
-                    _buildPasskeyTab(s),
                   ],
                 ),
               ),
@@ -950,58 +948,5 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
       ],
     );
   }
-
-  // ─── Tab 3: 순정 패스키 ───
-  Widget _buildPasskeyTab(double s) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: EdgeInsets.all(16 * s),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
-            ),
-            child: Icon(Icons.fingerprint_rounded, size: 54 * s, color: const Color(0xFF00F5D4)),
-          ),
-          SizedBox(height: 16 * s),
-          Text(
-            'boardest-cloud.web.app 순정 패스키',
-            style: GoogleFonts.notoSansKr(
-              fontSize: 18 * s,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-            ),
-          ),
-          SizedBox(height: 8 * s),
-          Text(
-            'FIDO2 / WebAuthn 지원 브라우저 및 기기에서 사용 가능합니다.\n보안을 위해 칠판에 자격증명을 영구 저장하지 않고 스마트폰 생체인식으로 안전하게 인증합니다.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansKr(
-              fontSize: 12 * s,
-              color: const Color(0xFF94A3B8),
-              height: 1.5,
-            ),
-          ),
-          SizedBox(height: 20 * s),
-          ElevatedButton.icon(
-            onPressed: () {
-              setState(() {
-                _selectedTab = 0; // QR 탭으로 전환하여 스마트폰에서 바로 패스키 발동
-              });
-            },
-            icon: const Icon(Icons.qr_code_scanner_rounded),
-            label: const Text('스마트폰으로 패스키 인증하기'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00F5D4),
-              foregroundColor: const Color(0xFF0F172A),
-              padding: EdgeInsets.symmetric(horizontal: 20 * s, vertical: 12 * s),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * s)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
+

@@ -1428,6 +1428,8 @@ class CloudDriveService with ChangeNotifier {
     String? email,
     String? name,
     String? school,
+    String? totpSecret,
+    String? shortId,
   }) async {
     _userEmail = email;
     _userName = name;
@@ -1445,6 +1447,12 @@ class CloudDriveService with ChangeNotifier {
     }
     if (refreshToken != null && refreshToken.isNotEmpty) {
       _refreshToken = refreshToken;
+    }
+    if (totpSecret != null && totpSecret.isNotEmpty) {
+      _totpSecret = totpSecret;
+    }
+    if (shortId != null && shortId.isNotEmpty) {
+      _shortId = shortId;
     }
 
     // Google Token으로 사용자 정보 직접 조회 (email/name 보충)
@@ -1470,6 +1478,13 @@ class CloudDriveService with ChangeNotifier {
     if (_userEmail != null) await prefs.setString(_userEmailKey, _userEmail!);
     if (_userName != null) await prefs.setString(_userNameKey, _userName!);
     if (_schoolName != null) await prefs.setString(_schoolNameKey, _schoolName!);
+    if (_totpSecret != null) {
+      await prefs.setString(_totpSecretKey, _totpSecret!);
+      await prefs.setString('bst_totp_secret', _totpSecret!);
+    }
+    if (_shortId != null) {
+      await prefs.setString(_shortIdKey, _shortId!);
+    }
 
     // Worker에서 shortId 동기화 (기존 캐시가 없을 때만 호출)
     if (_userEmail != null && _userEmail!.isNotEmpty && (_shortId == null || _shortId!.isEmpty)) {

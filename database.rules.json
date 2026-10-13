@@ -36,6 +36,18 @@
           ".write": true
         }
       }
+    },
+    "passkey_pairs": {
+      "$pair_id": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "passkey_vaults": {
+      "$vault_id": {
+        ".read": true,
+        ".write": true
+      }
     }
   }
 }

@@ -67,42 +67,52 @@ import 'package:flutter_acrylic/flutter_acrylic.dart' as acrylic;
 /// - 좌측(flex 2): 오늘의 시간표 / 클릭 시 주간 시간표 격자 토글. 담임인 경우 하단에 담임 학급 상태 및 주간 시간표 전환 제공.
 /// - 가운데(flex 6): USB 탐색기 + USB 형식 지정 (Plus, Pro 자동 반별 매핑)
 /// - 우측(flex 2): 수업 도구 (기본판서, PDF판서, PPT판서, 타이머, 발표자 추첨) 활성화
-// ── 교내 등록된 전자칠판 중 최근 5분 이내 온라인 기기 조회 ──
+// ── 교내 등록된 전자칠판 중 최근 10분 이내 온라인 기기 조회 (RTDB 직접 조회) ──
 Future<List<Map<String, dynamic>>> _fetchOnlineClassrooms([String? schoolCode]) async {
   try {
-    final code = (schoolCode != null && schoolCode.trim().isNotEmpty) ? schoolCode.trim() : 'ydm';
-    final res = await http.get(
-      Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/classrooms?schoolCode=' + code),
-    ).timeout(const Duration(seconds: 4));
+    final code = (schoolCode != null && schoolCode.trim().isNotEmpty) ? schoolCode.trim().toLowerCase() : 'ydm';
+    final rtdbUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls.json';
+    final res = await http.get(Uri.parse(rtdbUrl)).timeout(const Duration(seconds: 4));
 
-    if (res.statusCode == 200) {
+    if (res.statusCode == 200 && res.body != 'null') {
       final data = jsonDecode(res.body);
-      final list = (data['classrooms'] as List<dynamic>?) ?? [];
       final now = DateTime.now().toUtc();
-
       final Map<String, Map<String, dynamic>> dedup = {};
 
-      for (final item in list) {
-        final m = item as Map<String, dynamic>;
-        final lastActiveStr = m['lastActive']?.toString();
-        if (lastActiveStr == null || lastActiveStr.isEmpty) continue;
+      if (data is Map) {
+        data.forEach((key, val) {
+          if (val is! Map) return;
+          final docId = key.toString();
+          if (!docId.toLowerCase().startsWith(code) && code != 'school') return;
 
-        try {
-          final dt = DateTime.parse(lastActiveStr);
-          final diffMinutes = now.difference(dt).inMinutes.abs();
-          if (diffMinutes <= 5) {
-            final key = (m['nickname'] ?? m['docId'] ?? '').toString();
-            if (!dedup.containsKey(key) ||
-                DateTime.parse(dedup[key]!['lastActive']).isBefore(dt)) {
-              dedup[key] = m;
-            }
+          final lastActive = val['lastActive'];
+          int? lastActiveMs;
+          if (lastActive is int) {
+            lastActiveMs = lastActive;
+          } else if (lastActive is String) {
+            final parsed = DateTime.tryParse(lastActive);
+            if (parsed != null) lastActiveMs = parsed.millisecondsSinceEpoch;
           }
-        } catch (_) {}
+          if (lastActiveMs == null) return;
+
+          final dt = DateTime.fromMillisecondsSinceEpoch(lastActiveMs, isUtc: true);
+          final diffMinutes = now.difference(dt).inMinutes.abs();
+          if (diffMinutes <= 10) {
+            final nickname = val['classNickname']?.toString() ?? val['nickname']?.toString() ?? docId;
+            final m = {
+              'docId': docId,
+              'nickname': nickname,
+              'lastActive': dt.toIso8601String(),
+              'isOnline': true,
+            };
+            dedup[nickname] = m;
+          }
+        });
       }
       return dedup.values.toList();
     }
   } catch (e) {
-    debugPrint('[TeacherView] Error fetching online classrooms: ' + e.toString());
+    debugPrint('[TeacherView] Error fetching online classrooms: $e');
   }
   return [];
 }

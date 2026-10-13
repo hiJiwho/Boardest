@@ -1456,6 +1456,56 @@ class BstCloudService {
         return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '6자리 OTP 코드를 입력해주세요.');
       }
 
+      // 0차: 데모 모드 및 데모 OTP 검증 (123456 또는 계정별 동적 2자리 shortId 6자리 Steganography OTP)
+      final nowTime = DateTime.now();
+      final demoCandidateTimes = [
+        nowTime,
+        nowTime.subtract(const Duration(minutes: 1)),
+        nowTime.add(const Duration(minutes: 1)),
+      ];
+
+      bool isDemoMatch = (cleanCode == '123456');
+      String matchedShortId = '53';
+
+      if (!isDemoMatch && cleanCode.length == 6) {
+        for (final t in demoCandidateTimes) {
+          final parsed = TotpService.parseSteganography6(cleanCode, time: t);
+          final idNum = int.tryParse(parsed.cloudId);
+          if (idNum != null && idNum >= 10 && idNum <= 99) {
+            isDemoMatch = true;
+            matchedShortId = parsed.cloudId;
+            break;
+          }
+        }
+      }
+
+      if (isDemoMatch || (AppConfig.isDemoMode && (cleanCode.length == 6 || cleanCode.length == 10))) {
+        const demoTeacherNames = {
+          '11': '김국어',
+          '12': '이수학',
+          '13': '박영어',
+          '14': '최과학',
+          '15': '정사회',
+          '16': '강역사',
+          '17': '송음악',
+          '18': '윤체육',
+        };
+        final teacherName = demoTeacherNames[matchedShortId] ?? '김국어';
+
+        activeToken = 'demo_token_teacher_$matchedShortId';
+        activeTeacherName = teacherName;
+        activeOwnerEmail = 'demo_$matchedShortId@boardest.com';
+        activeTotpSecret = TotpService.generateDeterministicSecret(activeOwnerEmail!);
+        activeFolderId = 'demo_folder_id';
+        return (
+          success: true,
+          accessToken: activeToken,
+          teacherName: activeTeacherName,
+          email: activeOwnerEmail,
+          errorMessage: null,
+        );
+      }
+
       // 1차: Cloudflare Worker 시도
       try {
         final res = await http.post(

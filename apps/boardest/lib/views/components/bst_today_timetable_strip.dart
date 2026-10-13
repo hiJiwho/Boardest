@@ -181,8 +181,8 @@ class BstTodayTimetableStrip extends StatelessWidget {
         final double count = periods.isEmpty ? 1 : periods.length.clamp(1, 7).toDouble();
         // 7교시가 화면에 스크롤 없이 쏙 들어가도록 동적 너비 분할
         final double cardWidth = (availableWidth > 0 && count > 0)
-            ? ((availableWidth - (count - 1) * 6) / count).clamp(40.0, 84.0)
-            : (totalHeight > 0 ? totalHeight : 74.0);
+            ? ((availableWidth - (count - 1) * 6) / count).clamp(50.0, 140.0)
+            : (totalHeight > 0 ? totalHeight : 148.0);
 
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -200,7 +200,7 @@ class BstTodayTimetableStrip extends StatelessWidget {
                 padding: EdgeInsets.only(right: index == periods.length - 1 ? 0 : 6),
                 child: SizedBox(
                   width: cardWidth,
-                  height: totalHeight > 0 ? totalHeight : 74.0,
+                  height: totalHeight > 0 ? totalHeight : 148.0,
                   child: InkWell(
                     onTap: () => onPeriodTap?.call(item.period),
                     borderRadius: BorderRadius.circular(12),

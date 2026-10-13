@@ -167,111 +167,7 @@ class _MessageViewState extends State<MessageView> {
         }
       } catch (_) {}
 
-      // 2. Cloudflare Worker fallback
-      if (parsed.isEmpty) {
-        try {
-          final workerUrl = 'https://boardest-cloud-token.jiwho.workers.dev/api/classrooms?schoolCode=$connName';
-          final workerRes = await http.get(Uri.parse(workerUrl)).timeout(const Duration(seconds: 3));
-          if (workerRes.statusCode == 200) {
-            final wData = json.decode(workerRes.body);
-            final wList = wData['classrooms'] as List? ?? [];
-            for (final c in wList) {
-              final docId = c['docId']?.toString() ?? '';
-              if (docId.isEmpty) continue;
-              if (c['isLite'] == true || docId.toLowerCase().contains('lite') || docId.toLowerCase().contains('local') || docId.toLowerCase().contains('special')) continue;
-
-              final lastActiveStr = c['lastActive']?.toString() ?? '';
-              bool isOnline = false;
-              if (lastActiveStr.isNotEmpty) {
-                try {
-                  final activeTime = DateTime.parse(lastActiveStr).toUtc();
-                  final diffSec = nowUtc.difference(activeTime).inSeconds.abs();
-                  isOnline = (diffSec <= 900);
-                } catch (_) {}
-              }
-              if (!isOnline) continue;
-
-              final grade = int.tryParse(c['grade']?.toString() ?? '') ?? 0;
-              final cls = int.tryParse(c['class']?.toString() ?? '') ?? 0;
-              final nickname = c['nickname']?.toString() ?? (grade > 0 ? '$grade학년 $cls반' : docId);
-              parsed.add({
-                'docId': docId,
-                'cafeteria': c['cafeteria']?.toString() ?? '1',
-                'grade': grade,
-                'class': cls,
-                'nickname': nickname,
-                'isOnline': true,
-              });
-            }
-          }
-        } catch (_) {}
-      }
-
-      // 3. Firestore fallback
-      if (parsed.isEmpty) {
-        final url = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls?pageSize=100&key=$_apiKey';
-        final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 4));
-
-        if (res.statusCode == 200) {
-          final data = json.decode(res.body);
-          final docs = data['documents'] as List? ?? [];
-
-          final schoolCode = _settings?.selectedSchool?.code?.toString() ?? '';
-          final schoolId = _settings?.schoolId.trim() ?? '';
-          final schoolName = _settings?.selectedSchool?.name ?? '';
-
-          for (final doc in docs) {
-            final name = doc['name'] as String? ?? '';
-            final docId = name.split('/').last;
-            final fields = doc['fields'] as Map<String, dynamic>? ?? {};
-
-            if (fields['isLite']?['booleanValue'] == true || docId.toLowerCase().contains('lite') || docId.toLowerCase().contains('local') || docId.toLowerCase().contains('special')) continue;
-
-            final docSchoolCode = fields['schoolCode']?['stringValue'] ?? '';
-            final docSchoolName = fields['schoolName']?['stringValue'] ?? '';
-
-            bool isMatch = docId.toLowerCase().startsWith(connName);
-            if (!isMatch && schoolCode.isNotEmpty) {
-              isMatch = docId.toLowerCase().startsWith(schoolCode.toLowerCase()) || docSchoolCode == schoolCode;
-            }
-            if (!isMatch && schoolId.isNotEmpty) {
-              isMatch = docId.toLowerCase().startsWith(schoolId.toLowerCase());
-            }
-            if (!isMatch && schoolName.isNotEmpty && docSchoolName.isNotEmpty) {
-              isMatch = docSchoolName.contains(schoolName) || schoolName.contains(docSchoolName);
-            }
-            if (!isMatch) continue;
-
-            final lastActiveStr = fields['lastActive']?['timestampValue'] as String? ?? fields['lastActive']?['stringValue'] as String? ?? '';
-            final cafeteria = fields['cafeteriaNum']?['stringValue'] as String? ?? '1';
-
-            final gradeVal = fields['grade']?['integerValue'] ?? fields['grade']?['stringValue'] ?? '0';
-            final classVal = fields['classNum']?['integerValue'] ?? fields['classNum']?['stringValue'] ?? '0';
-            final grade = int.tryParse(gradeVal.toString()) ?? 0;
-            final cls = int.tryParse(classVal.toString()) ?? 0;
-            final nickname = fields['classNickname']?['stringValue'] ?? (grade > 0 ? '$grade학년 $cls반' : docId);
-
-            bool isOnline = false;
-            if (lastActiveStr.isNotEmpty) {
-              try {
-                final activeTime = DateTime.parse(lastActiveStr).toUtc();
-                final diffSec = nowUtc.difference(activeTime).inSeconds.abs();
-                isOnline = (diffSec <= 900);
-              } catch (_) {}
-            }
-            if (!isOnline) continue;
-
-            parsed.add({
-              'docId': docId,
-              'cafeteria': cafeteria,
-              'grade': grade,
-              'class': cls,
-              'nickname': nickname,
-              'isOnline': true,
-            });
-          }
-        }
-      }
+      // RTDB 결과만 사용 (Cloudflare Worker 및 Firestore 100건 폴백 제거로 0 Firestore Reads 달성)
 
       if (parsed.isEmpty) {
         for (int g = 1; g <= 3; g++) {
@@ -365,25 +261,7 @@ class _MessageViewState extends State<MessageView> {
           } catch (_) {}
         }(),
 
-        // 2. Firestore 동기화 (비동기 처리)
-        () async {
-          try {
-            const updateMask = 'updateMask.fieldPaths=message&updateMask.fieldPaths=messageFrom&updateMask.fieldPaths=messageSentAt';
-            final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls/$docId?$updateMask&key=$_apiKey';
-            final payload = {
-              "fields": {
-                "message": {"stringValue": text},
-                "messageFrom": {"stringValue": senderName},
-                "messageSentAt": {"stringValue": nowIso},
-              }
-            };
-            http.patch(
-              Uri.parse(firestoreUrl),
-              headers: {"Content-Type": "application/json"},
-              body: json.encode(payload),
-            ).catchError((_) => http.Response('', 500));
-          } catch (_) {}
-        }(),
+        // RTDB 실시간 전송만 사용 (0 Firestore Writes)
 
         // 3. Worker FCM Push 동시 발송 (High-Priority Push)
         () async {
