@@ -104,8 +104,64 @@ void main(List<String> args) async {
 
     final prefs = await SharedPreferences.getInstance();
 
-    // 일반 모드에서는 이전 데모 방문으로 남은 가짜 토큰 및 데모 계정 자동 정리 (401/404 방지)
-    if (!AppConfig.isDemoMode) {
+    // Query param based demo detection
+    final qDemo = params['Demo'] ?? params['demo'] ?? params['isDemo'];
+    if (qDemo?.toLowerCase() == 'yes' || qDemo?.toLowerCase() == 'true') {
+      AppConfig.isDemoMode = true;
+    }
+
+    // 데모 모드인 경우: Google 로그인 필요 없이 즉시 양동중학교 1-1 데모 교사 세션 자동 활성화!
+    if (AppConfig.isDemoMode) {
+      const demoEmail = 'demo_teacher@boardest.bst';
+      const demoToken = 'demo_token_teacher';
+      final demoTeacherName = params['teacherName'] ?? '데모교사';
+      const demoTeacherId = '1';
+      const demoSchoolId = '44134';
+      const demoSchoolName = '양동중학교';
+      final demoGrade = int.tryParse(params['grade'] ?? '1') ?? 1;
+      final demoClassNum = int.tryParse(params['classNum'] ?? '1') ?? 1;
+      const demoIsHomeroom = true;
+      const demoCafeteria = '1';
+
+      await prefs.setString('bst_google_user_email', demoEmail);
+      await prefs.setString('bst_user_email', demoEmail);
+      await prefs.setString('bst_google_user_name', demoTeacherName);
+      await prefs.setString('bst_user_name', demoTeacherName);
+      await prefs.setString('bst_cld_access_token', demoToken);
+      await prefs.setString('bst_google_access_token', demoToken);
+      await prefs.setString('bst_school_name', demoSchoolName);
+
+      await CloudDriveService.instance.setSession(
+        accessToken: demoToken,
+        bstCldToken: demoToken,
+        refreshToken: '',
+        email: demoEmail,
+        name: demoTeacherName,
+        school: demoSchoolName,
+      );
+
+      final school = School(
+        id: 44134,
+        code: 44134,
+        name: demoSchoolName,
+        region: '서울',
+      );
+      final existing = await storage.getSettings();
+      final newSettings = existing.copyWith(
+        selectedSchool: school,
+        schoolId: demoSchoolId,
+        selectedGrade: demoGrade,
+        selectedClass: demoClassNum,
+        selectedTeacher: demoTeacherId,
+        selectedTeacherId: demoTeacherId,
+        selectedTeacherName: demoTeacherName,
+        cafeteriaNum: demoCafeteria,
+        isHomeroom: demoIsHomeroom,
+        isSetupComplete: true,
+      );
+      await storage.saveSettings(newSettings);
+    } else {
+      // 일반 모드에서는 이전 데모 방문으로 남은 가짜 토큰 및 데모 계정 자동 정리 (401/404 방지)
       final oldEmail = prefs.getString('bst_google_user_email') ?? prefs.getString('bst_user_email') ?? '';
       final oldToken = prefs.getString('bst_cld_access_token') ?? prefs.getString('bst_google_access_token') ?? prefs.getString('bst_token') ?? '';
       if (oldEmail.toLowerCase().contains('demo') || oldToken.startsWith('demo_token')) {
@@ -122,7 +178,7 @@ void main(List<String> args) async {
     final cachedToken = prefs.getString('bst_cld_access_token') ?? prefs.getString('bst_google_access_token') ?? prefs.getString('bst_token') ?? '';
     final cachedEmail = prefs.getString('bst_google_user_email') ?? prefs.getString('bst_user_email') ?? '';
 
-    if (params['auth'] == 'success' || params.containsKey('token') || params.containsKey('access_token') || params.containsKey('email') || cachedToken.isNotEmpty || cachedEmail.isNotEmpty) {
+    if (!AppConfig.isDemoMode && (params['auth'] == 'success' || params.containsKey('token') || params.containsKey('access_token') || params.containsKey('email') || cachedToken.isNotEmpty || cachedEmail.isNotEmpty)) {
       final email = params['email'] ?? cachedEmail;
       final token = params['token'] ?? params['access_token'] ?? cachedToken;
       String teacherName = params['teacherName'] ?? prefs.getString('bst_google_user_name') ?? prefs.getString('bst_user_name') ?? '';
@@ -220,6 +276,54 @@ void main(List<String> args) async {
       );
       await storage.saveSettings(newSettings);
     }
+  }
+
+  if (!kIsWeb && AppConfig.isDemoMode) {
+    const demoEmail = 'demo_teacher@boardest.bst';
+    const demoToken = 'demo_token_teacher';
+    const demoTeacherName = '데모교사';
+    const demoTeacherId = '1';
+    const demoSchoolId = '44134';
+    const demoSchoolName = '양동중학교';
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('bst_google_user_email', demoEmail);
+    await prefs.setString('bst_user_email', demoEmail);
+    await prefs.setString('bst_google_user_name', demoTeacherName);
+    await prefs.setString('bst_user_name', demoTeacherName);
+    await prefs.setString('bst_cld_access_token', demoToken);
+    await prefs.setString('bst_google_access_token', demoToken);
+    await prefs.setString('bst_school_name', demoSchoolName);
+
+    await CloudDriveService.instance.setSession(
+      accessToken: demoToken,
+      bstCldToken: demoToken,
+      refreshToken: '',
+      email: demoEmail,
+      name: demoTeacherName,
+      school: demoSchoolName,
+    );
+
+    final school = School(
+      id: 44134,
+      code: 44134,
+      name: demoSchoolName,
+      region: '서울',
+    );
+    final existing = await storage.getSettings();
+    final newSettings = existing.copyWith(
+      selectedSchool: school,
+      schoolId: demoSchoolId,
+      selectedGrade: 1,
+      selectedClass: 1,
+      selectedTeacher: demoTeacherId,
+      selectedTeacherId: demoTeacherId,
+      selectedTeacherName: demoTeacherName,
+      cafeteriaNum: '1',
+      isHomeroom: true,
+      isSetupComplete: true,
+    );
+    await storage.saveSettings(newSettings);
   }
 
   final settings = await storage.loadConfigAndSync();
