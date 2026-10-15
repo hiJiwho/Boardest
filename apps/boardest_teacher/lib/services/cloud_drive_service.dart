@@ -288,13 +288,19 @@ class CloudDriveService with ChangeNotifier {
   Future<void> init() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _accessToken = prefs.getString(_tokenKey);
-      _refreshToken = prefs.getString(_refreshTokenKey);
-      _userEmail = prefs.getString(_userEmailKey);
-      _userName = prefs.getString(_userNameKey);
-      _schoolName = prefs.getString(_schoolNameKey);
-      _boardestToken = prefs.getString(_boardestTokenKey);
-      _bstCldToken = prefs.getString(_bstCldTokenKey);
+      _accessToken = prefs.getString(_tokenKey) ?? prefs.getString('bst_google_access_token') ?? prefs.getString('bst_token');
+      _refreshToken = prefs.getString(_refreshTokenKey) ?? prefs.getString('bst_refresh_token');
+      _userEmail = prefs.getString(_userEmailKey) ?? prefs.getString('bst_user_email') ?? prefs.getString('email');
+      _userName = prefs.getString(_userNameKey) ?? prefs.getString('bst_user_name');
+      _schoolName = prefs.getString(_schoolNameKey) ?? prefs.getString('bst_school_name');
+      _boardestToken = prefs.getString(_boardestTokenKey) ?? prefs.getString('bst_token');
+      _bstCldToken = prefs.getString(_bstCldTokenKey) ?? prefs.getString('bst_cld_access_token');
+      _totpSecret = prefs.getString(_totpSecretKey) ?? prefs.getString('bst_totp_secret');
+      _shortId = prefs.getString(_shortIdKey) ?? prefs.getString('bst_short_id');
+
+      if (_userEmail != null && _userEmail!.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) {
+        AppConfig.isDemoMode = true;
+      }
 
       // Disk session recovery if SharedPreferences is empty
       if (!kIsWeb && (_accessToken == null || _accessToken!.isEmpty) && (_userEmail == null || _userEmail!.isEmpty)) {
@@ -840,8 +846,12 @@ class CloudDriveService with ChangeNotifier {
     }
   }
 
-  /// Google Access Token이 유효한지 사전 점검하고 401(만료)인 경우 자가 치유(Self-healing) 재발급
   Future<bool> ensureValidAccessToken() async {
+    if (AppConfig.isDemoMode ||
+        (_userEmail != null && _userEmail!.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) ||
+        (_accessToken != null && _accessToken!.startsWith('demo_token'))) {
+      return true;
+    }
     if (_accessToken == null || _accessToken!.isEmpty) {
       return await refreshAccessToken();
     }
@@ -876,6 +886,11 @@ class CloudDriveService with ChangeNotifier {
   }
 
   Future<bool> _executeRefreshAccessToken({bool force = false}) async {
+    if (AppConfig.isDemoMode ||
+        (_userEmail != null && _userEmail!.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) ||
+        (_accessToken != null && _accessToken!.startsWith('demo_token'))) {
+      return true;
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       _userEmail ??= prefs.getString(_userEmailKey) ?? prefs.getString('bst_user_email') ?? prefs.getString('email');
@@ -1728,11 +1743,17 @@ class CloudDriveService with ChangeNotifier {
     return created;
   }
 
-  /// Google Drive 'bst-textbookpro' 교과서Pro 프로젝트 전용 루트 폴더 ID 가져오기/생성
+  /// Google Drive 'bst-tbs' (또는 'bst-textbookpro') 교과서Pro 프로젝트 전용 루트 폴더 ID 가져오기/생성
   Future<String?> getOrCreateTextbookProFolder() async {
     if (!isLoggedIn) return null;
     if (_bstTextbookProFolderId != null && _bstTextbookProFolderId!.isNotEmpty) {
       return _bstTextbookProFolderId;
+    }
+
+    final existingTbs = await findFolderByName('bst-tbs', parentFolderId: 'appDataFolder', isAppData: true);
+    if (existingTbs != null) {
+      _bstTextbookProFolderId = existingTbs;
+      return existingTbs;
     }
 
     final existing = await findFolderByName('bst-textbookpro', parentFolderId: 'appDataFolder', isAppData: true);
@@ -1741,7 +1762,7 @@ class CloudDriveService with ChangeNotifier {
       return existing;
     }
 
-    final created = await createFolderInDrive('bst-textbookpro', parentFolderId: 'appDataFolder');
+    final created = await createFolderInDrive('bst-tbs', parentFolderId: 'appDataFolder');
     if (created != null) {
       _bstTextbookProFolderId = created;
     }
@@ -1768,16 +1789,73 @@ class CloudDriveService with ChangeNotifier {
     return created;
   }
 
-  /// bst-save 에 저장된 모든 수업 자료 리스트 조회 (폴더 및 메타데이터 제외)
+  /// 카테고리별 엄격 분리 폴더 조회:
+  /// 수업자료(전체, PDF, PPT, 한글 등) => bst-save
+  /// Canva => bst-canva
+  /// TBP => bst-tbs (또는 bst-textbookpro)
+  /// 판서 => bst-pen
+  Future<List<Map<String, dynamic>>> fetchMaterialsByCategory(String category, {String? targetFolderId}) async {
+    if (!isLoggedIn) return [];
+    final List<Map<String, dynamic>> merged = [];
+    final Set<String> seenIds = {};
+
+    try {
+      String? folderIdToQuery = targetFolderId;
+      String sourceLabel = '☁️ 교안';
+      String source = 'cloud';
+
+      if (folderIdToQuery == null) {
+        if (category == 'Canva') {
+          folderIdToQuery = await getOrCreateCanvaFolder();
+          sourceLabel = '🎨 Canva';
+          source = 'canva';
+        } else if (category == 'TBP') {
+          folderIdToQuery = await getOrCreateTextbookProFolder();
+          sourceLabel = '📐 TBP';
+          source = 'tbp';
+        } else if (category == '판서') {
+          folderIdToQuery = await getOrCreatePenFolder();
+          sourceLabel = '📝 판서';
+          source = 'pen';
+        } else {
+          // 수업자료 기본: bst-save
+          folderIdToQuery = await getOrCreateConnectFolder();
+          sourceLabel = '☁️ 수업자료';
+          source = 'cloud';
+        }
+      }
+
+      if (folderIdToQuery != null) {
+        final files = await fetchDriveFiles(folderId: folderIdToQuery, includeFolders: true);
+        for (final f in files) {
+          if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json') continue;
+          if (seenIds.add(f.id)) {
+            merged.add({
+              'file': f,
+              'source': source,
+              'sourceLabel': sourceLabel,
+              'folderId': folderIdToQuery,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[CloudDriveService] fetchMaterialsByCategory error: $e');
+    }
+
+    return merged;
+  }
+
+  /// bst-save, bst-canva, bst-textbookpro 에 저장된 모든 수업 자료 리스트 조회 (하위 호환용)
   Future<List<Map<String, dynamic>>> fetchMergedMaterials({String? targetFolderId}) async {
     if (!isLoggedIn) return [];
     final List<Map<String, dynamic>> merged = [];
     final Set<String> seenIds = {};
 
     try {
-      final folderId = targetFolderId ?? await getOrCreateConnectFolder();
-      if (folderId != null) {
-        final files = await fetchDriveFiles(folderId: folderId, includeFolders: true);
+      if (targetFolderId != null) {
+        // 특정 하위 폴더 탐색 시
+        final files = await fetchDriveFiles(folderId: targetFolderId, includeFolders: true);
         for (final f in files) {
           if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json') continue;
           if (seenIds.add(f.id)) {
@@ -1785,8 +1863,45 @@ class CloudDriveService with ChangeNotifier {
               'file': f,
               'source': 'cloud',
               'sourceLabel': '☁️ Cloud',
-              'folderId': folderId,
+              'folderId': targetFolderId,
             });
+          }
+        }
+      } else {
+        // 최상위 교안함: 기본 bst-save + bst-canva + bst-textbookpro 3대 전용 보관함 모두 병합 조회
+        final foldersToQuery = <({String id, String label, String src})>[];
+
+        final saveFolderId = await getOrCreateConnectFolder();
+        if (saveFolderId != null) {
+          foldersToQuery.add((id: saveFolderId, label: '☁️ 교안', src: 'cloud'));
+        }
+
+        final canvaFolderId = await getOrCreateCanvaFolder();
+        if (canvaFolderId != null && canvaFolderId != saveFolderId) {
+          foldersToQuery.add((id: canvaFolderId, label: '🎨 Canva', src: 'canva'));
+        }
+
+        final tbpFolderId = await getOrCreateTextbookProFolder();
+        if (tbpFolderId != null && tbpFolderId != saveFolderId) {
+          foldersToQuery.add((id: tbpFolderId, label: '📐 TBP', src: 'tbp'));
+        }
+
+        for (final folderInfo in foldersToQuery) {
+          try {
+            final files = await fetchDriveFiles(folderId: folderInfo.id, includeFolders: true);
+            for (final f in files) {
+              if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json') continue;
+              if (seenIds.add(f.id)) {
+                merged.add({
+                  'file': f,
+                  'source': folderInfo.src,
+                  'sourceLabel': folderInfo.label,
+                  'folderId': folderInfo.id,
+                });
+              }
+            }
+          } catch (fe) {
+            debugPrint('[CloudDriveService] fetch files error for ${folderInfo.label}: $fe');
           }
         }
       }
@@ -1797,7 +1912,7 @@ class CloudDriveService with ChangeNotifier {
     return merged;
   }
 
-  /// Canva 디자인을 .canva.bst 파일로 bst-save 에 등록
+  /// Canva 디자인을 .canva.bst 파일로 전용 bst-canva 폴더 및 bst-save 에 등록
   Future<bool> registerCanvaDesign({required String title, required String canvaUrl}) async {
     try {
       final regExp = RegExp(r'design/([A-Za-z0-9_-]+)');
@@ -1810,12 +1925,20 @@ class CloudDriveService with ChangeNotifier {
       final content = jsonEncode({
         'canvaId': canvaId,
         'title': safeTitle,
+        'url': canvaUrl.trim(),
         'created': DateTime.now().toIso8601String(),
       });
 
       final bytes = Uint8List.fromList(utf8.encode(content));
+      // 전용 bst-canva 폴더 우선 저장, 실패 시 bst-save 폴더 fallback
+      final canvaFolderId = await getOrCreateCanvaFolder();
       final saveFolderId = await getOrCreateConnectFolder();
-      final success = await uploadBytesToDrive(bytes, fileName, folderId: saveFolderId);
+      final targetFolder = canvaFolderId ?? saveFolderId;
+      final success = await uploadBytesToDrive(bytes, fileName, folderId: targetFolder);
+      if (canvaFolderId != null && saveFolderId != null && canvaFolderId != saveFolderId) {
+        // 기본 보관함에서도 찾을 수 있도록 미러링 저장
+        unawaited(uploadBytesToDrive(bytes, fileName, folderId: saveFolderId));
+      }
       return success;
     } catch (e) {
       debugPrint('[CloudDriveService] registerCanvaDesign error: $e');

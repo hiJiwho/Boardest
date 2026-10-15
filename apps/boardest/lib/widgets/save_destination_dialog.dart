@@ -2,7 +2,6 @@ import 'package:universal_io/io.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/bst_save_service.dart';
-import '../services/auth_service.dart';
 
 enum SaveTargetType { local, cloud, usb }
 

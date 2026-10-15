@@ -107,9 +107,14 @@ void main(List<String> args) async {
 
     final prefs = await SharedPreferences.getInstance();
 
-    // Query param based demo detection
+    // Query param & persistent email based demo detection
     final qDemo = params['Demo'] ?? params['demo'] ?? params['isDemo'];
-    if (qDemo?.toLowerCase() == 'yes' || qDemo?.toLowerCase() == 'true') {
+    final qEmail = params['email'] ?? '';
+    final existingSavedEmail = prefs.getString('bst_google_user_email') ?? prefs.getString('bst_user_email') ?? '';
+    if (qDemo?.toLowerCase() == 'yes' ||
+        qDemo?.toLowerCase() == 'true' ||
+        qEmail.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz') ||
+        existingSavedEmail.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) {
       AppConfig.isDemoMode = true;
     }
 
@@ -147,76 +152,90 @@ void main(List<String> args) async {
 
   // ─── 데모 및 일반 세션 동기화 (Web & Windows 공통) ───
   final prefs = await SharedPreferences.getInstance();
+  final currentEmailCheck = prefs.getString('bst_google_user_email') ?? prefs.getString('bst_user_email') ?? '';
+  if (currentEmailCheck.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) {
+    AppConfig.isDemoMode = true;
+  }
 
   if (AppConfig.isDemoMode) {
-    // 1. 데모 모드: 접속 기기 고유 ID 기반 8명 교사/학급 슬롯 배정 (8명까지 안 겹치고, 8명 넘으면 겹치게)
-    var deviceId = prefs.getString('bst_demo_device_uuid');
-    if (deviceId == null || deviceId.isEmpty) {
-      deviceId = 'bst_dev_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(9999)}';
-      await prefs.setString('bst_demo_device_uuid', deviceId);
-    }
-
-    int slot = 0;
-    try {
-      final nowMs = DateTime.now().millisecondsSinceEpoch;
-      // RTDB demo_active_devices 에 내 기기 상태 갱신
-      await http.put(
-        Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/demo_active_devices/$deviceId.json'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'lastSeen': nowMs}),
-      ).timeout(const Duration(seconds: 2));
-
-      // 전체 활성 기기 목록 조회 후 슬롯 번호 계산
-      final res = await http.get(
-        Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/demo_active_devices.json'),
-      ).timeout(const Duration(seconds: 2));
-
-      if (res.statusCode == 200 && res.body.isNotEmpty && res.body != 'null') {
-        final map = jsonDecode(res.body) as Map<String, dynamic>;
-        final activeIds = map.entries
-            .where((e) {
-              final val = e.value;
-              if (val is Map && val['lastSeen'] != null) {
-                return (nowMs - (val['lastSeen'] as num)) < 7200000; // 2시간 이내
-              }
-              return true;
-            })
-            .map((e) => e.key)
-            .toList()
-          ..sort();
-
-        final idx = activeIds.indexOf(deviceId);
-        slot = (idx != -1) ? idx : activeIds.length;
-      }
-    } catch (_) {
-      slot = deviceId.hashCode.abs();
-    }
-
-    // 8명까지는 안 겹치고, 8명 넘으면 겹치게 순환 할당 (% 8)
-    final teacherSlot = slot % 8;
-
+    // 1. 데모 모드: 9개 반(1-1~1-3, 2-1~2-3, 3-1~3-3) 및 9명 교사 완전 순환 배정
     final demoTeachers = [
-      (name: '김국어', subject: '국어', classNum: 1, shortId: '11'),
-      (name: '이수학', subject: '수학', classNum: 2, shortId: '12'),
-      (name: '박영어', subject: '영어', classNum: 3, shortId: '13'),
-      (name: '최과학', subject: '과학', classNum: 4, shortId: '14'),
-      (name: '정사회', subject: '사회', classNum: 5, shortId: '15'),
-      (name: '강역사', subject: '역사', classNum: 6, shortId: '16'),
-      (name: '송음악', subject: '음악', classNum: 7, shortId: '17'),
-      (name: '윤체육', subject: '체육', classNum: 8, shortId: '18'),
+      (name: '김국어', subject: '국어', grade: 1, classNum: 1, shortId: '11'),
+      (name: '이수학', subject: '수학', grade: 1, classNum: 2, shortId: '12'),
+      (name: '박영어', subject: '영어', grade: 1, classNum: 3, shortId: '13'),
+      (name: '최과학', subject: '과학', grade: 2, classNum: 1, shortId: '14'),
+      (name: '정사회', subject: '사회', grade: 2, classNum: 2, shortId: '15'),
+      (name: '강역사', subject: '역사', grade: 2, classNum: 3, shortId: '16'),
+      (name: '송음악', subject: '음악', grade: 3, classNum: 1, shortId: '17'),
+      (name: '윤체육', subject: '체육', grade: 3, classNum: 2, shortId: '18'),
+      (name: '조미술', subject: '미술', grade: 3, classNum: 3, shortId: '19'),
     ];
 
+    int teacherSlot = 0;
+    // 특정 데모 계정(01, 02 등) 우선 매핑
+    final activeEmail = currentEmailCheck.toLowerCase();
+    if (activeEmail.startsWith('01@') || activeEmail.contains('teacher-demo.753210.xyz') && activeEmail.startsWith('01')) {
+      teacherSlot = 0; // 김국어 (1-1 담임)
+    } else if (activeEmail.startsWith('02@') || activeEmail.contains('teacher-demo.753210.xyz') && activeEmail.startsWith('02')) {
+      teacherSlot = 1; // 이수학 (1-2 담임)
+    } else {
+      var deviceId = prefs.getString('bst_demo_device_uuid');
+      if (deviceId == null || deviceId.isEmpty) {
+        deviceId = 'bst_dev_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(9999)}';
+        await prefs.setString('bst_demo_device_uuid', deviceId);
+      }
+
+      int slot = 0;
+      try {
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        await http.put(
+          Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/demo_active_devices/$deviceId.json'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'lastSeen': nowMs}),
+        ).timeout(const Duration(seconds: 2));
+
+        final res = await http.get(
+          Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/demo_active_devices.json'),
+        ).timeout(const Duration(seconds: 2));
+
+        if (res.statusCode == 200 && res.body.isNotEmpty && res.body != 'null') {
+          final map = jsonDecode(res.body) as Map<String, dynamic>;
+          final activeIds = map.entries
+              .where((e) {
+                final val = e.value;
+                if (val is Map && val['lastSeen'] != null) {
+                  return (nowMs - (val['lastSeen'] as num)) < 7200000;
+                }
+                return true;
+              })
+              .map((e) => e.key)
+              .toList()
+            ..sort();
+
+          final idx = activeIds.indexOf(deviceId);
+          slot = (idx != -1) ? idx : activeIds.length;
+        }
+      } catch (_) {
+        slot = deviceId.hashCode.abs();
+      }
+
+      // 9명까지는 안 겹치고, 9명 넘으면 순환
+      teacherSlot = slot % 9;
+    }
+
     final assigned = demoTeachers[teacherSlot];
-    final demoEmail = 'demo_${assigned.shortId}@boardest.com';
+    final demoEmail = activeEmail.endsWith('boardest-teacher-demo.753210.xyz')
+        ? activeEmail
+        : '${assigned.shortId == '11' ? '01' : (assigned.shortId == '12' ? '02' : assigned.shortId)}@boardest-teacher-demo.753210.xyz';
     final demoTeacherName = assigned.name;
     final demoTeacherId = assigned.name;
     final demoShortId = assigned.shortId;
+    final demoGrade = assigned.grade;
     final demoClassNum = assigned.classNum;
     final demoTotpSecret = TotpService.generateDeterministicSecret(demoEmail);
     final demoToken = 'demo_token_teacher_${assigned.shortId}';
     const demoSchoolId = 'demo';
     const demoSchoolName = '데모 중학교';
-    final demoGrade = 1;
     const demoIsHomeroom = true;
     const demoCafeteria = '1';
 
@@ -269,13 +288,15 @@ void main(List<String> args) async {
     final savedName = prefs.getString('bst_google_user_name') ?? prefs.getString('bst_user_name') ?? '';
     final savedSchool = prefs.getString('bst_school_name') ?? '';
 
-    final isDemoArtifact = savedEmail.toLowerCase().contains('demo') ||
-        savedToken.startsWith('demo_token') ||
-        savedName.contains('데모') ||
-        savedSchool.contains('데모');
+    final isExplicitDemoEmail = savedEmail.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz');
+    final isLegacyDemoArtifact = !isExplicitDemoEmail && (
+        (savedEmail.startsWith('demo_') && savedEmail.endsWith('@boardest.com')) ||
+        (savedToken.startsWith('demo_token_') && !isExplicitDemoEmail) ||
+        (savedSchool.contains('데모') && !isExplicitDemoEmail && !savedEmail.contains('@'))
+    );
 
-    if (isDemoArtifact) {
-      debugPrint('[main.dart] 🧹 Wiping legacy demo session from disk & prefs...');
+    if (isLegacyDemoArtifact) {
+      debugPrint('[main.dart] 🧹 Wiping legacy dummy demo session from disk & prefs...');
       await prefs.remove('bst_cld_access_token');
       await prefs.remove('bst_google_access_token');
       await prefs.remove('bst_token');
@@ -297,6 +318,21 @@ void main(List<String> args) async {
           if (await f2.exists()) await f2.delete();
         } catch (_) {}
       }
+    } else if (savedEmail.isNotEmpty || savedToken.isNotEmpty) {
+      // 일반 및 정식 계정 세션 자동 복원 (새로고침 및 재시작 시 로그인 유지)
+      final savedTotp = prefs.getString('bst_totp_secret_key') ?? prefs.getString('bst_totp_secret');
+      final savedShortId = prefs.getString('bst_teacher_short_id');
+      final savedRefresh = prefs.getString('bst_cld_refresh_token') ?? prefs.getString('bst_refresh_token');
+      await CloudDriveService.instance.setSession(
+        accessToken: savedToken,
+        bstCldToken: savedToken,
+        refreshToken: savedRefresh,
+        email: savedEmail,
+        name: savedName,
+        school: savedSchool,
+        totpSecret: savedTotp,
+        shortId: savedShortId,
+      );
     }
 
     // 3. hijiwho@gmail.com 및 hi.jiwho@gmail.com 정식 회원 자동 복원

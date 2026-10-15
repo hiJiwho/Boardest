@@ -114,41 +114,43 @@ class _MessageViewState extends State<MessageView> {
                   docId.toLowerCase().contains('special');
               if (isLite) return;
 
+              // 학교 소속 필터링 (다른 학교 교실 철저 제외)
               final docSchoolCode = (val['schoolCode']?.toString() ?? '').toLowerCase();
               final docSchoolName = (val['schoolName']?.toString() ?? '').toLowerCase();
               final schoolCode = (_settings?.selectedSchool?.code?.toString() ?? '').toLowerCase();
               final schoolId = (_settings?.schoolId ?? '').trim().toLowerCase();
               final schoolName = (_settings?.selectedSchool?.name ?? '').toLowerCase();
 
-              bool isMatch = docId.toLowerCase().startsWith(connName);
-              if (!isMatch && schoolCode.isNotEmpty) {
-                isMatch = docId.toLowerCase().startsWith(schoolCode) || docSchoolCode == schoolCode;
+              bool isMatch = false;
+              if (schoolCode.isNotEmpty) {
+                isMatch = docSchoolCode == schoolCode || docId.toLowerCase().startsWith('${schoolCode}_');
               }
               if (!isMatch && schoolId.isNotEmpty) {
-                isMatch = docId.toLowerCase().startsWith(schoolId) || docSchoolCode == schoolId;
+                isMatch = docSchoolCode == schoolId || docId.toLowerCase().startsWith('${schoolId}_');
               }
               if (!isMatch && schoolName.isNotEmpty && docSchoolName.isNotEmpty) {
-                isMatch = docSchoolName.contains(schoolName) || schoolName.contains(docSchoolName);
+                isMatch = docSchoolName == schoolName;
               }
-              if (!isMatch) return;
+              if (!isMatch && connName.isNotEmpty) {
+                isMatch = docId.toLowerCase().startsWith('${connName}_');
+              }
+              if (!isMatch) return; // 다른 학교 교실 제외
 
-              // ★ 실시간 온라인 기준: 최근 15분 이내 하트비트 또는 isOnline=true 인정
+              // 온라인 여부 확인: isOnline=true 및 최근 5분 이내 하트비트 필수
+              if (val['isOnline'] != true) return;
               final lastActiveVal = val['lastActive'];
-              bool isOnline = val['isOnline'] == true;
               if (lastActiveVal != null) {
                 if (lastActiveVal is num) {
                   final diffSec = (nowMs - lastActiveVal.toInt()).abs() / 1000;
-                  if (diffSec <= 900) isOnline = true;
+                  if (diffSec > 300) return; // 5분 이상 핑 없으면 오프라인 간주
                 } else {
                   try {
                     final dt = DateTime.parse(lastActiveVal.toString()).toUtc();
                     final diffSec = nowUtc.difference(dt).inSeconds.abs();
-                    if (diffSec <= 900) isOnline = true;
+                    if (diffSec > 300) return;
                   } catch (_) {}
                 }
               }
-
-              if (!isOnline) return; // 온라인 학급만 쪽지 수신 대상에 노출
 
               final grade = int.tryParse(val['grade']?.toString() ?? '') ?? 0;
               final cls = int.tryParse(val['classNum']?.toString() ?? val['class']?.toString() ?? '') ?? 0;
@@ -161,6 +163,7 @@ class _MessageViewState extends State<MessageView> {
                 'class': cls,
                 'nickname': nickname,
                 'isOnline': true,
+                'lastActive': val['lastActive']?.toString() ?? '',
               });
             });
           }
@@ -169,33 +172,35 @@ class _MessageViewState extends State<MessageView> {
 
       // RTDB 결과만 사용 (Cloudflare Worker 및 Firestore 100건 폴백 제거로 0 Firestore Reads 달성)
 
-      if (parsed.isEmpty) {
-        for (int g = 1; g <= 3; g++) {
-          for (int c = 1; c <= 4; c++) {
-            final docId = '${connName}_1_${g}_$c';
-            parsed.add({
-              'docId': docId,
-              'cafeteria': '1',
-              'grade': g,
-              'class': c,
-              'nickname': '$g학년 $c반',
-              'isOnline': false,
-            });
+      // 동일 학급(2학년 1반 등) 중복 접속 시 최신 1개만 단일 병합 (중복 제거)
+      final Map<String, Map<String, dynamic>> dedupMap = {};
+      for (final c in parsed) {
+        final key = '${c['grade']}-${c['class']}';
+        if (!dedupMap.containsKey(key)) {
+          dedupMap[key] = c;
+        } else {
+          final existingActive = dedupMap[key]!['lastActive']?.toString() ?? '';
+          final newActive = c['lastActive']?.toString() ?? '';
+          if (newActive.compareTo(existingActive) > 0) {
+            dedupMap[key] = c;
           }
         }
       }
 
-      parsed.sort((a, b) {
-        if (a['grade'] != b['grade']) return (a['grade'] as int).compareTo(b['grade'] as int);
-        return (a['class'] as int).compareTo(b['class'] as int);
-      });
+      final deduplicatedList = dedupMap.values.toList()
+        ..sort((a, b) {
+          if (a['grade'] != b['grade']) return (a['grade'] as int).compareTo(b['grade'] as int);
+          return (a['class'] as int).compareTo(b['class'] as int);
+        });
 
       if (mounted) {
         setState(() {
-          _onlineClassrooms = parsed;
+          _onlineClassrooms = deduplicatedList;
+          final validDocIds = deduplicatedList.map((c) => c['docId'] as String).toSet();
+          _selectedOnlineDocIds.removeWhere((id) => !validDocIds.contains(id));
           if (_selectAllOnline || _selectedOnlineDocIds.isEmpty) {
             _selectedOnlineDocIds.clear();
-            _selectedOnlineDocIds.addAll(parsed.map((c) => c['docId'] as String));
+            _selectedOnlineDocIds.addAll(validDocIds);
           }
         });
       }

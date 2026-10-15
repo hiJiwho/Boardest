@@ -173,16 +173,35 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   int _onlineStatusCounter = 0;
   BoardestUser? _currentUser;
   Timer? _cloudAutoLogoutTimer;
+  Timer? _cloudSessionKeepAliveTimer;
   bool _isReloading = false;
 
-  void _scheduleCloudAutoLogout() {
-    if (_cloudAutoLogoutTimer != null && _cloudAutoLogoutTimer!.isActive) return;
+  /// 클라우드 탈출(급식으로 토글 / 닫기) 시 3분 뒤 자동 로그아웃 예약
+  void _scheduleCloudEscapeAutoLogout() {
+    _cloudAutoLogoutTimer?.cancel();
     _cloudAutoLogoutTimer = Timer(const Duration(minutes: 3), () {
       if (mounted && BstCloudService.instance.activeToken != null) {
         setState(() {
           BstCloudService.instance.activeToken = null;
         });
-        debugPrint('[Dashboard] 🔒 수업 종료 3분이 경과하여 Cloud 세션이 자동으로 안전하게 로그아웃되었습니다.');
+        debugPrint('[Dashboard] 🔒 클라우드 탈출(급식 보기) 3분이 경과하여 Cloud 세션이 자동으로 안전하게 로그아웃되었습니다.');
+      }
+    });
+  }
+
+  void _cancelCloudEscapeAutoLogout() {
+    _cloudAutoLogoutTimer?.cancel();
+  }
+
+  /// 클라우드 로그인 시 최소 1시간(60분) 세션 유지 보장
+  void _startCloudSessionTimer() {
+    _cloudSessionKeepAliveTimer?.cancel();
+    _cloudSessionKeepAliveTimer = Timer(const Duration(hours: 1), () {
+      if (mounted && BstCloudService.instance.activeToken != null) {
+        setState(() {
+          BstCloudService.instance.activeToken = null;
+        });
+        debugPrint('[Dashboard] 🔒 세션 유지 시간(1시간)이 만료되어 Cloud 세션이 안전하게 로그아웃되었습니다.');
       }
     });
   }
@@ -2817,9 +2836,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
         if (active.isClass) {
           _countdownTarget = '${active.label} 종료까지';
-          _cloudAutoLogoutTimer?.cancel();
-        } else {
-          _scheduleCloudAutoLogout();
         }
 
         if (active.isClass) {
@@ -5193,10 +5209,12 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       ddayLabel = '$ddayNum ${activeDday.title}';
     }
 
+    final effectiveDpiScale = AppPaths.adaptiveUiScale(context, _settings.scaleFactor);
+
     final dashboardScaffold = MediaQuery(
       data: MediaQuery.of(
         context,
-      ).copyWith(textScaler: const TextScaler.linear(1.0)),
+      ).copyWith(textScaler: TextScaler.linear(effectiveDpiScale.clamp(0.7, 2.0))),
       child: Scaffold(
         backgroundColor: const Color(0xFF06100E),
         body: Stack(
@@ -5233,6 +5251,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
             SafeArea(
               child: BstClassMainLayout(
+                scaleFactor: effectiveDpiScale,
                 appName: kIsWeb
                     ? (_settings.specialClassroomMode ? 'Class Teacher' : 'Class')
                     : (_settings.specialClassroomMode ? 'Teacher PRO' : 'Class PRO'),
@@ -5241,7 +5260,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 isSpecialRoom: _settings.specialClassroomMode,
                 specialSubjectName: _settings.selectedSubject.isNotEmpty ? _settings.selectedSubject : null,
                 showCloudFiles: !_hideCloudPanel,
-                cloudFilesWidget: _buildInlineCloudDockPanel(_settings.scaleFactor),
+                cloudFilesWidget: _buildInlineCloudDockPanel(effectiveDpiScale),
                 periods: todayLessons.map((l) => TimetablePeriodItem(
                   period: l.classTime,
                   subject: l.subject,
@@ -5330,7 +5349,20 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 onMealVote: _handleDishVote,
                 onShowVoteBreakdown: _showDishVotesBreakdown,
                 isCloudActive: BstCloudService.instance.activeToken != null,
-                onCloudToggle: _openCloudPairingModal,
+                onCloudToggle: () {
+                  if (BstCloudService.instance.activeToken != null) {
+                    setState(() {
+                      _hideCloudPanel = !_hideCloudPanel;
+                    });
+                    if (_hideCloudPanel) {
+                      _scheduleCloudEscapeAutoLogout();
+                    } else {
+                      _cancelCloudEscapeAutoLogout();
+                    }
+                  } else {
+                    _openCloudPairingModal();
+                  }
+                },
                 isPro: !kIsWeb,
                 isWindows: !kIsWeb && Platform.isWindows,
                 onToolTap: (tool) {
@@ -5366,15 +5398,14 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       break;
                   }
                 },
+                customSlots: _getProCustomSlots(),
+                onLaunchApp: (slot) => _launchSystemApp(
+                  SystemApp(name: slot.name, appId: slot.id, iconPath: slot.iconPath),
+                ),
+                onRemoveApp: (customIdx) => _removeAppFromSlot(_getProSlotIndex(customIdx)),
+                onAddAppToSlot: (customIdx) => _openAppSelectorForSlot(_getProSlotIndex(customIdx)),
                 onAddAppTap: () {
-                  int targetSlot = 0;
-                  final slots = _settings.launcherSlots;
-                  for (int i = 0; i < slots.length; i++) {
-                    if (slots[i].type == LauncherSlotType.empty) {
-                      targetSlot = i;
-                      break;
-                    }
-                  }
+                  final targetSlot = _getNextAvailableProSlotIndex();
                   _openAppSelectorForSlot(targetSlot);
                 },
                 onMinimizeTap: () async {
@@ -10450,7 +10481,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      '수업 종료 3분 뒤 자동 로그아웃',
+                      '급식 전환 시 3분 뒤 자동 로그아웃 (세션 1시간 유지)',
                       style: GoogleFonts.notoSansKr(
                         color: Colors.white54,
                         fontSize: 9.5 * scale,
@@ -10459,6 +10490,43 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   ],
                 ),
               ),
+              // 급식 전환 버튼 (Cloud ↔ 급식 토글)
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _hideCloudPanel = true;
+                  });
+                  _scheduleCloudEscapeAutoLogout();
+                },
+                borderRadius: BorderRadius.circular(6 * scale),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 7 * scale, vertical: 3.5 * scale),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(6 * scale),
+                    border: Border.all(
+                      color: const Color(0xFF10B981),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.restaurant_rounded, size: 11 * scale, color: const Color(0xFF10B981)),
+                      SizedBox(width: 4 * scale),
+                      Text(
+                        '급식 보기',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 9.5 * scale,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF10B981),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(width: 6 * scale),
               // 신뢰기기 자동 로그인 등록 버튼
               InkWell(
                 onTap: () async {
@@ -10520,13 +10588,14 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               SizedBox(width: 6 * scale),
               IconButton(
                 icon: Icon(Icons.close_rounded, color: Colors.white70, size: 16 * scale),
-                tooltip: 'Cloud 패널 닫기 (로그인 유지)',
+                tooltip: 'Cloud 패널 닫기 (급식 전환, 3분 뒤 자동 로그아웃)',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 onPressed: () {
                   setState(() {
                     _hideCloudPanel = true;
                   });
+                  _scheduleCloudEscapeAutoLogout();
                 },
               ),
               SizedBox(width: 6 * scale),
@@ -13492,15 +13561,154 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
-  void _openAppSelectorForSlot(int slotIndex) async {
+  List<ScannedApp>? _dashboardScannedApps;
+
+  List<LauncherSlot> _getProCustomSlots() {
+    final slots = _settings.launcherSlots;
+    final List<LauncherSlot> result = [];
+    for (int i = 14; i <= 17; i++) {
+      if (i < slots.length &&
+          slots[i].type == LauncherSlotType.systemApp &&
+          slots[i].name.isNotEmpty) {
+        result.add(slots[i]);
+      }
+    }
+    if (result.isEmpty) {
+      for (final s in slots) {
+        if (s.type == LauncherSlotType.systemApp && s.name.isNotEmpty) {
+          result.add(s);
+          if (result.length >= 4) break;
+        }
+      }
+    }
+    return result;
+  }
+
+  int _getProSlotIndex(int customIdx) {
+    final slots = _settings.launcherSlots;
+    int foundCount = 0;
+    for (int i = 14; i <= 17; i++) {
+      if (i < slots.length &&
+          slots[i].type == LauncherSlotType.systemApp &&
+          slots[i].name.isNotEmpty) {
+        if (foundCount == customIdx) return i;
+        foundCount++;
+      }
+    }
+    return (14 + customIdx).clamp(14, 18);
+  }
+
+  int _getNextAvailableProSlotIndex() {
+    final slots = _settings.launcherSlots;
+    for (int i = 14; i <= 17; i++) {
+      if (i >= slots.length ||
+          slots[i].type == LauncherSlotType.empty ||
+          slots[i].name.isEmpty) {
+        return i;
+      }
+    }
+    return 14;
+  }
+
+  void _showAddUrlAppDialog(int slotIndex) {
+    final titleCtrl = TextEditingController();
+    final urlCtrl = TextEditingController(text: 'https://');
     final scale = _settings.scaleFactor;
 
-    // Get the cached/scanned apps
-    final apps = SystemAppScanner.externalAppsOnly(
-      await SystemAppScanner.scanInstalledApps(),
-    );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F0E17),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: Color(0xFF38BDF8), width: 1.5),
+        ),
+        title: Text(
+          '🌐 웹 바로가기 추가',
+          style: GoogleFonts.notoSansKr(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 16 * scale,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: '바로가기 이름 (예: Canva, EBS, 유튜브)',
+                labelStyle: TextStyle(color: Colors.white54),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white24),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: urlCtrl,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: '웹 주소 (URL)',
+                labelStyle: TextStyle(color: Colors.white54),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white24),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('취소', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF38BDF8),
+            ),
+            onPressed: () async {
+              final name = titleCtrl.text.trim();
+              var url = urlCtrl.text.trim();
+              if (name.isEmpty || url.isEmpty) return;
+              if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://$url';
+              }
 
-    if (!mounted) return;
+              final updatedSlots = List<LauncherSlot>.from(_settings.launcherSlots);
+              while (updatedSlots.length <= slotIndex) {
+                updatedSlots.add(LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''));
+              }
+              updatedSlots[slotIndex] = LauncherSlot(
+                type: LauncherSlotType.systemApp,
+                name: name,
+                id: url,
+                iconPath: null,
+              );
+              final newSettings = _settings.copyWith(launcherSlots: updatedSlots);
+              await _storageService.saveSettings(newSettings);
+              setState(() {
+                _settings = newSettings;
+              });
+
+              if (ctx.mounted) Navigator.of(ctx).pop();
+              if (mounted) Navigator.of(context).pop();
+            },
+            child: const Text(
+              '등록',
+              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openAppSelectorForSlot(int slotIndex) {
+    final scale = _settings.scaleFactor;
+    bool isLoading = _dashboardScannedApps == null;
+    List<ScannedApp> apps = _dashboardScannedApps ?? [];
 
     showDialog(
       context: context,
@@ -13508,6 +13716,24 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         String searchQuery = '';
         return StatefulBuilder(
           builder: (context, setStateDialog) {
+            if (isLoading) {
+              SystemAppScanner.scanInstalledApps().then((scanned) {
+                if (context.mounted) {
+                  setStateDialog(() {
+                    apps = SystemAppScanner.externalAppsOnly(scanned);
+                    _dashboardScannedApps = apps;
+                    isLoading = false;
+                  });
+                }
+              }).catchError((_) {
+                if (context.mounted) {
+                  setStateDialog(() {
+                    isLoading = false;
+                  });
+                }
+              });
+            }
+
             final filteredApps = apps.where((app) {
               return app.name.toLowerCase().contains(
                     searchQuery.toLowerCase(),
@@ -13607,16 +13833,44 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       SizedBox(height: 16 * scale),
                       // System apps list
                       Expanded(
-                        child: filteredApps.isEmpty
+                        child: isLoading
                             ? Center(
-                                child: Text(
-                                  '검색 결과가 없습니다.',
-                                  style: GoogleFonts.notoSansKr(
-                                    color: Colors.white30,
-                                    fontSize: 13 * scale,
-                                  ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const SizedBox(
+                                      width: 28,
+                                      height: 28,
+                                      child: CircularProgressIndicator(
+                                        color: Color(0xFF00F5D4),
+                                        strokeWidth: 2.5,
+                                      ),
+                                    ),
+                                    SizedBox(height: 14 * scale),
+                                    Text(
+                                      '설치된 앱을 불러오는 중입니다...',
+                                      style: GoogleFonts.notoSansKr(
+                                        color: Colors.white70,
+                                        fontSize: 12.5 * scale,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               )
+                            : filteredApps.isEmpty
+                                ? Center(
+                                    child: Text(
+                                      searchQuery.isEmpty
+                                          ? (kIsWeb
+                                              ? '웹 브라우저에서는 하단의 "웹 주소(URL) 추가"를 이용해 주세요.'
+                                              : '검색된 외부 앱이 없습니다.')
+                                          : '검색 결과가 없습니다.',
+                                      style: GoogleFonts.notoSansKr(
+                                        color: Colors.white30,
+                                        fontSize: 13 * scale,
+                                      ),
+                                    ),
+                                  )
                             : ListView.separated(
                                 physics: const BouncingScrollPhysics(),
                                 itemCount: filteredApps.length,
@@ -13764,6 +14018,24 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   16 * scale,
                 ),
                 actions: [
+                  TextButton.icon(
+                    onPressed: () {
+                      _showAddUrlAppDialog(slotIndex);
+                    },
+                    icon: const Icon(
+                      Icons.link_rounded,
+                      color: Color(0xFF38BDF8),
+                      size: 16,
+                    ),
+                    label: Text(
+                      '웹 주소(URL) 추가',
+                      style: GoogleFonts.notoSansKr(
+                        color: const Color(0xFF38BDF8),
+                        fontSize: 12 * scale,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                   if (!kIsWeb)
                     TextButton.icon(
                       onPressed: () async {
@@ -13971,8 +14243,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       teacher = lesson.teacher;
       subject = lesson.subject;
       targetPath = await BoardStorageService.instance.resolveBoardPathForLesson(
-        teacher: teacher,
-        subject: subject,
+        teacher: lesson.teacher,
+        subject: lesson.subject,
         isCloud: false,
       );
     } else {

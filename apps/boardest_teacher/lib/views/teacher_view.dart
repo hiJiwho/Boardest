@@ -85,6 +85,8 @@ Future<List<Map<String, dynamic>>> _fetchOnlineClassrooms([String? schoolCode]) 
           final docId = key.toString();
           if (!docId.toLowerCase().startsWith(code) && code != 'school') return;
 
+          if (val['isOnline'] != true) return;
+
           final lastActive = val['lastActive'];
           int? lastActiveMs;
           if (lastActive is int) {
@@ -97,7 +99,7 @@ Future<List<Map<String, dynamic>>> _fetchOnlineClassrooms([String? schoolCode]) 
 
           final dt = DateTime.fromMillisecondsSinceEpoch(lastActiveMs, isUtc: true);
           final diffMinutes = now.difference(dt).inMinutes.abs();
-          if (diffMinutes <= 10) {
+          if (diffMinutes <= 5) {
             final nickname = val['classNickname']?.toString() ?? val['nickname']?.toString() ?? docId;
             final m = {
               'docId': docId,
@@ -360,8 +362,15 @@ class _TeacherViewState extends State<TeacherView> {
           _settings = s;
         });
         _refreshDriveFiles();
-        if (AppConfig.isDemoMode || _settings.schoolId.toLowerCase() == 'demo' || _settings.selectedTeacher.contains('데모')) {
-          final demoResult = TimetableResult.generateDemo(_settings.selectedTeacher.isNotEmpty ? _settings.selectedTeacher : '김교사');
+        final curTeacher = _settings.selectedTeacherName.isNotEmpty
+            ? _settings.selectedTeacherName
+            : (_settings.selectedTeacher.isNotEmpty ? _settings.selectedTeacher : '김국어');
+        final isDemo = AppConfig.isDemoMode ||
+            _settings.schoolId.toLowerCase() == 'demo' ||
+            _settings.selectedTeacher.contains('데모') ||
+            (CloudDriveService.instance.userEmail?.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz') ?? false);
+        if (isDemo) {
+          final demoResult = TimetableResult.generateDemo(curTeacher);
           if (mounted) {
             setState(() {
               _timetableResult = demoResult;
@@ -425,8 +434,15 @@ class _TeacherViewState extends State<TeacherView> {
         await _storageService.saveSettings(_settings);
       }
 
-      if (AppConfig.isDemoMode || _settings.schoolId.toLowerCase() == 'demo' || _settings.selectedTeacher.contains('데모')) {
-        final demoResult = TimetableResult.generateDemo(_settings.selectedTeacher.isNotEmpty ? _settings.selectedTeacher : '김보데');
+      final curTeacher = _settings.selectedTeacherName.isNotEmpty
+          ? _settings.selectedTeacherName
+          : (_settings.selectedTeacher.isNotEmpty ? _settings.selectedTeacher : '김국어');
+      final isDemo = AppConfig.isDemoMode ||
+          _settings.schoolId.toLowerCase() == 'demo' ||
+          _settings.selectedTeacher.contains('데모') ||
+          (CloudDriveService.instance.userEmail?.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz') ?? false);
+      if (isDemo) {
+        final demoResult = TimetableResult.generateDemo(curTeacher);
         if (mounted) {
           setState(() {
             _timetableResult = demoResult;
@@ -2650,6 +2666,7 @@ class _TeacherViewState extends State<TeacherView> {
                                 ? _settings.selectedTeacherName
                                 : (_settings.selectedTeacher.isNotEmpty ? _settings.selectedTeacher : '선생님'),
                             homeroomClass: '${_settings.selectedGrade}학년 ${_settings.selectedClass}반',
+                            isHomeroom: _settings.isHomeroom,
                             hasPasskey: true,
                         onRegisterPasskey: _openPasskeyQrDialog,
                         currentTab: _currentTeacherTab,
@@ -2662,7 +2679,9 @@ class _TeacherViewState extends State<TeacherView> {
                         },
                         activeContent: _buildTeacherActiveContent(scale),
                         teacherTimetableWidget: _buildWeeklyGridTable(scale, isHomeroom: false, inline: true),
-                        homeroomTimetableWidget: _buildWeeklyGridTable(scale, isHomeroom: true, inline: true),
+                        homeroomTimetableWidget: _settings.isHomeroom
+                            ? _buildWeeklyGridTable(scale, isHomeroom: true, inline: true)
+                            : null,
                         currentOtp: _currentOtp,
                         remainingOtpSeconds: _remainingSeconds,
                         onOpenPopups: () {
@@ -2879,10 +2898,7 @@ class _TeacherViewState extends State<TeacherView> {
 
     const totalPeriods = 7;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _openWeeklyTimetablePopup(false),
-      child: Container(
+    return Container(
         decoration: BoxDecoration(
           color: _surfaceColor,
           borderRadius: BorderRadius.circular(20 * s),
@@ -2922,33 +2938,6 @@ class _TeacherViewState extends State<TeacherView> {
                             fontSize: 12 * s,
                             fontWeight: FontWeight.bold,
                           ),
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => _openWeeklyTimetablePopup(false),
-                        icon: const Icon(
-                          Icons.grid_on_rounded,
-                          size: 12,
-                          color: Color(0xFF2EC4B6),
-                        ),
-                        label: Text(
-                          '주간',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 10 * s,
-                            color: Color(0xFF2EC4B6),
-                          ),
-                        ),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 8 * s,
-                            vertical: 4 * s,
-                          ),
-                          backgroundColor: const Color(0xFF2EC4B6).withOpacity(0.08),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                       ),
                     ],
@@ -3053,8 +3042,7 @@ class _TeacherViewState extends State<TeacherView> {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 
   // ── Drive Files State ────────────────────────────────
@@ -3074,7 +3062,8 @@ class _TeacherViewState extends State<TeacherView> {
       }
       if (_cloudCategoryFilter == 'PDF' && !name.endsWith('.pdf')) return false;
       if (_cloudCategoryFilter == '한글' && !name.endsWith('.hwp') && !name.endsWith('.hwpx')) return false;
-      if (_cloudCategoryFilter == 'Canva' && !name.endsWith('.canva.bst') && !name.endsWith('.canva')) return false;
+      if (_cloudCategoryFilter == 'Canva' && !name.endsWith('.canva.bst') && !name.endsWith('.canva') && !name.endsWith('.bstcanva')) return false;
+      if (_cloudCategoryFilter == 'TBP' && !name.endsWith('.tbp') && !name.endsWith('.bsttbp')) return false;
       if (_cloudCategoryFilter == 'PPT' && !name.endsWith('.ppt') && !name.endsWith('.pptx')) return false;
       if (_cloudCategoryFilter == '판서' && !name.endsWith('.pen') && !name.endsWith('.iwb')) return false;
       return true;
@@ -3086,21 +3075,34 @@ class _TeacherViewState extends State<TeacherView> {
     if (mounted) {
       setState(() {
         _isLoadingDriveFiles = true;
+        String defaultFolderName = 'bst-save';
+        if (_cloudCategoryFilter == 'Canva') {
+          defaultFolderName = 'bst-canva';
+        } else if (_cloudCategoryFilter == 'TBP') {
+          defaultFolderName = 'bst-tbs';
+        } else if (_cloudCategoryFilter == '판서') {
+          defaultFolderName = 'bst-pen';
+        }
+
         if (resetToRoot) {
           _currentDriveFolderId = null;
-          _currentDriveFolderName = '최상위 교안함';
+          _currentDriveFolderName = defaultFolderName;
           _driveFolderNavStack.clear();
         } else {
           _currentDriveFolderId = folderId;
-          if (folderName != null) _currentDriveFolderName = folderName;
-          if (folderId == null && folderName == null) {
-            _currentDriveFolderName = '최상위 교안함';
+          if (folderName != null) {
+            _currentDriveFolderName = folderName;
+          } else if (folderId == null) {
+            _currentDriveFolderName = defaultFolderName;
           }
         }
       });
     }
     try {
-      final mergedList = await CloudDriveService.instance.fetchMergedMaterials(targetFolderId: _currentDriveFolderId);
+      final mergedList = await CloudDriveService.instance.fetchMaterialsByCategory(
+        _cloudCategoryFilter,
+        targetFolderId: _currentDriveFolderId,
+      );
       final list = mergedList.map((item) {
         final f = item['file'] as CloudDriveFile;
         return {
@@ -3644,10 +3646,7 @@ class _TeacherViewState extends State<TeacherView> {
 
     const totalPeriods = 7;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _openWeeklyTimetablePopup(true),
-      child: Container(
+    return Container(
         decoration: BoxDecoration(
           color: _surfaceColor,
           borderRadius: BorderRadius.circular(20 * s),
@@ -3687,33 +3686,6 @@ class _TeacherViewState extends State<TeacherView> {
                             fontSize: 12 * s,
                             fontWeight: FontWeight.bold,
                           ),
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => _openWeeklyTimetablePopup(true),
-                        icon: const Icon(
-                          Icons.grid_on_rounded,
-                          size: 12,
-                          color: Color(0xFF7F5AF0),
-                        ),
-                        label: Text(
-                          '주간',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 10 * s,
-                            color: const Color(0xFF7F5AF0),
-                          ),
-                        ),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 8 * s,
-                            vertical: 4 * s,
-                          ),
-                          backgroundColor: const Color(0xFF7F5AF0).withOpacity(0.08),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                       ),
                     ],
@@ -3805,8 +3777,7 @@ class _TeacherViewState extends State<TeacherView> {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 
   // ── 좌측 하단 (Web): 1분 OTP 패널 ─────────────────────────
@@ -4105,12 +4076,17 @@ class _TeacherViewState extends State<TeacherView> {
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
-                          children: ['전체', 'PDF', '한글', 'PPT', 'Canva', '판서'].map((cat) {
+                          children: ['전체', 'PDF', '한글', 'PPT', 'Canva', 'TBP', '판서'].map((cat) {
                             final isSel = _cloudCategoryFilter == cat;
                             return Padding(
                               padding: EdgeInsets.only(right: 4 * s),
                               child: InkWell(
-                                onTap: () => setState(() => _cloudCategoryFilter = cat),
+                                onTap: () {
+                                  if (_cloudCategoryFilter != cat) {
+                                    setState(() => _cloudCategoryFilter = cat);
+                                    _refreshDriveFiles(resetToRoot: true);
+                                  }
+                                },
                                 borderRadius: BorderRadius.circular(12 * s),
                                 child: Container(
                                   padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 3 * s),
@@ -4474,38 +4450,6 @@ class _TeacherViewState extends State<TeacherView> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (inline) ...[
-                      TextButton.icon(
-                        onPressed: () => _openWeeklyTimetablePopup(isHomeroom),
-                        icon: Icon(Icons.open_in_full_rounded, size: 10 * s, color: accentColor),
-                        label: Text('확대', style: TextStyle(color: accentColor, fontSize: 9.5 * s)),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 2 * s),
-                          backgroundColor: accentColor.withOpacity(0.08),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6 * s)),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
-                    ],
-                    if (!inline)
-                      IconButton(
-                        icon: Icon(
-                          Icons.close_rounded,
-                          color: _textColor54,
-                          size: 18 * s,
-                        ),
-                        onPressed:
-                            onClose ??
-                            () {
-                              if (Navigator.canPop(context)) {
-                                Navigator.pop(context);
-                              }
-                            },
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        tooltip: '돌아가기',
-                      ),
                   ],
                 ),
                 SizedBox(height: 8 * s),
@@ -4783,8 +4727,10 @@ class _TeacherViewState extends State<TeacherView> {
           child: Column(
             children: [
               SizedBox(height: 380 * scale, child: _buildTeacherTimetablePanel(scale)),
-              SizedBox(height: 12 * scale),
-              SizedBox(height: 380 * scale, child: _buildClassroomTimetablePanel(scale)),
+              if (_settings.isHomeroom) ...[
+                SizedBox(height: 12 * scale),
+                SizedBox(height: 380 * scale, child: _buildClassroomTimetablePanel(scale)),
+              ],
             ],
           ),
         );

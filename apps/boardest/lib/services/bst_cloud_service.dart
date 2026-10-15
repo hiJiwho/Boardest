@@ -409,8 +409,52 @@ class BstCloudService {
     } catch (_) {}
   }
 
+  List<BstCloudFile> _generateDemoCloudFiles() {
+    return [
+      BstCloudFile(
+        id: 'demo_file_pdf_1',
+        name: '1학기 교안_단원별_정리.pdf',
+        mimeType: 'application/pdf',
+        size: 2450000,
+      ),
+      BstCloudFile(
+        id: 'demo_file_tbp_1',
+        name: '국어_교과서_디지털_학습자료.bsttbp',
+        mimeType: 'application/octet-stream',
+        size: 5120000,
+      ),
+      BstCloudFile(
+        id: 'demo_file_canva_1',
+        name: '모둠별_발표수업_템플릿.bstcanva',
+        mimeType: 'application/octet-stream',
+        size: 1048576,
+      ),
+      BstCloudFile(
+        id: 'demo_file_hwp_1',
+        name: '수업_형성평가지_1단원.hwp',
+        mimeType: 'application/x-hwp',
+        size: 345000,
+      ),
+      BstCloudFile(
+        id: 'demo_file_ppt_1',
+        name: '오늘의_학습목표_슬라이드.pptx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        size: 4200000,
+      ),
+      BstCloudFile(
+        id: 'demo_file_pen_1',
+        name: '1단원_핵심판서기록.pen',
+        mimeType: 'application/octet-stream',
+        size: 89000,
+      ),
+    ];
+  }
+
   /// 5. Google Drive API를 통해 boardest-cloud-connect 폴더 내 파일 리스트 조회 (Short-lived Token 사용)
   Future<List<BstCloudFile>> fetchDriveFiles(String folderId, String token) async {
+    if (token.startsWith('demo_token') || token == 'web_qr_approved_token' || AppConfig.isDemoMode) {
+      return _generateDemoCloudFiles();
+    }
     String targetFolderId = folderId;
     if (targetFolderId.isEmpty || targetFolderId == 'root') {
       final saveFolder = await findDriveFolderByName('bst-save', 'root', token) ??
@@ -873,115 +917,127 @@ class BstCloudService {
     return fetchDriveFiles(targetFolderId, token);
   }
 
+  /// 특정 전용 폴더(bst-save, bst-canva, bst-tbs, bst-pen) 내 파일만 엄격히 분리 조회
+  Future<List<BstCloudFile>> fetchFilesBySpecificFolder({
+    required String accessToken,
+    required String folderName,
+  }) async {
+    if (accessToken.startsWith('demo_token') || accessToken == 'web_qr_approved_token' || AppConfig.isDemoMode) {
+      final allDemos = _generateDemoCloudFiles();
+      if (folderName == 'bst-canva') {
+        return allDemos.where((f) => f.name.toLowerCase().endsWith('.bstcanva') || f.name.toLowerCase().endsWith('.canva.bst') || f.name.toLowerCase().endsWith('.canva')).toList();
+      } else if (folderName == 'bst-tbs' || folderName == 'bst-textbookpro') {
+        return allDemos.where((f) => f.name.toLowerCase().endsWith('.bsttbp') || f.name.toLowerCase().endsWith('.tbp')).toList();
+      } else if (folderName == 'bst-pen') {
+        return allDemos.where((f) => f.name.toLowerCase().endsWith('.pen')).toList();
+      } else {
+        // bst-save: 일반 교안 (PDF, HWP, PPT)
+        return allDemos.where((f) => f.name.toLowerCase().endsWith('.pdf') || f.name.toLowerCase().endsWith('.ppt') || f.name.toLowerCase().endsWith('.pptx') || f.name.toLowerCase().endsWith('.hwp')).toList();
+      }
+    }
+
+    try {
+      final List<BstCloudFile> results = [];
+      List<String> targetFolderNames = [folderName];
+      if (folderName == 'bst-tbs') {
+        targetFolderNames = ['bst-tbs', 'bst-textbookpro'];
+      }
+
+      final List<String> folderIds = [];
+      for (final fn in targetFolderNames) {
+        final fid = await findDriveFolderByName(fn, 'root', accessToken) ??
+                    await findDriveFolderByName(fn, 'appDataFolder', accessToken);
+        if (fid != null && fid.isNotEmpty && !folderIds.contains(fid)) {
+          folderIds.add(fid);
+        }
+      }
+
+      String currentToken = accessToken;
+      for (final fid in folderIds) {
+        final q = "'$fid' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'";
+        final url = Uri.parse("https://www.googleapis.com/drive/v3/files?q=${Uri.encodeComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=100&orderBy=modifiedTime desc");
+        var res = await http.get(url, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
+        if (res.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+          final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+          if (newToken != null && newToken.isNotEmpty) {
+            activeToken = newToken;
+            currentToken = newToken;
+            res = await http.get(url, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
+          }
+        }
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          for (final f in (data['files'] as List? ?? [])) {
+            final name = (f['name'] ?? '').toString();
+            if (name.endsWith('.json') && !name.endsWith('.pen.json')) continue;
+            if (!results.any((r) => r.id == f['id'])) {
+              results.add(BstCloudFile(
+                id: f['id'] ?? '',
+                name: name,
+                mimeType: f['mimeType'] ?? '',
+                size: f['size'] != null ? int.tryParse(f['size'].toString()) : null,
+              ));
+            }
+          }
+        }
+      }
+
+      // 만약 폴더가 아직 생성 전이거나 폴더 ID로 못 찾은 경우, 파일 확장자 필터 fallback (Google Drive 루트 검색)
+      if (results.isEmpty && folderIds.isEmpty) {
+        String extQuery = '';
+        if (folderName == 'bst-canva') {
+          extQuery = "and (name contains '.bstcanva' or name contains '.canva')";
+        } else if (folderName == 'bst-tbs' || folderName == 'bst-textbookpro') {
+          extQuery = "and (name contains '.bsttbp' or name contains '.tbp')";
+        } else if (folderName == 'bst-pen') {
+          extQuery = "and name contains '.pen'";
+        } else {
+          extQuery = "and (name contains '.pdf' or name contains '.ppt' or name contains '.hwp')";
+        }
+        final fallbackUrl = Uri.parse("https://www.googleapis.com/drive/v3/files?q=trashed=false and mimeType!='application/vnd.google-apps.folder' $extQuery&fields=files(id,name,mimeType,size)&pageSize=100&orderBy=modifiedTime desc");
+        var fbRes = await http.get(fallbackUrl, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
+        if (fbRes.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+          final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+          if (newToken != null && newToken.isNotEmpty) {
+            activeToken = newToken;
+            currentToken = newToken;
+            fbRes = await http.get(fallbackUrl, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
+          }
+        }
+        if (fbRes.statusCode == 200) {
+          final data = jsonDecode(fbRes.body);
+          for (final f in (data['files'] as List? ?? [])) {
+            final name = (f['name'] ?? '').toString();
+            if (!results.any((r) => r.id == f['id'])) {
+              results.add(BstCloudFile(
+                id: f['id'] ?? '',
+                name: name,
+                mimeType: f['mimeType'] ?? '',
+                size: f['size'] != null ? int.tryParse(f['size'].toString()) : null,
+              ));
+            }
+          }
+        }
+      }
+
+      return results;
+    } catch (e) {
+      debugPrint('[BstCloudService] fetchFilesBySpecificFolder($folderName) error: $e');
+      return [];
+    }
+  }
+
   /// 10-1. 1번 탭: 수업 자료 (Save) 파일 조회 (PDF, PPT, Canva 등 순수 교안)
   Future<List<BstCloudFile>> fetchDriveFolderFiles({
     required String accessToken,
     String folderName = 'bst-save',
   }) async {
-    try {
-      final List<BstCloudFile> results = [];
-
-      // 1. appDataFolder 검색 (spaces=appDataFolder)
-      final adfUrl = Uri.parse(
-        "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=trashed=false&fields=files(id,name,mimeType,size,webViewLink,webContentLink)&pageSize=100&orderBy=modifiedTime desc",
-      );
-      final adfRes = await http.get(adfUrl, headers: {'Authorization': 'Bearer $accessToken'});
-      if (adfRes.statusCode == 401) {
-        activeToken = null;
-        activeTeacherName = null;
-        activeOwnerEmail = null;
-        activeTotpSecret = null;
-        debugPrint('[BstCloudService] Token expired (401). Session reset.');
-        return [];
-      }
-
-      if (adfRes.statusCode == 200) {
-        final data = jsonDecode(adfRes.body);
-        for (final f in (data['files'] as List? ?? [])) {
-          if (f['mimeType'] == 'application/vnd.google-apps.folder') continue;
-          final name = (f['name'] ?? '').toString();
-          final lower = name.toLowerCase();
-          if (lower == 'subject_mappings.json' || lower == 'classroom_mappings.json') continue;
-          // 판서 파일(.pen, .file.pen, .Free.pen, .annot) 및 TBP 파일(.bsttbp, .tbp) 제외 -> 1번 탭은 순수 수업자료
-          if (lower.endsWith('.pen') || lower.endsWith('.annot.json') || lower.contains('_annot') || lower.contains('.annotation') || lower.endsWith('.sync.json') || lower.endsWith('.bsttbp') || lower.endsWith('.tbp')) {
-            continue;
-          }
-          results.add(BstCloudFile(
-            id: f['id'] ?? '',
-            name: name,
-            mimeType: f['mimeType'] ?? '',
-            size: f['size'] != null ? int.tryParse(f['size'].toString()) : null,
-          ));
-        }
-      }
-
-      // 2. 일반 Drive 검색 (spaces=drive)
-      final driveUrl = Uri.parse(
-        "https://www.googleapis.com/drive/v3/files?q=trashed=false and mimeType!='application/vnd.google-apps.folder'&fields=files(id,name,mimeType,size,webViewLink,webContentLink)&pageSize=100&orderBy=modifiedTime desc",
-      );
-      final driveRes = await http.get(driveUrl, headers: {'Authorization': 'Bearer $accessToken'});
-      if (driveRes.statusCode == 401) {
-        activeToken = null;
-        activeTeacherName = null;
-        activeOwnerEmail = null;
-        activeTotpSecret = null;
-        debugPrint('[BstCloudService] Token expired (401). Session reset.');
-        return [];
-      }
-
-      if (driveRes.statusCode == 200) {
-        final data = jsonDecode(driveRes.body);
-        for (final f in (data['files'] as List? ?? [])) {
-          final name = (f['name'] ?? '').toString();
-          final lower = name.toLowerCase();
-          if (lower == 'subject_mappings.json' || lower == 'classroom_mappings.json') continue;
-          if (lower.endsWith('.pen') || lower.endsWith('.annot.json') || lower.contains('_annot') || lower.contains('.annotation') || lower.endsWith('.sync.json') || lower.endsWith('.bsttbp') || lower.endsWith('.tbp')) {
-            continue;
-          }
-          if (!results.any((r) => r.id == f['id'])) {
-            results.add(BstCloudFile(
-              id: f['id'] ?? '',
-              name: name,
-              mimeType: f['mimeType'] ?? '',
-              size: f['size'] != null ? int.tryParse(f['size'].toString()) : null,
-            ));
-          }
-        }
-      }
-      return results;
-    } catch (e) {
-      debugPrint('[BstCloudService] fetchDriveFolderFiles error: $e');
-      return [];
-    }
+    return fetchFilesBySpecificFolder(accessToken: accessToken, folderName: folderName);
   }
 
   /// 10-2. 2번 탭: TBP 전자교과서 목록 조회 (.bsttbp, .tbp)
   Future<List<BstCloudFile>> fetchTbpFiles({required String accessToken}) async {
-    try {
-      final List<BstCloudFile> results = [];
-      final driveUrl = Uri.parse(
-        "https://www.googleapis.com/drive/v3/files?q=trashed=false and (name contains '.bsttbp' or name contains '.tbp')&fields=files(id,name,mimeType,size)&pageSize=50&orderBy=modifiedTime desc",
-      );
-      final res = await http.get(driveUrl, headers: {'Authorization': 'Bearer $accessToken'});
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        for (final f in (data['files'] as List? ?? [])) {
-          final name = (f['name'] ?? '').toString();
-          if (name.toLowerCase().endsWith('.bsttbp') || name.toLowerCase().endsWith('.tbp')) {
-            results.add(BstCloudFile(
-              id: f['id'] ?? '',
-              name: name,
-              mimeType: f['mimeType'] ?? '',
-              size: f['size'] != null ? int.tryParse(f['size'].toString()) : null,
-            ));
-          }
-        }
-      }
-      return results;
-    } catch (e) {
-      debugPrint('[BstCloudService] fetchTbpFiles error: $e');
-      return [];
-    }
+    return fetchFilesBySpecificFolder(accessToken: accessToken, folderName: 'bst-tbs');
   }
 
   /// 10-3. 3번 탭: 화이트보드 판서보드 (Free) 파일 목록 조회 ('bst-Free' 폴더 내 .Free.pen)
@@ -1489,12 +1545,15 @@ class BstCloudService {
           '16': '강역사',
           '17': '송음악',
           '18': '윤체육',
+          '19': '조미술',
         };
-        final teacherName = demoTeacherNames[matchedShortId] ?? '김국어';
+        final sId = matchedShortId.isNotEmpty ? matchedShortId : '11';
+        final teacherName = demoTeacherNames[sId] ?? '김국어';
+        final demoNum = sId == '11' ? '01' : (sId == '12' ? '02' : sId);
 
-        activeToken = 'demo_token_teacher_$matchedShortId';
+        activeToken = 'demo_token_teacher_$sId';
         activeTeacherName = teacherName;
-        activeOwnerEmail = 'demo_$matchedShortId@boardest.com';
+        activeOwnerEmail = '$demoNum@boardest-teacher-demo.753210.xyz';
         activeTotpSecret = TotpService.generateDeterministicSecret(activeOwnerEmail!);
         activeFolderId = 'demo_folder_id';
         return (
@@ -1505,31 +1564,6 @@ class BstCloudService {
           errorMessage: null,
         );
       }
-
-      // 1차: Cloudflare Worker 시도
-      try {
-        final res = await http.post(
-          Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/verify-otp'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'code': cleanCode}),
-        ).timeout(const Duration(seconds: 4));
-
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          activeToken = data['accessToken']?.toString();
-          activeTeacherName = data['teacherName']?.toString() ?? '선생님';
-          activeOwnerEmail = data['email']?.toString();
-          activeTotpSecret = data['totpSecret']?.toString() ?? data['secret']?.toString();
-
-          return (
-            success: true,
-            accessToken: activeToken,
-            teacherName: activeTeacherName,
-            email: activeOwnerEmail,
-            errorMessage: null,
-          );
-        }
-      } catch (_) {}
 
       // 2차: Firestore 직접 Fallback 검증 (시간 디버깅과 무관하게 무조건 실제 현재 시각 DateTime.now() 기준)
       try {
@@ -1623,34 +1657,6 @@ class BstCloudService {
       }
 
       final currentOtp = TotpService.generate8DigitOtp(pairedSecret);
-      final res = await http.post(
-        Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/verify-otp'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'shortId': cloudId.trim(),
-          'teacherId': cloudId.trim(),
-          'otp': currentOtp,
-          'keyId': pairedKeyId,
-          'roomCode': roomCode,
-          'deviceSecret': pairedSecret,
-        }),
-      ).timeout(const Duration(seconds: 5));
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        activeToken = data['accessToken']?.toString();
-        activeTeacherName = data['teacherName']?.toString() ?? '선생님';
-        activeOwnerEmail = data['email']?.toString();
-        activeTotpSecret = data['totpSecret']?.toString();
-        activeFolderId = data['folderId']?.toString();
-        return (
-          success: true,
-          accessToken: activeToken,
-          teacherName: activeTeacherName,
-          email: activeOwnerEmail,
-          errorMessage: null,
-        );
-      }
 
       // 2차: Firestore 직접 Fallback 검증
       try {
@@ -1689,8 +1695,7 @@ class BstCloudService {
         }
       } catch (_) {}
 
-      final err = jsonDecode(res.body);
-      return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: err['error']?.toString() ?? '자동 로그인 실패: 등록되지 않은 교사 ID이거나 전자칠판 인증이 필요합니다.');
+      return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '자동 로그인 실패: 등록되지 않은 교사 ID이거나 전자칠판 인증이 필요합니다.');
     } catch (e) {
       return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '네트워크 오류: $e');
     }

@@ -22,58 +22,71 @@ class TimetableResult {
     required this.homeroomTeachers,
   });
 
-  /// 데모 전용 시간표 생성 (교실 8개: 1-1 ~ 1-8 / 교사 8명 / 하루 안에서는 교사 수업 절대 안 겹치게 완전 순환)
+  /// 데모 전용 시간표 생성 (교실 9개: 1-1~1-3, 2-1~2-3, 3-1~3-3 / 교사 9명 / 하루 안에서 교사 수업 절대 안 겹치게 완전 순환)
   static TimetableResult generateDemo(String teacherName, {int homeroomGrade = 1, int homeroomClass = 1}) {
     final effectiveName = teacherName.isNotEmpty ? teacherName : '김국어';
 
     final teachers = [
-      effectiveName, // 0: 국어
-      '이수학',       // 1: 수학
+      effectiveName, // 0: 국어 (01 계정 기본 교사)
+      '이수학',       // 1: 수학 (02 계정 기본 교사)
       '박영어',       // 2: 영어
       '최과학',       // 3: 과학
       '정사회',       // 4: 사회
       '강역사',       // 5: 역사
       '송음악',       // 6: 음악
       '윤체육',       // 7: 체육
+      '조미술',       // 8: 미술
     ];
 
-    final subjects = ['국어', '수학', '영어', '과학', '사회', '역사', '음악', '체육'];
+    final subjects = ['국어', '수학', '영어', '과학', '사회', '역사', '음악', '체육', '미술'];
+
+    // 9개 학급: 1학년 1~3반, 2학년 1~3반, 3학년 1~3반
+    final classList = <({int grade, int classNum})>[
+      (grade: 1, classNum: 1),
+      (grade: 1, classNum: 2),
+      (grade: 1, classNum: 3),
+      (grade: 2, classNum: 1),
+      (grade: 2, classNum: 2),
+      (grade: 2, classNum: 3),
+      (grade: 3, classNum: 1),
+      (grade: 3, classNum: 2),
+      (grade: 3, classNum: 3),
+    ];
 
     final lessons = <Lesson>[];
 
-    // 교실 8개 (1-1 ~ 1-8)
-    // 라틴 방진 순환: 어떤 요일, 어떤 교시에서도 8개 반에 8명의 교사가 정확히 1:1로 들어가 하루 동안 절대 겹치지 않음!
+    // 라틴 방진 순환: 어떤 요일, 어떤 교시에서도 9개 반에 9명의 교사가 정확히 1:1로 들어가 하루 동안 절대 겹치지 않음!
     for (int day = 1; day <= 5; day++) {
-      for (int p = 1; p <= 6; p++) {
-        for (int c = 1; c <= 8; c++) {
-          final tIdx = ((c - 1) + (p - 1) + (day - 1) * 3) % 8;
+      for (int p = 1; p <= 7; p++) {
+        for (int k = 0; k < classList.length; k++) {
+          final cInfo = classList[k];
+          final tIdx = (k + (p - 1) + (day - 1) * 2) % 9;
           lessons.add(Lesson(
-            grade: 1,
-            classNum: c,
+            grade: cInfo.grade,
+            classNum: cInfo.classNum,
             weekday: day,
             classTime: p,
             teacher: teachers[tIdx],
             subject: subjects[tIdx],
-            classroom: '1-$c',
+            classroom: '${cInfo.grade}-${cInfo.classNum}',
             isChanged: false,
           ));
         }
       }
     }
 
-    final homeroomMap = <int, String>{};
-    for (int i = 0; i < 8; i++) {
-      homeroomMap[i + 1] = teachers[i];
-    }
+    final homeroomMap = {
+      1: {1: teachers[0], 2: teachers[1], 3: teachers[2]},
+      2: {1: teachers[3], 2: teachers[4], 3: teachers[5]},
+      3: {1: teachers[6], 2: teachers[7], 3: teachers[8]},
+    };
 
     return TimetableResult(
       schoolName: '데모 중학교',
-      periodTimes: ['09:00', '09:50', '10:40', '11:30', '13:10', '14:00', '14:50'],
-      classCounts: {1: 8},
+      periodTimes: ['09:00', '09:50', '10:40', '11:30', '12:20', '13:50', '14:40'],
+      classCounts: {1: 3, 2: 3, 3: 3},
       lessons: lessons,
-      homeroomTeachers: {
-        1: homeroomMap,
-      },
+      homeroomTeachers: homeroomMap,
     );
   }
 

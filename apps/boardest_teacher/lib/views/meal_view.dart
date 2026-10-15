@@ -121,24 +121,40 @@ class _MealViewState extends State<MealView> {
               final docId = key.toString();
               if (docId.isEmpty) return;
 
-              // 현재 학교 소속 필터링
+              // 현재 학교 소속 필터링 (다른 학교 교실 철저 제외)
               final docSchoolCode = (val['schoolCode']?.toString() ?? '').toLowerCase();
               final docSchoolName = (val['schoolName']?.toString() ?? '').toLowerCase();
-              bool isMatch = docId.toLowerCase().startsWith(connName.toLowerCase());
-              if (!isMatch && schoolCode.isNotEmpty) {
-                isMatch = docId.toLowerCase().startsWith(schoolCode) || docSchoolCode == schoolCode;
+              bool isMatch = false;
+              if (schoolCode.isNotEmpty) {
+                isMatch = docSchoolCode == schoolCode || docId.toLowerCase().startsWith('${schoolCode}_');
               }
               if (!isMatch && schoolId.isNotEmpty) {
-                isMatch = docId.toLowerCase().startsWith(schoolId) || docSchoolCode == schoolId;
+                isMatch = docSchoolCode == schoolId || docId.toLowerCase().startsWith('${schoolId}_');
               }
               if (!isMatch && schoolName.isNotEmpty && docSchoolName.isNotEmpty) {
-                isMatch = docSchoolName.contains(schoolName) || schoolName.contains(docSchoolName);
+                isMatch = docSchoolName == schoolName;
+              }
+              if (!isMatch && connName.isNotEmpty) {
+                isMatch = docId.toLowerCase().startsWith('${connName}_');
               }
               if (!isMatch) return; // 다른 학교 교실 제외
 
-              // 온라인 여부 확인
-              final isOnline = val['isOnline'] == true;
-              if (!isOnline) return; // 온라인 교실만 표시
+              // 온라인 여부 확인: isOnline=true 및 최근 5분 이내 하트비트 필수
+              if (val['isOnline'] != true) return;
+              final lastActiveVal = val['lastActive'];
+              if (lastActiveVal != null) {
+                final nowMs = DateTime.now().millisecondsSinceEpoch;
+                if (lastActiveVal is num) {
+                  final diffSec = (nowMs - lastActiveVal.toInt()).abs() / 1000;
+                  if (diffSec > 300) return; // 5분 이상 핑 없으면 오프라인 간주
+                } else {
+                  try {
+                    final dt = DateTime.parse(lastActiveVal.toString()).toUtc();
+                    final diffSec = DateTime.now().toUtc().difference(dt).inSeconds.abs();
+                    if (diffSec > 300) return;
+                  } catch (_) {}
+                }
+              }
 
               final g = int.tryParse(val['grade']?.toString() ?? '') ?? 0;
               final c = int.tryParse(val['classNum']?.toString() ?? val['class']?.toString() ?? '') ?? 0;

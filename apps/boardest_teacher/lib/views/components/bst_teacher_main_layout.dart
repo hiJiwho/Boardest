@@ -13,6 +13,7 @@ class BstTeacherMainLayout extends StatelessWidget {
 
   final Widget? teacherTimetableWidget;
   final Widget? homeroomTimetableWidget;
+  final bool isHomeroom;
 
   final String currentOtp;
   final int remainingOtpSeconds;
@@ -26,6 +27,7 @@ class BstTeacherMainLayout extends StatelessWidget {
     this.schoolName = '보데스트 중학교',
     this.teacherName = '김보데',
     this.homeroomClass = '1학년 7반',
+    this.isHomeroom = true,
     this.hasPasskey = true,
     this.onRegisterPasskey,
     this.currentTab = 'timetable',
@@ -359,7 +361,7 @@ class BstTeacherMainLayout extends StatelessWidget {
                         Row(
                           children: [
                             Text(
-                              '$teacherName 선생님 ($homeroomClass)',
+                              isHomeroom ? '$teacherName 선생님 ($homeroomClass)' : '$teacherName 선생님 (비담임)',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 14,
@@ -385,9 +387,11 @@ class BstTeacherMainLayout extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 3),
-                        const Text(
-                          '교사 시간표 · 담임반 시간표 듀얼 뷰 | 칠판 연결 및 수업 관리',
-                          style: TextStyle(
+                        Text(
+                          isHomeroom
+                              ? '교사 시간표 · 담임반 시간표 듀얼 뷰 | 칠판 연결 및 수업 관리'
+                              : '교사 개인 시간표 | 칠판 연결 및 수업 관리',
+                          style: const TextStyle(
                             color: Color(0xFF94A3B8),
                             fontSize: 11.5,
                           ),
@@ -542,57 +546,50 @@ class BstTeacherMainLayout extends StatelessWidget {
                     ),
                   ),
 
-                  const SizedBox(width: 14),
+                  if (isHomeroom && homeroomTimetableWidget != null) ...[
+                    const SizedBox(width: 14),
 
-                  // 2. 우리 반 (담임 학급) 시간표
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.03),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(0.08)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                '🏫 우리 반 시간표 ($homeroomClass)',
-                                style: const TextStyle(
-                                  color: Color(0xFF8B5CF6),
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const Text(
-                                '담임 학급 일과',
-                                style: TextStyle(
-                                  color: Color(0xFF94A3B8),
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Divider(color: Colors.white12, height: 16),
-                          Expanded(
-                            child: homeroomTimetableWidget ??
-                                Center(
-                                  child: Text(
-                                    '담임 학급 시간표를 로드 중입니다...',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.4),
-                                      fontSize: 12,
-                                    ),
+                    // 2. 우리 반 (담임 학급) 시간표
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.03),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '🏫 우리 반 시간표 ($homeroomClass)',
+                                  style: const TextStyle(
+                                    color: Color(0xFF8B5CF6),
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
-                          ),
-                        ],
+                                const Text(
+                                  '담임 학급 일과',
+                                  style: TextStyle(
+                                    color: Color(0xFF94A3B8),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Divider(color: Colors.white12, height: 16),
+                            Expanded(
+                              child: homeroomTimetableWidget!,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

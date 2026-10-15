@@ -143,16 +143,28 @@ class _BstCloudModalState extends State<BstCloudModal> {
     }
   }
 
+  String get _currentFolderName {
+    if (_categoryFilter == 'canva') return 'bst-canva';
+    if (_categoryFilter == 'tbp') return 'bst-tbs';
+    if (_categoryFilter == 'pen') return 'bst-pen';
+    return 'bst-save';
+  }
+
   void _loadFiles() async {
     final token = _driveToken ?? BstCloudService.instance.activeToken;
     if (token == null || token.isEmpty) return;
 
     setState(() => _loadingFiles = true);
     try {
-      final files = await BstCloudService.instance.fetchDriveFolderFiles(accessToken: token);
+      final targetFolder = _currentFolderName;
+      final files = await BstCloudService.instance.fetchFilesBySpecificFolder(
+        accessToken: token,
+        folderName: targetFolder,
+      );
+
       if (mounted) {
         setState(() {
-          _allFiles = files.where((f) => !f.name.endsWith('.json')).toList();
+          _allFiles = files;
           _applyFilter();
           _loadingFiles = false;
         });
@@ -174,7 +186,9 @@ class _BstCloudModalState extends State<BstCloudModal> {
     if (_categoryFilter == 'pdf') {
       list = list.where((f) => f.name.toLowerCase().endsWith('.pdf')).toList();
     } else if (_categoryFilter == 'canva') {
-      list = list.where((f) => f.name.toLowerCase().endsWith('.canva.bst') || f.name.toLowerCase().endsWith('.canva')).toList();
+      list = list.where((f) => f.name.toLowerCase().endsWith('.canva.bst') || f.name.toLowerCase().endsWith('.canva') || f.name.toLowerCase().endsWith('.bstcanva')).toList();
+    } else if (_categoryFilter == 'tbp') {
+      list = list.where((f) => f.name.toLowerCase().endsWith('.tbp') || f.name.toLowerCase().endsWith('.bsttbp')).toList();
     } else if (_categoryFilter == 'ppt') {
       list = list.where((f) => f.name.toLowerCase().endsWith('.ppt') || f.name.toLowerCase().endsWith('.pptx')).toList();
     } else if (_categoryFilter == 'pen') {
@@ -1064,7 +1078,7 @@ class _BstCloudModalState extends State<BstCloudModal> {
                   children: [
                     const Icon(Icons.folder_rounded, color: Color(0xFFFACC15), size: 16),
                     SizedBox(width: 6 * s),
-                    Text('내 드라이브 > bst-save', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12 * s, fontWeight: FontWeight.w600)),
+                    Text('내 드라이브 > $_currentFolderName', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12 * s, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -1125,6 +1139,8 @@ class _BstCloudModalState extends State<BstCloudModal> {
               SizedBox(width: 8 * s),
               _buildFilterChip('canva', '🎨 Canva 디자인', s),
               SizedBox(width: 8 * s),
+              _buildFilterChip('tbp', '📐 TBP 교과서', s),
+              SizedBox(width: 8 * s),
               _buildFilterChip('ppt', '📊 PPT 슬라이드', s),
               SizedBox(width: 8 * s),
               _buildFilterChip('pen', '📝 판서 기록', s),
@@ -1173,10 +1189,14 @@ class _BstCloudModalState extends State<BstCloudModal> {
   Widget _buildFilterChip(String key, String label, double s) {
     final isSelected = _categoryFilter == key;
     return InkWell(
-      onTap: () => setState(() {
-        _categoryFilter = key;
-        _applyFilter();
-      }),
+      onTap: () {
+        if (_categoryFilter != key) {
+          setState(() {
+            _categoryFilter = key;
+          });
+          _loadFiles();
+        }
+      },
       borderRadius: BorderRadius.circular(20 * s),
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 6 * s),

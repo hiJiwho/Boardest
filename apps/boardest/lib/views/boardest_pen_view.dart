@@ -360,7 +360,7 @@ class _BoardestPenViewState extends State<BoardestPenView>
         'pages': pageData.map((k, v) => MapEntry(k.toString(), v)),
       });
 
-      // 1. Google Drive Cloud 실시간 동기화 (토큰이 있는 경우)
+      // 1. Google Drive Cloud 실시간 동기화 (토큰이 있는 경우 -> 교사 드라이브의 bst-pen 폴더에 즉시 저장)
       if (BstCloudService.instance.activeToken != null) {
         final cloudPenName = _boardFileBaseName.endsWith('.pen')
             ? _boardFileBaseName
@@ -369,6 +369,7 @@ class _BoardestPenViewState extends State<BoardestPenView>
           BstCloudService.instance.uploadPenBytesDirectly(
             fileName: cloudPenName,
             bytes: PenArchiveService.instance.packToPenBytes(penDoc),
+            targetFolderName: 'bst-pen',
           ),
         );
       }

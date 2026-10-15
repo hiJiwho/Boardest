@@ -7,6 +7,7 @@ import 'package:archive/archive.dart';
 import 'package:archive/archive_io.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../models/tbp_metadata.dart';
+import '../bst_cloud_service.dart';
 
 /// TBP (TextBook Plus) 전용 스토리지 및 I/O 전담 서비스
 ///
@@ -29,8 +30,27 @@ class TbpStorageService {
   // ─── 패키지 로드 (.bstTBP ZIP) ──────────────────────────────────────
 
   /// .bstTBP (ZIP) 또는 레거시 .TBP (JSON) 파일 로드
-  Future<TbpMetadata?> loadTbpFile(String tbpFilePath) async {
+  Future<TbpMetadata?> loadTbpFile(String tbpFilePath, {Uint8List? directBytes}) async {
     try {
+      if (kIsWeb) {
+        final bytes = directBytes ?? BstCloudService.webMemoryFiles[tbpFilePath] ?? BstCloudService.webMemoryFiles[p.basename(tbpFilePath)];
+        if (bytes != null && bytes.isNotEmpty) {
+          try {
+            final archive = ZipDecoder().decodeBytes(bytes);
+            for (final f in archive) {
+              if (f.name == 'meta.bstsave' || f.name == 'info.json') {
+                final json = jsonDecode(utf8.decode(f.content as List<int>)) as Map<String, dynamic>;
+                return TbpMetadata.fromJson(json);
+              }
+            }
+          } catch (_) {
+            final json = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+            return TbpMetadata.fromJson(json);
+          }
+        }
+        return null;
+      }
+
       // 새 형식: .bstTBP (Store Level 0 ZIP)
       if (tbpFilePath.toLowerCase().endsWith('.bsttbp')) {
         return await _loadFromBstTbpZip(tbpFilePath);
@@ -49,6 +69,9 @@ class TbpStorageService {
 
   Future<TbpMetadata?> _loadFromBstTbpZip(String bstTbpPath) async {
     try {
+      if (kIsWeb) {
+        return await loadTbpFile(bstTbpPath);
+      }
       // 캐시된 추출 경로 확인
       await _ensureExtracted(bstTbpPath);
 

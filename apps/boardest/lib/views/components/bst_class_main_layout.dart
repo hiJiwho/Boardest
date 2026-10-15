@@ -8,10 +8,12 @@ import 'bst_dual_meal_card.dart';
 import '../../models/meal_models.dart';
 import 'bst_tools_dock.dart';
 import 'bst_class_tools_panel.dart';
+import '../../models/app_settings.dart' show LauncherSlot;
 
 export 'bst_today_timetable_strip.dart';
 export 'bst_tools_dock.dart';
 export '../../models/meal_models.dart';
+export '../../models/app_settings.dart' show LauncherSlot;
 
 /// Boardest 전자칠판 메인 골든 레이아웃
 /// - 교과서 좌측 밀착 & 일과 시간표
@@ -68,12 +70,16 @@ class BstClassMainLayout extends StatelessWidget {
 
   final bool isPro;
   final bool isWindows;
+  final double scaleFactor;
   final VoidCallback? onLogoTap;
   final ValueChanged<BstToolType>? onToolTap;
   final VoidCallback? onAddAppTap;
   final VoidCallback? onMinimizeTap;
   final VoidCallback? onCloseTap;
-  final List<dynamic>? customSlots;
+  final List<LauncherSlot>? customSlots;
+  final ValueChanged<LauncherSlot>? onLaunchApp;
+  final ValueChanged<int>? onRemoveApp;
+  final ValueChanged<int>? onAddAppToSlot;
 
   const BstClassMainLayout({
     super.key,
@@ -119,20 +125,26 @@ class BstClassMainLayout extends StatelessWidget {
     this.cloudFilesWidget,
     this.isPro = false,
     this.isWindows = false,
+    this.scaleFactor = 1.0,
     this.onToolTap,
     this.onAddAppTap,
     this.onMinimizeTap,
     this.onCloseTap,
     this.customSlots,
+    this.onLaunchApp,
+    this.onRemoveApp,
+    this.onAddAppToSlot,
   });
 
   @override
   Widget build(BuildContext context) {
+    final s = scaleFactor.clamp(0.7, 2.2);
+
     return Scaffold(
       backgroundColor: const Color(0xFF070B14),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: EdgeInsets.all(12 * s),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -151,11 +163,11 @@ class BstClassMainLayout extends StatelessWidget {
                 specialSubjectName: specialSubjectName,
               ),
 
-              const SizedBox(height: 10),
+              SizedBox(height: 10 * s),
 
-              // 2. 메인 대시보드 신규 2열 레이아웃
-              // 좌측(flex: 3): 시계 (2) + 수업정보 (4) = 총 높이 6
-              // 우측(flex: 2): 수업도구함 (2) + 일과시간표 (1) + 급식표/Cloud (3) = 총 높이 6
+              // 2. 메인 대시보드 2열 레이아웃
+              // 좌측(flex: 1): 대형 시계 (flex: 2) + 수업정보 카드 (flex: 4)
+              // 우측(flex: 1): 일과 시간표 (flex: 1) : 수업도구함 (flex: 1) : 급식/Cloud (flex: 2) = 1:1:2
               Expanded(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -182,7 +194,7 @@ class BstClassMainLayout extends StatelessWidget {
                             ),
                           ),
 
-                          const SizedBox(height: 10),
+                          SizedBox(height: 10 * s),
 
                           // 2. 수업 정보 카드 (세로 flex: 4, 대형 교과서 & 과목명)
                           Expanded(
@@ -203,17 +215,17 @@ class BstClassMainLayout extends StatelessWidget {
                       ),
                     ),
 
-                    const SizedBox(width: 10),
+                    SizedBox(width: 10 * s),
 
-                    // [우측 열 (가로 flex: 1)]
+                    // [우측 열 (가로 flex: 1)]: 일과 시간표 : 수업도구함 : 급식/Cloud = 1 : 1 : 2
                     Expanded(
                       flex: 1,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // 1. 일과 시간표 스트립 (높이 2배로 확장: 148px)
-                          SizedBox(
-                            height: 148,
+                          // 1. 일과 시간표 스트립 (세로 flex: 1)
+                          Expanded(
+                            flex: 1,
                             child: BstTodayTimetableStrip(
                               periods: periods,
                               onPeriodTap: onPeriodTap,
@@ -223,11 +235,11 @@ class BstClassMainLayout extends StatelessWidget {
                             ),
                           ),
 
-                          const SizedBox(height: 10),
+                          SizedBox(height: 10 * s),
 
-                          // 2. 일과 시간표 아래 수업 도구함 (줄어든 시간표 높이를 가져가 넉넉하게 확장)
+                          // 2. 수업 도구함 (세로 flex: 1, 6개 한 줄 배치)
                           Expanded(
-                            flex: 3,
+                            flex: 1,
                             child: BstToolsDock(
                               isPro: isPro,
                               isWindows: isWindows,
@@ -235,14 +247,18 @@ class BstClassMainLayout extends StatelessWidget {
                               onAddAppTap: onAddAppTap,
                               onMinimizeTap: onMinimizeTap,
                               onCloseTap: onCloseTap,
+                              customSlots: customSlots,
+                              onLaunchApp: onLaunchApp,
+                              onRemoveApp: onRemoveApp,
+                              onAddAppToSlot: onAddAppToSlot,
                             ),
                           ),
 
-                          const SizedBox(height: 10),
+                          SizedBox(height: 10 * s),
 
-                          // 3. 급식 식단표 (세로 flex: 3, Cloud 연동 시에는 이 영역만 Cloud로 교체)
+                          // 3. 급식 식단표 (세로 flex: 2, Cloud 연동 시에는 이 영역만 Cloud로 교체)
                           Expanded(
-                            flex: 3,
+                            flex: 2,
                             child: (isCloudActive && showCloudFiles && cloudFilesWidget != null)
                                 ? cloudFilesWidget!
                                 : BstDualMealCard(

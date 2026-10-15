@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:async';
 import 'package:universal_io/io.dart';
 import 'dart:typed_data';
@@ -185,7 +185,12 @@ class _PdfBoardViewState extends State<PdfBoardView>
         } else if (filePath.startsWith('http://') || filePath.startsWith('https://') || filePath.startsWith('blob:')) {
           doc = await PdfDocument.openUri(Uri.parse(filePath));
         } else {
-          doc = await PdfDocument.openUri(Uri.parse(filePath));
+          final memBytes = BstCloudService.webMemoryFiles[filePath] ?? BstCloudService.webMemoryFiles[fileName];
+          if (memBytes != null) {
+            doc = await PdfDocument.openData(memBytes);
+          } else {
+            throw Exception('PDF 문서 데이터를 찾을 수 없습니다: ' + filePath);
+          }
         }
       } else {
         final file = File(filePath);

@@ -286,10 +286,24 @@ class AnnotationStorageService {
         await metaFile.writeAsString(json.encode(metadata), flush: true);
       }
 
-      // 3. BstCloudService 실시간 동기화 상태 갱신
+      // 3. BstCloudService 실시간 동기화 상태 갱신 및 Cloud 연결 시 교사 드라이브의 bst-pen 폴더로 즉시 백그라운드 업로드
       try {
         BstCloudService.instance.saveSyncState(formattedPenName, penData);
-      } catch (_) {}
+        if (BstCloudService.instance.activeToken != null) {
+          final penJsonBytes = Uint8List.fromList(utf8.encode(json.encode(penData)));
+          BstCloudService.instance.uploadPenBytesDirectly(
+            fileName: formattedPenName,
+            bytes: penJsonBytes,
+            targetFolderName: 'bst-pen',
+          ).then((ok) {
+            if (ok) {
+              debugPrint('[AnnotationStorageService] ☁️ Uploaded $formattedPenName to teacher bst-pen folder successfully');
+            }
+          });
+        }
+      } catch (e) {
+        debugPrint('[AnnotationStorageService] Cloud pen sync error: $e');
+      }
 
       debugPrint('[AnnotationStorageService] Saved .pen: $formattedPenName ($type)');
     } catch (e) {

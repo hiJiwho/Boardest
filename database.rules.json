@@ -3,7 +3,7 @@
     "eat_calls": {
       ".read": true,
       "$doc_id": {
-        ".write": "newData.hasChildren(['schoolCode', 'grade', 'classNum'])",
+        ".write": "!newData.exists() || newData.hasChildren(['schoolCode', 'grade', 'classNum'])",
         ".indexOn": ["schoolCode", "cafeteriaNum", "isOnline", "lastActive"]
       }
     },

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:universal_io/io.dart';
+import '../../models/app_settings.dart' show LauncherSlot, LauncherSlotType;
 
 enum BstToolType {
   pen,
@@ -18,6 +20,10 @@ class BstToolsDock extends StatelessWidget {
   final VoidCallback? onAddAppTap;
   final VoidCallback? onMinimizeTap;
   final VoidCallback? onCloseTap;
+  final List<LauncherSlot>? customSlots;
+  final ValueChanged<LauncherSlot>? onLaunchApp;
+  final ValueChanged<int>? onRemoveApp;
+  final ValueChanged<int>? onAddAppToSlot;
 
   const BstToolsDock({
     super.key,
@@ -27,6 +33,10 @@ class BstToolsDock extends StatelessWidget {
     this.onAddAppTap,
     this.onMinimizeTap,
     this.onCloseTap,
+    this.customSlots,
+    this.onLaunchApp,
+    this.onRemoveApp,
+    this.onAddAppToSlot,
   });
 
   Widget _buildToolButton({
@@ -100,20 +110,18 @@ class BstToolsDock extends StatelessWidget {
     ];
 
     if (!isPro) {
-      // 1. Web 버전: 4열 x 2행 (총 8개 전체 수업 도구)
+      // 1. Web 버전: 6열 x 1행 (웹, PDF 제외 6개 도구 한 줄 배치)
       final webTools = [
         {'type': BstToolType.pen, 'icon': '🖊️', 'label': '판서', 'primary': true},
         {'type': BstToolType.timer, 'icon': '⏱️', 'label': '타이머', 'primary': false},
         {'type': BstToolType.random, 'icon': '🎲', 'label': '추첨', 'primary': false},
         {'type': BstToolType.calculator, 'icon': '🧮', 'label': '계산기', 'primary': false},
-        {'type': BstToolType.web, 'icon': '🌐', 'label': '웹', 'primary': false},
-        {'type': BstToolType.pdf, 'icon': '📄', 'label': 'PDF', 'primary': false},
         {'type': BstToolType.cloud, 'icon': '☁️', 'label': 'Cloud', 'primary': false},
         {'type': BstToolType.settings, 'icon': '⚙️', 'label': '설정', 'primary': false},
       ];
 
       return Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: const Color(0xFF0F172A).withOpacity(0.92),
           borderRadius: BorderRadius.circular(16),
@@ -132,18 +140,18 @@ class BstToolsDock extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(5),
+                  padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     color: const Color(0xFF00F5D4).withOpacity(0.15),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Text('🧰', style: TextStyle(fontSize: 14)),
+                  child: const Text('🧰', style: TextStyle(fontSize: 13)),
                 ),
                 const SizedBox(width: 8),
                 const Text(
                   '수업 도구함',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
                     letterSpacing: -0.2,
@@ -151,32 +159,32 @@ class BstToolsDock extends StatelessWidget {
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.06),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text(
-                    'WEB 4×2',
+                    'WEB 6×1',
                     style: TextStyle(
                       color: Color(0xFF94A3B8),
-                      fontSize: 10,
+                      fontSize: 9.5,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  const crossAxisCount = 4;
-                  const rowCount = 2;
+                  const crossAxisCount = 6;
+                  const rowCount = 1;
                   const spacing = 8.0;
                   final itemWidth = (constraints.maxWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
-                  final itemHeight = (constraints.maxHeight - (spacing * (rowCount - 1))) / rowCount;
-                  final ratio = (itemWidth / (itemHeight > 0 ? itemHeight : itemWidth)).clamp(0.5, 3.5);
+                  final itemHeight = constraints.maxHeight;
+                  final ratio = (itemWidth / (itemHeight > 0 ? itemHeight : itemWidth)).clamp(0.5, 4.0);
 
                   return GridView.builder(
                     physics: const NeverScrollableScrollPhysics(),
@@ -206,10 +214,9 @@ class BstToolsDock extends StatelessWidget {
       );
     }
 
-    // 2. Windows / Android PRO 모드: 6열 x 3행 (총 18 슬롯 도구함)
-    // 8개 기본 도구 (Web과 동일) + 시스템 앱 등록 빈칸 + 윈도우 닫기/종료 버튼
+    // 2. Windows / Android PRO 모드: 6열 x 2행 (총 12 슬롯 도구함)
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A).withOpacity(0.92),
         borderRadius: BorderRadius.circular(16),
@@ -229,18 +236,18 @@ class BstToolsDock extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(5),
+                padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
                   color: const Color(0xFF00F5D4).withOpacity(0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Text('🧰', style: TextStyle(fontSize: 14)),
+                child: const Text('🧰', style: TextStyle(fontSize: 13)),
               ),
               const SizedBox(width: 8),
               const Text(
                 '수업 & 시스템 도구함',
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
                   letterSpacing: -0.2,
@@ -248,16 +255,16 @@ class BstToolsDock extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: const Color(0xFF00F5D4).withOpacity(0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text(
-                  '6×3 PRO',
+                  '6×2 PRO',
                   style: TextStyle(
                     color: Color(0xFF00F5D4),
-                    fontSize: 10,
+                    fontSize: 9.5,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -268,14 +275,14 @@ class BstToolsDock extends StatelessWidget {
                   onTap: onMinimizeTap,
                   borderRadius: BorderRadius.circular(6),
                   child: Container(
-                    width: 28,
-                    height: 24,
+                    width: 26,
+                    height: 22,
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: const Center(
-                      child: Text('─', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: Text('─', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ),
@@ -284,31 +291,36 @@ class BstToolsDock extends StatelessWidget {
                   onTap: onCloseTap,
                   borderRadius: BorderRadius.circular(6),
                   child: Container(
-                    width: 28,
-                    height: 24,
+                    width: 26,
+                    height: 22,
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: const Center(
-                      child: Text('✕', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: Text('✕', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ),
               ],
             ],
           ),
-          const SizedBox(height: 10),
-          // 6열 x 3행 = 18칸 그리드
+          const SizedBox(height: 6),
+          // 6열 x 2행 = 12칸 그리드
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
                 const crossAxisCount = 6;
-                const rowCount = 3;
+                const rowCount = 2;
                 const spacing = 6.0;
                 final itemWidth = (constraints.maxWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
                 final itemHeight = (constraints.maxHeight - (spacing * (rowCount - 1))) / rowCount;
-                final ratio = (itemWidth / (itemHeight > 0 ? itemHeight : itemWidth)).clamp(0.5, 3.0);
+                final ratio = (itemWidth / (itemHeight > 0 ? itemHeight : itemWidth)).clamp(0.5, 4.0);
+
+                final customApps = customSlots
+                        ?.where((s) => s.type == LauncherSlotType.systemApp && s.name.isNotEmpty)
+                        .toList() ??
+                    [];
 
                 return GridView.builder(
                   physics: const NeverScrollableScrollPhysics(),
@@ -318,10 +330,10 @@ class BstToolsDock extends StatelessWidget {
                     mainAxisSpacing: spacing,
                     childAspectRatio: ratio,
                   ),
-                  itemCount: 18,
+                  itemCount: 12,
                   itemBuilder: (context, index) {
                     if (index < baseTools.length) {
-                      // 0~7: Web과 동일한 8개 기본 도구
+                      // 0~7: 8개 기본 도구
                       final tool = baseTools[index];
                       return _buildToolGridCard(
                         icon: tool['icon'] as String,
@@ -329,10 +341,7 @@ class BstToolsDock extends StatelessWidget {
                         isPrimary: tool['primary'] as bool,
                         onTap: () => onToolTap?.call(tool['type'] as BstToolType),
                       );
-                    } else if (index == 8) {
-                      // 앱 추가 버튼
-                      return _buildAddAppCard();
-                    } else if (index == 17 && isWindows) {
+                    } else if (index == 11 && isWindows) {
                       // 마지막 슬롯: 윈도우 전용 종료/닫기 버튼
                       return _buildSystemAppCard(
                         icon: '🚪',
@@ -340,8 +349,36 @@ class BstToolsDock extends StatelessWidget {
                         onTap: onCloseTap ?? () {},
                       );
                     } else {
-                      // 9~16 (또는 17): 시스템 앱 등록 가능한 빈칸 슬롯
-                      return _buildEmptySlotCard();
+                      // 8, 9, 10 (비윈도우는 11 포함): 등록된 앱 또는 앱 추가 슬롯
+                      final customIdx = index - baseTools.length;
+                      if (customIdx < customApps.length) {
+                        final slot = customApps[customIdx];
+                        return _buildCustomAppCard(
+                          slot: slot,
+                          onTap: () => onLaunchApp?.call(slot),
+                          onLongPress: () => onRemoveApp?.call(customIdx),
+                        );
+                      } else if (customIdx == customApps.length) {
+                        return _buildAddAppCard(
+                          onTap: () {
+                            if (onAddAppToSlot != null) {
+                              onAddAppToSlot!(customIdx);
+                            } else {
+                              onAddAppTap?.call();
+                            }
+                          },
+                        );
+                      } else {
+                        return _buildEmptySlotCard(
+                          onTap: () {
+                            if (onAddAppToSlot != null) {
+                              onAddAppToSlot!(customIdx);
+                            } else {
+                              onAddAppTap?.call();
+                            }
+                          },
+                        );
+                      }
                     }
                   },
                 );
@@ -349,6 +386,66 @@ class BstToolsDock extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCustomAppCard({
+    required LauncherSlot slot,
+    required VoidCallback onTap,
+    required VoidCallback onLongPress,
+  }) {
+    final hasIcon = slot.iconPath != null &&
+        slot.iconPath!.isNotEmpty &&
+        File(slot.iconPath!).existsSync();
+    final isUrl = slot.id.startsWith('http://') || slot.id.startsWith('https://');
+
+    return InkWell(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: const Color(0xFF00F5D4).withOpacity(0.35),
+            width: 1.2,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (hasIcon)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: Image.file(
+                  File(slot.iconPath!),
+                  width: 20,
+                  height: 20,
+                  fit: BoxFit.contain,
+                ),
+              )
+            else if (isUrl)
+              const Text('🌐', style: TextStyle(fontSize: 17))
+            else
+              const Text('🚀', style: TextStyle(fontSize: 17)),
+            const SizedBox(height: 2),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Text(
+                slot.name,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -444,16 +541,16 @@ class BstToolsDock extends StatelessWidget {
     );
   }
 
-  Widget _buildAddAppCard() {
+  Widget _buildAddAppCard({VoidCallback? onTap}) {
     return InkWell(
-      onTap: onAddAppTap,
+      onTap: onTap ?? onAddAppTap,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.015),
+          color: const Color(0xFF00F5D4).withOpacity(0.04),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: Colors.white.withOpacity(0.15),
+            color: const Color(0xFF00F5D4).withOpacity(0.3),
             style: BorderStyle.solid,
           ),
         ),
@@ -467,7 +564,7 @@ class BstToolsDock extends StatelessWidget {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF94A3B8),
+                color: Color(0xFF00F5D4),
               ),
             ),
           ],
@@ -476,20 +573,24 @@ class BstToolsDock extends StatelessWidget {
     );
   }
 
-  Widget _buildEmptySlotCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.01),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withOpacity(0.03)),
-      ),
-      child: Center(
-        child: Container(
-          width: 4,
-          height: 4,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
-            shape: BoxShape.circle,
+  Widget _buildEmptySlotCard({VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.01),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white.withOpacity(0.04)),
+        ),
+        child: Center(
+          child: Container(
+            width: 4,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
           ),
         ),
       ),
