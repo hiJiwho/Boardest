@@ -243,7 +243,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   int _sleepCountdownSeconds = 30;
   Timer? _sleepWarningTimer;
   bool _dialogOpen = false;
-  int _cloudDockTab = 0; // 0: Cloud 파일, 1: TBP 교과서
+  String _cloudCategoryFilter = 'all'; // 'all', 'lesson', 'tbp_canva', 'pen'
   bool _isTrustDeviceSaved = false;
   Future<List<BstCloudFile>>? _cloudFilesFuture;
 
@@ -251,13 +251,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     final token = BstCloudService.instance.activeToken;
     if (token != null && token.isNotEmpty) {
       _hideCloudPanel = false;
-      if (_cloudDockTab == 0) {
-        _cloudFilesFuture = BstCloudService.instance.fetchDriveFolderFiles(accessToken: token);
-      } else if (_cloudDockTab == 1) {
-        _cloudFilesFuture = BstCloudService.instance.fetchTbpFiles(accessToken: token);
-      } else {
-        _cloudFilesFuture = BstCloudService.instance.fetchBstFreeFiles(accessToken: token);
-      }
+      _cloudFilesFuture = BstCloudService.instance.fetchAllCloudDriveFiles(accessToken: token);
     } else {
       _cloudFilesFuture = null;
     }
@@ -5214,7 +5208,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     final dashboardScaffold = MediaQuery(
       data: MediaQuery.of(
         context,
-      ).copyWith(textScaler: TextScaler.linear(effectiveDpiScale.clamp(0.7, 2.0))),
+      ).copyWith(textScaler: TextScaler.linear(effectiveDpiScale.clamp(0.5, 4.0))),
       child: Scaffold(
         backgroundColor: const Color(0xFF06100E),
         body: Stack(
@@ -5250,17 +5244,43 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             ),
 
             SafeArea(
-              child: BstClassMainLayout(
-                scaleFactor: effectiveDpiScale,
-                appName: kIsWeb
-                    ? (_settings.specialClassroomMode ? 'Class Teacher' : 'Class')
-                    : (_settings.specialClassroomMode ? 'Teacher PRO' : 'Class PRO'),
-                schoolName: _settings.selectedSchool?.name ?? (_settings.schoolId.isNotEmpty ? _settings.schoolId : '보데스트 중학교'),
-                gradeClass: '${_settings.selectedGrade}학년 ${_settings.selectedClass}반',
-                isSpecialRoom: _settings.specialClassroomMode,
-                specialSubjectName: _settings.selectedSubject.isNotEmpty ? _settings.selectedSubject : null,
-                showCloudFiles: !_hideCloudPanel,
-                cloudFilesWidget: _buildInlineCloudDockPanel(effectiveDpiScale),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final userScale = _settings.scaleFactor.clamp(0.8, 2.5);
+                  final fitW = constraints.maxWidth / 1920.0;
+                  final fitH = constraints.maxHeight / 1080.0;
+                  final fit = fitW < fitH ? fitW : fitH;
+
+                  // 디스플레이 불변 배율: FHD(1920) 기준 150%, 4K(3840) 기준 300%
+                  // 브라우저 줌이나 OS 배율(DPI)과 무관하게 언제나 동일한 물리 시각 비율 유지
+                  final scale = (userScale * fit).clamp(0.5, 4.0);
+                  final baseW = constraints.maxWidth / scale;
+                  final baseH = constraints.maxHeight / scale;
+
+                  return SizedBox(
+                    width: constraints.maxWidth,
+                    height: constraints.maxHeight,
+                    child: FittedBox(
+                      fit: BoxFit.fill,
+                      alignment: Alignment.center,
+                      child: SizedBox(
+                        width: baseW,
+                        height: baseH,
+                        child: MediaQuery(
+                          data: MediaQuery.of(context).copyWith(
+                            textScaler: const TextScaler.linear(1.0),
+                          ),
+                          child: BstClassMainLayout(
+                            scaleFactor: 1.0,
+                            appName: kIsWeb
+                                ? (_settings.specialClassroomMode ? 'Class Teacher' : 'Class')
+                                : (_settings.specialClassroomMode ? 'Teacher PRO' : 'Class PRO'),
+                            schoolName: _settings.selectedSchool?.name ?? (_settings.schoolId.isNotEmpty ? _settings.schoolId : '보데스트 중학교'),
+                            gradeClass: '${_settings.selectedGrade}학년 ${_settings.selectedClass}반',
+                            isSpecialRoom: _settings.specialClassroomMode,
+                            specialSubjectName: _settings.selectedSubject.isNotEmpty ? _settings.selectedSubject : null,
+                            showCloudFiles: !_hideCloudPanel,
+                            cloudFilesWidget: _buildInlineCloudDockPanel(1.0),
                 periods: todayLessons.map((l) => TimetablePeriodItem(
                   period: l.classTime,
                   subject: l.subject,
@@ -5419,6 +5439,12 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   }
                 },
                 onLogoTap: _openWeeklyTimetable,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
 
@@ -10490,6 +10516,97 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   ],
                 ),
               ),
+              // 등록 교사 저장 버튼
+              InkWell(
+                onTap: () async {
+                  final email = BstCloudService.instance.activeOwnerEmail ?? '';
+                  final token = BstCloudService.instance.activeToken;
+                  final refresh = BstCloudService.instance.activeRefreshToken;
+                  await PasskeyService.instance.saveProTeacher(
+                    teacherName: teacherName,
+                    email: email,
+                    schoolName: _settings.selectedSchool?.name ?? '',
+                    accessToken: token,
+                    refreshToken: refresh,
+                  );
+                  await BstCloudService.instance.registerActiveTeacherAsTrusted();
+                  if (mounted) {
+                    setState(() => _isTrustDeviceSaved = true);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('🎉 $teacherName 선생님이 등록 교사로 저장되었습니다!'),
+                        duration: const Duration(seconds: 2),
+                        backgroundColor: const Color(0xFF00F5D4),
+                      ),
+                    );
+                  }
+                },
+                borderRadius: BorderRadius.circular(6 * scale),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 3.5 * scale),
+                  decoration: BoxDecoration(
+                    color: _isTrustDeviceSaved
+                        ? const Color(0xFF00F5D4).withOpacity(0.2)
+                        : const Color(0xFF6366F1).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(6 * scale),
+                    border: Border.all(
+                      color: _isTrustDeviceSaved ? const Color(0xFF00F5D4) : const Color(0xFF818CF8),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isTrustDeviceSaved ? Icons.check_circle_rounded : Icons.bookmark_add_rounded,
+                        size: 11 * scale,
+                        color: _isTrustDeviceSaved ? const Color(0xFF00F5D4) : const Color(0xFF818CF8),
+                      ),
+                      SizedBox(width: 3 * scale),
+                      Text(
+                        _isTrustDeviceSaved ? '등록 교사' : '교사 등록',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 9.5 * scale,
+                          fontWeight: FontWeight.bold,
+                          color: _isTrustDeviceSaved ? const Color(0xFF00F5D4) : const Color(0xFF818CF8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(width: 5 * scale),
+
+              // 교사 전환 버튼
+              InkWell(
+                onTap: _openSavedTeachersSwitchDialog,
+                borderRadius: BorderRadius.circular(6 * scale),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 3.5 * scale),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(6 * scale),
+                    border: Border.all(color: Colors.white24, width: 1),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.switch_account_rounded, size: 11 * scale, color: Colors.white70),
+                      SizedBox(width: 3 * scale),
+                      Text(
+                        '교사 전환',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 9.5 * scale,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(width: 5 * scale),
+
               // 급식 전환 버튼 (Cloud ↔ 급식 토글)
               InkWell(
                 onTap: () {
@@ -10500,7 +10617,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 },
                 borderRadius: BorderRadius.circular(6 * scale),
                 child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 7 * scale, vertical: 3.5 * scale),
+                  padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 3.5 * scale),
                   decoration: BoxDecoration(
                     color: const Color(0xFF10B981).withOpacity(0.2),
                     borderRadius: BorderRadius.circular(6 * scale),
@@ -10513,9 +10630,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.restaurant_rounded, size: 11 * scale, color: const Color(0xFF10B981)),
-                      SizedBox(width: 4 * scale),
+                      SizedBox(width: 3 * scale),
                       Text(
-                        '급식 보기',
+                        '급식',
                         style: GoogleFonts.notoSansKr(
                           fontSize: 9.5 * scale,
                           fontWeight: FontWeight.bold,
@@ -10526,56 +10643,10 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   ),
                 ),
               ),
-              SizedBox(width: 6 * scale),
-              // 신뢰기기 자동 로그인 등록 버튼
-              InkWell(
-                onTap: () async {
-                  final ok = await BstCloudService.instance.registerActiveTeacherAsTrusted();
-                  if (ok && mounted) {
-                    setState(() => _isTrustDeviceSaved = true);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('🎉 $teacherName 선생님의 자동 로그인(신뢰 기기)으로 등록되었습니다!'),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                },
-                borderRadius: BorderRadius.circular(6 * scale),
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 7 * scale, vertical: 3.5 * scale),
-                  decoration: BoxDecoration(
-                    color: _isTrustDeviceSaved ? const Color(0xFF00F5D4).withOpacity(0.2) : const Color(0xFF6366F1).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(6 * scale),
-                    border: Border.all(
-                      color: _isTrustDeviceSaved ? const Color(0xFF00F5D4) : const Color(0xFF818CF8),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _isTrustDeviceSaved ? Icons.check_circle_rounded : Icons.lock_person_rounded,
-                        size: 11 * scale,
-                        color: _isTrustDeviceSaved ? const Color(0xFF00F5D4) : const Color(0xFF818CF8),
-                      ),
-                      SizedBox(width: 4 * scale),
-                      Text(
-                        _isTrustDeviceSaved ? '신뢰기기 등록됨' : '자동로그인 등록',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 9.5 * scale,
-                          fontWeight: FontWeight.bold,
-                          color: _isTrustDeviceSaved ? const Color(0xFF00F5D4) : const Color(0xFF818CF8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(width: 6 * scale),
+              SizedBox(width: 4 * scale),
+
               IconButton(
-                icon: Icon(Icons.refresh_rounded, color: Colors.white70, size: 16 * scale),
+                icon: Icon(Icons.refresh_rounded, color: Colors.white70, size: 15 * scale),
                 tooltip: '새로고침',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -10585,9 +10656,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   });
                 },
               ),
-              SizedBox(width: 6 * scale),
+              SizedBox(width: 4 * scale),
               IconButton(
-                icon: Icon(Icons.close_rounded, color: Colors.white70, size: 16 * scale),
+                icon: Icon(Icons.close_rounded, color: Colors.white70, size: 15 * scale),
                 tooltip: 'Cloud 패널 닫기 (급식 전환, 3분 뒤 자동 로그아웃)',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -10598,9 +10669,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   _scheduleCloudEscapeAutoLogout();
                 },
               ),
-              SizedBox(width: 6 * scale),
+              SizedBox(width: 4 * scale),
               IconButton(
-                icon: Icon(Icons.logout_rounded, color: Colors.redAccent, size: 16 * scale),
+                icon: Icon(Icons.logout_rounded, color: Colors.redAccent, size: 15 * scale),
                 tooltip: '로그아웃',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -10613,9 +10684,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               ),
             ],
           ),
-          SizedBox(height: 8 * scale),
+          SizedBox(height: 7 * scale),
 
-          // Cloud 상단 4-Tab 스위처: [📁 수업 자료] | [📖 TBP 교과서] | [🎨 Canva] | [✏️ 판서보드]
+          // 2. Cloud 상단 카테고리 필터 스위처: [전체] | [📁 수업 자료] | [📐 TBP & Canva] | [✏️ 판서]
           Container(
             padding: EdgeInsets.all(2.5 * scale),
             decoration: BoxDecoration(
@@ -10625,122 +10696,14 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             ),
             child: Row(
               children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () {
-                      setState(() {
-                        _cloudDockTab = 0;
-                        _refreshCloudFiles();
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(6 * scale),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(vertical: 4 * scale),
-                      decoration: BoxDecoration(
-                        color: _cloudDockTab == 0 ? const Color(0xFF6366F1) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6 * scale),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '📁 수업 자료',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 9.5 * scale,
-                            fontWeight: _cloudDockTab == 0 ? FontWeight.bold : FontWeight.normal,
-                            color: _cloudDockTab == 0 ? Colors.white : Colors.white60,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: InkWell(
-                    onTap: () {
-                      setState(() {
-                        _cloudDockTab = 1;
-                        _refreshCloudFiles();
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(6 * scale),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(vertical: 4 * scale),
-                      decoration: BoxDecoration(
-                        color: _cloudDockTab == 1 ? const Color(0xFF7F5AF0) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6 * scale),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '📖 TBP 교과서',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 9.5 * scale,
-                            fontWeight: _cloudDockTab == 1 ? FontWeight.bold : FontWeight.normal,
-                            color: _cloudDockTab == 1 ? Colors.white : Colors.white60,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: InkWell(
-                    onTap: () {
-                      setState(() {
-                        _cloudDockTab = 2;
-                        _refreshCloudFiles();
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(6 * scale),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(vertical: 4 * scale),
-                      decoration: BoxDecoration(
-                        color: _cloudDockTab == 2 ? const Color(0xFF00C4CC) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6 * scale),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '🎨 Canva',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 9.5 * scale,
-                            fontWeight: _cloudDockTab == 2 ? FontWeight.bold : FontWeight.normal,
-                            color: _cloudDockTab == 2 ? Colors.black : Colors.white60,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: InkWell(
-                    onTap: () {
-                      setState(() {
-                        _cloudDockTab = 3;
-                        _refreshCloudFiles();
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(6 * scale),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(vertical: 4 * scale),
-                      decoration: BoxDecoration(
-                        color: _cloudDockTab == 3 ? const Color(0xFF00F5D4) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6 * scale),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '✏️ 판서',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 9.5 * scale,
-                            fontWeight: _cloudDockTab == 3 ? FontWeight.bold : FontWeight.normal,
-                            color: _cloudDockTab == 3 ? Colors.black : Colors.white60,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                _buildCloudFilterPill('all', '전체', scale),
+                _buildCloudFilterPill('lesson', '📁 수업 자료', scale),
+                _buildCloudFilterPill('tbp_canva', '📐 TBP & Canva', scale),
+                _buildCloudFilterPill('pen', '✏️ 판서', scale),
               ],
             ),
           ),
-          SizedBox(height: 8 * scale),
+          SizedBox(height: 7 * scale),
 
           // 파일 목록
           Expanded(
@@ -10775,108 +10738,91 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 }
 
                 final allFiles = snapshot.data ?? [];
+                final filteredFiles = _filterCloudFiles(allFiles);
 
-                // Tab 0: 일반 Cloud 수업 자료 (Save)
-                if (_cloudDockTab == 0) {
-                  final files = allFiles.where((f) {
-                    final name = f.name.toLowerCase();
-                    return !name.endsWith('.pen') && !name.endsWith('.bsttbp') && !name.endsWith('.tbp') && !name.endsWith('.json') && !name.contains('canva');
-                  }).toList();
+                if (filteredFiles.isEmpty) {
+                  String emptyMsg = '표시할 클라우드 파일이 없습니다.';
+                  if (_cloudCategoryFilter == 'lesson') emptyMsg = '수업 자료(PDF, PPT, HWP 등)가 없습니다.';
+                  if (_cloudCategoryFilter == 'tbp_canva') emptyMsg = '등록된 TBP 교과서 및 Canva 디자인이 없습니다.';
+                  if (_cloudCategoryFilter == 'pen') emptyMsg = '저장된 판서 기록(.pen, .bstpen)이 없습니다.';
 
-                  if (files.isEmpty) {
-                    return Center(
-                      child: Text(
-                        '클라우드 폴더(bst-save)에 자료가 없습니다.',
-                        style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 11 * scale),
+                  return Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(12 * scale),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.folder_open_rounded, size: 28 * scale, color: Colors.white30),
+                          SizedBox(height: 6 * scale),
+                          Text(
+                            emptyMsg,
+                            style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 11 * scale),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
-                    );
-                  }
-
-                  return ListView.separated(
-                    itemCount: files.length,
-                    separatorBuilder: (_, __) => SizedBox(height: 5 * scale),
-                    itemBuilder: (ctx, idx) {
-                      final f = files[idx];
-                      final isPdf = f.name.endsWith('.pdf');
-                      final isPpt = f.name.endsWith('.ppt') || f.name.endsWith('.pptx');
-
-                      return InkWell(
-                        onTap: () => _openDriveFileFromDock(f),
-                        borderRadius: BorderRadius.circular(8 * scale),
-                        child: Container(
-                          padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 6 * scale),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.06),
-                            borderRadius: BorderRadius.circular(8 * scale),
-                            border: Border.all(color: Colors.white10),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                isPdf ? Icons.picture_as_pdf_rounded : isPpt ? Icons.slideshow_rounded : Icons.insert_drive_file_rounded,
-                                color: isPdf ? Colors.redAccent : isPpt ? Colors.orangeAccent : const Color(0xFF00F5D4),
-                                size: 15 * scale,
-                              ),
-                              SizedBox(width: 6 * scale),
-                              Expanded(
-                                child: Text(
-                                  f.name,
-                                  style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 10.5 * scale, fontWeight: FontWeight.w500),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 10 * scale),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                    ),
                   );
                 }
 
-                // Tab 1: TBP 교과서 목록
-                if (_cloudDockTab == 1) {
-                  final tbpFiles = allFiles.where((f) {
+                return ListView.separated(
+                  itemCount: filteredFiles.length,
+                  separatorBuilder: (_, __) => SizedBox(height: 5 * scale),
+                  itemBuilder: (ctx, idx) {
+                    final f = filteredFiles[idx];
                     final name = f.name.toLowerCase();
-                    return name.endsWith('.bsttbp') || name.endsWith('.tbp') || name.contains('tbp') || name.contains('교과서');
-                  }).toList();
+                    final isCanva = name.endsWith('.canva') ||
+                        name.endsWith('.canva.bst') ||
+                        name.endsWith('.bstcanva') ||
+                        name.contains('canva');
+                    final isTbp = name.endsWith('.bsttbp') ||
+                        name.endsWith('.tbp') ||
+                        f.mimeType == 'application/x-bst-tbp-folder' ||
+                        (f.mimeType == 'application/vnd.google-apps.folder' && (name.contains('tbp') || name.contains('교과서')));
+                    final isPen = name.endsWith('.pen') || name.endsWith('.bstpen');
+                    final isPdf = name.endsWith('.pdf');
+                    final isPpt = name.endsWith('.ppt') || name.endsWith('.pptx');
+                    final isHwp = name.endsWith('.hwp') || name.endsWith('.hwpx');
 
-                  if (tbpFiles.isEmpty) {
-                    return Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(8 * scale),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.menu_book_rounded, size: 28 * scale, color: const Color(0xFF7F5AF0).withOpacity(0.5)),
-                            SizedBox(height: 6 * scale),
-                            Text(
-                              '교사 Cloud에 등록된 TBP 교과서가 없습니다',
-                              style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 11 * scale, fontWeight: FontWeight.bold),
-                              textAlign: TextAlign.center,
-                            ),
-                            SizedBox(height: 3 * scale),
-                            Text(
-                              '교사용 앱에서 교과서 파일(.BSTtbp)을 Cloud에 업로드해주세요.',
-                              style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 9.5 * scale),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
+                    IconData iconData = Icons.insert_drive_file_rounded;
+                    Color itemColor = const Color(0xFF00F5D4);
+                    String badgeText = '자료';
 
-                  return ListView.separated(
-                    itemCount: tbpFiles.length,
-                    separatorBuilder: (_, __) => SizedBox(height: 5 * scale),
-                    itemBuilder: (ctx, idx) {
-                      final f = tbpFiles[idx];
-                      return InkWell(
-                        onTap: () async {
+                    if (isCanva) {
+                      iconData = Icons.palette_rounded;
+                      itemColor = const Color(0xFF00C4CC);
+                      badgeText = 'Canva';
+                    } else if (isTbp) {
+                      iconData = Icons.auto_stories_rounded;
+                      itemColor = const Color(0xFF818CF8);
+                      badgeText = '교과서';
+                    } else if (isPen) {
+                      iconData = Icons.history_edu_rounded;
+                      itemColor = const Color(0xFF00F5D4);
+                      badgeText = '판서';
+                    } else if (isPdf) {
+                      iconData = Icons.picture_as_pdf_rounded;
+                      itemColor = Colors.redAccent;
+                      badgeText = 'PDF';
+                    } else if (isPpt) {
+                      iconData = Icons.slideshow_rounded;
+                      itemColor = Colors.orangeAccent;
+                      badgeText = 'PPT';
+                    } else if (isHwp) {
+                      iconData = Icons.description_rounded;
+                      itemColor = const Color(0xFF3B82F6);
+                      badgeText = '한글';
+                    }
+
+                    return InkWell(
+                      onTap: () async {
+                        if (isCanva) {
+                          _openCloudCanvaFile(f);
+                        } else if (isTbp) {
                           final token = BstCloudService.instance.activeToken ?? '';
                           String targetPath = f.id;
-                          if (!kIsWeb) {
+                          final isFolder = f.mimeType == 'application/x-bst-tbp-folder' || f.mimeType == 'application/vnd.google-apps.folder';
+                          if (!kIsWeb && !isFolder) {
                             try {
                               final dl = await BstCloudService.instance.downloadDriveFile(f.id, f.name, token);
                               if (dl != null && dl.isNotEmpty) targetPath = dl;
@@ -10888,165 +10834,59 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                               scaleFactor: _settings.scaleFactor,
                             ),
                           );
-                        },
-                        borderRadius: BorderRadius.circular(8 * scale),
-                        child: Container(
-                          padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 6 * scale),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF7F5AF0).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8 * scale),
-                            border: Border.all(color: const Color(0xFF7F5AF0).withOpacity(0.3)),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.chrome_reader_mode_rounded, color: const Color(0xFF00F5D4), size: 15 * scale),
-                              SizedBox(width: 6 * scale),
-                              Expanded(
-                                child: Text(
-                                  f.name,
-                                  style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 10.5 * scale, fontWeight: FontWeight.w600),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 10 * scale),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                }
-
-                // Tab 2: 🎨 Canva 디자인 파일 목록
-                if (_cloudDockTab == 2) {
-                  final canvaFiles = allFiles.where((f) {
-                    final name = f.name.toLowerCase();
-                    return name.endsWith('.canva') || name.endsWith('.canva.bst') || name.contains('canva');
-                  }).toList();
-
-                  if (canvaFiles.isEmpty) {
-                    return Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(8 * scale),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.palette_rounded, size: 28 * scale, color: const Color(0xFF00C4CC).withOpacity(0.5)),
-                            SizedBox(height: 6 * scale),
-                            Text(
-                              '등록된 Canva 디자인이 없습니다',
-                              style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 11 * scale, fontWeight: FontWeight.bold),
-                              textAlign: TextAlign.center,
+                        } else if (isPen) {
+                          _pushBoardRoute(
+                            BoardestPenView(
+                              filePath: f.name,
+                              scaleFactor: _settings.scaleFactor,
+                              teacher: BstCloudService.instance.activeTeacherName ?? '교사',
+                              subject: '화이트보드',
                             ),
-                            SizedBox(height: 3 * scale),
-                            Text(
-                              '교사용 앱에서 Canva 링크 및 디자인을 Cloud에 등록해주세요.',
-                              style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 9.5 * scale),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-
-                  return ListView.separated(
-                    itemCount: canvaFiles.length,
-                    separatorBuilder: (_, __) => SizedBox(height: 5 * scale),
-                    itemBuilder: (ctx, idx) {
-                      final f = canvaFiles[idx];
-                      return InkWell(
-                        onTap: () => _openCloudCanvaFile(f),
-                        borderRadius: BorderRadius.circular(8 * scale),
-                        child: Container(
-                          padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 6 * scale),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF00C4CC).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8 * scale),
-                            border: Border.all(color: const Color(0xFF00C4CC).withOpacity(0.3)),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.palette_rounded, color: const Color(0xFF00C4CC), size: 15 * scale),
-                              SizedBox(width: 6 * scale),
-                              Expanded(
-                                child: Text(
-                                  f.name,
-                                  style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 10.5 * scale, fontWeight: FontWeight.w600),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 10 * scale),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                }
-
-                // Tab 3: ✏️ 판서보드 (Free) - 'bst-Free' 폴더의 .Free.pen 파일 목록
-                final freePenFiles = allFiles.where((f) => f.name.endsWith('.pen')).toList();
-                if (freePenFiles.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(8 * scale),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.draw_rounded, size: 28 * scale, color: const Color(0xFF00F5D4).withOpacity(0.5)),
-                          SizedBox(height: 6 * scale),
-                          Text(
-                            '저장된 화이트보드 판서가 없습니다',
-                            style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 11 * scale, fontWeight: FontWeight.bold),
-                          ),
-                          SizedBox(height: 3 * scale),
-                          Text(
-                            '전자칠판 화이트보드에서 필기하면 자동 저장됩니다.',
-                            style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 9.5 * scale),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-
-                return ListView.separated(
-                  itemCount: freePenFiles.length,
-                  separatorBuilder: (_, __) => SizedBox(height: 5 * scale),
-                  itemBuilder: (ctx, idx) {
-                    final f = freePenFiles[idx];
-                    return InkWell(
-                      onTap: () {
-                        _pushBoardRoute(
-                          BoardestPenView(
-                            filePath: f.name,
-                            scaleFactor: _settings.scaleFactor,
-                            teacher: BstCloudService.instance.activeTeacherName ?? '교사',
-                            subject: '화이트보드',
-                          ),
-                        );
+                          );
+                        } else {
+                          _openDriveFileFromDock(f);
+                        }
                       },
                       borderRadius: BorderRadius.circular(8 * scale),
                       child: Container(
                         padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 6 * scale),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF00F5D4).withOpacity(0.08),
+                          color: itemColor.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(8 * scale),
-                          border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.25)),
+                          border: Border.all(color: itemColor.withOpacity(0.2)),
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.history_edu_rounded, color: const Color(0xFF00F5D4), size: 15 * scale),
+                            Icon(iconData, color: itemColor, size: 15 * scale),
                             SizedBox(width: 6 * scale),
                             Expanded(
                               child: Text(
                                 f.name,
-                                style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 10.5 * scale, fontWeight: FontWeight.w600),
+                                style: GoogleFonts.notoSansKr(
+                                  color: Colors.white,
+                                  fontSize: 10.5 * scale,
+                                  fontWeight: FontWeight.w500,
+                                ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            Icon(Icons.open_in_new_rounded, color: const Color(0xFF00F5D4), size: 12 * scale),
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 5 * scale, vertical: 1.5 * scale),
+                              decoration: BoxDecoration(
+                                color: itemColor.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(4 * scale),
+                              ),
+                              child: Text(
+                                badgeText,
+                                style: TextStyle(
+                                  fontSize: 8.5 * scale,
+                                  fontWeight: FontWeight.bold,
+                                  color: itemColor,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 4 * scale),
+                            Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 10 * scale),
                           ],
                         ),
                       ),
@@ -11061,6 +10901,294 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
+  Widget _buildCloudFilterPill(String filterKey, String label, double scale) {
+    final isSelected = _cloudCategoryFilter == filterKey;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _cloudCategoryFilter = filterKey;
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          alignment: Alignment.center,
+          padding: EdgeInsets.symmetric(vertical: 5 * scale),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF00F5D4) : Colors.transparent,
+            borderRadius: BorderRadius.circular(6 * scale),
+          ),
+          child: Text(
+            label,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 10 * scale,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              color: isSelected ? const Color(0xFF070B14) : Colors.white70,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<BstCloudFile> _filterCloudFiles(List<BstCloudFile> files) {
+    return files.where((f) {
+      final name = f.name.toLowerCase();
+      final isPen = name.endsWith('.pen') || name.endsWith('.bstpen');
+      if (isPen && f.size != null && f.size! <= 0) return false;
+
+      final isTbp = name.endsWith('.bsttbp') ||
+          name.endsWith('.tbp') ||
+          f.mimeType == 'application/x-bst-tbp-folder' ||
+          (f.mimeType == 'application/vnd.google-apps.folder' && (name.contains('tbp') || name.contains('교과서')));
+      final isCanva = name.endsWith('.canva') ||
+          name.endsWith('.canva.bst') ||
+          name.endsWith('.bstcanva') ||
+          name.contains('canva');
+
+      switch (_cloudCategoryFilter) {
+        case 'lesson':
+          return !isPen && !isTbp && !isCanva;
+        case 'tbp_canva':
+          return isTbp || isCanva;
+        case 'pen':
+          return isPen;
+        case 'all':
+        default:
+          return true;
+      }
+    }).toList();
+  }
+
+  Future<void> _checkTrustDeviceStatus() async {
+    final activeTeacher = BstCloudService.instance.activeTeacherName;
+    if (activeTeacher == null || activeTeacher.isEmpty) {
+      if (mounted) setState(() => _isTrustDeviceSaved = false);
+      return;
+    }
+    final saved = await PasskeyService.instance.getProSavedTeachers();
+    final isSaved = saved.any((t) => t['teacherName'] == activeTeacher);
+    if (mounted) {
+      setState(() => _isTrustDeviceSaved = isSaved);
+    }
+  }
+
+  Future<void> _openSavedTeachersSwitchDialog() async {
+    final scale = _settings.scaleFactor;
+    final savedTeachers = await PasskeyService.instance.getProSavedTeachers();
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (dlgContext) {
+        return StatefulBuilder(
+          builder: (ctx, setDlgState) {
+            return Dialog(
+              backgroundColor: const Color(0xFF0B132B),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16 * scale),
+                side: const BorderSide(color: Color(0xFF00F5D4), width: 1.2),
+              ),
+              child: Container(
+                width: 420 * scale,
+                padding: EdgeInsets.all(20 * scale),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.switch_account_rounded, color: const Color(0xFF00F5D4), size: 22 * scale),
+                        SizedBox(width: 8 * scale),
+                        Expanded(
+                          child: Text(
+                            '등록 교사 선택 및 전환',
+                            style: GoogleFonts.notoSansKr(
+                              color: Colors.white,
+                              fontSize: 16 * scale,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.close_rounded, color: Colors.white54, size: 20 * scale),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 12 * scale),
+                    if (savedTeachers.isEmpty) ...[
+                      Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20 * scale),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Icon(Icons.person_off_rounded, size: 36 * scale, color: Colors.white30),
+                              SizedBox(height: 8 * scale),
+                              Text(
+                                '등록된 교사가 없습니다.',
+                                style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13 * scale),
+                              ),
+                              SizedBox(height: 4 * scale),
+                              Text(
+                                'QR 인증이나 OTP 로그인 시 등록되거나\n상단의 [교사 등록] 버튼을 눌러 등록하세요.',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 10.5 * scale),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxHeight: 280 * scale),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: savedTeachers.length,
+                          separatorBuilder: (_, __) => SizedBox(height: 8 * scale),
+                          itemBuilder: (itemCtx, idx) {
+                            final t = savedTeachers[idx];
+                            final name = t['teacherName'] ?? '선생님';
+                            final email = t['email'] ?? '';
+                            final school = t['schoolName'] ?? '';
+                            final token = t['accessToken'] ?? 'saved_token_$name';
+                            final isCurrent = BstCloudService.instance.activeTeacherName == name;
+
+                            return Container(
+                              padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 8 * scale),
+                              decoration: BoxDecoration(
+                                color: isCurrent ? const Color(0xFF00F5D4).withOpacity(0.12) : Colors.white.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(10 * scale),
+                                border: Border.all(
+                                  color: isCurrent ? const Color(0xFF00F5D4) : Colors.white12,
+                                  width: isCurrent ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 16 * scale,
+                                    backgroundColor: isCurrent ? const Color(0xFF00F5D4) : Colors.white24,
+                                    child: Text(
+                                      name.isNotEmpty ? name.substring(0, 1) : '교',
+                                      style: TextStyle(
+                                        color: isCurrent ? const Color(0xFF070B14) : Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13 * scale,
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 10 * scale),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          name + (isCurrent ? ' (현재 활성)' : ''),
+                                          style: GoogleFonts.notoSansKr(
+                                            color: Colors.white,
+                                            fontSize: 12.5 * scale,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        if (school.isNotEmpty || email.isNotEmpty)
+                                          Text(
+                                            [school, email].where((e) => e.isNotEmpty).join(' • '),
+                                            style: GoogleFonts.notoSansKr(
+                                              color: Colors.white54,
+                                              fontSize: 10 * scale,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (!isCurrent)
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        BstCloudService.instance.setDirectAccessToken(
+                                          token,
+                                          teacherName: name,
+                                          ownerEmail: email,
+                                        );
+                                        setState(() {
+                                          _refreshCloudFiles();
+                                          _checkTrustDeviceStatus();
+                                        });
+                                        Navigator.pop(ctx);
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('🎉 $name 선생님으로 즉시 전환되었습니다!'),
+                                            backgroundColor: const Color(0xFF00F5D4),
+                                          ),
+                                        );
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF00F5D4),
+                                        foregroundColor: const Color(0xFF070B14),
+                                        padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 6 * scale),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6 * scale)),
+                                      ),
+                                      child: Text('전환', style: TextStyle(fontSize: 11 * scale, fontWeight: FontWeight.bold)),
+                                    ),
+                                  SizedBox(width: 4 * scale),
+                                  IconButton(
+                                    icon: Icon(Icons.delete_outline_rounded, size: 16 * scale, color: Colors.white38),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    onPressed: () async {
+                                      await PasskeyService.instance.removeProTeacher(name);
+                                      final updated = await PasskeyService.instance.getProSavedTeachers();
+                                      setDlgState(() {
+                                        savedTeachers.clear();
+                                        savedTeachers.addAll(updated);
+                                      });
+                                      _checkTrustDeviceStatus();
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                    SizedBox(height: 14 * scale),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _openCloudPairingModal();
+                          },
+                          icon: Icon(Icons.add_rounded, size: 15 * scale, color: const Color(0xFF00F5D4)),
+                          label: Text(
+                            '새 교사 인증/등록',
+                            style: GoogleFonts.notoSansKr(
+                              color: const Color(0xFF00F5D4),
+                              fontSize: 11.5 * scale,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 
   void _openCloudCanvaFile(BstCloudFile file) async {
     final token = BstCloudService.instance.activeToken;

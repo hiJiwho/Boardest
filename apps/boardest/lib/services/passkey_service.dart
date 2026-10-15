@@ -187,8 +187,10 @@ class PasskeyService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final list = await getProSavedTeachers();
-      // 기존 동일 이메일 삭제 후 최신화
-      list.removeWhere((item) => item['email'] == email);
+      // 기존 동일 이메일 또는 이름 삭제 후 최신화
+      list.removeWhere((item) =>
+          (email.isNotEmpty && item['email'] == email) ||
+          item['teacherName'] == teacherName);
       list.insert(0, {
         'teacherName': teacherName,
         'email': email,
@@ -204,11 +206,12 @@ class PasskeyService {
   }
 
   /// PRO 로컬에서 선생님 등록 해제
-  Future<void> removeProTeacher(String email) async {
+  Future<void> removeProTeacher(String identifier) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final list = await getProSavedTeachers();
-      list.removeWhere((item) => item['email'] == email);
+      list.removeWhere((item) =>
+          item['email'] == identifier || item['teacherName'] == identifier);
       await prefs.setString(_savedTeachersPrefKey, jsonEncode(list));
     } catch (_) {}
   }

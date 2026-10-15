@@ -87,7 +87,7 @@ class _SettingsFullscreenViewState extends State<SettingsFullscreenView> {
     _currentSettings = widget.settings;
     _schoolIdController = TextEditingController(text: _currentSettings.schoolId);
     _specialIdController = TextEditingController(text: _currentSettings.classNickname);
-    _currentScaleFactor = _currentSettings.scaleFactor;
+    _currentScaleFactor = _currentSettings.scaleFactor.clamp(1.0, 2.0);
     _selectedGrade = _currentSettings.selectedGrade;
     _selectedClass = _currentSettings.selectedClass;
     _specialClassMode = _currentSettings.specialClassroomMode;
@@ -852,19 +852,19 @@ class _SettingsFullscreenViewState extends State<SettingsFullscreenView> {
               ),
               const SizedBox(height: 12),
               Slider(
-                value: _currentScaleFactor,
-                min: 0.8,
+                value: _currentScaleFactor.clamp(1.0, 2.0),
+                min: 1.0,
                 max: 2.0,
-                divisions: 12,
+                divisions: 10,
                 activeColor: const Color(0xFF00F5D4),
                 inactiveColor: Colors.white12,
-                onChanged: (val) => setState(() => _currentScaleFactor = val),
+                onChanged: (val) => setState(() => _currentScaleFactor = (val * 10).roundToDouble() / 10),
               ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('80% (소형 모니터)', style: GoogleFonts.notoSansKr(color: const Color(0xFF72757E), fontSize: 11)),
-                  Text('140% (기본 권장)', style: GoogleFonts.notoSansKr(color: const Color(0xFF72757E), fontSize: 11)),
+                  Text('100% (기본 모니터)', style: GoogleFonts.notoSansKr(color: const Color(0xFF72757E), fontSize: 11)),
+                  Text('150% (기본 권장)', style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontSize: 11, fontWeight: FontWeight.bold)),
                   Text('200% (초대형 전자칠판)', style: GoogleFonts.notoSansKr(color: const Color(0xFF72757E), fontSize: 11)),
                 ],
               ),

@@ -212,7 +212,7 @@ class AppSettings {
     this.isSetupComplete = false,
     List<DDayEvent>? ddayEvents,
     this.pinnedDday,
-    this.scaleFactor = 1.2,
+    this.scaleFactor = 1.5,
     List<SystemApp>? selectedSystemApps,
     List<LauncherSlot>? launcherSlots,
     this.autoSleepEnabled = false,
@@ -328,7 +328,7 @@ class AppSettings {
     // Define subject relation groups to fallback dynamically
     final List<Set<String>> relationGroups = [
       {'국어', '문학', '독서', '화법과작문', '화작', '언어와매체', '언매', '고전읽기', '심화국어', '실용국어'},
-      {'영어', '영어회화', '영어독해', '영어독해와작문', '영어작문', '영어회화', '영어I', '영어II', '영어1', '영어2', '실용영어', '심화영어', 'ENGLISH'},
+      {'영어', '영어회화', '영어독해', '영어독해와작문', '영어작문', '영어I', '영어II', '영어1', '영어2', '실용영어', '심화영어', 'ENGLISH'},
       {'수학', '공통수학', '수학I', '수학II', '수학1', '수학2', '미적분', '확률과통계', '확통', '기하', '인공지능수학', '경제수학', '수학과제탐구'},
       {'과학', '통합과학', '물리학', '화학', '생명과학', '지구과학', '물리', '생물', '지구', '융합과학', '과학탐구실험', '물리1', '물리2', '화학1', '화학2', '생명과학1', '생명과학2', '지구과학1', '지구과학2'},
       {'사회', '통합사회', '한국사', '역사', '세계사', '동아시아사', '사회문화', '사문', '생활과윤리', '생윤', '윤리와사상', '윤사', '한국지리', '한지', '세계지리', '세지', '정치와법', '정법', '경제'},
@@ -503,7 +503,7 @@ class AppSettings {
       pinnedDday: json['pinnedDday'] != null
           ? DDayEvent.fromJson(json['pinnedDday'] as Map<String, dynamic>)
           : null,
-      scaleFactor: (json['scaleFactor'] as num?)?.toDouble() ?? 1.2,
+      scaleFactor: (json['scaleFactor'] as num?)?.toDouble() ?? 1.5,
       selectedSystemApps: sysApps,
       launcherSlots: loadedSlots,
       autoSleepEnabled: json['autoSleepEnabled'] as bool? ?? false,

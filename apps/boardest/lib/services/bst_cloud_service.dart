@@ -954,7 +954,9 @@ class BstCloudService {
 
       String currentToken = accessToken;
       for (final fid in folderIds) {
-        final q = "'$fid' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'";
+        final q = (folderName == 'bst-tbs' || folderName == 'bst-textbookpro')
+            ? "'$fid' in parents and trashed = false"
+            : "'$fid' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'";
         final url = Uri.parse("https://www.googleapis.com/drive/v3/files?q=${Uri.encodeComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=100&orderBy=modifiedTime desc");
         var res = await http.get(url, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
         if (res.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
@@ -970,11 +972,15 @@ class BstCloudService {
           for (final f in (data['files'] as List? ?? [])) {
             final name = (f['name'] ?? '').toString();
             if (name.endsWith('.json') && !name.endsWith('.pen.json')) continue;
+            final isFolder = f['mimeType'] == 'application/vnd.google-apps.folder';
+            final mimeType = (isFolder && (folderName == 'bst-tbs' || folderName == 'bst-textbookpro'))
+                ? 'application/x-bst-tbp-folder'
+                : (f['mimeType'] ?? '');
             if (!results.any((r) => r.id == f['id'])) {
               results.add(BstCloudFile(
                 id: f['id'] ?? '',
                 name: name,
-                mimeType: f['mimeType'] ?? '',
+                mimeType: mimeType,
                 size: f['size'] != null ? int.tryParse(f['size'].toString()) : null,
               ));
             }
@@ -988,13 +994,13 @@ class BstCloudService {
         if (folderName == 'bst-canva') {
           extQuery = "and (name contains '.bstcanva' or name contains '.canva')";
         } else if (folderName == 'bst-tbs' || folderName == 'bst-textbookpro') {
-          extQuery = "and (name contains '.bsttbp' or name contains '.tbp')";
+          extQuery = "and (name contains '.bsttbp' or name contains '.tbp' or mimeType = 'application/vnd.google-apps.folder')";
         } else if (folderName == 'bst-pen') {
           extQuery = "and name contains '.pen'";
         } else {
           extQuery = "and (name contains '.pdf' or name contains '.ppt' or name contains '.hwp')";
         }
-        final fallbackUrl = Uri.parse("https://www.googleapis.com/drive/v3/files?q=trashed=false and mimeType!='application/vnd.google-apps.folder' $extQuery&fields=files(id,name,mimeType,size)&pageSize=100&orderBy=modifiedTime desc");
+        final fallbackUrl = Uri.parse("https://www.googleapis.com/drive/v3/files?q=trashed=false $extQuery&fields=files(id,name,mimeType,size)&pageSize=100&orderBy=modifiedTime desc");
         var fbRes = await http.get(fallbackUrl, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
         if (fbRes.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
           final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
@@ -1008,11 +1014,15 @@ class BstCloudService {
           final data = jsonDecode(fbRes.body);
           for (final f in (data['files'] as List? ?? [])) {
             final name = (f['name'] ?? '').toString();
+            final isFolder = f['mimeType'] == 'application/vnd.google-apps.folder';
+            final mimeType = (isFolder && (folderName == 'bst-tbs' || folderName == 'bst-textbookpro'))
+                ? 'application/x-bst-tbp-folder'
+                : (f['mimeType'] ?? '');
             if (!results.any((r) => r.id == f['id'])) {
               results.add(BstCloudFile(
                 id: f['id'] ?? '',
                 name: name,
-                mimeType: f['mimeType'] ?? '',
+                mimeType: mimeType,
                 size: f['size'] != null ? int.tryParse(f['size'].toString()) : null,
               ));
             }
@@ -1027,6 +1037,61 @@ class BstCloudService {
     }
   }
 
+  /// 모든 클라우드 폴더(수업자료 bst-save, Canva bst-canva, TBP 교과서 bst-tbs, 판서 bst-pen) 통합 조회
+  Future<List<BstCloudFile>> fetchAllCloudDriveFiles({required String accessToken}) async {
+    if (accessToken.startsWith('demo_token') || accessToken == 'web_qr_approved_token' || AppConfig.isDemoMode) {
+      return _generateDemoCloudFiles();
+    }
+
+    final List<BstCloudFile> results = [];
+    final Set<String> seenIds = {};
+
+    void addFile(BstCloudFile f) {
+      if (!seenIds.contains(f.id)) {
+        seenIds.add(f.id);
+        results.add(f);
+      }
+    }
+
+    try {
+      final saveFiles = await fetchFilesBySpecificFolder(accessToken: accessToken, folderName: 'bst-save');
+      for (final f in saveFiles) {
+        addFile(f);
+      }
+    } catch (e) {
+      debugPrint('[BstCloudService] fetch bst-save error: $e');
+    }
+
+    try {
+      final canvaFiles = await fetchFilesBySpecificFolder(accessToken: accessToken, folderName: 'bst-canva');
+      for (final f in canvaFiles) {
+        addFile(f);
+      }
+    } catch (e) {
+      debugPrint('[BstCloudService] fetch bst-canva error: $e');
+    }
+
+    try {
+      final tbpFiles = await fetchTbpFiles(accessToken: accessToken);
+      for (final f in tbpFiles) {
+        addFile(f);
+      }
+    } catch (e) {
+      debugPrint('[BstCloudService] fetch bst-tbs error: $e');
+    }
+
+    try {
+      final penFiles = await fetchBstFreeFiles(accessToken: accessToken);
+      for (final f in penFiles) {
+        addFile(f);
+      }
+    } catch (e) {
+      debugPrint('[BstCloudService] fetch bst-pen error: $e');
+    }
+
+    return results;
+  }
+
   /// 10-1. 1번 탭: 수업 자료 (Save) 파일 조회 (PDF, PPT, Canva 등 순수 교안)
   Future<List<BstCloudFile>> fetchDriveFolderFiles({
     required String accessToken,
@@ -1035,7 +1100,7 @@ class BstCloudService {
     return fetchFilesBySpecificFolder(accessToken: accessToken, folderName: folderName);
   }
 
-  /// 10-2. 2번 탭: TBP 전자교과서 목록 조회 (.bsttbp, .tbp)
+  /// 10-2. 2번 탭: TBP 전자교과서 목록 조회 (.bsttbp, .tbp, TBP 폴더)
   Future<List<BstCloudFile>> fetchTbpFiles({required String accessToken}) async {
     return fetchFilesBySpecificFolder(accessToken: accessToken, folderName: 'bst-tbs');
   }

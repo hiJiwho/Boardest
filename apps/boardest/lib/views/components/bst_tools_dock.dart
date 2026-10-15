@@ -121,195 +121,55 @@ class BstToolsDock extends StatelessWidget {
       ];
 
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFF0F172A).withOpacity(0.92),
+          color: const Color(0xFF0F172A).withValues(alpha: 0.92),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.4),
+              color: Colors.black.withValues(alpha: 0.4),
               blurRadius: 16,
               offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00F5D4).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text('🧰', style: TextStyle(fontSize: 13)),
+            for (int i = 0; i < webTools.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Expanded(
+                child: _buildToolGridCard(
+                  icon: webTools[i]['icon'] as String,
+                  label: webTools[i]['label'] as String,
+                  isPrimary: webTools[i]['primary'] as bool,
+                  onTap: () => onToolTap?.call(webTools[i]['type'] as BstToolType),
                 ),
-                const SizedBox(width: 8),
-                const Text(
-                  '수업 도구함',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.06),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text(
-                    'WEB 6×1',
-                    style: TextStyle(
-                      color: Color(0xFF94A3B8),
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  const crossAxisCount = 6;
-                  const rowCount = 1;
-                  const spacing = 8.0;
-                  final itemWidth = (constraints.maxWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount;
-                  final itemHeight = constraints.maxHeight;
-                  final ratio = (itemWidth / (itemHeight > 0 ? itemHeight : itemWidth)).clamp(0.5, 4.0);
-
-                  return GridView.builder(
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: crossAxisCount,
-                      crossAxisSpacing: spacing,
-                      mainAxisSpacing: spacing,
-                      childAspectRatio: ratio,
-                    ),
-                    itemCount: webTools.length,
-                    itemBuilder: (context, index) {
-                      final item = webTools[index];
-                      final isPrimary = item['primary'] as bool;
-                      return _buildToolGridCard(
-                        icon: item['icon'] as String,
-                        label: item['label'] as String,
-                        isPrimary: isPrimary,
-                        onTap: () => onToolTap?.call(item['type'] as BstToolType),
-                      );
-                    },
-                  );
-                },
               ),
-            ),
+            ],
           ],
         ),
       );
     }
 
-    // 2. Windows / Android PRO 모드: 6열 x 2행 (총 12 슬롯 도구함)
+    // 2. Windows / Android PRO 모드: 6열 x 2행 (총 12 슬롯 도구함, 버튼 영역 극대화)
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A).withOpacity(0.92),
+        color: const Color(0xFF0F172A).withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
+            color: Colors.black.withValues(alpha: 0.4),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 상단 바
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00F5D4).withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text('🧰', style: TextStyle(fontSize: 13)),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                '수업 & 시스템 도구함',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                  letterSpacing: -0.2,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00F5D4).withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  '6×2 PRO',
-                  style: TextStyle(
-                    color: Color(0xFF00F5D4),
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              if (isWindows) ...[
-                InkWell(
-                  onTap: onMinimizeTap,
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    width: 26,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Center(
-                      child: Text('─', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                InkWell(
-                  onTap: onCloseTap,
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    width: 26,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Center(
-                      child: Text('✕', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 6),
-          // 6열 x 2행 = 12칸 그리드
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
+      child: LayoutBuilder(
+        builder: (context, constraints) {
                 const crossAxisCount = 6;
                 const rowCount = 2;
                 const spacing = 6.0;
@@ -384,9 +244,6 @@ class BstToolsDock extends StatelessWidget {
                 );
               },
             ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -463,44 +320,50 @@ class BstToolsDock extends StatelessWidget {
         decoration: BoxDecoration(
           color: isPrimary
               ? const Color(0xFF00F5D4)
-              : Colors.white.withOpacity(0.045),
+              : Colors.white.withValues(alpha: 0.045),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isPrimary
                 ? const Color(0xFF00F5D4)
-                : Colors.white.withOpacity(0.08),
+                : Colors.white.withValues(alpha: 0.08),
           ),
           boxShadow: isPrimary
               ? [
                   BoxShadow(
-                    color: const Color(0xFF00F5D4).withOpacity(0.3),
+                    color: const Color(0xFF00F5D4).withValues(alpha: 0.3),
                     blurRadius: 8,
                   )
                 ]
               : null,
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              icon,
-              style: TextStyle(
-                fontSize: 18,
-                color: isPrimary ? Colors.black : Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                icon,
+                style: TextStyle(
+                  fontSize: 18,
+                  color: isPrimary ? Colors.black : Colors.white,
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w800,
-                color: isPrimary ? Colors.black : const Color(0xFFCBD5E1),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  color: isPrimary ? Colors.black : const Color(0xFFCBD5E1),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

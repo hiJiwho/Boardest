@@ -5402,7 +5402,7 @@ class _SetupWizardViewState extends State<SetupWizardView> {
       isSetupComplete: true,
       ddayEvents: _ddayEvents,
       pinnedDday: _existingSettings?.pinnedDday,
-      scaleFactor: _existingSettings?.scaleFactor ?? 1.4,
+      scaleFactor: _existingSettings?.scaleFactor ?? 1.5,
       selectedSystemApps: _selectedSystemApps,
       launcherSlots: _existingSettings?.launcherSlots,
       autoSleepEnabled: _existingSettings?.autoSleepEnabled ?? false,

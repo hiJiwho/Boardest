@@ -100,22 +100,18 @@ class AppPaths {
     _initialized = true;
   }
 
-  /// 1920×1080 기준 화면비 동적 UI 스케일 (오버플로우 방지 및 Android 80% 배율 적용)
+  /// 1920×1080 기준 모든 디스플레이 불변 배율 (FHD 150%, 4K 300% 정규화)
   static double adaptiveUiScale(BuildContext context, double userScaleFactor) {
-    if (kIsWeb) return userScaleFactor;
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      // 안드로이드 기본 고DPI 환경을 고려하여 80% (0.8x) 배율 기본 적용
-      return userScaleFactor * 0.8;
-    }
     final size = MediaQuery.of(context).size;
 
     const refW = 1920.0;
     const refH = 1080.0;
-    final fit = (size.width / refW) < (size.height / refH)
-        ? size.width / refW
-        : size.height / refH;
+    final fitW = size.width / refW;
+    final fitH = size.height / refH;
+    final fit = fitW < fitH ? fitW : fitH;
 
-    final adaptive = fit.clamp(0.85, 1.1);
-    return userScaleFactor * adaptive;
+    // 모니터 물리 해상도와 브라우저/OS 배율에 관계없이 일관된 상대 비율 제공
+    final effective = userScaleFactor * fit;
+    return effective.clamp(0.5, 4.5);
   }
 }

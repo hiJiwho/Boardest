@@ -94,16 +94,25 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
       if (_categoryFilter == '전체') return true;
       if (isFolder) return true; // 폴더는 카테고리 필터 중에도 표시
 
-      if (_categoryFilter == '📖 TBP' || _categoryFilter == 'TBP') {
-        return name.endsWith('.bsttbp') || name.endsWith('.tbp') || name.contains('교과서') || name.contains('tbp');
+      if (_categoryFilter == '📁 수업 자료' || _categoryFilter == '수업 자료') {
+        return !name.endsWith('.pen') &&
+            !name.endsWith('.bstpen') &&
+            !name.endsWith('.bsttbp') &&
+            !name.endsWith('.tbp') &&
+            !name.contains('canva');
       }
-      if (_categoryFilter == '🎨 Canva' || _categoryFilter == 'Canva') {
-        return name.endsWith('.canva') || name.endsWith('.canva.bst') || name.contains('canva');
+      if (_categoryFilter == '📐 TBP & Canva' || _categoryFilter == 'TBP & Canva') {
+        final isTbp = name.endsWith('.bsttbp') || name.endsWith('.tbp') || name.contains('tbp') || name.contains('교과서') || isFolder;
+        final isCanva = name.endsWith('.canva') || name.endsWith('.canva.bst') || name.endsWith('.bstcanva') || name.contains('canva');
+        return isTbp || isCanva;
       }
-      if (_categoryFilter == 'PDF') return name.endsWith('.pdf');
-      if (_categoryFilter == 'PPT') return name.endsWith('.ppt') || name.endsWith('.pptx');
-      if (_categoryFilter == '한글') return name.endsWith('.hwp') || name.endsWith('.hwpx');
-      if (_categoryFilter == '판서') return name.endsWith('.pen') || name.endsWith('.iwb');
+      if (_categoryFilter == '✏️ 판서 (.pen)' || _categoryFilter == '판서') {
+        final isPen = name.endsWith('.pen') || name.endsWith('.bstpen');
+        if (!isPen) return false;
+        final size = file['size'];
+        if (size is int && size <= 0) return false;
+        return true;
+      }
 
       return true;
     }).toList();
@@ -258,7 +267,7 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
 
   // ─── 2. 검색 & 필터 ───
   Widget _buildSearchAndFilters(double s) {
-    final categories = ['전체', '📖 TBP', '🎨 Canva', 'PDF', 'PPT', '한글', '판서'];
+    final categories = ['전체', '📁 수업 자료', '📐 TBP & Canva', '✏️ 판서 (.pen)'];
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 8 * s),

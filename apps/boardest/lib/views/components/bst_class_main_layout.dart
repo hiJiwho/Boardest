@@ -136,9 +136,41 @@ class BstClassMainLayout extends StatelessWidget {
     this.onAddAppToSlot,
   });
 
+  Widget _buildLessonInfoCard() {
+    return BstLessonInfoCard(
+      currentSubject: currentSubject,
+      subjectDescription: subjectDescription,
+      nextSubject: nextSubject,
+      nextSubjectRoom: nextSubjectRoom,
+      subjectIcon: subjectIcon,
+      textbookImagePath: currentTextbookImagePath,
+      textbookBytes: currentTextbookBytes,
+      remainingTimeText: remainingTimeText,
+      onTap: onLessonInfoTap,
+    );
+  }
+
+  Widget _buildMealCard() {
+    return BstDualMealCard(
+      schoolName: schoolName,
+      todayDishes: todayDishes,
+      todayCalories: todayCalories,
+      tomorrowDishes: tomorrowDishes,
+      tomorrowCalories: tomorrowCalories,
+      tomorrowDateLabel: tomorrowDateLabel,
+      isCloudActive: isCloudActive,
+      onCloudToggle: onCloudToggle,
+      currentTime: currentTime,
+      lunchStartTime: lunchStartTime,
+      lunchEndTime: lunchEndTime,
+      onVote: onMealVote,
+      onShowVoteBreakdown: onShowVoteBreakdown,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final s = scaleFactor.clamp(0.7, 2.2);
+    final s = scaleFactor.clamp(0.5, 4.0);
 
     return Scaffold(
       backgroundColor: const Color(0xFF070B14),
@@ -166,8 +198,8 @@ class BstClassMainLayout extends StatelessWidget {
               SizedBox(height: 10 * s),
 
               // 2. 메인 대시보드 2열 레이아웃
-              // 좌측(flex: 1): 대형 시계 (flex: 2) + 수업정보 카드 (flex: 4)
-              // 우측(flex: 1): 일과 시간표 (flex: 1) : 수업도구함 (flex: 1) : 급식/Cloud (flex: 2) = 1:1:2
+              // 좌측(flex: 1): 대형 시계 (flex: 2) : [평소: 급식 2단 / Cloud: 수업카드] (flex: 3) = 2 : 3
+              // 우측(flex: 1): 일과 시간표 (flex: 2) : [평소: 수업카드 / Cloud: Cloud패널] (flex: 7) : 수업도구함 (flex: 1) = 2 : 7 : 1
               Expanded(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -178,7 +210,7 @@ class BstClassMainLayout extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // 1. 대형 시계 (세로 flex: 2, D-day & 원형 남은시간 포함)
+                          // 1. 대형 시계 (세로 flex: 2, 40%)
                           Expanded(
                             flex: 2,
                             child: BstGiantClock(
@@ -196,20 +228,13 @@ class BstClassMainLayout extends StatelessWidget {
 
                           SizedBox(height: 10 * s),
 
-                          // 2. 수업 정보 카드 (세로 flex: 4, 대형 교과서 & 과목명)
+                          // 2. 좌측 하단 (세로 flex: 3, 60%)
+                          // 평소에는 급식 식단표 (2단), Cloud 활성화 시에는 지금 수업 카드
                           Expanded(
-                            flex: 4,
-                            child: BstLessonInfoCard(
-                              currentSubject: currentSubject,
-                              subjectDescription: subjectDescription,
-                              nextSubject: nextSubject,
-                              nextSubjectRoom: nextSubjectRoom,
-                              subjectIcon: subjectIcon,
-                              textbookImagePath: currentTextbookImagePath,
-                              textbookBytes: currentTextbookBytes,
-                              remainingTimeText: remainingTimeText,
-                              onTap: onLessonInfoTap,
-                            ),
+                            flex: 3,
+                            child: (isCloudActive && showCloudFiles)
+                                ? _buildLessonInfoCard()
+                                : _buildMealCard(),
                           ),
                         ],
                       ),
@@ -217,7 +242,7 @@ class BstClassMainLayout extends StatelessWidget {
 
                     SizedBox(width: 10 * s),
 
-                    // [우측 열 (가로 flex: 1)]: 일과 시간표 : 수업도구함 : 급식/Cloud = 1 : 1 : 2
+                    // [우측 열 (가로 flex: 1)]: 일과 (1) : 중단 (7) : 도구함 (1) = 1 : 7 : 1
                     Expanded(
                       flex: 1,
                       child: Column(
@@ -237,7 +262,18 @@ class BstClassMainLayout extends StatelessWidget {
 
                           SizedBox(height: 10 * s),
 
-                          // 2. 수업 도구함 (세로 flex: 1, 6개 한 줄 배치)
+                          // 2. 우측 중단 (세로 flex: 7, 70%)
+                          // 평소에는 지금&다음 수업 카드, Cloud 활성화 시에는 Cloud 탐색 패널
+                          Expanded(
+                            flex: 7,
+                            child: (isCloudActive && showCloudFiles && cloudFilesWidget != null)
+                                ? cloudFilesWidget!
+                                : _buildLessonInfoCard(),
+                          ),
+
+                          SizedBox(height: 10 * s),
+
+                          // 3. 수업 도구함 (세로 flex: 1, 10%)
                           Expanded(
                             flex: 1,
                             child: BstToolsDock(
@@ -252,30 +288,6 @@ class BstClassMainLayout extends StatelessWidget {
                               onRemoveApp: onRemoveApp,
                               onAddAppToSlot: onAddAppToSlot,
                             ),
-                          ),
-
-                          SizedBox(height: 10 * s),
-
-                          // 3. 급식 식단표 (세로 flex: 2, Cloud 연동 시에는 이 영역만 Cloud로 교체)
-                          Expanded(
-                            flex: 2,
-                            child: (isCloudActive && showCloudFiles && cloudFilesWidget != null)
-                                ? cloudFilesWidget!
-                                : BstDualMealCard(
-                                    schoolName: schoolName,
-                                    todayDishes: todayDishes,
-                                    todayCalories: todayCalories,
-                                    tomorrowDishes: tomorrowDishes,
-                                    tomorrowCalories: tomorrowCalories,
-                                    tomorrowDateLabel: tomorrowDateLabel,
-                                    isCloudActive: isCloudActive,
-                                    onCloudToggle: onCloudToggle,
-                                    currentTime: currentTime,
-                                    lunchStartTime: lunchStartTime,
-                                    lunchEndTime: lunchEndTime,
-                                    onVote: onMealVote,
-                                    onShowVoteBreakdown: onShowVoteBreakdown,
-                                  ),
                           ),
                         ],
                       ),

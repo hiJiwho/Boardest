@@ -62,7 +62,7 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
   // 6자리 OTP 상태
   String _enteredOtp = '';
   bool _isVerifyingOtp = false;
-  bool _saveOtpToDevice = false;
+  bool _saveOtpToDevice = true;
   String? _otpError;
 
   // 등록된 교사 목록
@@ -126,11 +126,20 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
             _isApproved = true;
           });
 
-          // Cloud 토큰 활성화 (기기 영구 저장하지 않고 현재 칠판 세션 RAM에만 보관)
+          // Cloud 토큰 활성화
           BstCloudService.instance.setDirectAccessToken(
             event.accessToken!,
             teacherName: event.teacherName ?? '선생님',
             ownerEmail: event.email ?? '',
+          );
+
+          // 등록된 교사로 자동 등록 저장 (Web, Windows, Android 공통)
+          await PasskeyService.instance.saveProTeacher(
+            teacherName: event.teacherName ?? '선생님',
+            email: event.email ?? '',
+            schoolName: widget.schoolName,
+            accessToken: event.accessToken,
+            refreshToken: event.refreshToken,
           );
 
           await Future.delayed(const Duration(milliseconds: 700));
@@ -173,7 +182,7 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
           ownerEmail: res.email ?? '',
         );
 
-        if (!kIsWeb && _saveOtpToDevice && res.teacherName != null) {
+        if (_saveOtpToDevice && res.teacherName != null) {
           await PasskeyService.instance.saveProTeacher(
             teacherName: res.teacherName!,
             email: res.email ?? '',
@@ -796,24 +805,36 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.person_off_rounded, size: 48 * s, color: Colors.white38),
-            SizedBox(height: 12 * s),
+            Icon(Icons.person_off_rounded, size: 44 * s, color: Colors.white38),
+            SizedBox(height: 10 * s),
             Text(
               '이 기기에 등록된 교사가 없습니다.',
               style: GoogleFonts.notoSansKr(
-                fontSize: 16 * s,
+                fontSize: 15 * s,
                 fontWeight: FontWeight.bold,
                 color: Colors.white70,
               ),
             ),
             SizedBox(height: 6 * s),
             Text(
-              '모바일 Web QR 또는 6자리 OTP 인증 시\n"이 기기에 로그인 정보 저장"을 체크하면 등록됩니다.',
+              '모바일 Web QR 또는 6자리 OTP 인증 시 자동 등록되거나,\n아래 버튼을 눌러 교사를 직접 등록할 수 있습니다.',
               textAlign: TextAlign.center,
               style: GoogleFonts.notoSansKr(
-                fontSize: 12 * s,
+                fontSize: 11.5 * s,
                 color: const Color(0xFF94A3B8),
                 height: 1.4,
+              ),
+            ),
+            SizedBox(height: 14 * s),
+            ElevatedButton.icon(
+              onPressed: () => _showAddTeacherDialog(s),
+              icon: Icon(Icons.person_add_alt_1_rounded, size: 16 * s),
+              label: Text('+ 새 교사 직접 등록', style: GoogleFonts.notoSansKr(fontSize: 12 * s, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00F5D4),
+                foregroundColor: const Color(0xFF0F172A),
+                padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 10 * s),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * s)),
               ),
             ),
           ],
@@ -837,12 +858,30 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              Text(
-                '원클릭으로 Cloud 수업자료를 연결합니다',
-                style: GoogleFonts.notoSansKr(
-                  color: Colors.white54,
-                  fontSize: 11 * s,
-                ),
+              Row(
+                children: [
+                  Text(
+                    '원클릭 연동',
+                    style: GoogleFonts.notoSansKr(
+                      color: Colors.white54,
+                      fontSize: 11 * s,
+                    ),
+                  ),
+                  SizedBox(width: 8 * s),
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddTeacherDialog(s),
+                    icon: Icon(Icons.person_add_alt_1_rounded, size: 13 * s),
+                    label: Text('+ 교사 등록', style: GoogleFonts.notoSansKr(fontSize: 10.5 * s, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00F5D4),
+                      foregroundColor: const Color(0xFF0F172A),
+                      padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6 * s)),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -946,6 +985,98 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _showAddTeacherDialog(double s) async {
+    final nameCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16 * s),
+          side: const BorderSide(color: Color(0xFF00F5D4), width: 1.2),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.person_add_alt_1_rounded, color: const Color(0xFF00F5D4), size: 20 * s),
+            SizedBox(width: 8 * s),
+            Text('새 교사 등록', style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 16 * s, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('이 전자칠판에 등록할 선생님 성함을 입력해주세요.', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12 * s)),
+            SizedBox(height: 12 * s),
+            TextField(
+              controller: nameCtrl,
+              autofocus: true,
+              style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 13 * s),
+              decoration: InputDecoration(
+                labelText: '선생님 성함 (예: 김교사)',
+                labelStyle: TextStyle(color: const Color(0xFF00F5D4), fontSize: 12 * s),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8 * s), borderSide: const BorderSide(color: Colors.white24)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8 * s), borderSide: const BorderSide(color: Color(0xFF00F5D4))),
+                filled: true,
+                fillColor: Colors.black26,
+              ),
+            ),
+            SizedBox(height: 10 * s),
+            TextField(
+              controller: emailCtrl,
+              style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 13 * s),
+              decoration: InputDecoration(
+                labelText: '학교 구글 이메일 (선택)',
+                labelStyle: TextStyle(color: Colors.white60, fontSize: 12 * s),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8 * s), borderSide: const BorderSide(color: Colors.white24)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8 * s), borderSide: const BorderSide(color: Color(0xFF00F5D4))),
+                filled: true,
+                fillColor: Colors.black26,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('취소', style: TextStyle(color: Colors.white38, fontSize: 12 * s)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00F5D4),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () async {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) return;
+              final email = emailCtrl.text.trim();
+              await PasskeyService.instance.saveProTeacher(
+                teacherName: name,
+                email: email,
+                schoolName: widget.schoolName,
+                accessToken: 'registered_teacher_${DateTime.now().millisecondsSinceEpoch}',
+              );
+              if (mounted) {
+                Navigator.pop(ctx);
+                await _loadSavedTeachers();
+                setState(() => _selectedTab = 2);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('🎉 [$name] 선생님이 등록 교사로 추가되었습니다!'),
+                    backgroundColor: const Color(0xFF00F5D4),
+                  ),
+                );
+              }
+            },
+            child: Text('등록하기', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12 * s)),
+          ),
+        ],
+      ),
     );
   }
 }

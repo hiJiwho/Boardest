@@ -227,7 +227,7 @@ class AppSettings {
     this.isSetupComplete = false,
     List<DDayEvent>? ddayEvents,
     this.pinnedDday,
-    this.scaleFactor = 1.4,
+    this.scaleFactor = 1.5,
     List<SystemApp>? selectedSystemApps,
     List<LauncherSlot>? launcherSlots,
     this.autoSleepEnabled = false,
@@ -667,7 +667,7 @@ class AppSettings {
       pinnedDday: json['pinnedDday'] != null
           ? DDayEvent.fromJson(json['pinnedDday'] as Map<String, dynamic>)
           : null,
-      scaleFactor: (json['scaleFactor'] as num?)?.toDouble() ?? 1.4,
+      scaleFactor: (json['scaleFactor'] as num?)?.toDouble() ?? 1.5,
       selectedSystemApps: sysApps,
       launcherSlots: loadedSlots,
       autoSleepEnabled: json['autoSleepEnabled'] as bool? ?? false,
