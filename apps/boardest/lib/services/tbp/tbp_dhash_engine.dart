@@ -28,8 +28,6 @@ class TbpDhashEngine {
 
   // Hamming distance 매칭 임계값
   static const int _matchThreshold = 64;
-  // 노이즈 필터 (이 미만 차이면 무시)
-  static const int _noiseFilterBits = 3;
 
   /// JS 해시 추출 스크립트
   static const String _hashJsScript = '''
@@ -74,20 +72,42 @@ class TbpDhashEngine {
         sendHash(hash);
       }
 
+      function computeOfflineFallbackHash() {
+        try {
+          var urlStr = location.href || '';
+          var textStr = (document.body && document.body.innerText) ? document.body.innerText.replace(/\\s+/g, ' ').slice(0, 512) : '';
+          var imgs = Array.prototype.slice.call(document.images || [], 0, 8).map(function(img) { return img.src || ''; }).join('|');
+          var raw = urlStr + '||' + Math.round((window.scrollY || 0) / 100) + '||' + imgs + '||' + textStr;
+          var bits = '';
+          var seeds = [2166136261, 16777619, 2654435761, 3266489917, 668265263, 374761393, 2246822519, 3266489919];
+          for (var s = 0; s < 8; s++) {
+            var h = seeds[s] >>> 0;
+            for (var i = 0; i < raw.length; i++) {
+              h ^= raw.charCodeAt(i);
+              h = Math.imul(h, 16777619) >>> 0;
+            }
+            bits += (h >>> 0).toString(2).padStart(32, '0');
+          }
+          sendHash(bits.slice(0, 256));
+        } catch (err) {
+          sendHash(null);
+        }
+      }
+
       try {
         if (typeof html2canvas === 'undefined') {
           var script = document.createElement('script');
           script.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
           script.onload = function() {
-            html2canvas(document.body).then(computeDhash).catch(function(e){ sendHash(null); });
+            html2canvas(document.body).then(computeDhash).catch(function(e){ computeOfflineFallbackHash(); });
           };
-          script.onerror = function() { sendHash(null); };
+          script.onerror = function() { computeOfflineFallbackHash(); };
           document.head.appendChild(script);
         } else {
-          html2canvas(document.body).then(computeDhash).catch(function(e){ sendHash(null); });
+          html2canvas(document.body).then(computeDhash).catch(function(e){ computeOfflineFallbackHash(); });
         }
       } catch(e) {
-        sendHash(null);
+        computeOfflineFallbackHash();
       }
     })();
   ''';

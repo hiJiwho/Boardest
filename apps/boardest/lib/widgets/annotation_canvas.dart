@@ -137,6 +137,14 @@ class AnnotationController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setStrokes(List<AnnotationStroke> newStrokes) {
+    _strokes
+      ..clear()
+      ..addAll(newStrokes);
+    _undoHistory.clear();
+    notifyListeners();
+  }
+
   void _saveToHistory() {
     if (_strokes.isEmpty) return;
     _undoHistory.add(List<AnnotationStroke>.from(_strokes));

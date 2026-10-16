@@ -28,14 +28,28 @@ class TbpStorageService {
 
   // ─── 패키지 로드 (.bstTBP ZIP) ──────────────────────────────────────
 
-  /// .bstTBP (ZIP) 또는 레거시 .TBP (JSON) 파일 로드
+  /// 로컬 TBP 폴더, .bstTBP (ZIP), 또는 레거시 .TBP (JSON) 파일 로드
   Future<TbpMetadata?> loadTbpFile(String tbpFilePath) async {
     try {
-      // 새 형식: .bstTBP (Store Level 0 ZIP)
+      // 1. 폴더 형태 TBP 패키지 (.tbp 폴더 등)
+      final dir = Directory(tbpFilePath);
+      if (await dir.exists()) {
+        _extractCache[tbpFilePath] = dir.path;
+        for (final name in ['meta.bstsave', 'manifest.json', 'info.json']) {
+          final f = File(p.join(dir.path, name));
+          if (f.existsSync()) {
+            final json = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+            return TbpMetadata.fromJson(json);
+          }
+        }
+        return null;
+      }
+
+      // 2. .bstTBP (Store Level 0 ZIP)
       if (tbpFilePath.toLowerCase().endsWith('.bsttbp')) {
         return await _loadFromBstTbpZip(tbpFilePath);
       }
-      // 레거시: .TBP (JSON 텍스트 파일)
+      // 3. 레거시: .TBP (JSON 텍스트 파일)
       final file = File(tbpFilePath);
       if (!await file.exists()) return null;
       final content = await file.readAsString();
@@ -55,18 +69,12 @@ class TbpStorageService {
       final extractedDir = _extractCache[bstTbpPath];
       if (extractedDir == null) return null;
 
-      // meta.bstsave 읽기
-      final metaFile = File(p.join(extractedDir, 'meta.bstsave'));
-      if (metaFile.existsSync()) {
-        final json = jsonDecode(await metaFile.readAsString()) as Map<String, dynamic>;
-        return TbpMetadata.fromJson(json);
-      }
-
-      // 레거시 호환: info.json에서 읽기
-      final infoFile = File(p.join(extractedDir, 'info.json'));
-      if (infoFile.existsSync()) {
-        final json = jsonDecode(await infoFile.readAsString()) as Map<String, dynamic>;
-        return TbpMetadata.fromJson(json);
+      for (final name in ['meta.bstsave', 'manifest.json', 'info.json']) {
+        final f = File(p.join(extractedDir, name));
+        if (f.existsSync()) {
+          final json = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+          return TbpMetadata.fromJson(json);
+        }
       }
 
       return null;
@@ -104,34 +112,61 @@ class TbpStorageService {
     }
 
     _extractCache[bstTbpPath] = extractDir.path;
+    await cleanupOldExtractCache();
+  }
+
+  /// 오래된 임시 추출 폴더 정리 (%TEMP%/bstTBP_*)
+  Future<void> cleanupOldExtractCache({Duration maxAge = const Duration(days: 1)}) async {
+    try {
+      Directory tmpDir;
+      try {
+        tmpDir = await getTemporaryDirectory();
+      } catch (_) {
+        tmpDir = Directory.systemTemp;
+      }
+      if (!tmpDir.existsSync()) return;
+      final entities = tmpDir.listSync();
+      final now = DateTime.now();
+      for (final entity in entities) {
+        if (entity is Directory && p.basename(entity.path).startsWith('bstTBP_')) {
+          try {
+            final stat = entity.statSync();
+            if (now.difference(stat.modified) > maxAge) {
+              entity.deleteSync(recursive: true);
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      debugPrint('[TbpStorageService] cleanupOldExtractCache error: $e');
+    }
   }
 
   // ─── 폴더 경로 취득 ────────────────────────────────────────────────────
 
-  /// TBP 폴더 루트 경로 취득 (.bstTBP ZIP 또는 레거시 폴더)
+  /// TBP 폴더 루트 경로 취득 (폴더형 TBP, .bstTBP ZIP 또는 레거시 폴더)
   String getTbpFolderPath(String tbpFilePath, String folderId) {
-    // .bstTBP ZIP의 경우 추출된 임시 폴더 반환
-    if (tbpFilePath.toLowerCase().endsWith('.bsttbp')) {
-      return _extractCache[tbpFilePath] ?? p.join(p.dirname(tbpFilePath), 'TBP-$folderId');
+    if (_extractCache.containsKey(tbpFilePath)) {
+      return _extractCache[tbpFilePath]!;
     }
-    // 레거시
+    if (Directory(tbpFilePath).existsSync()) {
+      return tbpFilePath;
+    }
     final parentDir = p.dirname(tbpFilePath);
     return p.join(parentDir, 'TBP-$folderId');
   }
 
-  // ─── info.json / meta.bstsave ──────────────────────────────────────────
+  // ─── info.json / meta.bstsave / manifest.json ──────────────────────────
 
   Future<Map<String, dynamic>?> loadInfoJson(String tbpFolderPath) async {
     try {
-      // 새 형식: meta.bstsave
-      final metaFile = File(p.join(tbpFolderPath, 'meta.bstsave'));
-      if (metaFile.existsSync()) {
-        return jsonDecode(await metaFile.readAsString()) as Map<String, dynamic>;
+      for (final name in ['meta.bstsave', 'manifest.json', 'info.json']) {
+        final f = File(p.join(tbpFolderPath, name));
+        if (f.existsSync()) {
+          return jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+        }
       }
-      // 레거시: info.json
-      final infoFile = File(p.join(tbpFolderPath, 'info.json'));
-      if (!await infoFile.exists()) return null;
-      return jsonDecode(await infoFile.readAsString()) as Map<String, dynamic>;
+      return null;
     } catch (_) {
       return null;
     }

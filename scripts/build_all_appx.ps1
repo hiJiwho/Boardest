@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '4.0.6.0',
+  [string]$AppVersion = '4.0.7.0',
   [switch]$SkipApk
 )
 
@@ -78,11 +78,17 @@ function Pack-Signed([string]$Name) {
 Write-Host "Building Boardest official v$AppVersion AppX and APK files..." -ForegroundColor Cyan
 Build-Windows (Join-Path $RootDir 'apps\boardest')
 Build-Windows (Join-Path $RootDir 'apps\boardest_teacher')
+Build-Windows (Join-Path $RootDir 'apps\boardest_class_lite')
 
 $BoardestRelease = Join-Path $RootDir 'apps\boardest\build\windows\x64\runner\Release'
 $TeacherRelease = Join-Path $RootDir 'apps\boardest_teacher\build\windows\x64\runner\Release'
+$ClassLiteRelease = Join-Path $RootDir 'apps\boardest_class_lite\build\windows\x64\runner\Release'
 Copy-Item "$BoardestRelease\*" (Join-Path $PackageDir 'boardest') -Recurse -Force
 Copy-Item "$TeacherRelease\*" (Join-Path $PackageDir 'bst-teacher') -Recurse -Force
+Copy-Item "$ClassLiteRelease\*" (Join-Path $PackageDir 'boardest-class-lite') -Recurse -Force
+if (Test-Path (Join-Path $PackageDir 'boardest-class-lite\boardest_class_lite.exe')) {
+  Copy-Item (Join-Path $PackageDir 'boardest-class-lite\boardest_class_lite.exe') (Join-Path $PackageDir 'boardest-class-lite\Boardest-Class-Lite.exe') -Force
+}
 Compress-Archive -Path (Join-Path $BoardestRelease '*') -DestinationPath (Join-Path $OutDir 'boardest-windows.zip') -Force
 Compress-Archive -Path (Join-Path $TeacherRelease '*') -DestinationPath (Join-Path $OutDir 'bst-teacher-windows.zip') -Force
 Copy-Item (Join-Path $RootDir 'infra\class_lite_web\index.html') (Join-Path $PackageDir 'boardest-class-lite\index.html') -Force
@@ -91,12 +97,15 @@ if (-not $SkipApk) {
   Build-Apk (Join-Path $RootDir 'apps\boardest') 'boardest.apk'
   Build-Apk (Join-Path $RootDir 'apps\boardest_teacher') 'bst-teacher.apk'
   Build-Apk (Join-Path $RootDir 'apps\boardest_teacher_lite') 'bst-teacher-lite.apk'
-  Build-Apk (Join-Path $RootDir 'apps\boardest_class_lite') 'boardest-class-lite.apk'
+  Build-Apk (Join-Path $RootDir 'apps\boardest_class_lite') 'bst-class-lite.apk'
+  Copy-Item (Join-Path $OutDir 'bst-class-lite.apk') (Join-Path $OutDir 'boardest-class-lite.apk') -Force
 }
 
-$ClassLiteExe = Join-Path $PackageDir 'boardest-class-lite\Boardest-Class-Lite.exe'
-& $CSharpCompiler /nologo /target:winexe "/out:$ClassLiteExe" (Join-Path $RootDir 'infra\class_lite_win\Boardest-Class-Lite.cs')
-if ($LASTEXITCODE -ne 0) { throw 'Class Lite Windows launcher compilation failed.' }
+if (-not (Test-Path (Join-Path $PackageDir 'boardest-class-lite\Boardest-Class-Lite.exe'))) {
+  $ClassLiteExe = Join-Path $PackageDir 'boardest-class-lite\Boardest-Class-Lite.exe'
+  & $CSharpCompiler /nologo /target:winexe "/out:$ClassLiteExe" (Join-Path $RootDir 'infra\class_lite_win\Boardest-Class-Lite.cs')
+  if ($LASTEXITCODE -ne 0) { throw 'Class Lite Windows launcher compilation failed.' }
+}
 
 $OverlayPackage = Join-Path $PackageDir 'bst-overlay-panser'
 $OverlaySource = Join-Path $RootDir 'apps\boardest'
@@ -124,7 +133,7 @@ Copy-Item $CerFile (Join-Path $OutDir 'BoardestCert.cer') -Force
 
 $DownloadDir = Join-Path $RootDir 'infra\download_web'
 New-Item -ItemType Directory -Force -Path $DownloadDir | Out-Null
-foreach ($file in @('boardest.appx', 'bst-teacher.appx', 'bst-overlay-panser.appx', 'boardest-class-lite.appx', 'boardest.apk', 'bst-teacher.apk', 'bst-teacher-lite.apk', 'boardest-class-lite.apk', 'BoardestCert.cer')) {
+foreach ($file in @('boardest.appx', 'bst-teacher.appx', 'bst-overlay-panser.appx', 'boardest-class-lite.appx', 'boardest.apk', 'bst-teacher.apk', 'bst-teacher-lite.apk', 'bst-class-lite.apk', 'boardest-class-lite.apk', 'BoardestCert.cer')) {
   $source = Join-Path $OutDir $file
   if (Test-Path $source) { Copy-Item $source (Join-Path $DownloadDir $file) -Force }
 }

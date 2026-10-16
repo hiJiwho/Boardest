@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import '../boardest_tools_view.dart';
 import 'bst_tools_dock.dart';
 
-class BstClassToolsPanel extends StatelessWidget {
+/// 교사 도구 패널 ([사용] / [제작] 분리 지원)
+class BstClassToolsPanel extends StatefulWidget {
   final bool isPro;
   final bool isWindows;
   final ValueChanged<BstToolType>? onToolTap;
@@ -18,9 +20,27 @@ class BstClassToolsPanel extends StatelessWidget {
   });
 
   @override
+  State<BstClassToolsPanel> createState() => _BstClassToolsPanelState();
+}
+
+class _BstClassToolsPanelState extends State<BstClassToolsPanel> {
+  bool _isCreationTab = false; // false: 사용 도구, true: 제작 도구
+
+  void _openCreationStudio(BuildContext context, int tabIndex) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BoardestToolsView(
+          initialCreationMode: true,
+          initialTabIndex: tabIndex,
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // 3*2 기본 6대 도구 (PDF는 Cloud에 통합됨)
-    final defaultTools = [
+    // 1) [사용 (수업 진행)] 3*2 6대 도구
+    final usageTools = [
       {
         'type': BstToolType.pen,
         'name': '판서',
@@ -65,6 +85,54 @@ class BstClassToolsPanel extends StatelessWidget {
       },
     ];
 
+    // 2) [제작 (수업 저작)] 도구
+    final creationTools = [
+      {
+        'creationIndex': 0,
+        'name': 'TBP 제작',
+        'sub': '폴더형 교과서',
+        'icon': Icons.auto_stories_rounded,
+        'color': const Color(0xFF7F5AF0),
+      },
+      {
+        'creationIndex': 1,
+        'name': 'Canva 등록',
+        'sub': '슬라이드 결합',
+        'icon': Icons.palette_rounded,
+        'color': const Color(0xFF00C4CC),
+      },
+      {
+        'creationIndex': 2,
+        'name': '판서 노트',
+        'sub': '.bstpen 저작',
+        'icon': Icons.draw_rounded,
+        'color': const Color(0xFF00F5D4),
+      },
+      {
+        'creationIndex': 2,
+        'name': '자료 업로드',
+        'sub': 'Cloud 교안함',
+        'icon': Icons.cloud_upload_rounded,
+        'color': const Color(0xFF38BDF8),
+      },
+      {
+        'type': BstToolType.cloud,
+        'name': '교안 열기',
+        'sub': 'Cloud 탐색기',
+        'icon': Icons.folder_shared_rounded,
+        'color': const Color(0xFF34D399),
+      },
+      {
+        'type': BstToolType.settings,
+        'name': '설정',
+        'sub': '환경 설정',
+        'icon': Icons.settings_outlined,
+        'color': const Color(0xFF94A3B8),
+      },
+    ];
+
+    final activeTools = _isCreationTab ? creationTools : usageTools;
+
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF0A0F1D),
@@ -81,9 +149,9 @@ class BstClassToolsPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 1. 헤더: 수업 도구 타이틀
+          // 1. 헤더: 교사 도구 타이틀 + [사용 / 제작] 탭 전환
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.03),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
@@ -96,16 +164,20 @@ class BstClassToolsPanel extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
+                    color: (_isCreationTab ? const Color(0xFF7F5AF0) : const Color(0xFF00F5D4)).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.widgets_rounded, color: Color(0xFF00F5D4), size: 18),
+                  child: Icon(
+                    _isCreationTab ? Icons.auto_fix_high_rounded : Icons.widgets_rounded,
+                    color: _isCreationTab ? const Color(0xFF7F5AF0) : const Color(0xFF00F5D4),
+                    size: 17,
+                  ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 const Text(
-                  '수업 도구',
+                  '교사 도구',
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 14.5,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
                     letterSpacing: -0.2,
@@ -113,27 +185,35 @@ class BstClassToolsPanel extends StatelessWidget {
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  padding: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
-                    color: isPro
-                        ? const Color(0xFF00F5D4).withValues(alpha: 0.2)
-                        : Colors.white.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(6),
+                    color: const Color(0xFF050811),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                   ),
-                  child: Text(
-                    isPro ? 'PRO' : '3×2',
-                    style: TextStyle(
-                      color: isPro ? const Color(0xFF00F5D4) : const Color(0xFF94A3B8),
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildMiniModeTab(
+                        label: '사용',
+                        selected: !_isCreationTab,
+                        activeColor: const Color(0xFF00F5D4),
+                        onTap: () => setState(() => _isCreationTab = false),
+                      ),
+                      _buildMiniModeTab(
+                        label: '제작',
+                        selected: _isCreationTab,
+                        activeColor: const Color(0xFF7F5AF0),
+                        onTap: () => setState(() => _isCreationTab = true),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
 
-          // 2. 도구 2:3 (2열 3행) 그리드 (칸 안에 정확히 맞춤)
+          // 2. 도구 2:3 (2열 3행) 그리드
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -154,74 +234,81 @@ class BstClassToolsPanel extends StatelessWidget {
                       mainAxisSpacing: spacing,
                       childAspectRatio: ratio,
                     ),
-                itemCount: defaultTools.length,
-                itemBuilder: (context, index) {
-                  final tool = defaultTools[index];
-                  final type = tool['type'] as BstToolType;
-                  final name = tool['name'] as String;
-                  final sub = tool['sub'] as String;
-                  final icon = tool['icon'] as IconData;
-                  final color = tool['color'] as Color;
+                    itemCount: activeTools.length,
+                    itemBuilder: (context, index) {
+                      final tool = activeTools[index];
+                      final type = tool['type'] as BstToolType?;
+                      final creationIdx = tool['creationIndex'] as int?;
+                      final name = tool['name'] as String;
+                      final sub = tool['sub'] as String;
+                      final icon = tool['icon'] as IconData;
+                      final color = tool['color'] as Color;
 
-                  return Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => onToolTap?.call(type),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.035),
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            if (creationIdx != null) {
+                              _openCreationStudio(context, creationIdx);
+                            } else if (type != null) {
+                              widget.onToolTap?.call(type);
+                            }
+                          },
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: color.withValues(alpha: 0.25),
-                            width: 1.2,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.035),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: color.withValues(alpha: 0.25),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(alpha: 0.12),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(icon, color: color, size: 22),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  name,
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                Text(
+                                  sub,
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.12),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(icon, color: color, size: 22),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              name,
-                              style: const TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
-                            Text(
-                              sub,
-                              style: TextStyle(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white.withValues(alpha: 0.5),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                      );
+                    },
                   );
                 },
-              );
-            },
+              ),
+            ),
           ),
-        ),
-      ),
 
           // 3. 하단 앱/플러그인 추가 버튼
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
             child: InkWell(
-              onTap: onAddAppTap,
+              onTap: widget.onAddAppTap,
               borderRadius: BorderRadius.circular(10),
               child: Container(
                 height: 38,
@@ -239,15 +326,15 @@ class BstClassToolsPanel extends StatelessWidget {
                     Icon(
                       Icons.add_circle_outline_rounded,
                       size: 15,
-                      color: isPro ? const Color(0xFF00F5D4) : const Color(0xFF94A3B8),
+                      color: widget.isPro ? const Color(0xFF00F5D4) : const Color(0xFF94A3B8),
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      isPro ? '앱 / 도구 추가 (PRO)' : '앱 등록 (설정)',
+                      widget.isPro ? '앱 / 도구 추가 (PRO)' : '앱 등록 (설정)',
                       style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w700,
-                        color: isPro ? const Color(0xFF00F5D4) : const Color(0xFF94A3B8),
+                        color: widget.isPro ? const Color(0xFF00F5D4) : const Color(0xFF94A3B8),
                       ),
                     ),
                   ],
@@ -256,6 +343,34 @@ class BstClassToolsPanel extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMiniModeTab({
+    required String label,
+    required bool selected,
+    required Color activeColor,
+    required VoidCallback onTap,
+  }) {
+    final isDarkText = activeColor == const Color(0xFF00F5D4);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: selected ? activeColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? (isDarkText ? const Color(0xFF050811) : Colors.white) : const Color(0xFF94A3B8),
+            fontSize: 10.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
       ),
     );
   }

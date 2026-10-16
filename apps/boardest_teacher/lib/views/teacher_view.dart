@@ -1602,8 +1602,8 @@ class _TeacherViewState extends State<TeacherView> {
       return;
     }
 
-    // 3. 교과서 (.tbp, .bsttbp): Boardest TBP 뷰어로 열기
-    if (lower.endsWith('.tbp') || lower.endsWith('.bsttbp')) {
+    // 3. 교과서 (.tbp, .bsttbp, 또는 Drive TBP 폴더): Boardest TBP 뷰어로 열기
+    if (lower.endsWith('.tbp') || lower.endsWith('.bsttbp') || path.startsWith('drive://tbp/')) {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => TbpViewerRoute(
@@ -2101,10 +2101,23 @@ class _TeacherViewState extends State<TeacherView> {
       onOpenFile: (fileData) async {
         final id = fileData['id'] as String? ?? '';
         final name = fileData['name'] as String? ?? '';
+        final mimeType = fileData['mimeType'] as String? ?? '';
+        final source = fileData['source'] as String? ?? '';
+        final lowerName = name.toLowerCase();
+
+        final isTbpFolder = source == 'tbp' ||
+            mimeType == 'application/x-bst-tbp-folder' ||
+            (mimeType == 'application/vnd.google-apps.folder' &&
+                (lowerName.endsWith('.tbp') || lowerName.endsWith('.bsttbp')));
+        if (isTbpFolder) {
+          _openFile('drive://tbp/$id');
+          return;
+        }
+
         final driveFile = CloudDriveFile(
           id: id,
           name: name,
-          mimeType: fileData['mimeType'] as String? ?? '',
+          mimeType: mimeType,
           size: (fileData['size'] as int?) ?? 0,
           webViewLink: fileData['webViewLink'] as String?,
         );

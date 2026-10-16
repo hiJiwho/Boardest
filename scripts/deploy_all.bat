@@ -1,8 +1,8 @@
 @echo off
 setlocal
 cd /d "%~dp0.."
-set "VERSION=4.0.6"
-set "APPX_VERSION=4.0.6.0"
+set "VERSION=4.0.7"
+set "APPX_VERSION=4.0.7.0"
 set "PROJECT=jiwhosboardest"
 
 echo [1/7] Building Boardest and Teacher web releases...
@@ -56,16 +56,14 @@ if not exist dist mkdir dist
 git archive --format=zip --output=dist\Boardest-v%VERSION%-source.zip HEAD || goto :fail
 gh release view v%VERSION% --repo hiJiwho/Boardest >nul 2>&1
 if errorlevel 1 (
-  gh release create v%VERSION% dist\Boardest-v%VERSION%-source.zip dist\appx\boardest-windows.zip dist\appx\bst-teacher-windows.zip dist\appx\boardest.appx dist\appx\bst-teacher.appx dist\appx\bst-overlay-panser.appx dist\appx\boardest-class-lite.appx dist\appx\boardest.apk dist\appx\bst-teacher.apk dist\appx\bst-teacher-lite.apk dist\appx\boardest-class-lite.apk dist\appx\BoardestCert.cer --repo hiJiwho/Boardest --title "Boardest v%VERSION%" --generate-notes || goto :fail
+  gh release create v%VERSION% dist\Boardest-v%VERSION%-source.zip dist\appx\boardest-windows.zip dist\appx\bst-teacher-windows.zip dist\appx\boardest.appx dist\appx\bst-teacher.appx dist\appx\bst-overlay-panser.appx dist\appx\boardest-class-lite.appx dist\appx\boardest.apk dist\appx\bst-teacher.apk dist\appx\bst-teacher-lite.apk dist\appx\bst-class-lite.apk dist\appx\BoardestCert.cer --repo hiJiwho/Boardest --title "Boardest v%VERSION%" --generate-notes || goto :fail
 ) else (
-  gh release upload v%VERSION% dist\Boardest-v%VERSION%-source.zip dist\appx\boardest-windows.zip dist\appx\bst-teacher-windows.zip dist\appx\boardest.appx dist\appx\bst-teacher.appx dist\appx\bst-overlay-panser.appx dist\appx\boardest-class-lite.appx dist\appx\boardest.apk dist\appx\bst-teacher.apk dist\appx\bst-teacher-lite.apk dist\appx\boardest-class-lite.apk dist\appx\BoardestCert.cer --repo hiJiwho/Boardest --clobber || goto :fail
+  gh release upload v%VERSION% dist\Boardest-v%VERSION%-source.zip dist\appx\boardest-windows.zip dist\appx\bst-teacher-windows.zip dist\appx\boardest.appx dist\appx\bst-teacher.appx dist\appx\bst-overlay-panser.appx dist\appx\boardest-class-lite.appx dist\appx\boardest.apk dist\appx\bst-teacher.apk dist\appx\bst-teacher-lite.apk dist\appx\bst-class-lite.apk dist\appx\BoardestCert.cer --repo hiJiwho/Boardest --clobber || goto :fail
 )
 
 echo [7/7] Verifying GitHub release assets and every published website...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\verify_release.ps1 -Version %VERSION% || goto :fail
 echo Completed: v%VERSION% source, Windows, Android, web, hosting, and GitHub uploads verified.
-echo Shutting down Windows in 2 minutes. Run "shutdown /a" to cancel.
-rem shutdown.exe /s /t 120 /c "Boardest v%VERSION% release complete. Run shutdown.exe /a to cancel."
 exit /b 0
 
 :fail

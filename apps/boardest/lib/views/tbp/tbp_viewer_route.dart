@@ -205,16 +205,31 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
 
   Future<void> _onDhashDetected(String dHash) async {
     if (_currentDhash == dHash) return;
-    _currentDhash = dHash;
 
-    // 판서 저장 후 새 페이지 판서 로드
-    // (TBP는 dHash 기반이므로 컨트롤러 재사용 가능)
+    if (_tbpFolderPath.isNotEmpty &&
+        _currentDhash.isNotEmpty &&
+        _annotationController.strokes.isNotEmpty) {
+      await TbpStorageService.instance.savePenStrokes(
+        _tbpFolderPath,
+        _currentDhash,
+        _annotationController.strokes,
+      );
+    }
+
+    _currentDhash = dHash;
 
     final hotspots = await TbpStorageService.instance.loadHotspots(
       _tbpFolderPath,
       dHash,
     );
-    if (mounted) setState(() => _currentHotspots = hotspots);
+    final strokes = await TbpStorageService.instance.loadPenStrokes(
+      _tbpFolderPath,
+      dHash,
+    );
+    if (mounted) {
+      setState(() => _currentHotspots = hotspots);
+      _annotationController.setStrokes(strokes);
+    }
   }
 
   void _navigatePage(bool isNext) {

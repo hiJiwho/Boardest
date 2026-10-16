@@ -119,9 +119,13 @@ class MealDayInfo {
   };
 
   /// Parses raw NEIS DDISH_NM containing HTML breaks and parentheses numbers e.g. "소고기된장국(5.6.16.)<br/>맛있는케이크(1.2.8.)"
-  factory MealDayInfo.fromNeisRaw(DateTime date, String rawDdish) {
+  factory MealDayInfo.fromNeisRaw(
+    DateTime date,
+    String rawDdish, {
+    String calories = '',
+  }) {
     if (rawDdish.trim().isEmpty) {
-      return MealDayInfo(date: date, dishes: [], footnotes: []);
+      return MealDayInfo(date: date, dishes: [], footnotes: [], calories: calories);
     }
 
     final cleaned = rawDdish.replaceAll(RegExp(r'<br\s*/?>'), '\n');
@@ -164,16 +168,17 @@ class MealDayInfo {
       return '! ($a) : $exp';
     }).toList();
 
-    return MealDayInfo(date: date, dishes: dishItems, footnotes: footnotes);
+    return MealDayInfo(
+      date: date,
+      dishes: dishItems,
+      footnotes: footnotes,
+      calories: calories,
+    );
   }
 
   /// Generates delicious middle school lunch menu for Demo mode deterministically
   factory MealDayInfo.generateDemo(DateTime date) {
     final daySeed = date.year * 10000 + date.month * 100 + date.day;
-    final weekday = date.weekday;
-
-    // In Demo mode, always provide demo meal for evaluation even on weekends
-    final effectiveSeed = daySeed;
 
     final menuPools = [
       [
@@ -218,6 +223,7 @@ class MealDayInfo {
       ],
     ];
 
+    const caloriePools = ['745 kcal', '712 kcal', '688 kcal', '790 kcal', '734 kcal'];
     final index = (daySeed % menuPools.length);
     final chosenDishes = menuPools[index];
 
@@ -231,6 +237,11 @@ class MealDayInfo {
       return '! ($a) : $exp';
     }).toList();
 
-    return MealDayInfo(date: date, dishes: chosenDishes, footnotes: footnotes);
+    return MealDayInfo(
+      date: date,
+      dishes: chosenDishes,
+      footnotes: footnotes,
+      calories: caloriePools[index],
+    );
   }
 }

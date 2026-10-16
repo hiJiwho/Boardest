@@ -6,8 +6,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import '../services/tbp_storage_service.dart';
-
 /// TextBook Plus (.TBP) 새 교과서 패키지 생성 다이얼로그
 class TbpCreatorDialog extends StatefulWidget {
   final double scaleFactor;
@@ -101,31 +99,32 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
         'webUrl': webUrl,
       };
 
-      final tempDir = await Directory.systemTemp.createTemp('tbp_create_');
-      final metaFile = File(p.join(tempDir.path, 'meta.bstsave'));
-      await metaFile.writeAsString(jsonEncode(metaData));
-      final infoFile = File(p.join(tempDir.path, 'info.json'));
-      await infoFile.writeAsString(jsonEncode(metaData));
-
       final safeTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-      final outputBstTbpPath = p.join(targetDir, '$safeTitle.bstTBP');
+      final folderName = safeTitle.toLowerCase().endsWith('.tbp')
+          ? safeTitle
+          : '$safeTitle.tbp';
+      final outputTbpFolderPath = p.join(targetDir, folderName);
+      final outputDir = Directory(outputTbpFolderPath);
+      if (!outputDir.existsSync()) {
+        await outputDir.create(recursive: true);
+      }
 
-      final success = await TbpStorageService.instance.packageBstTbp(
-        sourceFolderPath: tempDir.path,
-        outputBstTbpPath: outputBstTbpPath,
-      );
+      final manifestData = {
+        ...metaData,
+        'format': 'bst-tbp-folder',
+        'hotspots': <String>[],
+        'pens': <String>[],
+        'updatedAt': DateTime.now().toIso8601String(),
+      };
+      await File(p.join(outputDir.path, 'manifest.json'))
+          .writeAsString(jsonEncode(manifestData));
+      await File(p.join(outputDir.path, 'meta.bstsave'))
+          .writeAsString(jsonEncode(metaData));
+      await File(p.join(outputDir.path, 'info.json'))
+          .writeAsString(jsonEncode(metaData));
 
-      try {
-        await tempDir.delete(recursive: true);
-      } catch (_) {}
-
-      if (success && mounted) {
-        Navigator.of(context).pop(outputBstTbpPath); // 생성된 .bstTBP 파일 경로 반환
-      } else {
-        setState(() {
-          _errorMessage = '.TBP 패키지 생성 실패. 저장 위치 경로 권한을 확인해 주세요.';
-          _isCreating = false;
-        });
+      if (mounted) {
+        Navigator.of(context).pop(outputTbpFolderPath);
       }
     } catch (e) {
       setState(() {

@@ -143,14 +143,14 @@ class BstTodayTimetableStrip extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(icon, style: const TextStyle(fontSize: 22)),
-                const SizedBox(height: 2),
+                Text(icon, style: const TextStyle(fontSize: 24)),
+                const SizedBox(height: 3),
                 Text(
                   '교과서',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.65),
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w600,
+                    color: Colors.white.withValues(alpha: 0.75),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -169,7 +169,11 @@ class BstTodayTimetableStrip extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           '오늘 등록된 시간표 일과가 없습니다.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 13),
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.55),
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       );
     }
@@ -181,7 +185,7 @@ class BstTodayTimetableStrip extends StatelessWidget {
         final double count = periods.isEmpty ? 1 : periods.length.clamp(1, 7).toDouble();
         // 7교시가 화면에 스크롤 없이 쏙 들어가도록 동적 너비 분할
         final double cardWidth = (availableWidth > 0 && count > 0)
-            ? ((availableWidth - (count - 1) * 6) / count).clamp(50.0, 140.0)
+            ? ((availableWidth - (count - 1) * 6) / count).clamp(56.0, 150.0)
             : (totalHeight > 0 ? totalHeight : 148.0);
 
         return SingleChildScrollView(
@@ -232,7 +236,7 @@ class BstTodayTimetableStrip extends StatelessWidget {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // 1. 좌측: 교과서 높이 꽉 차게 (좌측 : 우측 = 3 : 1)
+                            // 1. 좌측: 교과서 높이 꽉 차게 (좌측 : 우측 = 3 : 2)
                             Expanded(
                               flex: 3,
                               child: Stack(
@@ -245,7 +249,7 @@ class BstTodayTimetableStrip extends StatelessWidget {
                                       right: 2,
                                       bottom: 4,
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                                        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFF0F1E2E).withValues(alpha: 0.94),
                                           borderRadius: BorderRadius.circular(4),
@@ -255,7 +259,7 @@ class BstTodayTimetableStrip extends StatelessWidget {
                                           item.targetClass!,
                                           style: const TextStyle(
                                             color: Color(0xFF00F5D4),
-                                            fontSize: 9,
+                                            fontSize: 12.5,
                                             fontWeight: FontWeight.w900,
                                           ),
                                           maxLines: 1,
@@ -273,51 +277,54 @@ class BstTodayTimetableStrip extends StatelessWidget {
                               color: Colors.white.withValues(alpha: 0.08),
                             ),
 
-                            // 2. 우측: 1.국어 시계방향 90도 회전 (flex: 1)
+                            // 2. 우측: 1.국어 시계방향 90도 회전 (flex: 2, 가독성 대폭 확대)
                             Expanded(
-                              flex: 1,
+                              flex: 2,
                               child: Container(
                                 color: item.isCurrent
                                     ? const Color(0xFF00F5D4).withValues(alpha: 0.15)
                                     : Colors.white.withValues(alpha: 0.03),
                                 alignment: Alignment.center,
+                                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
                                 child: RotatedBox(
                                   quarterTurns: 1, // 시계방향 90도 회전
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        '${item.period}.',
-                                        style: TextStyle(
-                                          color: item.isCurrent ? const Color(0xFF00F5D4) : subjectColor,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 3),
-                                      Text(
-                                        item.subject,
-                                        style: TextStyle(
-                                          color: item.isCurrent ? Colors.white : const Color(0xFFE2E8F0),
-                                          fontSize: 12,
-                                          fontWeight: item.isCurrent ? FontWeight.w900 : FontWeight.w700,
-                                          letterSpacing: -0.2,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      if (item.isCurrent) ...[
-                                        const SizedBox(width: 4),
-                                        const Text(
-                                          '●',
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          '${item.period}.',
                                           style: TextStyle(
-                                            color: Color(0xFF00F5D4),
-                                            fontSize: 8,
+                                            color: item.isCurrent ? const Color(0xFF00F5D4) : subjectColor,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900,
                                           ),
                                         ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          item.subject,
+                                          style: TextStyle(
+                                            color: item.isCurrent ? Colors.white : const Color(0xFFE2E8F0),
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: -0.3,
+                                          ),
+                                          maxLines: 1,
+                                        ),
+                                        if (item.isCurrent) ...[
+                                          const SizedBox(width: 5),
+                                          const Text(
+                                            '●',
+                                            style: TextStyle(
+                                              color: Color(0xFF00F5D4),
+                                              fontSize: 10,
+                                            ),
+                                          ),
+                                        ],
                                       ],
-                                    ],
+                                    ),
                                   ),
                                 ),
                               ),

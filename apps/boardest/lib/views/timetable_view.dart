@@ -13,12 +13,14 @@ class TimetableView extends StatefulWidget {
   final School school;
   final List<Map<String, dynamic>> apiScheduleEvents;
   final bool initialShowCalendar;
+  final TimetableResult? initialTimetableResult;
 
   const TimetableView({
     super.key,
     required this.school,
     this.apiScheduleEvents = const [],
     this.initialShowCalendar = false,
+    this.initialTimetableResult,
   });
 
   @override
@@ -72,14 +74,23 @@ class _TimetableViewState extends State<TimetableView>
     });
 
     try {
+      final settings = await _storageService.getSettings();
+      if (widget.school.code == 0 && widget.initialTimetableResult != null) {
+        setState(() {
+          _timetableResult = widget.initialTimetableResult;
+          _appSettings = settings;
+          _selectedGrade = settings.selectedGrade;
+          _selectedClass = settings.selectedClass;
+          _isLoading = false;
+        });
+        return;
+      }
+
       // Fetch school timetable
       final rawData = await _comciganService.fetchTimetableRaw(
         widget.school.code,
       );
       final result = _comciganService.parseTimetable(rawData);
-
-      // Load saved settings
-      final settings = await _storageService.getSettings();
 
       setState(() {
         _timetableResult = result;
@@ -89,6 +100,13 @@ class _TimetableViewState extends State<TimetableView>
         _isLoading = false;
       });
     } catch (e) {
+      if (widget.initialTimetableResult != null) {
+        setState(() {
+          _timetableResult = widget.initialTimetableResult;
+          _isLoading = false;
+        });
+        return;
+      }
       setState(() {
         _errorMessage = '시간표 데이터를 가져오지 못했습니다. 네트워크 상태를 확인하고 다시 시도해 주세요.';
         _isLoading = false;

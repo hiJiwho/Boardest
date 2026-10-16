@@ -18,6 +18,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:bst_core/bst_core.dart' show PanserPluginService;
 
+import '../models/school.dart';
 import '../models/lesson.dart';
 import '../models/app_settings.dart';
 import '../models/meal_models.dart';
@@ -77,22 +78,9 @@ import 'modals/timer_modal.dart';
 import 'modals/app_drawer_dialog.dart';
 import 'browser_board_view.dart';
 import '../services/passkey_service.dart';
-
-class PeriodTimeRange {
-  final int period; // 0 for break/lunch, 1-8 for classes
-  final String label;
-  final DateTime start;
-  final DateTime end;
-  final bool isClass;
-
-  PeriodTimeRange({
-    required this.period,
-    required this.label,
-    required this.start,
-    required this.end,
-    required this.isClass,
-  });
-}
+import '../services/timetable_schedule_calculator.dart';
+import 'timetable/bst_today_timetable_panel.dart';
+export '../services/timetable_schedule_calculator.dart' show PeriodTimeRange;
 
 class DashboardView extends StatefulWidget {
   final String? initialTool;
@@ -2396,397 +2384,26 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   }
 
   List<Lesson> _getLessonsForDay(int day) {
-    if (_timetableResult == null) return [];
-
-    final isDemo = AppConfig.isDemoMode || _settings.schoolId.toLowerCase() == 'demo';
-    if (isDemo) {
-      final targetClassNum = DemoTimetableService.parseClassNumber(
-        _settings.classNickname.isNotEmpty ? _settings.classNickname : 'Demo-class1',
-      );
-      return _timetableResult!.lessons
-          .where((lesson) => lesson.classNum == targetClassNum && lesson.weekday == day)
-          .toList();
-    }
-
-    if (_settings.isLearningLab) {
-      // 교수학습실: 시간표 없음
-      return [];
-    }
-
-    if (_settings.isTeacherFixedRoom) {
-      final candidates = <String>{
-        _settings.selectedTeacherId.replaceAll('*', '').replaceAll(' ', '').trim(),
-        _settings.selectedTeacher.replaceAll('*', '').replaceAll(' ', '').trim(),
-        _settings.selectedTeacherName.replaceAll('*', '').replaceAll(' ', '').trim(),
-      }..removeWhere((s) => s.isEmpty);
-
-      if (candidates.isEmpty) return [];
-
-      final rawLessons = _timetableResult!.lessons.where((lesson) {
-        if (lesson.weekday != day) return false;
-        final lt = lesson.teacher.replaceAll('*', '').replaceAll(' ', '').trim();
-        if (lt.isEmpty) return false;
-        return candidates.any((c) =>
-            lt == c ||
-            (c.length >= 2 && lt.startsWith(c)) ||
-            (lt.length >= 2 && c.startsWith(lt)));
-      }).toList();
-
-      if (rawLessons.isEmpty) return [];
-
-      // 특별실을 거쳐가는 모든 학급(학년-반) 정보 추출
-      final classes = rawLessons.map((l) => '${l.grade}-${l.classNum}').toSet();
-
-      // 그 학급들 중 오늘 가장 늦게 끝나는 반의 마지막 교시 찾기
-      int maxPeriod = 0;
-      for (final lesson in _timetableResult!.lessons) {
-        if (lesson.weekday == day &&
-            classes.contains('${lesson.grade}-${lesson.classNum}')) {
-          if (lesson.classTime > maxPeriod) {
-            maxPeriod = lesson.classTime;
-          }
-        }
-      }
-
-      if (maxPeriod == 0) maxPeriod = 7; // 기본 백업
-
-      // 1교시부터 maxPeriod까지 채우기
-      List<Lesson> filledLessons = [];
-      for (int period = 1; period <= maxPeriod; period++) {
-        final lesson = rawLessons.firstWhere(
-          (l) => l.classTime == period,
-          orElse: () => Lesson(
-            grade: 0,
-            classNum: 0,
-            weekday: day,
-            classTime: period,
-            subject: '',
-            teacher: '',
-            classroom: '',
-            isChanged: false,
-          ),
-        );
-
-        if (lesson.grade == 0) {
-          filledLessons.add(lesson);
-        } else {
-          filledLessons.add(
-            Lesson(
-              grade: lesson.grade,
-              classNum: lesson.classNum,
-              weekday: lesson.weekday,
-              classTime: lesson.classTime,
-              subject: lesson.subject,
-              teacher: '${lesson.grade}-${lesson.classNum}',
-              classroom: lesson.classroom,
-              isChanged: lesson.isChanged,
-            ),
-          );
-        }
-      }
-      return filledLessons;
-    } else {
-      final rawLessons = _timetableResult!.lessons.where((lesson) {
-        return lesson.grade == _settings.selectedGrade &&
-            lesson.classNum == _settings.selectedClass &&
-            lesson.weekday == day;
-      }).toList();
-
-      if (rawLessons.isEmpty) return [];
-
-      int maxPeriod = 0;
-      for (final l in rawLessons) {
-        if (l.classTime > maxPeriod) {
-          maxPeriod = l.classTime;
-        }
-      }
-      if (maxPeriod == 0) maxPeriod = 7;
-
-      List<Lesson> filledLessons = [];
-      for (int period = 1; period <= maxPeriod; period++) {
-        final lesson = rawLessons.firstWhere(
-          (l) => l.classTime == period,
-          orElse: () => Lesson(
-            grade: _settings.selectedGrade,
-            classNum: _settings.selectedClass,
-            weekday: day,
-            classTime: period,
-            subject: '',
-            teacher: '',
-            classroom: '',
-            isChanged: false,
-          ),
-        );
-
-        if (lesson.subject.isEmpty) {
-          filledLessons.add(lesson);
-        } else {
-          filledLessons.add(
-            Lesson(
-              grade: lesson.grade,
-              classNum: lesson.classNum,
-              weekday: lesson.weekday,
-              classTime: lesson.classTime,
-              subject: lesson.subject,
-              teacher: AppSettings.formatTeacherDisplayName(lesson.teacher),
-              classroom: lesson.classroom,
-              isChanged: lesson.isChanged,
-            ),
-          );
-        }
-      }
-      return filledLessons;
-    }
+    return TimetableScheduleCalculator.getLessonsForDay(
+      timetableResult: _timetableResult,
+      settings: _settings,
+      day: day,
+    );
   }
 
   Lesson _emptyLesson(int period, int weekday) {
-    return Lesson(
-      grade: _settings.selectedGrade,
-      classNum: _settings.selectedClass,
-      weekday: weekday,
-      classTime: period,
-      subject: '',
-      teacher: '',
-      classroom: '',
-      isChanged: false,
-    );
+    return TimetableScheduleCalculator.emptyLesson(_settings, period, weekday);
   }
 
   List<PeriodTimeRange> _generatePeriodRanges(TimeSettings ts, DateTime now) {
-    final List<PeriodTimeRange> ranges = [];
-
-    // 1. Determine Morning Assembly Times & Pre-assembly (아침 시간)
-    final timeParts = ts.firstPeriodStart.split(':');
-    final firstPeriodH = int.tryParse(timeParts[0]) ?? 8;
-    final firstPeriodM =
-        int.tryParse(timeParts.length > 1 ? timeParts[1] : '40') ?? 40;
-    final firstPeriodStart = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      firstPeriodH,
-      firstPeriodM,
-    );
-
-    DateTime morningStart;
-    DateTime morningEnd;
-
-    final morningBefore = ts.morningAssemblyBeforeMinutes;
-    if (morningBefore != null) {
-      morningStart = firstPeriodStart.subtract(Duration(minutes: morningBefore));
-      final dur = int.tryParse(ts.morningAssemblyEnd) ?? (morningBefore > 5 ? morningBefore - 5 : morningBefore);
-      morningEnd = morningStart.add(Duration(minutes: dur));
-    } else {
-      final morningPartsStart = ts.morningAssemblyStart.split(':');
-      final morningHStart = int.tryParse(morningPartsStart[0]) ?? 8;
-      final morningMStart = int.tryParse(morningPartsStart.length > 1 ? morningPartsStart[1] : '25') ?? 25;
-
-      final morningPartsEnd = ts.morningAssemblyEnd.split(':');
-      final morningHEnd = int.tryParse(morningPartsEnd[0]) ?? 8;
-      final morningMEnd = int.tryParse(morningPartsEnd.length > 1 ? morningPartsEnd[1] : '40') ?? 40;
-
-      morningStart = DateTime(now.year, now.month, now.day, morningHStart, morningMStart);
-      morningEnd = DateTime(now.year, now.month, now.day, morningHEnd, morningMEnd);
-    }
-
-    // 0. 조회 전 아침 시간 (00:00 ~ morningStart)
-    final morningMidnight = DateTime(now.year, now.month, now.day, 0, 0, 0);
-    if (morningStart.isAfter(morningMidnight)) {
-      ranges.add(
-        PeriodTimeRange(
-          period: -3,
-          label: '아침 시간',
-          start: morningMidnight,
-          end: morningStart,
-          isClass: false,
-        ),
-      );
-    }
-
-    // 1. 조회 시간
-    ranges.add(
-      PeriodTimeRange(
-        period: -1,
-        label: '조회 시간',
-        start: morningStart,
-        end: morningEnd,
-        isClass: false,
-      ),
-    );
-
-    // 2. 조회 후 ~ 1교시 전 쉬는시간
-    if (morningEnd.isBefore(firstPeriodStart)) {
-      ranges.add(
-        PeriodTimeRange(
-          period: 0,
-          label: '쉬는 시간',
-          start: morningEnd,
-          end: firstPeriodStart,
-          isClass: false,
-        ),
-      );
-    }
-
-    // 3. 교시별 수업 & 쉬는시간 & 점심시간 분할
-    int currentMinutes = firstPeriodH * 60 + firstPeriodM;
-
     final weekday = now.weekday;
     final isWeekend = weekday == 6 || weekday == 7;
     final displayWeekday = isWeekend ? 1 : weekday;
-    final lessons = _getLessonsForDay(displayWeekday);
-    int maxPeriod = 7;
-    if (lessons.isNotEmpty) {
-      final activeLessons = lessons.where((l) => l.subject.trim().isNotEmpty);
-      if (activeLessons.isNotEmpty) {
-        maxPeriod = activeLessons
-            .map((l) => l.classTime)
-            .reduce((a, b) => a > b ? a : b);
-      } else {
-        maxPeriod = lessons
-            .map((l) => l.classTime)
-            .reduce((a, b) => a > b ? a : b);
-      }
-    }
-    if (maxPeriod < 4) maxPeriod = 7;
-
-    DateTime? lastPeriodEndTime;
-
-    for (int p = 1; p <= maxPeriod; p++) {
-      final classStart = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        currentMinutes ~/ 60,
-        currentMinutes % 60,
-      );
-      currentMinutes += ts.lessonDuration;
-      final classEnd = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        currentMinutes ~/ 60,
-        currentMinutes % 60,
-      );
-
-      ranges.add(
-        PeriodTimeRange(
-          period: p,
-          label: '$p교시',
-          start: classStart,
-          end: classEnd,
-          isClass: true,
-        ),
-      );
-
-      if (p == maxPeriod) {
-        lastPeriodEndTime = classEnd;
-      }
-
-      // 점심시간 처리 (쉬는시간 만큼 뺀 시간: 순수 점심시간 -> 이후 점심 다음 교시 전 쉬는시간)
-      if (p == ts.lunchAfterPeriod) {
-        final pureLunchMinutes = (ts.lunchDuration - ts.breakDuration).clamp(1, 180);
-        final lunchStart = classEnd;
-        final pureLunchEnd = lunchStart.add(Duration(minutes: pureLunchMinutes));
-        final totalLunchEnd = lunchStart.add(Duration(minutes: ts.lunchDuration));
-
-        // Phase 1: 순수 점심 시간
-        ranges.add(
-          PeriodTimeRange(
-            period: 0,
-            label: '점심 시간',
-            start: lunchStart,
-            end: pureLunchEnd,
-            isClass: false,
-          ),
-        );
-
-        // Phase 2: 점심 다음 교시 전 쉬는시간 (쉬는시간 만큼 다음 교시 준비)
-        if (ts.lunchDuration > pureLunchMinutes) {
-          ranges.add(
-            PeriodTimeRange(
-              period: 0,
-              label: '쉬는 시간',
-              start: pureLunchEnd,
-              end: totalLunchEnd,
-              isClass: false,
-            ),
-          );
-        }
-
-        currentMinutes += ts.lunchDuration;
-      } else if (p < maxPeriod) {
-        // 일반 수업 간 쉬는시간
-        final breakStart = classEnd;
-        final breakEnd = breakStart.add(Duration(minutes: ts.breakDuration));
-        ranges.add(
-          PeriodTimeRange(
-            period: 0,
-            label: '쉬는 시간',
-            start: breakStart,
-            end: breakEnd,
-            isClass: false,
-          ),
-        );
-        currentMinutes += ts.breakDuration;
-      }
-    }
-
-    // 4. 종례 시간: 마지막 교시 종료 후 n분 후 시작, m분 진행
-    final lastEnd = lastPeriodEndTime ??
-        DateTime(
-          now.year,
-          now.month,
-          now.day,
-          currentMinutes ~/ 60,
-          currentMinutes % 60,
-        );
-    final afterMinutes = ts.afternoonAssemblyAfterMinutes ?? 10;
-    final durationMinutes = ts.afternoonAssemblyDuration;
-
-    if (afterMinutes > 0) {
-      // 종례 전 대기/쉬는시간
-      final breakStart = lastEnd;
-      final breakEnd = breakStart.add(Duration(minutes: afterMinutes));
-      ranges.add(
-        PeriodTimeRange(
-          period: 0,
-          label: '쉬는 시간',
-          start: breakStart,
-          end: breakEnd,
-          isClass: false,
-        ),
-      );
-    }
-
-    final afternoonStart = lastEnd.add(Duration(minutes: afterMinutes));
-    final afternoonEnd = afternoonStart.add(Duration(minutes: durationMinutes));
-    ranges.add(
-      PeriodTimeRange(
-        period: -2,
-        label: '종례 시간',
-        start: afternoonStart,
-        end: afternoonEnd,
-        isClass: false,
-      ),
+    return TimetableScheduleCalculator.generatePeriodRanges(
+      ts: ts,
+      now: now,
+      lessonsForDisplayDay: _getLessonsForDay(displayWeekday),
     );
-
-    // 5. 종례 후 방과후 (afternoonEnd ~ 23:59:59)
-    final nightMidnight = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
-    if (afternoonEnd.isBefore(nightMidnight)) {
-      ranges.add(
-        PeriodTimeRange(
-          period: -4,
-          label: '방과후',
-          start: afternoonEnd,
-          end: nightMidnight,
-          isClass: false,
-        ),
-      );
-    }
-
-    // Sort ranges by start time
-    ranges.sort((a, b) => a.start.compareTo(b.start));
-    return ranges;
   }
 
   void _updateLiveSchedule() {
@@ -3502,13 +3119,19 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   }
 
   void _openWeeklyTimetable() async {
-    if (_settings.selectedSchool == null) return;
+    final isDemo = AppConfig.isDemoMode ||
+        _settings.schoolId.toLowerCase() == 'demo' ||
+        _settings.selectedSchool?.name.contains('데모') == true;
+    if (_settings.selectedSchool == null && !isDemo) return;
+    final targetSchool = _settings.selectedSchool ??
+        School(id: 0, region: '데모', name: '데모 중학교', code: 0);
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => TimetableView(
-          school: _settings.selectedSchool!,
+          school: targetSchool,
           apiScheduleEvents: _apiScheduleEvents,
           initialShowCalendar: false,
+          initialTimetableResult: _timetableResult,
         ),
       ),
     );
@@ -5353,9 +4976,13 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         : null),
                 remainingTimeText: remainingTimeText,
                 todayDishes: _todayMeal?.dishes ?? [],
-                todayCalories: '745 kcal',
+                todayCalories: (_todayMeal?.calories.isNotEmpty == true)
+                    ? _todayMeal!.calories
+                    : '745 kcal',
                 tomorrowDishes: _tomorrowMeal?.dishes ?? [],
-                tomorrowCalories: '682 kcal',
+                tomorrowCalories: (_tomorrowMeal?.calories.isNotEmpty == true)
+                    ? _tomorrowMeal!.calories
+                    : '682 kcal',
                 tomorrowDateLabel: '다음 급식',
                 currentTime: _debugTimeOverride ?? DateTime.now(),
                 lunchStartTime: TimeOfDay(
@@ -5613,461 +5240,22 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
   // --- 1. Left Timetable Panel (오늘의 시간표 - 교과서 배경, 교시 순서, 진행시간, 남은시간 게이지) ---
   Widget _buildTodayTimetablePanel(List<Lesson> lessons, bool isWeekend) {
-    final scale = _settings.scaleFactor;
-
-    if (_settings.isLearningLab) {
-      final labName = _settings.classNickname.isNotEmpty ? _settings.classNickname : '교수학습실';
-      return Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF081714),
-          borderRadius: BorderRadius.circular(24 * scale),
-          border: Border.all(
-            color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
-            width: 1.2,
-          ),
-        ),
-        padding: EdgeInsets.symmetric(horizontal: 14 * scale, vertical: 14 * scale),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Text(
-                labName,
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 17 * scale,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: -0.5,
-                ),
-              ),
-            ),
-            SizedBox(height: 12 * scale),
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: EdgeInsets.all(16 * scale),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF2EC4B6).withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFF2EC4B6).withValues(alpha: 0.3)),
-                      ),
-                      child: Icon(Icons.school_rounded, color: const Color(0xFF2EC4B6), size: 36 * scale),
-                    ),
-                    SizedBox(height: 12 * scale),
-                    Text(
-                      '교수학습 전용 공간',
-                      style: GoogleFonts.notoSansKr(
-                        color: Colors.white,
-                        fontSize: 15 * scale,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: 4 * scale),
-                    Text(
-                      '정규 수업 시간표 없음',
-                      style: GoogleFonts.notoSansKr(
-                        color: Colors.white38,
-                        fontSize: 12 * scale,
-                      ),
-                    ),
-                    SizedBox(height: 16 * scale),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 6 * scale),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF16161A),
-                        borderRadius: BorderRadius.circular(8 * scale),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.mail_outline_rounded, color: const Color(0xFF00F5D4), size: 14 * scale),
-                          SizedBox(width: 6 * scale),
-                          Text(
-                            '쪽지 수신 가능',
-                            style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontSize: 11 * scale, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: 6 * scale),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 6 * scale),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF16161A),
-                        borderRadius: BorderRadius.circular(8 * scale),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.widgets_outlined, color: const Color(0xFF2EC4B6), size: 14 * scale),
-                          SizedBox(width: 6 * scale),
-                          Text(
-                            'BST 스마트 도구 사용 가능',
-                            style: GoogleFonts.notoSansKr(color: const Color(0xFF2EC4B6), fontSize: 11 * scale, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final displayLessons = List<Lesson>.from(lessons);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF081714),
-        borderRadius: BorderRadius.circular(24 * scale),
-        border: Border.all(
-          color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
-          width: 1.2,
-        ),
-      ),
-      padding: EdgeInsets.symmetric(horizontal: 14 * scale, vertical: 14 * scale),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header: 좌측 로고, 우측 Boardest by Jiwho & 오늘의 시간표
-          Padding(
-            padding: EdgeInsets.only(bottom: 10 * scale),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // 좌측 앱 로고
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10 * scale),
-                  child: Image.asset(
-                    'assets/icons/app_logo.png',
-                    width: 38 * scale,
-                    height: 38 * scale,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 38 * scale,
-                      height: 38 * scale,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10 * scale),
-                      ),
-                      child: Icon(Icons.dashboard_rounded, color: const Color(0xFF00F5D4), size: 22 * scale),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 10 * scale),
-                // 우측 Boardest by Jiwho & 시간표 제목
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _openWeeklyTimetable,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Text(
-                              'Boardest',
-                              style: GoogleFonts.outfit(
-                                fontSize: 18 * scale,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                            SizedBox(width: 6 * scale),
-                            Text(
-                              'by Jiwho',
-                              style: GoogleFonts.outfit(
-                                fontSize: 9 * scale, // 절반 크기
-                                fontWeight: FontWeight.w500,
-                                color: const Color(0xFF00F5D4),
-                              ),
-                            ),
-                          ],
-                        ),
-                        Text(
-                          isWeekend ? '월요일 시간표' : '오늘의 시간표',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 13 * scale,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                IconButton(
-                  onPressed: _openWeeklyTimetable,
-                  icon: Icon(Icons.calendar_month_rounded, color: Colors.white38, size: 18 * scale),
-                  tooltip: '주간 시간표',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
-          SizedBox(height: 8 * scale),
-          // 7 Period Buttons (교과서 은은한 배경 이미지 & 시간대/게이지)
-          Expanded(
-            child: displayLessons.isEmpty
-                ? Center(
-                    child: Text(
-                      isWeekend ? '주말에는 수업이 없습니다' : '수업 일정이 없습니다',
-                      style: GoogleFonts.notoSansKr(
-                        color: Colors.white38,
-                        fontSize: 13 * scale,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: List.generate(displayLessons.length > 7 ? 7 : displayLessons.length, (index) {
-                      final lesson = displayLessons[index];
-                      final isCurrent = _currentPeriod?.isClass == true && _currentPeriod?.period == lesson.classTime;
-                      final isNextInBreak = _currentPeriod != null && !_currentPeriod!.isClass && _nextLesson?.classTime == lesson.classTime;
-                      final isLast = index == (displayLessons.length > 7 ? 6 : displayLessons.length - 1);
-                      final subject = lesson.subject.isNotEmpty ? lesson.subject : '${lesson.classTime}교시';
-                      final timeStr = _getPeriodTimeString(lesson.classTime);
-                      final textbookPath = lesson.subject.isNotEmpty ? _settings.getTextbookPath(lesson.subject) : null;
-                      final imgProvider = _getAdaptiveImageProvider(textbookPath, subject: lesson.subject);
-
-                      return Expanded(
-                        child: Container(
-                          margin: EdgeInsets.only(bottom: isLast ? 0 : 8 * scale),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: () {
-                                if (lesson.subject.isNotEmpty) {
-                                  setState(() {
-                                    _currentLesson = lesson;
-                                  });
-                                }
-                              },
-                              borderRadius: BorderRadius.circular(14 * scale),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: isCurrent
-                                      ? const Color(0xFF004D40)
-                                      : (isNextInBreak ? const Color(0xFF0A3029) : const Color(0xFF0F2622)),
-                                  borderRadius: BorderRadius.circular(14 * scale),
-                                  border: Border.all(
-                                    color: isCurrent
-                                        ? const Color(0xFF00F5D4)
-                                        : (isNextInBreak ? const Color(0xFF2EC4B6).withValues(alpha: 0.7) : const Color(0xFF2EC4B6).withValues(alpha: 0.35)),
-                                    width: isCurrent ? 2.0 : 1.2,
-                                  ),
-                                  image: imgProvider != null
-                                      ? DecorationImage(
-                                          image: imgProvider,
-                                          fit: BoxFit.cover,
-                                          colorFilter: ColorFilter.mode(
-                                            (isCurrent ? const Color(0xFF003830) : const Color(0xFF081714))
-                                                .withValues(alpha: 0.85),
-                                            BlendMode.srcOver,
-                                          ),
-                                        )
-                                      : null,
-                                  boxShadow: isCurrent
-                                      ? [
-                                          BoxShadow(
-                                            color: const Color(0xFF00F5D4).withValues(alpha: 0.4),
-                                            blurRadius: 12 * scale,
-                                            spreadRadius: 2 * scale,
-                                          ),
-                                        ]
-                                      : [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(alpha: 0.3),
-                                            blurRadius: 3 * scale,
-                                            offset: Offset(0, 1.5 * scale),
-                                          ),
-                                        ],
-                                ),
-                                child: Stack(
-                                  children: [
-                                    Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 10 * scale, vertical: 6 * scale),
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          // Top Row: Period number + Time range + Remaining countdown
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Row(
-                                                children: [
-                                                  Container(
-                                                    padding: EdgeInsets.symmetric(horizontal: 5 * scale, vertical: 1.5 * scale),
-                                                    decoration: BoxDecoration(
-                                                      color: isCurrent ? const Color(0xFF00F5D4) : Colors.white12,
-                                                      borderRadius: BorderRadius.circular(4 * scale),
-                                                    ),
-                                                    child: Text(
-                                                      '${lesson.classTime}교시',
-                                                      style: GoogleFonts.outfit(
-                                                        color: isCurrent ? Colors.black : Colors.white70,
-                                                        fontSize: 9.5 * scale,
-                                                        fontWeight: FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  if (timeStr.isNotEmpty) ...[
-                                                    SizedBox(width: 4 * scale),
-                                                    Text(
-                                                      timeStr,
-                                                      style: GoogleFonts.outfit(
-                                                        color: Colors.white54,
-                                                        fontSize: 9 * scale,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ],
-                                              ),
-                                              if (isCurrent && _countdownTime.isNotEmpty) ...[
-                                                Container(
-                                                  padding: EdgeInsets.symmetric(horizontal: 5 * scale, vertical: 1.5 * scale),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFF00F5D4).withValues(alpha: 0.2),
-                                                    borderRadius: BorderRadius.circular(4 * scale),
-                                                    border: Border.all(color: const Color(0xFF00F5D4), width: 0.8),
-                                                  ),
-                                                  child: Text(
-                                                    '$_countdownTime 남음',
-                                                    style: GoogleFonts.notoSansKr(
-                                                      color: const Color(0xFF00F5D4),
-                                                      fontSize: 9 * scale,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ] else if (isNextInBreak) ...[
-                                                Container(
-                                                  padding: EdgeInsets.symmetric(horizontal: 5 * scale, vertical: 1.5 * scale),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFF2EC4B6).withValues(alpha: 0.2),
-                                                    borderRadius: BorderRadius.circular(4 * scale),
-                                                  ),
-                                                  child: Text(
-                                                    '다음 수업',
-                                                    style: GoogleFonts.notoSansKr(
-                                                      color: const Color(0xFF74F8E5),
-                                                      fontSize: 9 * scale,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-
-                                          // Center: Subject Name / Visiting Class in Special Room Mode
-                                          Center(
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  _settings.specialClassroomMode
-                                                      ? '${lesson.grade}학년 ${lesson.classNum}반'
-                                                      : subject,
-                                                  style: GoogleFonts.notoSansKr(
-                                                    color: isCurrent ? const Color(0xFF00F5D4) : Colors.white,
-                                                    fontSize: (_settings.specialClassroomMode ? 14.0 : 15.5) * scale,
-                                                    fontWeight: FontWeight.bold,
-                                                    shadows: [
-                                                      Shadow(
-                                                        color: Colors.black.withValues(alpha: 0.9),
-                                                        blurRadius: 4,
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                                if (_settings.specialClassroomMode && lesson.subject.isNotEmpty)
-                                                  Text(
-                                                    lesson.subject,
-                                                    style: GoogleFonts.notoSansKr(
-                                                      color: isCurrent ? const Color(0xFF74F8E5) : Colors.white70,
-                                                      fontSize: 10 * scale,
-                                                      fontWeight: FontWeight.w600,
-                                                    ),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                              ],
-                                            ),
-                                          ),
-
-                                          // Spacer for bottom bar
-                                          SizedBox(height: 2 * scale),
-                                        ],
-                                      ),
-                                    ),
-
-                                    // Bottom Progress Bar (진행 중일 때 또는 쉬는 시간일 때)
-                                    if (isCurrent) ...[
-                                      Positioned(
-                                        bottom: 0,
-                                        left: 0,
-                                        right: 0,
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.only(
-                                            bottomLeft: Radius.circular(14 * scale),
-                                            bottomRight: Radius.circular(14 * scale),
-                                          ),
-                                          child: LinearProgressIndicator(
-                                            value: _periodProgress,
-                                            minHeight: 3.5 * scale,
-                                            backgroundColor: Colors.white12,
-                                            valueColor: const AlwaysStoppedAnimation(Color(0xFF00F5D4)),
-                                          ),
-                                        ),
-                                      ),
-                                    ] else if (isNextInBreak) ...[
-                                      Positioned(
-                                        bottom: 0,
-                                        left: 0,
-                                        right: 0,
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.only(
-                                            bottomLeft: Radius.circular(14 * scale),
-                                            bottomRight: Radius.circular(14 * scale),
-                                          ),
-                                          child: LinearProgressIndicator(
-                                            value: _periodProgress,
-                                            minHeight: 2.5 * scale,
-                                            backgroundColor: Colors.white12,
-                                            valueColor: const AlwaysStoppedAnimation(Color(0xFF2EC4B6)),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-          ),
-        ],
-      ),
+    return BstTodayTimetablePanel(
+      lessons: lessons,
+      isWeekend: isWeekend,
+      settings: _settings,
+      currentPeriod: _currentPeriod,
+      nextLesson: _nextLesson,
+      countdownTime: _countdownTime,
+      periodProgress: _periodProgress,
+      onOpenWeeklyTimetable: _openWeeklyTimetable,
+      onSelectLesson: (lesson) {
+        setState(() {
+          _currentLesson = lesson;
+        });
+      },
+      getPeriodTimeString: _getPeriodTimeString,
+      getAdaptiveImageProvider: _getAdaptiveImageProvider,
     );
   }
 
@@ -10820,8 +10008,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                           _openCloudCanvaFile(f);
                         } else if (isTbp) {
                           final token = BstCloudService.instance.activeToken ?? '';
-                          String targetPath = f.id;
-                          final isFolder = f.mimeType == 'application/x-bst-tbp-folder' || f.mimeType == 'application/vnd.google-apps.folder';
+                          final isFolder = f.mimeType == 'application/x-bst-tbp-folder' ||
+                              f.mimeType == 'application/vnd.google-apps.folder';
+                          String targetPath = isFolder ? 'drive://tbp/${f.id}' : f.id;
                           if (!kIsWeb && !isFolder) {
                             try {
                               final dl = await BstCloudService.instance.downloadDriveFile(f.id, f.name, token);
@@ -11290,10 +10479,14 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           subject: '판서',
         ),
       );
-    } else if (lower.endsWith('.bsttbp') || lower.endsWith('.tbp')) {
+    } else if (lower.endsWith('.bsttbp') ||
+        lower.endsWith('.tbp') ||
+        file.mimeType == 'application/x-bst-tbp-folder') {
+      final isFolder = file.mimeType == 'application/x-bst-tbp-folder' ||
+          file.mimeType == 'application/vnd.google-apps.folder';
       _pushBoardRoute(
         TbpViewerRoute(
-          tbpFilePath: file.id,
+          tbpFilePath: isFolder ? 'drive://tbp/${file.id}' : file.id,
           scaleFactor: _settings.scaleFactor,
         ),
       );
@@ -13001,15 +12194,30 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           width: 480 * scale,
           height: 380 * scale,
           child: FutureBuilder<List<BstCloudFile>>(
-            future: BstCloudService.instance.fetchDriveFolderFiles(accessToken: token),
+            future: Future.wait([
+              BstCloudService.instance.fetchFilesBySpecificFolder(
+                accessToken: token,
+                folderName: 'bst-tbs',
+              ),
+              BstCloudService.instance.fetchDriveFolderFiles(accessToken: token),
+            ]).then((lists) => [...lists[0], ...lists[1]]),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator(color: Color(0xFF7F5AF0)));
               }
               final allFiles = snapshot.data ?? [];
+              final seenIds = <String>{};
               final tbpFiles = allFiles.where((f) {
+                if (!seenIds.add(f.id)) return false;
                 final name = f.name.toLowerCase();
-                return name.endsWith('.bsttbp') || name.endsWith('.tbp') || name.contains('교과서') || name.contains('tbp');
+                final isTbpFolder = f.mimeType == 'application/x-bst-tbp-folder' ||
+                    (f.mimeType == 'application/vnd.google-apps.folder' &&
+                        (name.endsWith('.tbp') || name.endsWith('.bsttbp')));
+                return isTbpFolder ||
+                    name.endsWith('.bsttbp') ||
+                    name.endsWith('.tbp') ||
+                    name.contains('교과서') ||
+                    name.contains('tbp');
               }).toList();
 
               if (tbpFiles.isEmpty) {
@@ -13029,7 +12237,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       ),
                       SizedBox(height: 6 * scale),
                       Text(
-                        '교사용 앱에서 교과서 파일(.BSTtbp)을 Cloud에 업로드해주세요.',
+                        '교사용 앱에서 TBP 교과서 폴더를 Cloud에 생성해주세요.',
                         style: GoogleFonts.notoSansKr(
                           color: Colors.white38,
                           fontSize: 12 * scale,
@@ -13062,8 +12270,14 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 14),
                       onTap: () async {
                         Navigator.of(ctx).pop();
-                        String targetPath = file.id;
-                        if (!kIsWeb && !file.id.startsWith('http') && !file.id.startsWith('/') && !file.id.contains(Platform.pathSeparator)) {
+                        final isFolder = file.mimeType == 'application/x-bst-tbp-folder' ||
+                            file.mimeType == 'application/vnd.google-apps.folder';
+                        String targetPath = isFolder ? 'drive://tbp/${file.id}' : file.id;
+                        if (!kIsWeb &&
+                            !isFolder &&
+                            !file.id.startsWith('http') &&
+                            !file.id.startsWith('/') &&
+                            !file.id.contains(Platform.pathSeparator)) {
                           showDialog(
                             context: context,
                             barrierDismissible: false,

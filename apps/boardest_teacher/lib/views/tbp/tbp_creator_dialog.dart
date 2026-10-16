@@ -112,34 +112,35 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
 
       final tbpRootId = await cloud.getOrCreateTextbookProFolder();
       if (tbpRootId == null) {
-        throw Exception('Google Drive /bst-textbookpro 폴더를 찾을 수 없습니다.');
+        throw Exception('Google Drive /bst-tbs 폴더를 찾을 수 없습니다.');
       }
 
-      // /bst-textbookpro/ 아래 프로젝트 전용 폴더 생성
+      // /bst-tbs/ 아래 프로젝트 전용 폴더 생성 (겉으로는 파일처럼 보이도록 .tbp 접미사 부여)
+      final folderName = safeTitle.toLowerCase().endsWith('.tbp') ? safeTitle : '$safeTitle.tbp';
       final existingProjects = await cloud.fetchDriveFoldersInParent(tbpRootId);
-      var projectFolder = existingProjects.where((f) => f.name == safeTitle).firstOrNull;
+      var projectFolder = existingProjects.where((f) => f.name == folderName || f.name == safeTitle).firstOrNull;
       String projectFolderId;
       if (projectFolder != null) {
         projectFolderId = projectFolder.id;
       } else {
-        final newId = await cloud.createFolderInDrive(safeTitle, parentFolderId: tbpRootId);
+        final newId = await cloud.createFolderInDrive(folderName, parentFolderId: tbpRootId);
         if (newId == null) throw Exception('프로젝트 폴더 생성 실패');
         projectFolderId = newId;
       }
 
-      // 1. manifest.json 업로드
-      final manifestBytes = Uint8List.fromList(utf8.encode(jsonEncode(metaData)));
-      await cloud.uploadBytesToDrive(manifestBytes, 'manifest.json', folderId: projectFolderId);
+      final fullMeta = {
+        ...metaData,
+        'folderId': projectFolderId,
+      };
+      final metaJsonStr = jsonEncode(fullMeta);
 
-      // 2. hotspots.json 초기화 업로드
-      final hotspotsBytes = Uint8List.fromList(utf8.encode(jsonEncode({'hotspots': []})));
-      await cloud.uploadBytesToDrive(hotspotsBytes, 'hotspots.json', folderId: projectFolderId);
-
-      // 3. pen_data.json 초기화 업로드
-      await cloud.saveProjectPenData(projectFolderId, {'strokes': [], 'updatedAt': DateTime.now().toIso8601String()});
+      // 1. manifest.json, meta.bstsave, info.json 업로드 (온디맨드 개별 파일 구조)
+      await cloud.saveTbpFolderFileText(projectFolderId, 'manifest.json', metaJsonStr);
+      await cloud.saveTbpFolderFileText(projectFolderId, 'meta.bstsave', metaJsonStr);
+      await cloud.saveTbpFolderFileText(projectFolderId, 'info.json', metaJsonStr);
 
       if (mounted) {
-        Navigator.of(context).pop(safeTitle);
+        Navigator.of(context).pop('drive://tbp/$projectFolderId');
       }
     } catch (e) {
       debugPrint('TBP Creator Error: $e');

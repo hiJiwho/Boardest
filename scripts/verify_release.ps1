@@ -1,5 +1,5 @@
 param(
-  [string]$Version = '4.0.6'
+  [string]$Version = '4.0.7'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,7 +15,7 @@ $ExpectedAssets = @(
   'boardest.apk',
   'bst-teacher.apk',
   'bst-teacher-lite.apk',
-  'boardest-class-lite.apk',
+  'bst-class-lite.apk',
   'BoardestCert.cer'
 )
 $DownloadArtifacts = @(
@@ -26,7 +26,7 @@ $DownloadArtifacts = @(
   'boardest.apk',
   'bst-teacher.apk',
   'bst-teacher-lite.apk',
-  'boardest-class-lite.apk',
+  'bst-class-lite.apk',
   'BoardestCert.cer'
 )
 $VersionChecks = @{

@@ -331,7 +331,12 @@
       "redirects": [
         {
           "source": "/boardest-class-lite.apk",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-class-lite.apk",
+          "type": 302
+        },
+        {
+          "source": "/bst-class-lite.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-class-lite.apk",
           "type": 302
         },
         {

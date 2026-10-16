@@ -1750,19 +1750,20 @@ class CloudDriveService with ChangeNotifier {
       return _bstTextbookProFolderId;
     }
 
-    final existingTbs = await findFolderByName('bst-tbs', parentFolderId: 'appDataFolder', isAppData: true);
-    if (existingTbs != null) {
-      _bstTextbookProFolderId = existingTbs;
-      return existingTbs;
+    for (final name in ['bst-tbs', 'bst-textbookpro', 'TBP']) {
+      final inRoot = await findFolderByName(name, parentFolderId: 'root', isAppData: false);
+      if (inRoot != null) {
+        _bstTextbookProFolderId = inRoot;
+        return inRoot;
+      }
+      final inAdf = await findFolderByName(name, parentFolderId: 'appDataFolder', isAppData: true);
+      if (inAdf != null) {
+        _bstTextbookProFolderId = inAdf;
+        return inAdf;
+      }
     }
 
-    final existing = await findFolderByName('bst-textbookpro', parentFolderId: 'appDataFolder', isAppData: true);
-    if (existing != null) {
-      _bstTextbookProFolderId = existing;
-      return existing;
-    }
-
-    final created = await createFolderInDrive('bst-tbs', parentFolderId: 'appDataFolder');
+    final created = await createFolderInDrive('bst-tbs', parentFolderId: 'root');
     if (created != null) {
       _bstTextbookProFolderId = created;
     }
@@ -2019,29 +2020,38 @@ class CloudDriveService with ChangeNotifier {
   /// 특정 부모 폴더 내 하위 폴더 목록만 안전하게 조회
   Future<List<CloudDriveFile>> fetchDriveFoldersInParent(String parentFolderId, {bool isAppData = false}) async {
     if (!isLoggedIn) return [];
+    final List<CloudDriveFile> results = [];
     try {
-      final isAdf = (isAppData || parentFolderId == 'appDataFolder');
       final parentQ = (parentFolderId == 'appDataFolder') ? "'appDataFolder' in parents" : "'$parentFolderId' in parents";
       final q = "mimeType = 'application/vnd.google-apps.folder' and $parentQ and trashed = false";
-      final spaceQuery = isAdf ? 'spaces=appDataFolder&' : '';
-      final url = Uri.parse(
-        'https://www.googleapis.com/drive/v3/files?'
-        '$spaceQuery'
-        'q=${Uri.encodeComponent(q)}&'
-        'fields=files(id,name,mimeType,modifiedTime)&'
-        'pageSize=100&orderBy=modifiedTime desc',
-      );
+      final spaceQueries = (parentFolderId == 'appDataFolder')
+          ? ['spaces=appDataFolder&']
+          : ['', 'spaces=appDataFolder&'];
+      for (final spaceQuery in spaceQueries) {
+        final url = Uri.parse(
+          'https://www.googleapis.com/drive/v3/files?'
+          '$spaceQuery'
+          'q=${Uri.encodeComponent(q)}&'
+          'fields=files(id,name,mimeType,modifiedTime)&'
+          'pageSize=100&orderBy=modifiedTime desc',
+        );
 
-      final res = await http.get(url, headers: authHeaders);
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
-        final list = data['files'] as List? ?? [];
-        return list.map((f) => CloudDriveFile.fromJson(f as Map<String, dynamic>)).toList();
+        final res = await http.get(url, headers: authHeaders);
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body) as Map<String, dynamic>;
+          final list = data['files'] as List? ?? [];
+          for (final f in list) {
+            final item = CloudDriveFile.fromJson(f as Map<String, dynamic>);
+            if (!results.any((r) => r.id == item.id)) {
+              results.add(item);
+            }
+          }
+        }
       }
     } catch (e) {
       debugPrint('[CloudDriveService] fetchDriveFoldersInParent error: $e');
     }
-    return [];
+    return results;
   }
 
   /// 프로젝트 폴더 내 판서 데이터 (pen_data.json) 저장
@@ -3038,5 +3048,125 @@ class CloudDriveService with ChangeNotifier {
       debugPrint('[CloudDriveService] syncFolderWithDrive error: $e');
     }
     return false;
+  }
+
+  /// TBP 폴더 내부 특정 파일(manifest.json, info.json, hotspot_xxx.bstsave, pen_xxx.bstpen 등) 온디맨드 읽기
+  Future<String?> fetchTbpFolderFileText(String tbpFolderId, String fileName) async {
+    if (!isLoggedIn) return null;
+    try {
+      final q = "'$tbpFolderId' in parents and name = '$fileName' and trashed = false";
+      for (final spaceParam in ['', 'spaces=appDataFolder&']) {
+        final url = Uri.parse(
+          "https://www.googleapis.com/drive/v3/files?${spaceParam}q=${Uri.encodeComponent(q)}&fields=files(id,name)&pageSize=1",
+        );
+        final res = await http.get(url, headers: authHeaders).timeout(const Duration(seconds: 6));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final files = data['files'] as List? ?? [];
+          if (files.isNotEmpty) {
+            final fileId = files[0]['id']?.toString() ?? '';
+            if (fileId.isNotEmpty) {
+              final bytes = await fetchDriveFileBytes(fileId);
+              if (bytes != null) return utf8.decode(bytes);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[CloudDriveService] fetchTbpFolderFileText($fileName) error: $e');
+    }
+    return null;
+  }
+
+  /// TBP 폴더 내부 특정 파일(manifest.json, hotspot_xxx.bstsave, pen_xxx.bstpen 등) 온디맨드 저장/업데이트
+  Future<bool> saveTbpFolderFileText(String tbpFolderId, String fileName, String content) async {
+    if (!isLoggedIn) return false;
+    try {
+      final bytes = Uint8List.fromList(utf8.encode(content));
+      final q = "'$tbpFolderId' in parents and name = '$fileName' and trashed = false";
+      String? existingFileId;
+
+      for (final spaceParam in ['', 'spaces=appDataFolder&']) {
+        final url = Uri.parse(
+          "https://www.googleapis.com/drive/v3/files?${spaceParam}q=${Uri.encodeComponent(q)}&fields=files(id,name)&pageSize=1",
+        );
+        final res = await http.get(url, headers: authHeaders).timeout(const Duration(seconds: 6));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final files = data['files'] as List? ?? [];
+          if (files.isNotEmpty) {
+            existingFileId = files[0]['id']?.toString();
+            if (existingFileId != null && existingFileId.isNotEmpty) break;
+          }
+        }
+      }
+
+      if (existingFileId != null && existingFileId.isNotEmpty) {
+        final patchUrl = Uri.parse('https://www.googleapis.com/upload/drive/v3/files/$existingFileId?uploadType=media');
+        final patchRes = await http.patch(
+          patchUrl,
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json; charset=UTF-8',
+          },
+          body: bytes,
+        ).timeout(const Duration(seconds: 8));
+        return patchRes.statusCode == 200;
+      }
+
+      return await uploadBytesToDrive(bytes, fileName, folderId: tbpFolderId);
+    } catch (e) {
+      debugPrint('[CloudDriveService] saveTbpFolderFileText($fileName) error: $e');
+      return false;
+    }
+  }
+
+  /// TBP 프로젝트를 .bsttbp 압축 파일이 아닌 Google Drive TBP 폴더 내 개별 파일 구조로 저장
+  Future<String?> saveTbpFolderProjectToDrive({
+    required String title,
+    required Directory localTbpDir,
+    String? existingDriveFolderId,
+  }) async {
+    if (!isLoggedIn) return null;
+    try {
+      String? projectFolderId = existingDriveFolderId;
+      if (projectFolderId == null || projectFolderId.isEmpty) {
+        final tbpRootId = await getOrCreateTextbookProFolder();
+        if (tbpRootId == null) return null;
+        final safeTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+        final folderName = safeTitle.toLowerCase().endsWith('.tbp') ? safeTitle : '$safeTitle.tbp';
+        final existingFolders = await fetchDriveFoldersInParent(tbpRootId);
+        final matched = existingFolders.where((f) => f.name == folderName || f.name == safeTitle).firstOrNull;
+        projectFolderId = matched?.id ?? await createFolderInDrive(folderName, parentFolderId: tbpRootId);
+      }
+      if (projectFolderId == null) return null;
+
+      if (await localTbpDir.exists()) {
+        await for (final entity in localTbpDir.list(recursive: true)) {
+          if (entity is File) {
+            final rel = p.relative(entity.path, from: localTbpDir.path).replaceAll('\\', '/');
+            final content = await entity.readAsString();
+            if (rel == 'meta.bstsave' || rel == 'info.json' || rel == 'manifest.json') {
+              await saveTbpFolderFileText(projectFolderId, rel, content);
+            } else if (rel.startsWith('HOTspot/') && rel.endsWith('hotspot.bstsave')) {
+              final parts = rel.split('/');
+              if (parts.length >= 2) {
+                final key = parts[1];
+                await saveTbpFolderFileText(projectFolderId, 'hotspot_$key.bstsave', content);
+              }
+            } else if (rel.startsWith('PEN/') && rel.endsWith('.bstpen')) {
+              final baseName = p.basename(rel);
+              await saveTbpFolderFileText(projectFolderId, 'pen_$baseName', content);
+            } else if (rel.startsWith('hotspot_') || rel.startsWith('pen_')) {
+              await saveTbpFolderFileText(projectFolderId, p.basename(rel), content);
+            }
+          }
+        }
+      }
+      return projectFolderId;
+    } catch (e) {
+      debugPrint('[CloudDriveService] saveTbpFolderProjectToDrive error: $e');
+      return null;
+    }
   }
 }

@@ -524,43 +524,98 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                             ),
                           ),
                           onPressed: () async {
+                            if (_tbpFolderPath.isNotEmpty &&
+                                _currentDhash.isNotEmpty) {
+                              await TbpStorageService.instance.savePenStrokes(
+                                _tbpFolderPath,
+                                _currentDhash,
+                                _annotationController.strokes,
+                              );
+                            }
+
                             final result = await SaveDestinationDialog.show(
                               context: context,
                               scaleFactor: widget.scaleFactor,
                               title: '💾 TBP 스마트 교과서 저장',
-                              subTitle: 'TBP 교과서 패키지를 어디에 저장하시겠습니까?',
+                              subTitle: 'TBP 교과서 폴더를 어디에 저장하시겠습니까?',
                             );
 
                             if (result != null) {
-                              final targetFile = File(
-                                p.join(
-                                  result.targetDirectory.path,
-                                  '${_metadata?.title ?? "textbook"}.bstTBP',
-                                ),
-                              );
-                              if (_tbpFolderPath.isNotEmpty) {
-                                await TbpStorageService.instance.packageBstTbp(
-                                  sourceFolderPath: _tbpFolderPath,
-                                  outputBstTbpPath: targetFile.path,
-                                );
-                              } else {
-                                final sourceFile = File(widget.tbpFilePath);
-                                if (sourceFile.existsSync()) {
-                                  await sourceFile.copy(targetFile.path);
-                                }
-                              }
+                              final safeTitle =
+                                  (_metadata?.title ?? 'textbook').replaceAll(
+                                    RegExp(r'[\\/:*?"<>|]'),
+                                    '_',
+                                  );
+                              final folderName =
+                                  safeTitle.toLowerCase().endsWith('.tbp')
+                                  ? safeTitle
+                                  : '$safeTitle.tbp';
 
-                              if (result.type == SaveTargetType.cloud &&
-                                  targetFile.existsSync()) {
-                                await CloudDriveService.instance
-                                    .uploadFileToDrive(targetFile);
+                              if (result.type == SaveTargetType.cloud) {
+                                final tbpRootId = await CloudDriveService
+                                    .instance
+                                    .ensureFolder('bst-tbs');
+                                final projectFolderId = await CloudDriveService
+                                    .instance
+                                    .ensureFolder(
+                                      folderName,
+                                      parentFolderId: tbpRootId,
+                                    );
+                                if (projectFolderId != null &&
+                                    _tbpFolderPath.isNotEmpty &&
+                                    Directory(_tbpFolderPath).existsSync()) {
+                                  await for (final entity in Directory(
+                                    _tbpFolderPath,
+                                  ).list(recursive: false)) {
+                                    if (entity is File) {
+                                      final bytes = await entity.readAsBytes();
+                                      await CloudDriveService.instance
+                                          .uploadFile(
+                                            name: p.basename(entity.path),
+                                            bytes: bytes,
+                                            folderId: projectFolderId,
+                                            mimeType: 'application/json',
+                                          );
+                                    }
+                                  }
+                                }
+                              } else {
+                                final targetDir = Directory(
+                                  p.join(
+                                    result.targetDirectory.path,
+                                    folderName,
+                                  ),
+                                );
+                                if (!targetDir.existsSync()) {
+                                  targetDir.createSync(recursive: true);
+                                }
+                                if (_tbpFolderPath.isNotEmpty &&
+                                    Directory(_tbpFolderPath).existsSync()) {
+                                  await for (final entity in Directory(
+                                    _tbpFolderPath,
+                                  ).list(recursive: true)) {
+                                    if (entity is File) {
+                                      final rel = p.relative(
+                                        entity.path,
+                                        from: _tbpFolderPath,
+                                      );
+                                      final destFile = File(
+                                        p.join(targetDir.path, rel),
+                                      );
+                                      destFile.parent.createSync(
+                                        recursive: true,
+                                      );
+                                      await entity.copy(destFile.path);
+                                    }
+                                  }
+                                }
                               }
 
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      '✅ TBP 교과서가 [${result.type.name}]에 성공적으로 저장되었습니다!',
+                                      '✅ TBP 교과서 폴더가 [${result.type.name}]에 성공적으로 저장되었습니다!',
                                     ),
                                     backgroundColor: const Color(0xFF2CB67D),
                                   ),

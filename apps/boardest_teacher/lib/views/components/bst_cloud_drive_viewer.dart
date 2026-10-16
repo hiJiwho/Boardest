@@ -57,21 +57,45 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
     });
 
     try {
-      final list = await CloudDriveService.instance.fetchDriveFiles(
-        folderId: folderId,
-        includeFolders: true,
-      );
-      if (!mounted) return;
-      setState(() {
-        _files = list.map((f) => {
-          'id': f.id,
-          'name': f.name,
-          'mimeType': f.mimeType,
-          'size': f.size,
-          'modifiedTime': f.modifiedTime,
-        }).toList();
-        _isLoading = false;
-      });
+      if (folderId == null) {
+        final merged = await CloudDriveService.instance.fetchMergedMaterials();
+        final folders = await CloudDriveService.instance.fetchDriveFiles(
+          folderId: null,
+          includeFolders: true,
+        );
+        final subFolders = folders
+            .where((f) => f.mimeType == 'application/vnd.google-apps.folder')
+            .map((f) => <String, dynamic>{
+                  'id': f.id,
+                  'name': f.name,
+                  'mimeType': f.mimeType,
+                  'size': f.size,
+                  'modifiedTime': f.modifiedTime,
+                  'source': 'save',
+                })
+            .toList();
+        if (!mounted) return;
+        setState(() {
+          _files = [...merged, ...subFolders];
+          _isLoading = false;
+        });
+      } else {
+        final list = await CloudDriveService.instance.fetchDriveFiles(
+          folderId: folderId,
+          includeFolders: true,
+        );
+        if (!mounted) return;
+        setState(() {
+          _files = list.map((f) => <String, dynamic>{
+            'id': f.id,
+            'name': f.name,
+            'mimeType': f.mimeType,
+            'size': f.size,
+            'modifiedTime': f.modifiedTime,
+          }).toList();
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -80,10 +104,25 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
     }
   }
 
+  bool _isTbpFolderItem(Map<String, dynamic> file) {
+    final name = (file['name'] ?? '').toString().toLowerCase();
+    final mimeType = (file['mimeType'] ?? '').toString();
+    final source = (file['source'] ?? '').toString();
+    if (source == 'tbp' || mimeType == 'application/x-bst-tbp-folder') {
+      return true;
+    }
+    if (mimeType == 'application/vnd.google-apps.folder' &&
+        (name.endsWith('.tbp') || name.endsWith('.bsttbp'))) {
+      return true;
+    }
+    return false;
+  }
+
   List<Map<String, dynamic>> get _filteredFiles {
     return _files.where((file) {
       final name = (file['name'] ?? '').toString().toLowerCase();
-      final isFolder = file['mimeType'] == 'application/vnd.google-apps.folder';
+      final isTbpFolder = _isTbpFolderItem(file);
+      final isFolder = file['mimeType'] == 'application/vnd.google-apps.folder' && !isTbpFolder;
 
       // 1. 검색어 필터
       if (_searchQuery.isNotEmpty && !name.contains(_searchQuery.toLowerCase())) {
@@ -92,18 +131,19 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
 
       // 2. 카테고리 필터
       if (_categoryFilter == '전체') return true;
-      if (isFolder) return true; // 폴더는 카테고리 필터 중에도 표시
+      if (isFolder) return true; // 일반 폴더는 카테고리 필터 중에도 표시
 
       if (_categoryFilter == '📁 수업 자료' || _categoryFilter == '수업 자료') {
-        return !name.endsWith('.pen') &&
+        return !isTbpFolder &&
+            !name.endsWith('.pen') &&
             !name.endsWith('.bstpen') &&
             !name.endsWith('.bsttbp') &&
             !name.endsWith('.tbp') &&
             !name.contains('canva');
       }
       if (_categoryFilter == '📐 TBP & Canva' || _categoryFilter == 'TBP & Canva') {
-        final isTbp = name.endsWith('.bsttbp') || name.endsWith('.tbp') || name.contains('tbp') || name.contains('교과서') || isFolder;
-        final isCanva = name.endsWith('.canva') || name.endsWith('.canva.bst') || name.endsWith('.bstcanva') || name.contains('canva');
+        final isTbp = isTbpFolder || name.endsWith('.bsttbp') || name.endsWith('.tbp') || name.contains('tbp') || name.contains('교과서');
+        final isCanva = file['source'] == 'canva' || name.endsWith('.canva') || name.endsWith('.canva.bst') || name.endsWith('.bstcanva') || name.contains('canva');
         return isTbp || isCanva;
       }
       if (_categoryFilter == '✏️ 판서 (.pen)' || _categoryFilter == '판서') {
@@ -348,8 +388,9 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
       itemBuilder: (ctx, i) {
         final file = list[i];
         final name = file['name']?.toString() ?? '파일';
-        final isFolder = file['mimeType'] == 'application/vnd.google-apps.folder';
-        final meta = _resolveFileMeta(name, isFolder);
+        final isTbpFolder = _isTbpFolderItem(file);
+        final isFolder = file['mimeType'] == 'application/vnd.google-apps.folder' && !isTbpFolder;
+        final meta = _resolveFileMeta(name, isFolder, isTbpFolder: isTbpFolder);
 
         return InkWell(
           onTap: () {
@@ -461,8 +502,9 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
       itemBuilder: (ctx, i) {
         final file = list[i];
         final name = file['name']?.toString() ?? '파일';
-        final isFolder = file['mimeType'] == 'application/vnd.google-apps.folder';
-        final meta = _resolveFileMeta(name, isFolder);
+        final isTbpFolder = _isTbpFolderItem(file);
+        final isFolder = file['mimeType'] == 'application/vnd.google-apps.folder' && !isTbpFolder;
+        final meta = _resolveFileMeta(name, isFolder, isTbpFolder: isTbpFolder);
 
         return InkWell(
           onTap: () {
@@ -547,15 +589,18 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
     );
   }
 
-  _FileMeta _resolveFileMeta(String name, bool isFolder) {
+  _FileMeta _resolveFileMeta(String name, bool isFolder, {bool isTbpFolder = false}) {
     final lower = name.toLowerCase();
+    if (isTbpFolder || lower.endsWith('.tbp') || lower.endsWith('.bsttbp')) {
+      return _FileMeta(const Color(0xFF7F5AF0), Icons.auto_stories_rounded, 'TBP');
+    }
     if (isFolder) {
       return _FileMeta(const Color(0xFFFFB703), Icons.folder_rounded, '폴더');
     }
     if (lower.endsWith('.pdf')) {
       return _FileMeta(const Color(0xFFEF4565), Icons.picture_as_pdf_rounded, 'PDF');
     }
-    if (lower.endsWith('.canva') || lower.endsWith('.canva.bst')) {
+    if (lower.endsWith('.canva') || lower.endsWith('.canva.bst') || lower.endsWith('.bstcanva')) {
       return _FileMeta(const Color(0xFF00C4CC), Icons.palette_rounded, 'CANVA');
     }
     if (lower.endsWith('.ppt') || lower.endsWith('.pptx')) {
@@ -564,7 +609,7 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
     if (lower.endsWith('.hwp') || lower.endsWith('.hwpx')) {
       return _FileMeta(const Color(0xFF29B6F6), Icons.description_rounded, '한글');
     }
-    if (lower.endsWith('.pen') || lower.endsWith('.iwb')) {
+    if (lower.endsWith('.pen') || lower.endsWith('.bstpen') || lower.endsWith('.iwb')) {
       return _FileMeta(const Color(0xFF00F5D4), Icons.draw_rounded, '판서');
     }
     return _FileMeta(const Color(0xFF818CF8), Icons.insert_drive_file_rounded, '파일');

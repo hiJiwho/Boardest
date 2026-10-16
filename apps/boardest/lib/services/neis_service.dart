@@ -94,8 +94,9 @@ class NeisService {
 
       final mealRow = rows[0] as Map<String, dynamic>;
       final rawDdish = mealRow['DDISH_NM'] as String? ?? '';
+      final rawCal = (mealRow['CAL_INFO'] as String? ?? '').replaceAll('Kcal', 'kcal').trim();
       
-      return MealDayInfo.fromNeisRaw(date, rawDdish);
+      return MealDayInfo.fromNeisRaw(date, rawDdish, calories: rawCal);
     } catch (_) {
       return MealDayInfo(date: date, dishes: [], footnotes: ['급식 정보를 불러오는 중 오류가 발생했습니다.']);
     }
@@ -148,11 +149,12 @@ class NeisService {
       for (final row in rows) {
         final ymd = row['MLSV_YMD'] as String? ?? '';
         final rawDdish = row['DDISH_NM'] as String? ?? '';
+        final rawCal = (row['CAL_INFO'] as String? ?? '').replaceAll('Kcal', 'kcal').trim();
         if (ymd.length == 8) {
           final d = int.tryParse(ymd.substring(6, 8));
           if (d != null) {
             final date = DateTime(year, month, d);
-            result[d] = MealDayInfo.fromNeisRaw(date, rawDdish);
+            result[d] = MealDayInfo.fromNeisRaw(date, rawDdish, calories: rawCal);
           }
         }
       }
