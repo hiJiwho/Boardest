@@ -4,6 +4,7 @@ import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_windows/webview_windows.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -614,7 +615,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                             top: 0,
                             bottom: 0,
                             child: Center(
-                              child: Material(
+                              child: PointerInterceptor(child: Material(
                                 color: Colors.transparent,
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(24 * s),
@@ -642,7 +643,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                                     ),
                                   ),
                                 ),
-                              ),
+                              )),
                             ),
                           ),
 
@@ -651,7 +652,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                             top: 0,
                             bottom: 0,
                             child: Center(
-                              child: Material(
+                              child: PointerInterceptor(child: Material(
                                 color: Colors.transparent,
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(24 * s),
@@ -679,7 +680,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                                     ),
                                   ),
                                 ),
-                              ),
+                              )),
                             ),
                           ),
                           // 5. 활동 타이머 오버레이 (활성 시)
@@ -737,7 +738,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
+                  PointerInterceptor(child: Container(
                     padding: EdgeInsets.symmetric(
                       horizontal: 16 * s,
                       vertical: 8 * s,
@@ -779,10 +780,10 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                         ),
                       ],
                     ),
-                  ),
+                  )),
 
                   // TBP 3모드 스위처 (마우스 / 스마트 / 주석)
-                  Container(
+                  PointerInterceptor(child: Container(
                     padding: EdgeInsets.all(4 * s),
                     decoration: BoxDecoration(
                       color: const Color(0xFF16161A).withOpacity(0.9),
@@ -798,9 +799,9 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                         _buildInputModeChip(TbpInputMode.pen, '✏️ 주석', s),
                       ],
                     ),
-                  ),
+                  )),
 
-                  Container(
+                  PointerInterceptor(child: Container(
                     padding: EdgeInsets.symmetric(
                       horizontal: 12 * s,
                       vertical: 6 * s,
@@ -960,7 +961,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                         ),
                       ],
                     ),
-                  ),
+                  )),
                 ],
               ),
             ),
@@ -971,7 +972,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
               left: 0,
               right: 0,
               child: Center(
-                child: BoardDockToolbar(
+                child: PointerInterceptor(child: BoardDockToolbar(
                   scale: widget.scaleFactor,
                   tool: _tool,
                   onToolChanged: (tool) {
@@ -1005,7 +1006,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                       );
                     }
                   },
-                ),
+                )),
               ),
             ),
           ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
@@ -374,7 +375,7 @@ class TbpHotspotOverlay extends StatelessWidget {
                 return Positioned(
                   left: (left - 22 * s).clamp(4.0, (width - 160 * s).clamp(4.0, double.infinity)),
                   top: (top - 20 * s).clamp(4.0, (height - 48 * s).clamp(4.0, double.infinity)),
-                  child: Listener(
+                  child: PointerInterceptor(child: Listener(
                     behavior: HitTestBehavior.opaque,
                     onPointerDown: (_) {},
                     child: MouseRegion(
@@ -453,7 +454,7 @@ class TbpHotspotOverlay extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ),
+                  )),
                 );
               }).toList(),
             );

@@ -795,63 +795,34 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                             ),
                           ),
                           const SizedBox(height: 10),
-                          ElevatedButton.icon(
-                            onPressed: _startGoogleLogin,
-                            icon: const Icon(Icons.account_circle_rounded, color: Colors.black87),
-                            label: Text(
-                              'Google 계정으로 로그인 (Drive 연동 시연)',
-                              style: GoogleFonts.notoSansKr(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: Colors.black87,
-                              minimumSize: const Size(double.infinity, 48),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                          ),
-                          ElevatedButton.icon(
-                            onPressed: _startGoogleLogin,
-                            icon: const Icon(Icons.account_circle_rounded, color: Colors.black87),
-                            label: Text(
-                              'Google 계정으로 로그인',
-                              style: GoogleFonts.notoSansKr(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: Colors.black87,
-                              minimumSize: const Size(double.infinity, 48),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          ElevatedButton.icon(
-                            onPressed: _loginAsDemoTeacher,
-                            icon: const Icon(Icons.play_arrow_rounded, color: Colors.black87),
-                            label: Text(
-                              '데모(DEMO) 교사 계정으로 즉시 체험',
-                              style: GoogleFonts.notoSansKr(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00F5D4),
-                              foregroundColor: Colors.black87,
-                              minimumSize: const Size(double.infinity, 48),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          OutlinedButton.icon(
-                            onPressed: () => launchUrl(Uri.parse(kIsWeb ? 'https://boardest-teacher-oauth.web.app?web' : 'https://boardest-teacher-oauth.web.app?win')),
-                            icon: const Icon(Icons.open_in_new_rounded, color: Color(0xFF2EC4B6), size: 16),
-                            label: Text(
-                              '교사 OAuth 등록 포털 바로가기',
-                              style: GoogleFonts.notoSansKr(color: const Color(0xFF2EC4B6), fontSize: 12.5),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Color(0xFF2EC4B6)),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                          ),
                         ],
+                        ElevatedButton.icon(
+                          onPressed: _startGoogleLogin,
+                          icon: const Icon(Icons.account_circle_rounded, color: Colors.black87),
+                          label: Text(
+                            AppConfig.isDemoMode ? 'Google 계정으로 로그인 (Drive 연동 시연)' : 'Google 계정으로 로그인',
+                            style: GoogleFonts.notoSansKr(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.black87,
+                            minimumSize: const Size(double.infinity, 48),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () => launchUrl(Uri.parse(kIsWeb ? 'https://boardest-teacher-oauth.web.app?web' : 'https://boardest-teacher-oauth.web.app?win')),
+                          icon: const Icon(Icons.open_in_new_rounded, color: Color(0xFF2EC4B6), size: 16),
+                          label: Text(
+                            '교사 OAuth 등록 포털 바로가기',
+                            style: GoogleFonts.notoSansKr(color: const Color(0xFF2EC4B6), fontSize: 12.5),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFF2EC4B6)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
                       ],
                     ),
                   ),

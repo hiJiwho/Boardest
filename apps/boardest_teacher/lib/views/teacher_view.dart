@@ -6387,6 +6387,8 @@ class _TeacherViewState extends State<TeacherView> {
     final lastUrl = prefs.getString('last_canva_url') ?? '';
 
     final urlCtrl = TextEditingController(text: initialUrl ?? (lastUrl.isNotEmpty ? lastUrl : ''));
+    final titleCtrl = TextEditingController();
+    bool saveToDrive = CloudDriveService.instance.isLoggedIn;
 
     if (!mounted) return;
 
@@ -6399,19 +6401,36 @@ class _TeacherViewState extends State<TeacherView> {
             children: [
               const Icon(Icons.slideshow_rounded, color: Color(0xFF00F5D4)),
               const SizedBox(width: 8),
-              Text('✨ HTML Present URL 입력', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
+              Text('✨ HTML Present 등록', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
             ],
           ),
-          content: Column(
+          content: SingleChildScrollView(
+           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Canva, 구글 슬라이드, 미리캔버스, 패들렛 등 모든 웹 프레젠테이션 주소를 입력하면 Dhash 기반 페이지별 판서 & 스마트 모드로 실행됩니다.', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13, height: 1.4)),
               const SizedBox(height: 12),
               TextField(
+                controller: titleCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: '이름 (파일 이름)',
+                  labelStyle: TextStyle(color: Colors.white60),
+                  hintText: '예: 2단원 1차시 과학 탐구',
+                  hintStyle: TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: Color(0xFF242629),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
                 controller: urlCtrl,
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
+                  labelText: 'URL',
+                  labelStyle: TextStyle(color: Colors.white60),
                   hintText: 'https://www.canva.com 또는 구글 슬라이드 링크',
                   hintStyle: TextStyle(color: Colors.white38),
                   filled: true,
@@ -6419,7 +6438,19 @@ class _TeacherViewState extends State<TeacherView> {
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                value: saveToDrive,
+                onChanged: CloudDriveService.instance.isLoggedIn
+                    ? (v) => setDialogState(() => saveToDrive = v ?? false)
+                    : null,
+                activeColor: const Color(0xFF00F5D4),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                dense: true,
+                title: Text('내 드라이브에 이 이름으로 저장', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12.5)),
+              ),
+              const SizedBox(height: 6),
               Text('💾 추천 바로가기:', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               SingleChildScrollView(
@@ -6456,6 +6487,7 @@ class _TeacherViewState extends State<TeacherView> {
                 ),
               ),
             ],
+           ),
           ),
           actions: [
             TextButton(
@@ -6466,19 +6498,35 @@ class _TeacherViewState extends State<TeacherView> {
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4)),
               onPressed: () async {
                 final val = urlCtrl.text.trim();
-                if (val.isNotEmpty) {
-                  final list = prefs.getStringList('saved_canva_urls') ?? [];
-                  if (!list.contains(val)) list.insert(0, val);
-                  await prefs.setStringList('saved_canva_urls', list);
-                  await prefs.setString('last_canva_url', val);
+                final name = titleCtrl.text.trim();
+                if (val.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('URL을 입력해 주세요.')));
+                  return;
+                }
+                final list = prefs.getStringList('saved_canva_urls') ?? [];
+                if (!list.contains(val)) list.insert(0, val);
+                await prefs.setStringList('saved_canva_urls', list);
+                await prefs.setString('last_canva_url', val);
+                if (saveToDrive && CloudDriveService.instance.isLoggedIn) {
+                  final ok = await CloudDriveService.instance.registerCanvaDesign(
+                    title: name.isNotEmpty ? name : 'HTML Present',
+                    canvaUrl: val,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      SnackBar(content: Text(ok ? '☁️ "${name.isNotEmpty ? name : 'HTML Present'}" 이(가) 내 드라이브에 저장되었습니다.' : '⚠️ 드라이브 저장에 실패했습니다.')),
+                    );
+                    if (ok) _refreshDriveFiles();
+                  }
                 }
                 Navigator.pop(ctx);
                 if (mounted) {
-                  Navigator.of(context).push(
+                  Navigator.of(this.context).push(
                     MaterialPageRoute(
                       builder: (_) => CanvaBoardView(
                         scaleFactor: _settings.scaleFactor,
-                        initialUrl: val.isNotEmpty ? val : null,
+                        initialUrl: val,
+                        title: name.isNotEmpty ? name : null,
                         filePath: filePath,
                       ),
                     ),

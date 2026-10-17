@@ -61,6 +61,7 @@ dependencies:
   bst_native:
     path: ../../packages/plugins/bst_native
   qr_flutter: ^4.1.0
+  pointer_interceptor: ^0.10.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

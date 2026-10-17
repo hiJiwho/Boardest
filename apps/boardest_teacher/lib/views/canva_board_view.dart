@@ -4,6 +4,7 @@ import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:path/path.dart' as p;
 import 'package:webview_windows/webview_windows.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -43,22 +44,33 @@ class HtmlPresentView extends StatefulWidget {
   static String formatPresentUrl(String rawUrl) {
     var url = rawUrl.trim();
     if (url.isEmpty) return 'https://www.canva.com';
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://$url';
+    }
 
-    // Canva URL 포맷팅
+    // Canva URL 포맷팅: /design/{id}/{token}/(edit|view|watch...) → 공개 임베드 뷰
+    // (edit/utm 등 쿼리가 붙은 주소는 비공개 편집 화면이라 403이 발생함)
     if (url.contains('canva.com')) {
+      final uri = Uri.tryParse(url);
+      if (uri != null) {
+        final segs = uri.pathSegments.where((e) => e.isNotEmpty).toList();
+        final di = segs.indexOf('design');
+        if (di >= 0 && segs.length >= di + 3) {
+          final id = segs[di + 1];
+          final token = segs[di + 2];
+          return 'https://www.canva.com/design/$id/$token/view?embed';
+        }
+        if (di >= 0 && segs.length == di + 2) {
+          return 'https://www.canva.com/design/${segs[di + 1]}/view?embed';
+        }
+      }
       if (url.contains('/view?embed')) return url;
-      if (url.contains('/edit')) {
-        return url.replaceAll('/edit', '/view?embed');
-      }
-      if (url.contains('/view')) {
-        return url.replaceAll('/view', '/view?embed');
-      }
-      return url.endsWith('/') ? '${url}view?embed' : '$url/view?embed';
+      return url;
     }
 
     // Google Slides URL 포맷팅 (/pub?start=false&loop=false&delayms=3000)
     if (url.contains('docs.google.com/presentation') && url.contains('/edit')) {
-      return url.replaceAll('/edit', '/embed');
+      return url.replaceAll(RegExp(r'/edit.*$'), '/embed?start=false&loop=false');
     }
 
     return url;
@@ -603,7 +615,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                             top: 0,
                             bottom: 0,
                             child: Center(
-                              child: Material(
+                              child: PointerInterceptor(child: Material(
                                 color: Colors.transparent,
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(24 * s),
@@ -631,7 +643,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                                     ),
                                   ),
                                 ),
-                              ),
+                              )),
                             ),
                           ),
 
@@ -640,7 +652,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                             top: 0,
                             bottom: 0,
                             child: Center(
-                              child: Material(
+                              child: PointerInterceptor(child: Material(
                                 color: Colors.transparent,
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(24 * s),
@@ -668,7 +680,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                                     ),
                                   ),
                                 ),
-                              ),
+                              )),
                             ),
                           ),
                         ],
@@ -727,7 +739,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
+                  PointerInterceptor(child: Container(
                     padding: EdgeInsets.symmetric(horizontal: 14 * s, vertical: 8 * s),
                     decoration: BoxDecoration(
                       color: const Color(0xFF16161A).withOpacity(0.9),
@@ -761,10 +773,10 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                         ),
                       ],
                     ),
-                  ),
+                  )),
 
                   // 3모드 스위처 (마우스 / 스마트 / 주석)
-                  Container(
+                  PointerInterceptor(child: Container(
                     padding: EdgeInsets.all(4 * s),
                     decoration: BoxDecoration(
                       color: const Color(0xFF16161A).withOpacity(0.9),
@@ -778,10 +790,10 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                         _buildInputModeChip(TbpInputMode.pen, '✏️ 주석', s),
                       ],
                     ),
-                  ),
+                  )),
 
                   // 이전/다음 슬라이드 & 핫스팟 추가
-                  Container(
+                  PointerInterceptor(child: Container(
                     padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 6 * s),
                     decoration: BoxDecoration(
                       color: const Color(0xFF16161A).withOpacity(0.9),
@@ -834,7 +846,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                         ),
                       ],
                     ),
-                  ),
+                  )),
                 ],
               ),
             ),

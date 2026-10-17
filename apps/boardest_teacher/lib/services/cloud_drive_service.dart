@@ -2542,6 +2542,50 @@ class CloudDriveService with ChangeNotifier {
     }
   }
 
+  /// Google Drive 파일/폴더를 다른 폴더로 이동 (기존 부모 자동 조회 후 교체)
+  Future<bool> moveDriveFile(String fileId, String newParentId) async {
+    if (!isLoggedIn) return false;
+    try {
+      Future<http.Response> doGet() => http.get(
+            Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId?fields=parents'),
+            headers: {'Authorization': 'Bearer $_accessToken'},
+          );
+      var infoRes = await doGet();
+      if (infoRes.statusCode == 401 && await refreshAccessToken()) {
+        infoRes = await doGet();
+      }
+      final parents = <String>[];
+      if (infoRes.statusCode == 200) {
+        final j = jsonDecode(infoRes.body) as Map<String, dynamic>;
+        for (final p in (j['parents'] as List? ?? [])) {
+          parents.add(p.toString());
+        }
+      }
+      if (parents.contains(newParentId)) return true;
+
+      final remove = parents.isEmpty ? '' : '&removeParents=${parents.join(',')}';
+      final url = Uri.parse(
+        'https://www.googleapis.com/drive/v3/files/$fileId?addParents=$newParentId$remove',
+      );
+      Future<http.Response> doPatch() => http.patch(
+            url,
+            headers: {
+              'Authorization': 'Bearer $_accessToken',
+              'Content-Type': 'application/json',
+            },
+            body: '{}',
+          );
+      var res = await doPatch();
+      if (res.statusCode == 401 && await refreshAccessToken()) {
+        res = await doPatch();
+      }
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('[CloudDriveService] moveDriveFile error: $e');
+      return false;
+    }
+  }
+
 
   /// 자유판서(.pen / .iwb) 파일 또는 폴더 이름 변경 (Cloud Drive 또는 로컬 디스크 지원)
   Future<bool> renamePenFile({

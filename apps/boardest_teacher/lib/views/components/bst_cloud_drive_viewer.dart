@@ -37,11 +37,197 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
   // 폴더 탐색 스택
   final List<Map<String, String>> _folderStack = [];
   String _currentFolderName = 'bst-save (수업 교안함)';
+  String? _currentFolderId;
+  String? _rootFolderId;
 
   @override
   void initState() {
     super.initState();
     _loadFiles();
+  }
+
+  /// fetchMergedMaterials 가 반환하는 {'file': CloudDriveFile, ...} 를 평탄화
+  Map<String, dynamic> _flattenItem(Map<String, dynamic> item) {
+    final f = item['file'];
+    if (f is CloudDriveFile) {
+      return <String, dynamic>{
+        'id': f.id,
+        'name': f.name,
+        'mimeType': f.mimeType,
+        'size': f.size,
+        'modifiedTime': f.modifiedTime,
+        'webViewLink': f.webViewLink,
+        'webContentLink': f.webContentLink,
+        'source': item['source'],
+        'sourceLabel': item['sourceLabel'],
+        'folderId': item['folderId'],
+      };
+    }
+    return item;
+  }
+
+  void _toast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _reloadCurrent() => _loadFiles(
+        folderId: _folderStack.isNotEmpty ? _folderStack.last['id'] : null,
+        folderName: _currentFolderName,
+      );
+
+  Future<String?> _askText(String title, String initial, {String hint = ''}) {
+    final ctrl = TextEditingController(text: initial);
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16161A),
+        title: Text(title, style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(color: Colors.white38),
+            filled: true,
+            fillColor: Colors.black26,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소', style: TextStyle(color: Colors.white60))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('확인', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _renameFile(Map<String, dynamic> file) async {
+    final id = (file['id'] ?? '').toString();
+    final oldName = (file['name'] ?? '').toString();
+    if (id.isEmpty) return;
+    final newName = await _askText('이름 바꾸기', oldName, hint: '새 이름');
+    if (newName == null || newName.isEmpty || newName == oldName) return;
+    final ok = await CloudDriveService.instance.renameDriveFile(id, newName);
+    _toast(ok ? '이름이 "$newName"(으)로 변경되었습니다.' : '이름 변경에 실패했습니다.');
+    if (ok) await _reloadCurrent();
+  }
+
+  Future<void> _deleteFile(Map<String, dynamic> file) async {
+    final id = (file['id'] ?? '').toString();
+    final name = (file['name'] ?? '').toString();
+    if (id.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16161A),
+        title: Text('삭제', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text('"$name" 을(를) Google Drive에서 삭제하시겠습니까?', style: GoogleFonts.notoSansKr(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소', style: TextStyle(color: Colors.white60))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('삭제', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final ok = await CloudDriveService.instance.deleteDriveFile(id);
+    _toast(ok ? '삭제되었습니다.' : '삭제에 실패했습니다.');
+    if (ok) await _reloadCurrent();
+  }
+
+  Future<void> _newFolder() async {
+    final name = await _askText('새 폴더 만들기', '', hint: '폴더 이름');
+    if (name == null || name.isEmpty) return;
+    final parent = _currentFolderId ?? _rootFolderId ?? await CloudDriveService.instance.getOrCreateConnectFolder();
+    final id = await CloudDriveService.instance.createFolderInDrive(name, parentFolderId: parent);
+    _toast(id != null ? '폴더 "$name" 이(가) 생성되었습니다.' : '폴더 생성에 실패했습니다.');
+    if (id != null) await _reloadCurrent();
+  }
+
+  Future<void> _moveFile(Map<String, dynamic> file) async {
+    final id = (file['id'] ?? '').toString();
+    final name = (file['name'] ?? '').toString();
+    if (id.isEmpty) return;
+
+    final rootId = _rootFolderId ?? await CloudDriveService.instance.getOrCreateConnectFolder();
+    if (rootId == null) {
+      _toast('이동할 폴더 목록을 불러오지 못했습니다.');
+      return;
+    }
+    // 이동 후보: bst-save 루트 + 그 하위 폴더 + 현재 폴더의 하위 폴더
+    final candidates = <Map<String, String>>[
+      {'id': rootId, 'name': '📁 bst-save (최상위)'},
+    ];
+    final seen = <String>{rootId};
+    Future<void> addFolders(String parent, String prefix) async {
+      final list = await CloudDriveService.instance.fetchDriveFiles(folderId: parent, includeFolders: true);
+      for (final f in list) {
+        if (f.mimeType == 'application/vnd.google-apps.folder' && f.id != id && seen.add(f.id)) {
+          candidates.add({'id': f.id, 'name': '$prefix${f.name}'});
+        }
+      }
+    }
+    await addFolders(rootId, '   📂 ');
+    if (_currentFolderId != null && _currentFolderId != rootId) {
+      await addFolders(_currentFolderId!, '      ↳ ');
+    }
+    if (!mounted) return;
+
+    final target = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16161A),
+        title: Text('"$name" 이동', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+        content: SizedBox(
+          width: 380,
+          height: 320,
+          child: ListView(
+            children: candidates
+                .map((c) => ListTile(
+                      dense: true,
+                      title: Text(c['name']!, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                      onTap: () => Navigator.pop(ctx, c['id']),
+                    ))
+                .toList(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소', style: TextStyle(color: Colors.white60))),
+        ],
+      ),
+    );
+    if (target == null) return;
+    final ok = await CloudDriveService.instance.moveDriveFile(id, target);
+    _toast(ok ? '이동되었습니다.' : '이동에 실패했습니다.');
+    if (ok) await _reloadCurrent();
+  }
+
+  Widget _buildItemMenu(Map<String, dynamic> file, double s) {
+    return PopupMenuButton<String>(
+      tooltip: '더보기',
+      color: const Color(0xFF1E293B),
+      icon: Icon(Icons.more_vert_rounded, color: Colors.white54, size: 18 * s),
+      padding: EdgeInsets.zero,
+      onSelected: (v) {
+        if (v == 'rename') _renameFile(file);
+        if (v == 'move') _moveFile(file);
+        if (v == 'delete') _deleteFile(file);
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem(value: 'rename', child: Text('✏️ 이름 바꾸기', style: TextStyle(color: Colors.white))),
+        PopupMenuItem(value: 'move', child: Text('📂 폴더로 이동', style: TextStyle(color: Colors.white))),
+        PopupMenuItem(value: 'delete', child: Text('🗑️ 삭제', style: TextStyle(color: Color(0xFFFF8BA7)))),
+      ],
+    );
   }
 
   Future<void> _loadFiles({String? folderId, String? folderName, bool resetToRoot = false}) async {
@@ -59,6 +245,8 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
     try {
       if (folderId == null) {
         final merged = await CloudDriveService.instance.fetchMergedMaterials();
+        final flatMerged = merged.map(_flattenItem).toList();
+        final rootId = await CloudDriveService.instance.getOrCreateConnectFolder();
         final folders = await CloudDriveService.instance.fetchDriveFiles(
           folderId: null,
           includeFolders: true,
@@ -72,11 +260,20 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
                   'size': f.size,
                   'modifiedTime': f.modifiedTime,
                   'source': 'save',
+                  'folderId': rootId,
                 })
             .toList();
+        // 중복(같은 id) 제거
+        final seen = <String>{};
+        final all = <Map<String, dynamic>>[];
+        for (final f in [...flatMerged, ...subFolders]) {
+          if (seen.add((f['id'] ?? '').toString())) all.add(f);
+        }
         if (!mounted) return;
         setState(() {
-          _files = [...merged, ...subFolders];
+          _currentFolderId = null;
+          _rootFolderId = rootId;
+          _files = all;
           _isLoading = false;
         });
       } else {
@@ -86,12 +283,16 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
         );
         if (!mounted) return;
         setState(() {
+          _currentFolderId = folderId;
           _files = list.map((f) => <String, dynamic>{
             'id': f.id,
             'name': f.name,
             'mimeType': f.mimeType,
             'size': f.size,
             'modifiedTime': f.modifiedTime,
+            'webViewLink': f.webViewLink,
+            'webContentLink': f.webContentLink,
+            'folderId': folderId,
           }).toList();
           _isLoading = false;
         });
@@ -222,6 +423,22 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
             child: Icon(Icons.folder_shared_rounded, color: const Color(0xFF00F5D4), size: 18 * s),
           ),
           SizedBox(width: 10 * s),
+          if (_folderStack.isNotEmpty)
+            IconButton(
+              onPressed: () {
+                _folderStack.removeLast();
+                if (_folderStack.isEmpty) {
+                  _loadFiles(resetToRoot: true);
+                } else {
+                  _loadFiles(
+                    folderId: _folderStack.last['id'],
+                    folderName: _folderStack.last['name'],
+                  );
+                }
+              },
+              tooltip: '상위 폴더로',
+              icon: Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20 * s),
+            ),
 
           // 브레드크럼 경로
           Expanded(
@@ -283,6 +500,13 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
             ),
             tooltip: '새로고침',
             icon: Icon(Icons.refresh_rounded, color: Colors.white70, size: 20 * s),
+          ),
+
+          // 새 폴더
+          IconButton(
+            onPressed: _newFolder,
+            tooltip: '새 폴더',
+            icon: Icon(Icons.create_new_folder_rounded, color: const Color(0xFFFFB703), size: 20 * s),
           ),
 
           SizedBox(width: 6 * s),
@@ -431,20 +655,30 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
                       ),
                       child: Icon(meta.icon, color: meta.color, size: 24 * s),
                     ),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 2 * s),
-                      decoration: BoxDecoration(
-                        color: meta.color.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(4 * s),
-                      ),
-                      child: Text(
-                        meta.tag,
-                        style: TextStyle(
-                          color: meta.color,
-                          fontSize: 9 * s,
-                          fontWeight: FontWeight.w900,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 2 * s),
+                          decoration: BoxDecoration(
+                            color: meta.color.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(4 * s),
+                          ),
+                          child: Text(
+                            meta.tag,
+                            style: TextStyle(
+                              color: meta.color,
+                              fontSize: 9 * s,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                         ),
-                      ),
+                        SizedBox(
+                          width: 28 * s,
+                          height: 24 * s,
+                          child: _buildItemMenu(file, s),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -560,6 +794,7 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
                     tooltip: '칠판으로 전송',
                     icon: Icon(Icons.send_rounded, color: const Color(0xFF00F5D4), size: 18 * s),
                   ),
+                _buildItemMenu(file, s),
                 Icon(
                   isFolder ? Icons.chevron_right_rounded : Icons.open_in_new_rounded,
                   color: Colors.white38,

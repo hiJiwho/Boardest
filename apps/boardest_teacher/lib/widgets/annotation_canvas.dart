@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 import '../models/board_tools.dart';
 
 class AnnotationStroke {
@@ -423,13 +424,33 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     widget.onRightClick?.call(pos);
   }
 
+  void _onTapUp(TapUpDetails d) {
+    if (!widget.enabled) return;
+    final ctrl = widget.controller;
+    final p = _local(d.globalPosition);
+    if (ctrl.toolMode == ToolMode.pen) {
+      // 스마트/주석 모드: 한 번 눌러도 점(dot) 드로잉
+      ctrl.addStroke(AnnotationStroke(
+        points: [p, p + const Offset(0.1, 0.1)],
+        color: ctrl.activeColor,
+        strokeWidth: ctrl.activeWidth,
+      ));
+    } else if (ctrl.toolMode == ToolMode.eraser) {
+      ctrl.eraseAt(p);
+    } else if (ctrl.toolMode == ToolMode.select) {
+      ctrl.clearLassoSelection();
+      setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
+    final canvas = IgnorePointer(
       ignoring: !widget.enabled,
       child: GestureDetector(
         key: _canvasKey,
         behavior: widget.enabled ? HitTestBehavior.opaque : HitTestBehavior.translucent,
+        onTapUp: widget.enabled ? _onTapUp : null,
         onPanStart: widget.enabled ? _onPanStart : null,
         onPanUpdate: widget.enabled ? _onPanUpdate : null,
         onPanEnd: widget.enabled ? _onPanEnd : null,
@@ -443,12 +464,11 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
                 widget.onLongPressClick!(_local(details.globalPosition));
               }
             : null,
-        onSecondaryTapDown: (details) {
-          _handleRightClick(details.localPosition);
-        },
-        onSecondaryTapUp: (details) {
-          _handleRightClick(details.localPosition);
-        },
+        onSecondaryTapDown: widget.enabled
+            ? (details) {
+                _handleRightClick(details.localPosition);
+              }
+            : null,
         child: RepaintBoundary(
           child: ListenableBuilder(
             listenable: widget.controller,
@@ -471,6 +491,8 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
         ),
       ),
     );
+    // 웹에서는 iframe(플랫폼 뷰)이 포인터를 가로채므로 판서 활성 시 인터셉터로 감싼다.
+    return widget.enabled ? PointerInterceptor(child: canvas) : canvas;
   }
 }
 
