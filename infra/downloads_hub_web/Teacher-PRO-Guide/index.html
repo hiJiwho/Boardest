@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boardest Teacher PRO Windows 설치 가이드 — 교사용 공식 가이드</title>
+  <link rel="icon" type="image/png" href="https://boardest-teacher.web.app/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0D1117;
+      --card: rgba(22, 27, 34, 0.85);
+      --border: rgba(255, 255, 255, 0.08);
+      --primary: #7F5AF0;
+      --accent: #00F5D4;
+      --text: #FFFFFF;
+      --text-sub: #94A1B2;
+      --font-brand: 'Outfit', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans KR', sans-serif; }
+    body {
+      background: var(--bg);
+      background-image: radial-gradient(at 0% 0%, rgba(127, 90, 240, 0.15) 0px, transparent 50%),
+                        radial-gradient(at 100% 100%, rgba(0, 186, 242, 0.1) 0px, transparent 50%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+    .container { max-width: 860px; width: 100%; }
+    .back-nav { margin-bottom: 24px; }
+    .back-nav a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    header { text-align: center; margin-bottom: 36px; }
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(127, 90, 240, 0.15);
+      color: #9D7BFC;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      border: 1px solid rgba(127, 90, 240, 0.3);
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+    .subtitle { color: var(--text-sub); font-size: 15px; }
+
+    .method-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px 28px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+    }
+    .method-card.featured {
+      border: 1.5px solid var(--primary);
+      box-shadow: 0 12px 36px rgba(127, 90, 240, 0.2);
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 19px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .method-pill {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--primary);
+      color: #FFF;
+    }
+    .card-desc {
+      color: var(--text-sub);
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .code-box {
+      background: #05080C;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-family: Consolas, monospace;
+      font-size: 13.5px;
+      color: #9D7BFC;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      overflow-x: auto;
+    }
+    .code-text { word-break: break-all; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 11px 20px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 14px;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #FFF;
+    }
+    .btn-primary:hover {
+      background: #9D7BFC;
+      transform: translateY(-2px);
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #FFF;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+    .btn-copy {
+      background: rgba(127, 90, 240, 0.25);
+      color: #FFF;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      white-space: nowrap;
+      margin-left: 12px;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-copy:hover {
+      background: rgba(127, 90, 240, 0.45);
+    }
+    .steps-list {
+      margin-left: 20px;
+      margin-bottom: 16px;
+      color: var(--text-sub);
+      font-size: 13.5px;
+      line-height: 1.7;
+    }
+    .tip-box {
+      background: rgba(127, 90, 240, 0.1);
+      border-left: 3px solid var(--primary);
+      padding: 10px 14px;
+      border-radius: 0 8px 8px 0;
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-bottom: 14px;
+    }
+    footer {
+      text-align: center;
+      color: var(--text-sub);
+      font-size: 13px;
+      margin-top: 40px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="back-nav">
+      <a href="https://boardest-downloads.web.app">← 다운로드 허브로 돌아가기</a>
+    </div>
+
+    <header>
+      <span class="badge">Windows PRO 교사용 도구 클라이언트</span>
+      <h1>Boardest Teacher PRO 설치 가이드</h1>
+      <p class="subtitle">선생님 교무실 PC에 가장 빠르고 안정적인 설치 방식을 선택해 진행하세요.</p>
+    </header>
+
+    <!-- 방법 1: PowerShell 원클릭 자동 설치 (강력 추천) -->
+    <div class="method-card featured">
+      <div class="card-header">
+        <div class="card-title">
+          <span>⚡ 방법 1. 파워쉘 원클릭 자동 설치 (강력 추천)</span>
+        </div>
+        <span class="method-pill">가장 간편함</span>
+      </div>
+      <p class="card-desc">
+        서명 인증서 등록(0x800B0109 방지)부터 최신 교사용 AppX 패키지 다운로드 및 설치까지 1줄로 한 번에 처리합니다.<br>
+        PowerShell 창에 아래 명령어를 복사하여 붙여넣고 엔터를 치면 끝납니다.
+      </p>
+      <div class="code-box">
+        <span class="code-text" id="cmd-teacher">irm https://bst-installer.web.app/install-teacher.ps1 | iex</span>
+        <button class="btn btn-copy" onclick="copyCode('cmd-teacher')">복사하기</button>
+      </div>
+      <button class="btn btn-primary" onclick="copyCode('cmd-teacher')">
+        <span>📋 명령어 복사하기</span>
+      </button>
+    </div>
+
+    <!-- 방법 2: AppInstaller 수동 다운로드 & 실행 -->
+    <div class="method-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span>📦 방법 2. .appinstaller 패키지 다운로드 설치</span>
+        </div>
+        <span class="method-pill" style="background: #2CB67D; color: #FFF;">자동 업데이트</span>
+      </div>
+      <p class="card-desc">
+        Windows 설치 패키지(.appx)를 직접 다운로드하여 설치합니다.
+      </p>
+      <div class="tip-box">
+        💡 <em>참고:</em> 인증서를 먼저 등록한 후 다운로드한 <code>bst-teacher.appx</code> 패키지를 실행하세요.
+      </div>
+      <a href="https://bst-installer.web.app/bst-teacher.appx" class="btn btn-secondary">
+        <span>📥 BST Teacher v4.0.2 AppX 다운로드</span>
+      </a>
+    </div>
+
+    <!-- 방법 3: AppX 패키지 및 인증서 직접 설치 -->
+    <div class="method-card">
+      <div class="card-header">
+        <div class="card-title">
+          <span>🔒 방법 3. AppX 직접 설치 및 서명 인증서 등록</span>
+        </div>
+        <span class="method-pill" style="background: rgba(255,255,255,0.2); color: #FFF;">수동 설치</span>
+      </div>
+      <p class="card-desc">
+        인터넷이 제한되거나 보안 정책이 엄격한 교무실 PC의 경우 인증서(.cer)를 먼저 등록 후 패키지를 설치합니다.
+      </p>
+      <ol class="steps-list">
+        <li><strong>인증서 등록:</strong> 아래 인증서 스크립트를 실행하거나 <code>BoardestCert.cer</code>을 다운로드하여 '신뢰할 수 있는 루트 인증 기관' 및 '신뢰할 수 있는 사용자'에 설치합니다.</li>
+        <li><strong>AppX 설치:</strong> 인증서 등록 후 <code>bst-teacher.appx</code>를 더블 클릭하여 설치합니다.</li>
+      </ol>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px;">
+        <a href="https://bst-installer.web.app/bst-teacher.appx" class="btn btn-secondary">
+          <span>📥 bst-teacher.appx 패키지 다운로드</span>
+        </a>
+        <a href="https://bst-installer.web.app/BoardestCert.cer" class="btn btn-secondary">
+          <span>📜 BoardestCert.cer 인증서 다운로드</span>
+        </a>
+      </div>
+      <div>
+        <p style="font-size: 13px; color: var(--text-sub); margin-bottom: 6px;">인증서 원클릭 자동 등록 스크립트:</p>
+        <div class="code-box">
+          <span class="code-text" id="cmd-cert2">irm https://bst-installer.web.app/win-cer.ps1 | iex</span>
+          <button class="btn btn-copy" onclick="copyCode('cmd-cert2')">복사하기</button>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>© 2026 Boardest by Jiwho. All rights reserved.</p>
+    </footer>
+  </div>
+
+  <script>
+    function copyCode(id) {
+      const text = document.getElementById(id).innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        alert('명령어가 복사되었습니다!\nPowerShell 창에서 마우스 우클릭 후 Enter를 누르시면 자동으로 진행됩니다.');
+      });
+    }
+  </script>
+</body>
+</html>

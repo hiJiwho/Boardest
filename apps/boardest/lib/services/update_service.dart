@@ -11,7 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 /// Updates are distributed as signed AppX/APK files from the Boardest download
 /// page or direct APK installation. The app checks the official release.
 class UpdateService {
-  static const String defaultVersion = '4.0.7';
+  static const String defaultVersion = '4.0.8';
   static const String _releaseApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String downloadPage = 'https://boardest-downloads.web.app';

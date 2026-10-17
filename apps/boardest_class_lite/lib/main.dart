@@ -453,7 +453,7 @@ class _ClassLitePageState extends State<ClassLitePage> {
                           ),
                           SizedBox(height: 16),
                           Text(
-                            'Boardest Class Lite  v4.0.7',
+                            'Boardest Class Lite  v4.0.8',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
