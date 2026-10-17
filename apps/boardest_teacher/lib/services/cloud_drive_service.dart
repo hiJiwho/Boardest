@@ -3050,10 +3050,21 @@ class CloudDriveService with ChangeNotifier {
     return false;
   }
 
+  /// TBP 폴더 내부 파일 ID 캐시: "$tbpFolderId/$fileName" -> fileId
+  static final Map<String, String> _tbpFileIdCache = {};
+
   /// TBP 폴더 내부 특정 파일(manifest.json, info.json, hotspot_xxx.bstsave, pen_xxx.bstpen 등) 온디맨드 읽기
   Future<String?> fetchTbpFolderFileText(String tbpFolderId, String fileName) async {
     if (!isLoggedIn) return null;
     try {
+      final cacheKey = '$tbpFolderId/$fileName';
+      String? cachedId = _tbpFileIdCache[cacheKey];
+
+      if (cachedId != null && cachedId.isNotEmpty) {
+        final bytes = await fetchDriveFileBytes(cachedId);
+        if (bytes != null) return utf8.decode(bytes);
+      }
+
       final q = "'$tbpFolderId' in parents and name = '$fileName' and trashed = false";
       for (final spaceParam in ['', 'spaces=appDataFolder&']) {
         final url = Uri.parse(
@@ -3066,6 +3077,7 @@ class CloudDriveService with ChangeNotifier {
           if (files.isNotEmpty) {
             final fileId = files[0]['id']?.toString() ?? '';
             if (fileId.isNotEmpty) {
+              _tbpFileIdCache[cacheKey] = fileId;
               final bytes = await fetchDriveFileBytes(fileId);
               if (bytes != null) return utf8.decode(bytes);
             }
@@ -3083,20 +3095,26 @@ class CloudDriveService with ChangeNotifier {
     if (!isLoggedIn) return false;
     try {
       final bytes = Uint8List.fromList(utf8.encode(content));
-      final q = "'$tbpFolderId' in parents and name = '$fileName' and trashed = false";
-      String? existingFileId;
+      final cacheKey = '$tbpFolderId/$fileName';
+      String? existingFileId = _tbpFileIdCache[cacheKey];
 
-      for (final spaceParam in ['', 'spaces=appDataFolder&']) {
-        final url = Uri.parse(
-          "https://www.googleapis.com/drive/v3/files?${spaceParam}q=${Uri.encodeComponent(q)}&fields=files(id,name)&pageSize=1",
-        );
-        final res = await http.get(url, headers: authHeaders).timeout(const Duration(seconds: 6));
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          final files = data['files'] as List? ?? [];
-          if (files.isNotEmpty) {
-            existingFileId = files[0]['id']?.toString();
-            if (existingFileId != null && existingFileId.isNotEmpty) break;
+      if (existingFileId == null || existingFileId.isEmpty) {
+        final q = "'$tbpFolderId' in parents and name = '$fileName' and trashed = false";
+        for (final spaceParam in ['', 'spaces=appDataFolder&']) {
+          final url = Uri.parse(
+            "https://www.googleapis.com/drive/v3/files?${spaceParam}q=${Uri.encodeComponent(q)}&fields=files(id,name)&pageSize=1",
+          );
+          final res = await http.get(url, headers: authHeaders).timeout(const Duration(seconds: 6));
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            final files = data['files'] as List? ?? [];
+            if (files.isNotEmpty) {
+              existingFileId = files[0]['id']?.toString();
+              if (existingFileId != null && existingFileId.isNotEmpty) {
+                _tbpFileIdCache[cacheKey] = existingFileId;
+                break;
+              }
+            }
           }
         }
       }
@@ -3114,7 +3132,8 @@ class CloudDriveService with ChangeNotifier {
         return patchRes.statusCode == 200;
       }
 
-      return await uploadBytesToDrive(bytes, fileName, folderId: tbpFolderId);
+      final uploadSuccess = await uploadBytesToDrive(bytes, fileName, folderId: tbpFolderId);
+      return uploadSuccess;
     } catch (e) {
       debugPrint('[CloudDriveService] saveTbpFolderFileText($fileName) error: $e');
       return false;

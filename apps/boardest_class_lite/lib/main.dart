@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_windows/webview_windows.dart' as win_wv;
 import 'package:win32/win32.dart' show GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN;
 import 'package:window_manager/window_manager.dart';
@@ -237,6 +236,16 @@ class _ClassLitePageState extends State<ClassLitePage> {
           await windowManager.setFullScreen(true);
         }
       }
+
+      // Web 쪽의 2중 축소 방지 (class_lite_web의 CSS native-docked-class 제어)
+      if (_windowsWebReady && _windowsWebController != null) {
+        final js = dockRightThreeQuarters
+            ? "document.body && document.body.classList.add('native-docked-class');"
+            : "document.body && document.body.classList.remove('native-docked-class');";
+        try {
+          await _windowsWebController!.executeScript(js);
+        } catch (_) {}
+      }
     } catch (e) {
       debugPrint('[BoardestClassLite] Window geometry update error: $e');
     }
@@ -281,6 +290,11 @@ class _ClassLitePageState extends State<ClassLitePage> {
         }
       });
 
+      // WebView WebMessage 수신 (index.html polyfill: window.chrome.webview.postMessage)
+      controller.webMessage.listen((rawMessage) {
+        _handleIncomingWebMessage(rawMessage);
+      });
+
       await controller.loadUrl(_siteUri.toString());
       if (!mounted) return;
       setState(() {
@@ -305,6 +319,12 @@ class _ClassLitePageState extends State<ClassLitePage> {
     final controller = _androidWebController!;
     await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
     await controller.setBackgroundColor(const Color(0xFF0F0E17));
+    await controller.addJavaScriptChannel(
+      'FlutterChannel',
+      onMessageReceived: (JavaScriptMessage msg) {
+        _handleIncomingWebMessage(msg.message);
+      },
+    );
     await controller.setNavigationDelegate(
       NavigationDelegate(
         onPageStarted: (_) {
@@ -337,6 +357,26 @@ class _ClassLitePageState extends State<ClassLitePage> {
     );
 
     await controller.loadRequest(_siteUri);
+  }
+
+  void _handleIncomingWebMessage(dynamic raw) {
+    if (raw == null) return;
+    try {
+      final text = raw.toString();
+      if (text.contains('"type":"appQuit"') || text.contains("'type':'appQuit'")) {
+        unawaited(_handleCloseApp());
+        return;
+      }
+      if (text.contains('"type":"setWindowLayout"') || text.contains("'type':'setWindowLayout'")) {
+        final isClass = text.contains('"layout":"class"') || text.contains("'layout':'class'");
+        if (_layoutMode == WindowLayoutMode.autoSchedule) {
+          _isClassTimeDetected = isClass;
+          unawaited(_evaluateAndApplyWindowBounds());
+        }
+      }
+    } catch (e) {
+      debugPrint('[BoardestClassLite] IPC message handle error: $e');
+    }
   }
 
   Future<void> _reloadWebView() async {

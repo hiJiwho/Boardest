@@ -1373,11 +1373,15 @@ class _TeacherViewState extends State<TeacherView> {
   /// Pro USB 전용: 동기화 설정 / 반 매핑 / 파일 정렬 통합 옵션 다이얼로그
     void _openFolderOptionsDialog({int initialTab = 0}) async {}
 
-    void _openBoardBookEditor() {
-    showDialog(
+  Future<void> _openBoardBookEditor() async {
+    final createdPath = await showDialog<String>(
       context: context,
       builder: (_) => TbpCreatorDialog(scaleFactor: _settings.scaleFactor),
     );
+    if (createdPath != null && createdPath.isNotEmpty && mounted) {
+      unawaited(_refreshDriveFiles());
+      _openFile(createdPath);
+    }
   }
   void _showGithubAuthDialog() {}
   void _checkForAppUpdates({bool silent = false}) async {
@@ -1602,8 +1606,11 @@ class _TeacherViewState extends State<TeacherView> {
       return;
     }
 
-    // 3. 교과서 (.tbp, .bsttbp, 또는 Drive TBP 폴더): Boardest TBP 뷰어로 열기
-    if (lower.endsWith('.tbp') || lower.endsWith('.bsttbp') || path.startsWith('drive://tbp/')) {
+    // 3. 교과서 (.tbp, .bsttbp, 또는 Drive/Web TBP 폴더): Boardest TBP 뷰어로 열기
+    if (lower.endsWith('.tbp') ||
+        lower.endsWith('.bsttbp') ||
+        path.startsWith('drive://tbp/') ||
+        path.startsWith('web://tbp/')) {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => TbpViewerRoute(
@@ -2235,11 +2242,15 @@ class _TeacherViewState extends State<TeacherView> {
                   title: 'TBP 인터랙티브 교안 생성',
                   desc: '문제, 활동지, 타이머가 결합된 전자칠판 전용 수업 패키지를 만듭니다.',
                   buttonLabel: 'TBP 만들기',
-                  onTap: () {
-                    showDialog(
+                  onTap: () async {
+                    final createdPath = await showDialog<String>(
                       context: context,
                       builder: (ctx) => TbpCreatorDialog(scaleFactor: scale),
                     );
+                    if (createdPath != null && createdPath.isNotEmpty && mounted) {
+                      unawaited(_refreshDriveFiles());
+                      _openFile(createdPath);
+                    }
                   },
                 ),
                 // 2. Canva 디자인 생성

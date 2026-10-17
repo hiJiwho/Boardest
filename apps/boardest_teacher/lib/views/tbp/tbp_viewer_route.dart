@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_windows/webview_windows.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -17,6 +18,7 @@ import '../../services/cloud_drive_service.dart';
 import '../../widgets/annotation_canvas.dart';
 import '../../widgets/board_toolbar.dart';
 import '../../widgets/save_destination_dialog.dart';
+import '../../helpers/iframe_view_helper.dart';
 import 'tbp_hotspot_overlay.dart';
 
 /// TextBook Plus (TBP) 스마트 교과서 뷰어 (교사용 앱 전용 모듈)
@@ -46,11 +48,16 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
   TbpMetadata? _metadata;
   Map<String, dynamic>? _infoJson;
   String _tbpFolderPath = '';
+  String _targetUrl = '';
   bool _isLoading = true;
   String? _errorMessage;
 
   String _currentDhash = 'default';
   List<Map<String, dynamic>> _currentHotspots = [];
+
+  // 활동 타이머 상태
+  Timer? _activeSpotTimer;
+  int? _spotTimerRemaining;
 
   late final TbpDhashEngine _dhashEngine;
 
@@ -85,35 +92,56 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
       );
 
       _infoJson = await TbpStorageService.instance.loadInfoJson(_tbpFolderPath);
-      if (_infoJson == null || _infoJson!['webUrl'] == null) {
+      final targetUrl = (_infoJson?['webUrl'] ?? _infoJson?['targetUrl'] ?? '').toString().trim();
+      if (targetUrl.isEmpty) {
         setState(() {
-          _errorMessage = 'TBP 폴더 내 info.json 파일이 없거나 webUrl 설정이 올바르지 않습니다.';
+          _errorMessage = 'TBP 폴더 내 webUrl 설정이 올바르지 않습니다.';
           _isLoading = false;
         });
         return;
       }
+      _targetUrl = targetUrl;
 
-      final targetUrl = _infoJson!['webUrl'] as String;
+      // 초기 페이지('default') 핫스팟 및 판서 스트로크 즉시 로드
+      final initialHotspots = await TbpStorageService.instance.loadHotspots(
+        _tbpFolderPath,
+        _currentDhash,
+      );
+      final initialStrokes = await TbpStorageService.instance.loadPenStrokes(
+        _tbpFolderPath,
+        _currentDhash,
+      );
+      _currentHotspots = initialHotspots;
+      _annotationController.setStrokes(initialStrokes);
 
-      if (!kIsWeb && Platform.isWindows) {
+      if (kIsWeb) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      } else if (Platform.isWindows) {
         await _initWindowsWebview(targetUrl);
       } else {
         _initAndroidWebview(targetUrl);
       }
 
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
 
       _dhashEngine.startTracker(
         _winWebviewInitialized ? _winWebview : null,
-        (!kIsWeb && Platform.isWindows) ? null : _androidWebview,
+        Platform.isWindows ? null : _androidWebview,
       );
     } catch (e) {
-      setState(() {
-        _errorMessage = 'TBP 패키지 로딩 중 오류 발생: $e';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'TBP 패키지 로딩 중 오류 발생: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -177,6 +205,107 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
         },
       )
       ..loadRequest(Uri.parse(url));
+  }
+
+  void _triggerHotspot(Map<String, dynamic> spot) async {
+    final type = (spot['type'] ?? 'url').toString();
+    final val = (spot['value'] ?? '').toString().trim();
+    final title = (spot['title'] ?? spot['name'] ?? '핫스팟').toString();
+    if (val.isEmpty) return;
+
+    switch (type) {
+      case 'url':
+        final urlStr = (val.startsWith('http://') || val.startsWith('https://')) ? val : 'https://$val';
+        await launchUrl(Uri.parse(urlStr), mode: LaunchMode.externalApplication);
+        break;
+      case 'memo':
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            backgroundColor: const Color(0xFF16161A),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                const Text('📌 ', style: TextStyle(fontSize: 20)),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              val,
+              style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 15, height: 1.5),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('닫기', style: TextStyle(color: Color(0xFF2EC4B6))),
+              ),
+            ],
+          ),
+        );
+        break;
+      case 'timer':
+        final secs = int.tryParse(val) ?? 180;
+        _activeSpotTimer?.cancel();
+        setState(() => _spotTimerRemaining = secs);
+        _activeSpotTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+          if (!mounted) {
+            t.cancel();
+            return;
+          }
+          if ((_spotTimerRemaining ?? 0) <= 0) {
+            t.cancel();
+            setState(() {});
+          } else {
+            setState(() => _spotTimerRemaining = (_spotTimerRemaining ?? 1) - 1);
+          }
+        });
+        break;
+      case 'image':
+        final isNet = val.startsWith('http://') || val.startsWith('https://');
+        showDialog(
+          context: context,
+          builder: (_) => Dialog(
+            backgroundColor: Colors.transparent,
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: isNet
+                      ? Image.network(val, fit: BoxFit.contain)
+                      : (!kIsWeb && File(val).existsSync()
+                          ? Image.file(File(val), fit: BoxFit.contain)
+                          : const Icon(Icons.broken_image, color: Colors.white, size: 80)),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        break;
+      default:
+        if (val.startsWith('http://') || val.startsWith('https://')) {
+          await launchUrl(Uri.parse(val), mode: LaunchMode.externalApplication);
+        } else {
+          TbpDownloadInterceptor.instance.openSupportedViewer(
+            context: context,
+            filePath: val,
+            scaleFactor: widget.scaleFactor,
+          );
+        }
+        break;
+    }
   }
 
   Widget _buildInputModeChip(TbpInputMode mode, String label, double s) {
@@ -253,6 +382,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
   @override
   void dispose() {
     _touchDhashTimer?.cancel();
+    _activeSpotTimer?.cancel();
     _dhashEngine.dispose();
     super.dispose();
   }
@@ -301,6 +431,14 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
       );
     }
 
+    final webviewWidget = kIsWeb
+        ? getIframeViewWidget('tbp-teacher-iframe-${_targetUrl.hashCode}', _targetUrl)
+        : (Platform.isWindows
+            ? (_winWebviewInitialized
+                ? Webview(_winWebview)
+                : const SizedBox.shrink())
+            : WebViewWidget(controller: _androidWebview));
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0E17),
       body: Listener(
@@ -317,11 +455,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                     children: [
                       // 1. Webview 메인 영역
                       Positioned.fill(
-                        child: (!kIsWeb && Platform.isWindows)
-                            ? (_winWebviewInitialized
-                                  ? Webview(_winWebview)
-                                  : const SizedBox.shrink())
-                            : WebViewWidget(controller: _androidWebview),
+                        child: webviewWidget,
                       ),
 
                       // 2. 스마트 판서 캔버스 레이어
@@ -331,26 +465,6 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                           enabled:
                               _inputMode != TbpInputMode.touch &&
                               _tool != ToolMode.pointer,
-                          onRightClick: (pos) {
-                            if (widget.isTeacherApp) {
-                              final size = MediaQuery.of(context).size;
-                              final rx = pos.dx / size.width;
-                              final ry = pos.dy / size.height;
-                              TbpHotspotOverlay.showAddHotspotModal(
-                                context,
-                                rx,
-                                ry,
-                                _tbpFolderPath,
-                                _currentDhash,
-                                _currentHotspots,
-                                (updated) {
-                                  setState(() {
-                                    _currentHotspots = updated;
-                                  });
-                                },
-                              );
-                            }
-                          },
                           onLongPressClick: (pos) {
                             final x = pos.dx.toInt();
                             final y = pos.dy.toInt();
@@ -372,14 +486,14 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                           ''';
                             if (!kIsWeb && Platform.isWindows && _winWebviewInitialized) {
                               _winWebview.executeScript(script);
-                            } else if (kIsWeb || !Platform.isWindows) {
+                            } else if (!kIsWeb && !Platform.isWindows) {
                               _androidWebview.runJavaScript(script);
                             }
                           },
                         ),
                       ),
 
-                      // 3. 모듈화된 핫스팟 오버레이 핀 레이어
+                      // 3. 모듈화된 핫스팟 오버레이 핀 레이어 (우클릭 핫스팟 추가 & 핀 편집/실행)
                       Positioned.fill(
                         child: TbpHotspotOverlay(
                           hotspots: _currentHotspots,
@@ -387,6 +501,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                           currentDhash: _currentDhash,
                           scaleFactor: widget.scaleFactor,
                           isTeacherApp: widget.isTeacherApp,
+                          onTriggerHotspot: _triggerHotspot,
                           onHotspotsUpdated: (updated) {
                             setState(() {
                               _currentHotspots = updated;
@@ -394,6 +509,46 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                           },
                         ),
                       ),
+
+                      // 4. 활동 타이머 오버레이 (활성 시)
+                      if (_spotTimerRemaining != null)
+                        Positioned(
+                          bottom: 72 * s,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: Container(
+                              padding: EdgeInsets.symmetric(horizontal: 22 * s, vertical: 10 * s),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF16161A).withOpacity(0.95),
+                                borderRadius: BorderRadius.circular(36 * s),
+                                border: Border.all(color: const Color(0xFF00F5D4), width: 2),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text('⏱️ ', style: TextStyle(fontSize: 20 * s)),
+                                  Text(
+                                    '${((_spotTimerRemaining ?? 0) ~/ 60).toString().padLeft(2, '0')}:${((_spotTimerRemaining ?? 0) % 60).toString().padLeft(2, '0')}',
+                                    style: GoogleFonts.outfit(
+                                      color: (_spotTimerRemaining ?? 0) <= 10 ? const Color(0xFFEF4565) : Colors.white,
+                                      fontSize: 26 * s,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(width: 10 * s),
+                                  IconButton(
+                                    icon: const Icon(Icons.close_rounded, color: Colors.white54),
+                                    onPressed: () {
+                                      _activeSpotTimer?.cancel();
+                                      setState(() => _spotTimerRemaining = null);
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -428,7 +583,16 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                             Icons.arrow_back_rounded,
                             color: Colors.white,
                           ),
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () async {
+                            if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty) {
+                              await TbpStorageService.instance.savePenStrokes(
+                                _tbpFolderPath,
+                                _currentDhash,
+                                _annotationController.strokes,
+                              );
+                            }
+                            if (context.mounted) Navigator.pop(context);
+                          },
                         ),
                         SizedBox(width: 8 * s),
                         Text(
@@ -484,7 +648,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                           onPressed: () =>
                               _dhashEngine.navigatePage(isNext: false),
                         ),
-                        SizedBox(width: 8 * s),
+                        SizedBox(width: 4 * s),
                         IconButton(
                           icon: const Icon(
                             Icons.navigate_next_rounded,
@@ -494,6 +658,46 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                           tooltip: '다음 페이지 (PgDn)',
                           onPressed: () =>
                               _dhashEngine.navigatePage(isNext: true),
+                        ),
+                        SizedBox(width: 8 * s),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.add_location_alt_rounded, size: 16),
+                          label: Text(
+                            '+ 핫스팟',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 12 * s,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2EC4B6),
+                            foregroundColor: Colors.black,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 10 * s,
+                              vertical: 6 * s,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10 * s),
+                            ),
+                          ),
+                          onPressed: () {
+                            final offsetCount = _currentHotspots.length;
+                            final rx = (0.2 + (offsetCount % 5) * 0.14).clamp(0.1, 0.88);
+                            final ry = (0.22 + (offsetCount ~/ 5) * 0.14).clamp(0.15, 0.82);
+                            TbpHotspotOverlay.showAddHotspotModal(
+                              context,
+                              rx,
+                              ry,
+                              _tbpFolderPath,
+                              _currentDhash,
+                              _currentHotspots,
+                              (updated) {
+                                setState(() {
+                                  _currentHotspots = updated;
+                                });
+                              },
+                            );
+                          },
                         ),
                         SizedBox(width: 8 * s),
                         ElevatedButton.icon(

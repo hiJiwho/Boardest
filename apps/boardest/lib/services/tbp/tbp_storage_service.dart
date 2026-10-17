@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:universal_io/io.dart';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:archive/archive.dart';
-import 'package:archive/archive_io.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../models/tbp_metadata.dart';
 import '../../widgets/annotation_canvas.dart';
@@ -28,8 +26,79 @@ class TbpStorageService {
   // Web 인메모리 JSON 캐시 (folderPath::key → jsonString)
   final Map<String, String> _webJsonCache = {};
 
+  /// 새로 생성한 TBP 프로젝트 메타데이터를 즉시 캐시에 등록하여 뷰어 진입 시 지연/오류 방지
+  Future<String> registerCreatedTbpProject({
+    required Map<String, dynamic> meta,
+    String? driveFolderId,
+    String? localDirPath,
+  }) async {
+    final encoded = const JsonEncoder.withIndent('  ').convert(meta);
+
+    if (driveFolderId != null && driveFolderId.isNotEmpty) {
+      final rawKey = 'drive://tbp/$driveFolderId';
+      final vPath = 'drive_tbp_$driveFolderId';
+      _webJsonCache['$vPath::info'] = encoded;
+      _webJsonCache['$rawKey::info'] = encoded;
+      if (kIsWeb) {
+        _extractCache[rawKey] = vPath;
+        _driveFolderIds[vPath] = driveFolderId;
+      } else {
+        try {
+          final tmpDir = await getTemporaryDirectory();
+          final safeId = driveFolderId.replaceAll(RegExp(r'[^\w-]'), '_');
+          final cacheDir = Directory(p.join(tmpDir.path, 'bstTBP_cloud_$safeId'));
+          if (!cacheDir.existsSync()) {
+            cacheDir.createSync(recursive: true);
+          }
+          await File(p.join(cacheDir.path, 'manifest.json')).writeAsString(encoded, flush: true);
+          await File(p.join(cacheDir.path, 'meta.bstsave')).writeAsString(encoded, flush: true);
+          await File(p.join(cacheDir.path, 'info.json')).writeAsString(encoded, flush: true);
+          _extractCache[rawKey] = cacheDir.path;
+          _driveFolderIds[cacheDir.path] = driveFolderId;
+          _webJsonCache['${cacheDir.path}::info'] = encoded;
+        } catch (_) {}
+      }
+    }
+
+    if (localDirPath != null && localDirPath.isNotEmpty) {
+      if (kIsWeb || localDirPath.startsWith('web://')) {
+        _extractCache[localDirPath] = localDirPath;
+        _webJsonCache['$localDirPath::info'] = encoded;
+        if (driveFolderId != null && driveFolderId.isNotEmpty) {
+          _driveFolderIds[localDirPath] = driveFolderId;
+        }
+        return localDirPath;
+      } else {
+        try {
+          final dir = Directory(localDirPath);
+          if (!dir.existsSync()) {
+            dir.createSync(recursive: true);
+          }
+          for (final sub in ['HOTspot', 'PEN', 'PDF', 'PPT', 'HWP']) {
+            final subDir = Directory(p.join(dir.path, sub));
+            if (!subDir.existsSync()) subDir.createSync(recursive: true);
+          }
+          await File(p.join(dir.path, 'manifest.json')).writeAsString(encoded, flush: true);
+          await File(p.join(dir.path, 'meta.bstsave')).writeAsString(encoded, flush: true);
+          await File(p.join(dir.path, 'info.json')).writeAsString(encoded, flush: true);
+          _extractCache[dir.path] = dir.path;
+          _webJsonCache['${dir.path}::info'] = encoded;
+          if (driveFolderId != null && driveFolderId.isNotEmpty) {
+            _driveFolderIds[dir.path] = driveFolderId;
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (driveFolderId != null && driveFolderId.isNotEmpty) {
+      return 'drive://tbp/$driveFolderId';
+    }
+    return localDirPath ?? 'web://tbp/${meta['folderId'] ?? 'default'}';
+  }
+
   static bool _isDriveFolderRef(String pathStr) {
     if (pathStr.startsWith('drive://tbp/')) return true;
+    if (pathStr.startsWith('web://tbp/')) return false;
     if (pathStr.startsWith('http://') || pathStr.startsWith('https://')) return false;
     if (pathStr.contains('/') || pathStr.contains('\\')) return false;
     final lower = pathStr.toLowerCase();
@@ -48,6 +117,15 @@ class TbpStorageService {
 
   Future<TbpMetadata?> loadTbpFile(String tbpFilePath, {Uint8List? directBytes}) async {
     try {
+      // 0. Web 가상 경로 또는 인메모리 캐시 확인
+      if (tbpFilePath.startsWith('web://tbp/')) {
+        final cached = _webJsonCache['$tbpFilePath::info'];
+        if (cached != null) {
+          _extractCache[tbpFilePath] = tbpFilePath;
+          return TbpMetadata.fromJson(jsonDecode(cached) as Map<String, dynamic>);
+        }
+      }
+
       // 1. Google Drive TBP 폴더 (온디맨드: manifest.json / meta.bstsave / info.json 만 먼저 다운로드)
       if (_isDriveFolderRef(tbpFilePath)) {
         final driveFolderId = _extractDriveFolderId(tbpFilePath);
@@ -55,6 +133,11 @@ class TbpStorageService {
       }
 
       if (kIsWeb) {
+        final cached = _webJsonCache['$tbpFilePath::info'];
+        if (cached != null) {
+          _extractCache[tbpFilePath] = tbpFilePath;
+          return TbpMetadata.fromJson(jsonDecode(cached) as Map<String, dynamic>);
+        }
         final bytes = directBytes ?? BstCloudService.webMemoryFiles[tbpFilePath] ?? BstCloudService.webMemoryFiles[p.basename(tbpFilePath)];
         if (bytes != null && bytes.isNotEmpty) {
           try {
@@ -82,7 +165,14 @@ class TbpStorageService {
         for (final name in ['meta.bstsave', 'manifest.json', 'info.json']) {
           final f = File(p.join(dir.path, name));
           if (f.existsSync()) {
-            final json = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+            final raw = await f.readAsString();
+            _webJsonCache['${dir.path}::info'] = raw;
+            final json = jsonDecode(raw) as Map<String, dynamic>;
+            if (json['folderId'] != null &&
+                json['folderId'].toString().isNotEmpty &&
+                !json['folderId'].toString().startsWith('local_')) {
+              _driveFolderIds[dir.path] = json['folderId'].toString();
+            }
             return TbpMetadata.fromJson(json);
           }
         }
@@ -106,10 +196,14 @@ class TbpStorageService {
 
   Future<TbpMetadata?> _loadFromDriveTbpFolder(String rawKey, String driveFolderId) async {
     try {
-      String? rawJson;
-      for (final fileName in ['manifest.json', 'meta.bstsave', 'info.json']) {
-        rawJson = await BstCloudService.instance.fetchTbpFolderFileText(driveFolderId, fileName);
-        if (rawJson != null && rawJson.trim().isNotEmpty) break;
+      final vPath = 'drive_tbp_$driveFolderId';
+      String? rawJson = _webJsonCache['$vPath::info'] ?? _webJsonCache['$rawKey::info'];
+
+      if (rawJson == null || rawJson.trim().isEmpty) {
+        for (final fileName in ['manifest.json', 'meta.bstsave', 'info.json']) {
+          rawJson = await BstCloudService.instance.fetchTbpFolderFileText(driveFolderId, fileName);
+          if (rawJson != null && rawJson.trim().isNotEmpty) break;
+        }
       }
       if (rawJson == null || rawJson.trim().isEmpty) return null;
 
@@ -117,12 +211,13 @@ class TbpStorageService {
       json['folderId'] = (json['folderId']?.toString().isNotEmpty == true)
           ? json['folderId']
           : driveFolderId;
+      final encoded = jsonEncode(json);
+      _webJsonCache['$vPath::info'] = encoded;
+      _webJsonCache['$rawKey::info'] = encoded;
 
       if (kIsWeb) {
-        final vPath = 'drive_tbp_$driveFolderId';
         _extractCache[rawKey] = vPath;
         _driveFolderIds[vPath] = driveFolderId;
-        _webJsonCache['$vPath::info'] = jsonEncode(json);
         return TbpMetadata.fromJson(json);
       }
 
@@ -132,12 +227,12 @@ class TbpStorageService {
       if (!cacheDir.existsSync()) {
         cacheDir.createSync(recursive: true);
       }
-      final encoded = jsonEncode(json);
       await File(p.join(cacheDir.path, 'meta.bstsave')).writeAsString(encoded, flush: true);
       await File(p.join(cacheDir.path, 'info.json')).writeAsString(encoded, flush: true);
 
       _extractCache[rawKey] = cacheDir.path;
       _driveFolderIds[cacheDir.path] = driveFolderId;
+      _webJsonCache['${cacheDir.path}::info'] = encoded;
       unawaited(cleanupOldExtractCache());
       return TbpMetadata.fromJson(json);
     } catch (e) {

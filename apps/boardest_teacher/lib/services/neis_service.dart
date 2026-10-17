@@ -2,7 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class NeisService {
-  static const String _apiKey = '821179541cf54b6288d51741f30e1c90';
+  static const String _apiKey = String.fromEnvironment(
+    'NEIS_API_KEY',
+    defaultValue: '821179541cf54b6288d51741f30e1c90',
+  );
 
   // In-memory cache for resolved school codes: schoolName -> { officeCode, schoolCode }
   static final Map<String, Map<String, String>> _schoolCodesCache = {};

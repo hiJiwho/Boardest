@@ -3,7 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
 import '../../services/bst_cloud_service.dart';
+import '../../services/bst_save_service.dart';
+import '../../services/tbp/tbp_storage_service.dart';
 import '../boardest_pen_view.dart';
 import '../canva_board_view.dart';
 import '../tbp/tbp_viewer_route.dart';
@@ -86,7 +89,7 @@ class _TeacherCreationToolsViewState extends State<TeacherCreationToolsView> {
   Future<void> _handleCreateTbpFolder() async {
     final title = _tbpTitleCtrl.text.trim();
     final subject = _tbpSubjectCtrl.text.trim().isEmpty ? '공통' : _tbpSubjectCtrl.text.trim();
-    final url = _tbpUrlCtrl.text.trim();
+    var url = _tbpUrlCtrl.text.trim();
 
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -94,46 +97,73 @@ class _TeacherCreationToolsViewState extends State<TeacherCreationToolsView> {
       );
       return;
     }
-    if (url.isEmpty || url == 'https://') {
+    if (url.isEmpty || url == 'https://' || url == 'http://') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('디지털교과서 또는 수업 웹 URL을 입력해주세요.'), backgroundColor: Color(0xFFEF4565)),
       );
       return;
     }
-
-    final token = BstCloudService.instance.activeToken;
-    if (token == null || token.isEmpty) {
-      widget.onRequestCloudConnect?.call();
-      return;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://$url';
     }
 
     setState(() => _isCreatingTbp = true);
     try {
-      final folderId = await BstCloudService.instance.createTbpProjectFolderOnDrive(
-        title: title,
-        subject: subject,
-        targetUrl: url,
-        accessToken: token,
-      );
-      if (!mounted) return;
-      setState(() => _isCreatingTbp = false);
-
-      if (folderId != null && folderId.isNotEmpty) {
-        _tbpTitleCtrl.clear();
-        _loadExistingTbpFolders();
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => TbpViewerRoute(
-              tbpFilePath: 'drive://tbp/$folderId',
-              scaleFactor: 1.0,
-            ),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('TBP 폴더 생성에 실패했습니다. Cloud 권한을 확인해주세요.'), backgroundColor: Color(0xFFEF4565)),
+      final token = BstCloudService.instance.activeToken;
+      String? folderId;
+      if (token != null && token.isNotEmpty) {
+        folderId = await BstCloudService.instance.createTbpProjectFolderOnDrive(
+          title: title,
+          subject: subject,
+          targetUrl: url,
+          accessToken: token,
         );
       }
+
+      final safeTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      final folderName = safeTitle.toLowerCase().endsWith('.tbp') ? safeTitle : '$safeTitle.tbp';
+      final fallbackId = folderId ?? 'local_${DateTime.now().millisecondsSinceEpoch}';
+      final fullMeta = <String, dynamic>{
+        'version': '2.0.0',
+        'title': title,
+        'subject': subject,
+        'webUrl': url,
+        'targetUrl': url,
+        'folderId': fallbackId,
+        'createdAt': DateTime.now().toIso8601String(),
+      };
+
+      String? localTbpDirPath;
+      if (kIsWeb) {
+        localTbpDirPath = folderId != null ? null : 'web://tbp/$folderName';
+      } else {
+        try {
+          final boardDir = await BstSaveService.instance.directoryFor(BstSaveService.subBoard);
+          localTbpDirPath = p.join(boardDir.path, folderName);
+        } catch (_) {}
+      }
+
+      final resultPath = await TbpStorageService.instance.registerCreatedTbpProject(
+        meta: fullMeta,
+        driveFolderId: folderId,
+        localDirPath: localTbpDirPath,
+      );
+
+      if (!mounted) return;
+      setState(() => _isCreatingTbp = false);
+      _tbpTitleCtrl.clear();
+      if (folderId != null && folderId.isNotEmpty) {
+        _loadExistingTbpFolders();
+      }
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => TbpViewerRoute(
+            tbpFilePath: resultPath,
+            scaleFactor: 1.0,
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isCreatingTbp = false);

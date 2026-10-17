@@ -116,7 +116,8 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
       );
       _infoJson = await TbpStorageService.instance.loadInfoJson(_tbpFolderPath);
 
-      if (_infoJson == null || _infoJson!['webUrl'] == null) {
+      final targetUrl = (_infoJson?['webUrl'] ?? _infoJson?['targetUrl'] ?? '').toString().trim();
+      if (targetUrl.isEmpty) {
         setState(() {
           _errorMessage = 'TBP 폴더 내 webUrl 설정이 올바르지 않습니다.';
           _isLoading = false;
@@ -124,7 +125,18 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
         return;
       }
 
-      final targetUrl = _infoJson!['webUrl'] as String;
+      // 초기 페이지('default') 핫스팟 및 판서 스트로크 즉시 로드
+      final initialHotspots = await TbpStorageService.instance.loadHotspots(
+        _tbpFolderPath,
+        _currentDhash,
+      );
+      final initialStrokes = await TbpStorageService.instance.loadPenStrokes(
+        _tbpFolderPath,
+        _currentDhash,
+      );
+      _currentHotspots = initialHotspots;
+      _annotationController.setStrokes(initialStrokes);
+
       _targetUrl = targetUrl;
       if (kIsWeb) {
         setState(() => _isLoading = false);
@@ -135,7 +147,9 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
         _initAndroidWebview(targetUrl);
       }
 
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
 
       _dhashEngine.startTracker(
         _winWebviewInitialized ? _winWebview : null,
@@ -399,17 +413,12 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                                 enabled:
                                     _isAnnotationEnabled &&
                                     _tool != ToolMode.pointer,
-                                onRightClick: _inputMode == TbpInputMode.touch
-                                    ? null
-                                    : (pos) {
-                                        // 우클릭 핫스팟 생성 (교사용 앱에서만, 전자칠판은 핫스팟 실행만)
-                                      },
                               ),
                             ),
                           ),
                         ),
 
-                        // ── 핫스팟 오버레이 ─────────────────────────────
+                        // ── 핫스팟 오버레이 (우클릭 핫스팟 추가/편집 & 실행) ─────
                         Positioned.fill(
                           child: TbpHotspotOverlay(
                             hotspots: _currentHotspots,
@@ -418,6 +427,11 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                             scaleFactor: widget.scaleFactor,
                             inputMode: _inputMode,
                             longPressActive: _longPressActive,
+                            onHotspotsUpdated: (updated) {
+                              setState(() {
+                                _currentHotspots = updated;
+                              });
+                            },
                           ),
                         ),
                       ],
@@ -456,7 +470,16 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                   color: Colors.white,
                   size: 20,
                 ),
-                onPressed: () => Navigator.pop(context),
+                onPressed: () async {
+                  if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty) {
+                    await TbpStorageService.instance.savePenStrokes(
+                      _tbpFolderPath,
+                      _currentDhash,
+                      _annotationController.strokes,
+                    );
+                  }
+                  if (mounted) Navigator.pop(context);
+                },
                 tooltip: '뒤로',
               ),
               SizedBox(width: 6 * s),
@@ -472,7 +495,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
           ),
         ),
 
-        // ── 중앙: 페이지 이동 버튼 ─────────────────────────
+        // ── 중앙: 페이지 이동 + 핫스팟 추가 버튼 ─────────────
         _controlContainer(
           s,
           Row(
@@ -495,6 +518,41 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                 ),
                 tooltip: '다음 페이지 (→ ArrowRight)',
                 onPressed: () => _navigatePage(true),
+              ),
+              SizedBox(width: 8 * s),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add_location_alt_rounded, size: 16),
+                label: Text(
+                  '+ 핫스팟',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 12 * s,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2EC4B6),
+                  foregroundColor: Colors.black,
+                  padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * s)),
+                ),
+                onPressed: () {
+                  final offsetCount = _currentHotspots.length;
+                  final rx = (0.2 + (offsetCount % 5) * 0.14).clamp(0.1, 0.88);
+                  final ry = (0.22 + (offsetCount ~/ 5) * 0.14).clamp(0.15, 0.82);
+                  TbpHotspotOverlay.showAddHotspotModal(
+                    context,
+                    rx,
+                    ry,
+                    _tbpFolderPath,
+                    _currentDhash,
+                    _currentHotspots,
+                    (updated) {
+                      setState(() {
+                        _currentHotspots = updated;
+                      });
+                    },
+                  );
+                },
               ),
             ],
           ),

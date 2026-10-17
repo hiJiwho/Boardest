@@ -272,6 +272,14 @@
       position: relative;
     }
 
+    /* Windows Native Docked Mode: 창 자체가 화면 우측 3/4로 도킹되었을 때 내부 이중축소 방지 */
+    body.native-docked-class .left-pane {
+      display: none !important;
+    }
+    body.native-docked-class .right-pane {
+      width: 100vw !important;
+    }
+
     /* Left Header with Menu */
     .left-header {
       padding: 1.5vh 1.2vw;
@@ -2210,10 +2218,24 @@
           if (data.tbImageArr) localStorage.setItem('tbImageArr', JSON.stringify(data.tbImageArr));
           return { success: true };
         },
-        setWindowLayout: () => { }, // No-op on Android
-        controlExplorer: () => { }, // No-op on Android
-        appQuit: () => { }, // No-op on Android
-        onUSBEvent: () => { }, // Not used on Android as requested
+        setWindowLayout: (layout) => {
+          const payload = JSON.stringify({ type: 'setWindowLayout', layout: layout });
+          if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.postMessage(payload);
+          } else if (window.FlutterChannel) {
+            window.FlutterChannel.postMessage(payload);
+          }
+        },
+        controlExplorer: () => { },
+        appQuit: () => {
+          const payload = JSON.stringify({ type: 'appQuit' });
+          if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.postMessage(payload);
+          } else if (window.FlutterChannel) {
+            window.FlutterChannel.postMessage(payload);
+          }
+        },
+        onUSBEvent: () => { },
       };
     }
 
@@ -2490,11 +2512,13 @@
           classContainer.style.display = 'none'; specContainer.style.display = 'none'; noClass.style.display = 'block';
         }
 
-        // Layout Control: Break, Assembly, Lunch, and Dismissal are Fullscreen. Regular Class is Desktop. (PC ONLY)
+        // Layout Control: Break, Assembly, Lunch, and Dismissal are Fullscreen. Regular Class is Desktop. (PC & Native Host)
         const targetLayout = (isBreakTime || isAfterSchool || specialEventText) ? 'break' : 'class';
-        if (isElectron && targetLayout !== lastSystemLayout && window.api) {
+        if (targetLayout !== lastSystemLayout && window.api) {
           window.api.setWindowLayout(targetLayout);
-          window.api.controlExplorer(targetLayout === 'break' ? 'kill' : 'start');
+          if (isElectron) {
+            window.api.controlExplorer(targetLayout === 'break' ? 'kill' : 'start');
+          }
           lastSystemLayout = targetLayout;
           currentLayout = targetLayout;
         }
