@@ -168,6 +168,7 @@ class _TeacherViewState extends State<TeacherView> {
   bool _isViewingHomeroomWeekly = false; // 담임 학급 주간 시간표 보기 중 여부
   int _mobileTabIndex = 0; // 0: 시간표, 1: Cloud, 2: 수업도구, 3: 급식/쪽지, 4: 설정
   String _currentTeacherTab = 'timetable'; // 'timetable', 'lesson', 'canva', 'meal', 'memo', 'archive', 'settings'
+  bool _guestBypassLogin = false; // 게스트 모드 둘러보기 허용
 
   // 플로팅 타이머 상태
   bool _showMiniTimer = false;
@@ -2619,7 +2620,7 @@ class _TeacherViewState extends State<TeacherView> {
               ),
 
               SafeArea(
-                child: !CloudDriveService.instance.isLoggedIn
+                child: (!CloudDriveService.instance.isLoggedIn && !_guestBypassLogin)
                     ? Center(
                         child: Container(
                           width: 480,
@@ -2675,6 +2676,18 @@ class _TeacherViewState extends State<TeacherView> {
                                   ),
                                 ),
                               ),
+                              const SizedBox(height: 12),
+                              TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _guestBypassLogin = true;
+                                  });
+                                },
+                                child: const Text(
+                                  '먼저 둘러보기 (게스트 모드)',
+                                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -2692,6 +2705,16 @@ class _TeacherViewState extends State<TeacherView> {
                             homeroomClass: '${_settings.selectedGrade}학년 ${_settings.selectedClass}반',
                             isHomeroom: _settings.isHomeroom,
                             hasPasskey: true,
+                            isLoggedIn: CloudDriveService.instance.isLoggedIn,
+                            userEmail: CloudDriveService.instance.userEmail,
+                            onLoginPressed: () async {
+                              await CloudDriveService.instance.loginWithBrowserOAuth();
+                              if (mounted) setState(() {});
+                            },
+                            onLogoutPressed: () async {
+                              await CloudDriveService.instance.logout();
+                              if (mounted) setState(() {});
+                            },
                         onRegisterPasskey: _openPasskeyQrDialog,
                         currentTab: _currentTeacherTab,
                         onTabSelected: (tab) {
@@ -6374,22 +6397,22 @@ class _TeacherViewState extends State<TeacherView> {
           backgroundColor: const Color(0xFF16161A),
           title: Row(
             children: [
-              const Icon(Icons.palette_rounded, color: Color(0xFF8B5CF6)),
+              const Icon(Icons.slideshow_rounded, color: Color(0xFF00F5D4)),
               const SizedBox(width: 8),
-              Text('🎨 Canva 슬라이드 URL 입력', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
+              Text('✨ HTML Present URL 입력', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('수업에 사용할 Canva 프레젠테이션 URL 주소를 입력하면 자동 저장됩니다.', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13)),
+              Text('Canva, 구글 슬라이드, 미리캔버스, 패들렛 등 모든 웹 프레젠테이션 주소를 입력하면 Dhash 기반 페이지별 판서 & 스마트 모드로 실행됩니다.', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13, height: 1.4)),
               const SizedBox(height: 12),
               TextField(
                 controller: urlCtrl,
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
-                  hintText: 'https://www.canva.com/design/...',
+                  hintText: 'https://www.canva.com 또는 구글 슬라이드 링크',
                   hintStyle: TextStyle(color: Colors.white38),
                   filled: true,
                   fillColor: Color(0xFF242629),
@@ -6404,15 +6427,21 @@ class _TeacherViewState extends State<TeacherView> {
                 child: Row(
                   children: [
                     ActionChip(
-                      label: const Text('기본 Canva', style: TextStyle(color: Color(0xFF8B5CF6), fontSize: 11)),
+                      label: const Text('Canva', style: TextStyle(color: Color(0xFF00F5D4), fontSize: 11)),
                       backgroundColor: const Color(0xFF242629),
                       onPressed: () => urlCtrl.text = 'https://www.canva.com',
                     ),
                     const SizedBox(width: 6),
                     ActionChip(
-                      label: const Text('교육용 프레젠테이션', style: TextStyle(color: Color(0xFF00C4CC), fontSize: 11)),
+                      label: const Text('Google Slides', style: TextStyle(color: Color(0xFFFF9F1C), fontSize: 11)),
                       backgroundColor: const Color(0xFF242629),
-                      onPressed: () => urlCtrl.text = 'https://www.canva.com/education',
+                      onPressed: () => urlCtrl.text = 'https://docs.google.com/presentation',
+                    ),
+                    const SizedBox(width: 6),
+                    ActionChip(
+                      label: const Text('미리캔버스', style: TextStyle(color: Color(0xFF2EC4B6), fontSize: 11)),
+                      backgroundColor: const Color(0xFF242629),
+                      onPressed: () => urlCtrl.text = 'https://www.miricanvas.com',
                     ),
                     const SizedBox(width: 6),
                     ...savedUrls.take(3).map((u) => Padding(
@@ -6434,7 +6463,7 @@ class _TeacherViewState extends State<TeacherView> {
               child: const Text('취소', style: TextStyle(color: Colors.white54)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B5CF6)),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4)),
               onPressed: () async {
                 final val = urlCtrl.text.trim();
                 if (val.isNotEmpty) {
@@ -6456,7 +6485,7 @@ class _TeacherViewState extends State<TeacherView> {
                   );
                 }
               },
-              child: const Text('🚀 Canva 판서 시작', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text('🚀 HTML Present 시작', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900)),
             ),
           ],
         ),
@@ -6495,7 +6524,7 @@ class _TeacherViewState extends State<TeacherView> {
       {'id': 'whiteboard',      'name': '기본판서'},
       {'id': 'document_board',  'name': '문서판서'},
       {'id': 'boardbook',       'name': 'BoardBook'},
-      {'id': 'canva_board',     'name': 'Canva 슬라이드'},
+      {'id': 'canva_board',     'name': 'HTML Present'},
       {'id': 'website_board',   'name': '사이트판서'},
       {'id': 'browser_board',   'name': '웹브라우저'},
     ];
@@ -8348,10 +8377,10 @@ class _TeacherViewState extends State<TeacherView> {
                             s: s,
                           ),
                           _buildSlimActionBtn(
-                            icon: Icons.palette_rounded,
-                            iconColor: const Color(0xFF00C4CC),
-                            label: 'Canva',
-                            tooltip: 'Canva 디자인 등록',
+                            icon: Icons.slideshow_rounded,
+                            iconColor: const Color(0xFF00F5D4),
+                            label: 'HTML Present',
+                            tooltip: 'HTML Present (Canva/GoogleSlides/웹 프레젠테이션)',
                             onTap: _showRegisterCanvaDialog,
                             s: s,
                           ),

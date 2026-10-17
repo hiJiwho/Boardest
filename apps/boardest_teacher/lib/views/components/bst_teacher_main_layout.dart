@@ -22,6 +22,11 @@ class BstTeacherMainLayout extends StatelessWidget {
   final VoidCallback? onStartQuickLesson;
   final VoidCallback? onCreateQuickMaterial;
 
+  final bool isLoggedIn;
+  final String? userEmail;
+  final VoidCallback? onLoginPressed;
+  final VoidCallback? onLogoutPressed;
+
   const BstTeacherMainLayout({
     super.key,
     this.schoolName = '보데스트 중학교',
@@ -41,6 +46,10 @@ class BstTeacherMainLayout extends StatelessWidget {
     this.onResumeLesson,
     this.onStartQuickLesson,
     this.onCreateQuickMaterial,
+    this.isLoggedIn = false,
+    this.userEmail,
+    this.onLoginPressed,
+    this.onLogoutPressed,
   });
 
   Widget _buildLeftNavButton({
@@ -308,6 +317,87 @@ class BstTeacherMainLayout extends StatelessWidget {
 
                   const Spacer(),
 
+                  // Google 계정 로그인 / 프로필 뱃지
+                  if (isLoggedIn)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00F5D4).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 26,
+                            height: 26,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0xFF00F5D4),
+                            ),
+                            child: const Center(
+                              child: Text('G', style: TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.w900)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  teacherName.isNotEmpty ? teacherName : '선생님',
+                                  style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  userEmail ?? '연동됨',
+                                  style: const TextStyle(color: Color(0xFF00F5D4), fontSize: 9.5),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert_rounded, size: 16, color: Colors.white70),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            color: const Color(0xFF16161A),
+                            onSelected: (val) {
+                              if (val == 'relogin') onLoginPressed?.call();
+                              if (val == 'logout') onLogoutPressed?.call();
+                            },
+                            itemBuilder: (ctx) => [
+                              const PopupMenuItem(
+                                value: 'relogin',
+                                child: Text('🔄 계정 전환 / 재로그인', style: TextStyle(fontSize: 12, color: Colors.white)),
+                              ),
+                              const PopupMenuItem(
+                                value: 'logout',
+                                child: Text('🚪 로그아웃', style: TextStyle(fontSize: 12, color: Color(0xFFFF595E))),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00F5D4),
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: onLoginPressed,
+                        icon: const Icon(Icons.login_rounded, size: 16, color: Colors.black),
+                        label: const Text('Google 로그인', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+
                   _buildLeftNavButton(
                     icon: '⚙️',
                     label: '교사 환경 설정',
@@ -486,6 +576,42 @@ class BstTeacherMainLayout extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11.5),
                     ),
                   ),
+                  const SizedBox(width: 8),
+
+                  // 5. Google 로그인 / 계정 상태 버튼
+                  if (isLoggedIn)
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF00F5D4),
+                        side: BorderSide(color: const Color(0xFF00F5D4).withOpacity(0.5)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: onLoginPressed,
+                      icon: const Icon(Icons.account_circle_rounded, size: 16, color: Color(0xFF00F5D4)),
+                      label: Text(
+                        userEmail != null && userEmail!.isNotEmpty
+                            ? (userEmail!.length > 18 ? '${userEmail!.substring(0, 15)}...' : userEmail!)
+                            : 'Google 연동됨',
+                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                      ),
+                    )
+                  else
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00F5D4),
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                      ),
+                      onPressed: onLoginPressed,
+                      icon: const Icon(Icons.login_rounded, size: 16, color: Colors.black),
+                      label: const Text(
+                        'Google 로그인',
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11.5),
+                      ),
+                    ),
                 ],
               ),
             ),

@@ -322,6 +322,32 @@ class _BoardestPenViewState extends State<BoardestPenView>
         final key = 'web_board_${_boardFileBaseName.isNotEmpty ? _boardFileBaseName : 'active'}';
         await prefs.setString(key, payload);
         debugPrint('[BoardestPenView] Auto-saved whiteboard to web LocalStorage ($key)');
+
+        if (CloudDriveService.instance.isLoggedIn) {
+          final Map<int, List<AnnotationStroke>> strokesPagesWeb = {};
+          for (int pIndex = 1; pIndex <= _totalPages; pIndex++) {
+            final strokes = _pageStrokes[pIndex] ?? [];
+            strokesPagesWeb[pIndex] = strokes.map<AnnotationStroke>((s) {
+              return AnnotationStroke(
+                points: s.points,
+                color: s.color,
+                strokeWidth: s.strokeWidth,
+              );
+            }).toList();
+          }
+          final penDocWeb = PenDocument.fromStrokesMap(
+            title: _boardFileBaseName.isNotEmpty ? _boardFileBaseName : 'Boardest_판서',
+            strokesPages: strokesPagesWeb,
+            classroom: widget.teacher,
+            subject: widget.subject,
+          );
+          unawaited(CloudDriveService.instance.savePenDocumentToAdf(
+            penDocWeb,
+            originalFileName: '${_boardFileBaseName.isNotEmpty ? _boardFileBaseName : 'board_backup'}.pen',
+            classroom: widget.teacher,
+            teacherName: widget.teacher,
+          ));
+        }
         return;
       }
 
@@ -344,6 +370,16 @@ class _BoardestPenViewState extends State<BoardestPenView>
         classroom: widget.teacher,
         subject: widget.subject,
       );
+
+      // Cloud 연동 시 모든 판서 자동 백업
+      if (CloudDriveService.instance.isLoggedIn) {
+        unawaited(CloudDriveService.instance.savePenDocumentToAdf(
+          penDoc,
+          originalFileName: '${_boardFileBaseName.isNotEmpty ? _boardFileBaseName : 'board_backup'}.pen',
+          classroom: widget.teacher,
+          teacherName: widget.teacher,
+        ));
+      }
 
       if (_isBstSaveBoard || (widget.teacher != null && widget.subject != null)) {
         final dir = await BstSaveService.instance.directoryFor(BstSaveService.subBoard);
@@ -372,16 +408,6 @@ class _BoardestPenViewState extends State<BoardestPenView>
 
         if (widget.teacher != null && widget.subject != null) {
           await _saveBoardMapping(penPath);
-        }
-
-        // Cloud 연동 시 ADF bst-pen 자동 백업
-        if (CloudDriveService.instance.isLoggedIn) {
-          unawaited(CloudDriveService.instance.savePenDocumentToAdf(
-            penDoc,
-            originalFileName: '$_boardFileBaseName.pen',
-            classroom: widget.teacher,
-            teacherName: widget.teacher,
-          ));
         }
       } else {
         if (_activeFilePath.isNotEmpty) {

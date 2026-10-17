@@ -1136,8 +1136,12 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
   }
 
   void _navigateToOAuth() {
+    final baseUri = Uri.base;
+    final currentReturn = '${baseUri.origin}${baseUri.path}';
+    final targetUrl = 'https://boardest-teacher-oauth.web.app?web-lite&return_url=${Uri.encodeComponent(currentReturn.isNotEmpty ? currentReturn : 'https://boardest-teacher.web.app/lite/')}';
     launchUrl(
-      Uri.parse('https://boardest-teacher-oauth.web.app?web-lite&return_url=https://boardest-teacher.web.app/lite/'),
+      Uri.parse(targetUrl),
+      mode: LaunchMode.platformDefault,
       webOnlyWindowName: '_self',
     );
   }

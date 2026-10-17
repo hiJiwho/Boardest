@@ -356,26 +356,10 @@ class TbpHotspotOverlay extends StatelessWidget {
         final width = constraints.maxWidth > 0 ? constraints.maxWidth : MediaQuery.of(context).size.width;
         final height = constraints.maxHeight > 0 ? constraints.maxHeight : MediaQuery.of(context).size.height;
 
-        return GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onSecondaryTapDown: (details) {
-            final rx = (details.localPosition.dx / width).clamp(0.02, 0.98);
-            final ry = (details.localPosition.dy / height).clamp(0.02, 0.98);
-            showAddHotspotModal(
-              context,
-              rx,
-              ry,
-              tbpFolderPath,
-              currentDhash,
-              hotspots,
-              onHotspotsUpdated,
-            );
-          },
-          child: SizedBox.expand(
-            child: Stack(
-              fit: StackFit.expand,
-              clipBehavior: Clip.none,
-              children: hotspots.map((hotspot) {
+        return Stack(
+          fit: StackFit.expand,
+          clipBehavior: Clip.none,
+          children: hotspots.map((hotspot) {
                 final rx = ((hotspot['x'] as num?)?.toDouble() ?? 0.5).clamp(0.02, 0.98);
                 final ry = ((hotspot['y'] as num?)?.toDouble() ?? 0.5).clamp(0.02, 0.98);
                 final left = rx * width;
@@ -472,10 +456,8 @@ class TbpHotspotOverlay extends StatelessWidget {
                   ),
                 );
               }).toList(),
-            ),
-          ),
-        );
-      },
+            );
+          },
     );
   }
 }

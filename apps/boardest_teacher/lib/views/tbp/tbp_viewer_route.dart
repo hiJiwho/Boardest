@@ -65,9 +65,79 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
   late final WebViewController _androidWebview;
   bool _winWebviewInitialized = false;
 
+  Timer? _autoSavePenTimer;
+
+  void _scheduleAutoSavePenStrokes() {
+    _autoSavePenTimer?.cancel();
+    _autoSavePenTimer = Timer(const Duration(milliseconds: 1000), () async {
+      if (!mounted) return;
+      try {
+        await TbpStorageService.instance.savePenStrokes(
+          _tbpFolderPath,
+          _currentDhash,
+          _annotationController.strokes,
+        );
+        debugPrint('[TbpViewer] Auto-saved pen strokes to Cloud/Local for dhash: $_currentDhash');
+      } catch (e) {
+        debugPrint('[TbpViewer] Auto-save pen strokes error: $e');
+      }
+    });
+  }
+
+  void _sendVirtualKey(String key, int keyCode) {
+    final script = '''
+      (function() {
+        const target = document.activeElement || document.body;
+        const downEvt = new KeyboardEvent('keydown', {
+          key: '$key',
+          code: '$key',
+          keyCode: $keyCode,
+          which: $keyCode,
+          bubbles: true,
+          cancelable: true
+        });
+        target.dispatchEvent(downEvt);
+        window.dispatchEvent(downEvt);
+
+        const upEvt = new KeyboardEvent('keyup', {
+          key: '$key',
+          code: '$key',
+          keyCode: $keyCode,
+          which: $keyCode,
+          bubbles: true,
+          cancelable: true
+        });
+        target.dispatchEvent(upEvt);
+        window.dispatchEvent(upEvt);
+
+        // Fallback arrow keys for presentation frameworks (Canva, Slides, etc)
+        if ('$key' === 'PageDown' || '$key' === 'PageUp') {
+          const arrowKey = '$key' === 'PageDown' ? 'ArrowRight' : 'ArrowLeft';
+          const arrowCode = '$key' === 'PageDown' ? 39 : 37;
+          const aEvt = new KeyboardEvent('keydown', {
+            key: arrowKey,
+            code: arrowKey,
+            keyCode: arrowCode,
+            which: arrowCode,
+            bubbles: true,
+            cancelable: true
+          });
+          target.dispatchEvent(aEvt);
+          window.dispatchEvent(aEvt);
+        }
+      })();
+    ''';
+    if (!kIsWeb && Platform.isWindows && _winWebviewInitialized) {
+      _winWebview.executeScript(script);
+    } else if (!kIsWeb && !Platform.isWindows) {
+      _androidWebview.runJavaScript(script);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _annotationController.onStrokesChanged = _scheduleAutoSavePenStrokes;
     _dhashEngine = TbpDhashEngine(onDhashChanged: _onDhashDetected);
     _loadTbpPackage();
   }
@@ -381,6 +451,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
 
   @override
   void dispose() {
+    _autoSavePenTimer?.cancel();
     _touchDhashTimer?.cancel();
     _activeSpotTimer?.cancel();
     _dhashEngine.dispose();
@@ -446,110 +517,213 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
         onPointerDown: _onPointerDown,
         child: Stack(
           children: [
-            // ── 16:9 컨테이너 (WebView + 판서 + 핫스팟) ──
+            // ── 16:9 컨테이너 (WebView + 판서 + 핫스팟 + 가상 넘기기 버튼) ──
             Positioned.fill(
               child: Center(
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: Stack(
-                    children: [
-                      // 1. Webview 메인 영역
-                      Positioned.fill(
-                        child: webviewWidget,
-                      ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final cWidth = constraints.maxWidth > 0 ? constraints.maxWidth : MediaQuery.of(context).size.width;
+                      final cHeight = constraints.maxHeight > 0 ? constraints.maxHeight : MediaQuery.of(context).size.height;
 
-                      // 2. 스마트 판서 캔버스 레이어
-                      Positioned.fill(
-                        child: AnnotationCanvas(
-                          controller: _annotationController,
-                          enabled:
-                              _inputMode != TbpInputMode.touch &&
-                              _tool != ToolMode.pointer,
-                          onLongPressClick: (pos) {
-                            final x = pos.dx.toInt();
-                            final y = pos.dy.toInt();
-                            final script =
-                                '''
-                            (function() {
-                              const el = document.elementFromPoint($x, $y);
-                              if (el) {
-                                const evt = new MouseEvent('click', {
-                                  bubbles: true,
-                                  cancelable: true,
-                                  clientX: $x,
-                                  clientY: $y
-                                });
-                                el.dispatchEvent(evt);
-                                if (typeof el.click === 'function') el.click();
-                              }
-                            })();
-                          ''';
-                            if (!kIsWeb && Platform.isWindows && _winWebviewInitialized) {
-                              _winWebview.executeScript(script);
-                            } else if (!kIsWeb && !Platform.isWindows) {
-                              _androidWebview.runJavaScript(script);
-                            }
-                          },
-                        ),
-                      ),
-
-                      // 3. 모듈화된 핫스팟 오버레이 핀 레이어 (우클릭 핫스팟 추가 & 핀 편집/실행)
-                      Positioned.fill(
-                        child: TbpHotspotOverlay(
-                          hotspots: _currentHotspots,
-                          tbpFolderPath: _tbpFolderPath,
-                          currentDhash: _currentDhash,
-                          scaleFactor: widget.scaleFactor,
-                          isTeacherApp: widget.isTeacherApp,
-                          onTriggerHotspot: _triggerHotspot,
-                          onHotspotsUpdated: (updated) {
+                      void openHotspotModalAt(Offset pos) {
+                        final rx = (pos.dx / cWidth).clamp(0.02, 0.98);
+                        final ry = (pos.dy / cHeight).clamp(0.02, 0.98);
+                        TbpHotspotOverlay.showAddHotspotModal(
+                          context,
+                          rx,
+                          ry,
+                          _tbpFolderPath,
+                          _currentDhash,
+                          _currentHotspots,
+                          (updated) {
                             setState(() {
                               _currentHotspots = updated;
                             });
                           },
-                        ),
-                      ),
+                        );
+                      }
 
-                      // 4. 활동 타이머 오버레이 (활성 시)
-                      if (_spotTimerRemaining != null)
-                        Positioned(
-                          bottom: 72 * s,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: Container(
-                              padding: EdgeInsets.symmetric(horizontal: 22 * s, vertical: 10 * s),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF16161A).withOpacity(0.95),
-                                borderRadius: BorderRadius.circular(36 * s),
-                                border: Border.all(color: const Color(0xFF00F5D4), width: 2),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text('⏱️ ', style: TextStyle(fontSize: 20 * s)),
-                                  Text(
-                                    '${((_spotTimerRemaining ?? 0) ~/ 60).toString().padLeft(2, '0')}:${((_spotTimerRemaining ?? 0) % 60).toString().padLeft(2, '0')}',
-                                    style: GoogleFonts.outfit(
-                                      color: (_spotTimerRemaining ?? 0) <= 10 ? const Color(0xFFEF4565) : Colors.white,
-                                      fontSize: 26 * s,
-                                      fontWeight: FontWeight.bold,
+                      return Stack(
+                        children: [
+                          // 1. Webview 메인 영역 (터치 모드일 때 우클릭 감지 지원)
+                          Positioned.fill(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onSecondaryTapDown: (d) => openHotspotModalAt(d.localPosition),
+                              child: webviewWidget,
+                            ),
+                          ),
+
+                          // 2. 스마트 판서 캔버스 레이어
+                          Positioned.fill(
+                            child: AnnotationCanvas(
+                              controller: _annotationController,
+                              enabled:
+                                  _inputMode != TbpInputMode.touch &&
+                                  _tool != ToolMode.pointer,
+                              onRightClick: openHotspotModalAt,
+                              onLongPressClick: (pos) {
+                                final x = pos.dx.toInt();
+                                final y = pos.dy.toInt();
+                                final script = '''
+                                (function() {
+                                  const el = document.elementFromPoint($x, $y);
+                                  if (el) {
+                                    const evt = new MouseEvent('click', {
+                                      bubbles: true,
+                                      cancelable: true,
+                                      clientX: $x,
+                                      clientY: $y
+                                    });
+                                    el.dispatchEvent(evt);
+                                    if (typeof el.click === 'function') el.click();
+                                  }
+                                })();
+                              ''';
+                                if (!kIsWeb && Platform.isWindows && _winWebviewInitialized) {
+                                  _winWebview.executeScript(script);
+                                } else if (!kIsWeb && !Platform.isWindows) {
+                                  _androidWebview.runJavaScript(script);
+                                }
+                              },
+                            ),
+                          ),
+
+                          // 3. 모듈화된 핫스팟 오버레이 핀 레이어 (우클릭 핫스팟 추가 & 핀 편집/실행)
+                          Positioned.fill(
+                            child: TbpHotspotOverlay(
+                              hotspots: _currentHotspots,
+                              tbpFolderPath: _tbpFolderPath,
+                              currentDhash: _currentDhash,
+                              scaleFactor: widget.scaleFactor,
+                              isTeacherApp: widget.isTeacherApp,
+                              onTriggerHotspot: _triggerHotspot,
+                              onHotspotsUpdated: (updated) {
+                                setState(() {
+                                  _currentHotspots = updated;
+                                });
+                              },
+                            ),
+                          ),
+
+                          // 4. 가상 슬라이드 넘기기 버튼 (좌: PgUp, 우: PgDn)
+                          Positioned(
+                            left: 12 * s,
+                            top: 0,
+                            bottom: 0,
+                            child: Center(
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(24 * s),
+                                  onTap: () => _sendVirtualKey('PageUp', 33),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF16161A).withOpacity(0.65),
+                                      borderRadius: BorderRadius.circular(24 * s),
+                                      border: Border.all(color: Colors.white.withOpacity(0.18)),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.35),
+                                          blurRadius: 10,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.arrow_back_ios_new_rounded, size: 16 * s, color: Colors.white),
+                                        SizedBox(height: 4 * s),
+                                        Text('PgUp', style: TextStyle(color: Colors.white70, fontSize: 9 * s, fontWeight: FontWeight.bold)),
+                                      ],
                                     ),
                                   ),
-                                  SizedBox(width: 10 * s),
-                                  IconButton(
-                                    icon: const Icon(Icons.close_rounded, color: Colors.white54),
-                                    onPressed: () {
-                                      _activeSpotTimer?.cancel();
-                                      setState(() => _spotTimerRemaining = null);
-                                    },
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                    ],
+
+                          Positioned(
+                            right: 12 * s,
+                            top: 0,
+                            bottom: 0,
+                            child: Center(
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(24 * s),
+                                  onTap: () => _sendVirtualKey('PageDown', 34),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF16161A).withOpacity(0.65),
+                                      borderRadius: BorderRadius.circular(24 * s),
+                                      border: Border.all(color: Colors.white.withOpacity(0.18)),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.35),
+                                          blurRadius: 10,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.arrow_forward_ios_rounded, size: 16 * s, color: Colors.white),
+                                        SizedBox(height: 4 * s),
+                                        Text('PgDn', style: TextStyle(color: Colors.white70, fontSize: 9 * s, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          // 5. 활동 타이머 오버레이 (활성 시)
+                          if (_spotTimerRemaining != null)
+                            Positioned(
+                              bottom: 72 * s,
+                              left: 0,
+                              right: 0,
+                              child: Center(
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(horizontal: 22 * s, vertical: 10 * s),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF16161A).withOpacity(0.95),
+                                    borderRadius: BorderRadius.circular(36 * s),
+                                    border: Border.all(color: const Color(0xFF00F5D4), width: 2),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text('⏱️ ', style: TextStyle(fontSize: 20 * s)),
+                                      Text(
+                                        '${((_spotTimerRemaining ?? 0) ~/ 60).toString().padLeft(2, '0')}:${((_spotTimerRemaining ?? 0) % 60).toString().padLeft(2, '0')}',
+                                        style: GoogleFonts.outfit(
+                                          color: (_spotTimerRemaining ?? 0) <= 10 ? const Color(0xFFEF4565) : Colors.white,
+                                          fontSize: 26 * s,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      SizedBox(width: 10 * s),
+                                      IconButton(
+                                        icon: const Icon(Icons.close_rounded, color: Colors.white54),
+                                        onPressed: () {
+                                          _activeSpotTimer?.cancel();
+                                          setState(() => _spotTimerRemaining = null);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -645,8 +819,10 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                             size: 28,
                           ),
                           tooltip: '이전 페이지 (PgUp)',
-                          onPressed: () =>
-                              _dhashEngine.navigatePage(isNext: false),
+                          onPressed: () {
+                            _sendVirtualKey('PageUp', 33);
+                            _dhashEngine.navigatePage(isNext: false);
+                          },
                         ),
                         SizedBox(width: 4 * s),
                         IconButton(
@@ -656,8 +832,10 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                             size: 28,
                           ),
                           tooltip: '다음 페이지 (PgDn)',
-                          onPressed: () =>
-                              _dhashEngine.navigatePage(isNext: true),
+                          onPressed: () {
+                            _sendVirtualKey('PageDown', 34);
+                            _dhashEngine.navigatePage(isNext: true);
+                          },
                         ),
                         SizedBox(width: 8 * s),
                         ElevatedButton.icon(

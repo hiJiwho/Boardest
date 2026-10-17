@@ -48,6 +48,8 @@ class AnnotationController extends ChangeNotifier {
   final List<AnnotationStroke> _strokes = [];
   final List<List<AnnotationStroke>> _undoHistory = [];
 
+  VoidCallback? onStrokesChanged;
+
   ToolMode toolMode = ToolMode.pen;
   Color activeColor = Colors.white;
   double activeWidth = 4.0;
@@ -136,6 +138,7 @@ class AnnotationController extends ChangeNotifier {
     _saveToHistory();
     _strokes.clear();
     notifyListeners();
+    onStrokesChanged?.call();
   }
 
   void _saveToHistory() {
@@ -151,6 +154,7 @@ class AnnotationController extends ChangeNotifier {
     _strokes.clear();
     _strokes.addAll(_undoHistory.removeLast());
     notifyListeners();
+    onStrokesChanged?.call();
   }
 
   double _distancePointToSegment(Offset p, Offset a, Offset b) {
@@ -256,6 +260,7 @@ class AnnotationController extends ChangeNotifier {
       _strokes.clear();
       _strokes.addAll(newStrokes);
       notifyListeners();
+      onStrokesChanged?.call();
     }
   }
 
@@ -267,6 +272,7 @@ class AnnotationController extends ChangeNotifier {
       strokeWidth: activeWidth,
     ));
     notifyListeners();
+    onStrokesChanged?.call();
   }
 
   void extendStroke(Offset point) {
@@ -284,6 +290,7 @@ class AnnotationController extends ChangeNotifier {
     _saveToHistory();
     _strokes.add(stroke);
     notifyListeners();
+    onStrokesChanged?.call();
   }
 }
 
@@ -389,8 +396,11 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     }
     if (_isDrawing) {
       if (ctrl.toolMode == ToolMode.pen && _activePoints.isNotEmpty) {
+        final pts = _activePoints.length == 1
+            ? [_activePoints.first, _activePoints.first + const Offset(0.1, 0.1)]
+            : List<Offset>.from(_activePoints);
         final stroke = AnnotationStroke(
-          points: List<Offset>.from(_activePoints),
+          points: pts,
           color: ctrl.activeColor,
           strokeWidth: ctrl.activeWidth,
         );
@@ -403,6 +413,16 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     }
   }
 
+  DateTime? _lastRightClickTime;
+  void _handleRightClick(Offset pos) {
+    final now = DateTime.now();
+    if (_lastRightClickTime != null && now.difference(_lastRightClickTime!).inMilliseconds < 300) {
+      return;
+    }
+    _lastRightClickTime = now;
+    widget.onRightClick?.call(pos);
+  }
+
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
@@ -410,24 +430,12 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
       child: GestureDetector(
         key: _canvasKey,
         behavior: widget.enabled ? HitTestBehavior.opaque : HitTestBehavior.translucent,
-        onTapDown: widget.enabled ? (details) {
-          final ctrl = widget.controller;
-          if (ctrl.toolMode == ToolMode.pen) {
-            final p = _local(details.globalPosition);
-            final dotStroke = AnnotationStroke(
-              points: [p, p + const Offset(0.1, 0.1)],
-              color: ctrl.activeColor,
-              strokeWidth: ctrl.activeWidth,
-            );
-            ctrl.addStroke(dotStroke);
-          }
-        } : null,
         onPanStart: widget.enabled ? _onPanStart : null,
         onPanUpdate: widget.enabled ? _onPanUpdate : null,
         onPanEnd: widget.enabled ? _onPanEnd : null,
         onLongPressStart: widget.enabled && widget.onLongPressClick != null
             ? (details) {
-                // 길게 누르면 주석 취소 및 클릭 이벤트 발송
+                // 스마트 모드: 길게 꾹 누르면 판서 선을 즉시 취소하고 웹 클릭 발송!
                 setState(() {
                   _isDrawing = false;
                   _activePoints.clear();
@@ -435,10 +443,11 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
                 widget.onLongPressClick!(_local(details.globalPosition));
               }
             : null,
+        onSecondaryTapDown: (details) {
+          _handleRightClick(details.localPosition);
+        },
         onSecondaryTapUp: (details) {
-          if (widget.onRightClick != null) {
-            widget.onRightClick!(details.localPosition);
-          }
+          _handleRightClick(details.localPosition);
         },
         child: RepaintBoundary(
           child: ListenableBuilder(
