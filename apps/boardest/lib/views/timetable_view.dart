@@ -975,8 +975,8 @@ class _TimetableViewState extends State<TimetableView>
                                             color: lesson.isChanged
                                                 ? const Color(0xFFEF4565)
                                                 : Colors.white,
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 14.5,
                                           ),
                                         ),
                                         if (lesson.classroom.isNotEmpty) ...[
@@ -1148,8 +1148,8 @@ class _TimetableViewState extends State<TimetableView>
                                       lesson.subject,
                                       style: GoogleFonts.notoSansKr(
                                         color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
+                                        fontSize: 19.5,
+                                        fontWeight: FontWeight.w900,
                                       ),
                                     ),
                                     if (lesson.isChanged) ...[

@@ -486,7 +486,6 @@ class _BstCloudModalState extends State<BstCloudModal> {
       if (!mounted || _pairingCancelled) return;
 
       if (res.success && BstCloudService.instance.activeToken != null) {
-        await BstCloudService.instance.registerActiveTeacherAsTrusted();
         if (!mounted) return;
         _driveToken = BstCloudService.instance.activeToken;
         _teacherName = res.teacherName ?? '선생님';
@@ -498,7 +497,7 @@ class _BstCloudModalState extends State<BstCloudModal> {
         _loadFiles();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('🎉 [$_teacherName] 선생님의 전자칠판 자동 로그인 기기로 등록되었습니다!'),
+            content: Text('🎉 [$_teacherName] 선생님의 Cloud 수업자료가 연결되었습니다! (기기 등록은 [교사 등록] 버튼을 눌러주세요)'),
             backgroundColor: const Color(0xFF2EC4B6),
             duration: const Duration(seconds: 3),
           ),

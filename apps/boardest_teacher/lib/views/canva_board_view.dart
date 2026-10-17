@@ -776,81 +776,84 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                             ),
                           ),
 
-                          // 2. 스마트 판서 캔버스 레이어
+                          // 2. 스마트 판서 캔버스 레이어 (스마트 꾹누르기 클릭 통과 시 IgnorePointer 활성화)
                           Positioned.fill(
-                            child: AnnotationCanvas(
-                              controller: _annotationController,
-                              enabled: !_isWebTouchMode,
-                              onRightClick: _inputMode != TbpInputMode.pen ? openHotspotModalAt : null,
-                              onLongPressClick: _inputMode == TbpInputMode.smart
-                                  ? (pos) {
-                                      setState(() {
-                                        _smartClickPassThrough = true;
-                                      });
-                                      _syncIframePointerEvents();
-                                      _smartPassThroughTimer?.cancel();
-                                      _smartPassThroughTimer = Timer(const Duration(milliseconds: 2200), () {
-                                        if (mounted) {
-                                          setState(() {
-                                            _smartClickPassThrough = false;
-                                          });
-                                          _syncIframePointerEvents();
-                                          _dhashEngine.triggerBurstCapture();
-                                        }
-                                      });
-
-                                      ScaffoldMessenger.of(context).clearSnackBars();
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('👆 스마트 클릭 통과 활성화 (프레젠테이션 요소 클릭 실행됨 • 2.2초간 직접 터치 가능)'),
-                                          duration: Duration(milliseconds: 1400),
-                                          behavior: SnackBarBehavior.floating,
-                                        ),
-                                      );
-
-                                      if (kIsWeb) {
-                                        return;
-                                      }
-
-                                      final rx = (pos.dx / cWidth).clamp(0.0, 1.0);
-                                      final ry = (pos.dy / cHeight).clamp(0.0, 1.0);
-                                      final script = '''
-                                      (function() {
-                                        function fireClickAt(doc, win, cx, cy) {
-                                          let el = doc.elementFromPoint(cx, cy);
-                                          if (!el) return;
-                                          if (el.tagName === 'IFRAME') {
-                                            try {
-                                              const rect = el.getBoundingClientRect();
-                                              const subDoc = el.contentDocument || (el.contentWindow && el.contentWindow.document);
-                                              if (subDoc) {
-                                                fireClickAt(subDoc, el.contentWindow || win, cx - rect.left, cy - rect.top);
-                                                return;
-                                              }
-                                            } catch (_) {}
+                            child: IgnorePointer(
+                              ignoring: _smartClickPassThrough,
+                              child: AnnotationCanvas(
+                                controller: _annotationController,
+                                enabled: !_isWebTouchMode && !_smartClickPassThrough,
+                                onRightClick: _inputMode != TbpInputMode.pen ? openHotspotModalAt : null,
+                                onLongPressClick: _inputMode == TbpInputMode.smart
+                                    ? (pos) {
+                                        setState(() {
+                                          _smartClickPassThrough = true;
+                                        });
+                                        _syncIframePointerEvents();
+                                        _smartPassThroughTimer?.cancel();
+                                        _smartPassThroughTimer = Timer(const Duration(milliseconds: 2200), () {
+                                          if (mounted) {
+                                            setState(() {
+                                              _smartClickPassThrough = false;
+                                            });
+                                            _syncIframePointerEvents();
+                                            _dhashEngine.triggerBurstCapture();
                                           }
-                                          const opts = { bubbles: true, cancelable: true, view: win, clientX: cx, clientY: cy, button: 0, buttons: 1 };
-                                          try { el.dispatchEvent(new PointerEvent('pointerdown', opts)); } catch (_) {}
-                                          try { el.dispatchEvent(new MouseEvent('mousedown', opts)); } catch (_) {}
-                                          try { el.dispatchEvent(new PointerEvent('pointerup', opts)); } catch (_) {}
-                                          try { el.dispatchEvent(new MouseEvent('mouseup', opts)); } catch (_) {}
-                                          try { el.dispatchEvent(new MouseEvent('click', opts)); } catch (_) {}
-                                          if (typeof el.click === 'function') el.click();
-                                          if (typeof el.focus === 'function') el.focus();
+                                        });
+
+                                        ScaffoldMessenger.of(context).clearSnackBars();
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('👆 스마트 클릭 통과 활성화 (프레젠테이션 요소 클릭 실행됨 • 2.2초간 직접 터치 가능)'),
+                                            duration: Duration(milliseconds: 1400),
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+
+                                        if (kIsWeb) {
+                                          return;
                                         }
-                                        const x = Math.round($rx * (window.innerWidth || document.documentElement.clientWidth || 1280));
-                                        const y = Math.round($ry * (window.innerHeight || document.documentElement.clientHeight || 720));
-                                        fireClickAt(document, window, x, y);
-                                      })();
-                                      ''';
-                                      if (!kIsWeb && Platform.isWindows && _winWebviewInitialized) {
-                                        _winWebview.executeScript(script);
-                                      } else if (!kIsWeb && !Platform.isWindows) {
-                                        _androidWebview.runJavaScript(script);
+
+                                        final rx = (pos.dx / cWidth).clamp(0.0, 1.0);
+                                        final ry = (pos.dy / cHeight).clamp(0.0, 1.0);
+                                        final script = '''
+                                        (function() {
+                                          function fireClickAt(doc, win, cx, cy) {
+                                            let el = doc.elementFromPoint(cx, cy);
+                                            if (!el) return;
+                                            if (el.tagName === 'IFRAME') {
+                                              try {
+                                                const rect = el.getBoundingClientRect();
+                                                const subDoc = el.contentDocument || (el.contentWindow && el.contentWindow.document);
+                                                if (subDoc) {
+                                                  fireClickAt(subDoc, el.contentWindow || win, cx - rect.left, cy - rect.top);
+                                                  return;
+                                                }
+                                              } catch (_) {}
+                                            }
+                                            const opts = { bubbles: true, cancelable: true, view: win, clientX: cx, clientY: cy, button: 0, buttons: 1 };
+                                            try { el.dispatchEvent(new PointerEvent('pointerdown', opts)); } catch (_) {}
+                                            try { el.dispatchEvent(new MouseEvent('mousedown', opts)); } catch (_) {}
+                                            try { el.dispatchEvent(new PointerEvent('pointerup', opts)); } catch (_) {}
+                                            try { el.dispatchEvent(new MouseEvent('mouseup', opts)); } catch (_) {}
+                                            try { el.dispatchEvent(new MouseEvent('click', opts)); } catch (_) {}
+                                            if (typeof el.click === 'function') el.click();
+                                            if (typeof el.focus === 'function') el.focus();
+                                          }
+                                          const x = Math.round($rx * (window.innerWidth || document.documentElement.clientWidth || 1280));
+                                          const y = Math.round($ry * (window.innerHeight || document.documentElement.clientHeight || 720));
+                                          fireClickAt(document, window, x, y);
+                                        })();
+                                        ''';
+                                        if (!kIsWeb && Platform.isWindows && _winWebviewInitialized) {
+                                          _winWebview.executeScript(script);
+                                        } else if (!kIsWeb && !Platform.isWindows) {
+                                          _androidWebview.runJavaScript(script);
+                                        }
+                                        _dhashEngine.triggerBurstCapture();
                                       }
-                                      _dhashEngine.triggerBurstCapture();
-                                    }
-                                  : null,
+                                    : null,
+                              ),
                             ),
                           ),
 

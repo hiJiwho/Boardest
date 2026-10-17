@@ -1,12 +1,12 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta name="application-version" content="4.0.8">
-  <base href="/teacher/">
+  <meta name="application-version" content="4.0.9">
+  <base href="/">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Boardest Teacher ???좎깮???꾩슜 ?듯빀 ??PWA ?쒕퉬??>
+  <meta name="description" content="Boardest Teacher — 선생님 전용 통합 웹 PWA 서비스">
 
   <!-- Mobile & PWA meta tags -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -56,11 +56,11 @@
       e.preventDefault();
     });
   </script>
-  <!-- ?쒖젙 FIDO2 / WebAuthn Cross-Device ?⑥뒪??諛쒕룞 ?ы띁 -->
+  <!-- 순정 FIDO2 / WebAuthn Cross-Device 패스키 발동 헬퍼 -->
   <script>
     window.triggerNativePasskeyCreate = async function(email, displayName) {
       if (!window.PublicKeyCredential) {
-        throw new Error('??釉뚮씪?곗???FIDO2 WebAuthn ?⑥뒪?ㅻ? 吏?먰븯吏 ?딆뒿?덈떎.');
+        throw new Error('이 브라우저는 FIDO2 WebAuthn 패스키를 지원하지 않습니다.');
       }
       const challengeBytes = new Uint8Array(32);
       crypto.getRandomValues(challengeBytes);
@@ -76,7 +76,7 @@
           user: {
             id: userIdBytes,
             name: email || 'teacher@boardest.local',
-            displayName: displayName || '?좎깮??
+            displayName: displayName || '선생님'
           },
           pubKeyCredParams: [
             { alg: -7, type: "public-key" },  // ES256
@@ -97,7 +97,7 @@
 
     window.triggerNativePasskeyGet = async function() {
       if (!window.PublicKeyCredential) {
-        throw new Error('??釉뚮씪?곗???FIDO2 WebAuthn ?⑥뒪?ㅻ? 吏?먰븯吏 ?딆뒿?덈떎.');
+        throw new Error('이 브라우저는 FIDO2 WebAuthn 패스키를 지원하지 않습니다.');
       }
       const challengeBytes = new Uint8Array(32);
       crypto.getRandomValues(challengeBytes);
@@ -256,7 +256,7 @@
 </head>
 <body>
   <script>
-    // ??? Pro vs Lite Device Detection & Route Handling ???
+    // ─── Pro vs Lite Device Detection & Route Handling ───
     (function() {
       const path = window.location.pathname.toLowerCase();
       const search = window.location.search;
@@ -288,7 +288,7 @@
       }
     });
 
-    // auth=success ?뚮씪誘명꽣媛 ?좎엯?섏뿀????Flutter Web 濡쒕뵫 ???좎떎 諛⑹?瑜??꾪빐 利됱떆 localStorage 諛깆뾽
+    // auth=success 파라미터가 유입되었을 때 Flutter Web 로딩 전 유실 방지를 위해 즉시 localStorage 백업
     if (window.location.search && window.location.search.includes('auth=success')) {
       try {
         const params = new URLSearchParams(window.location.search);
@@ -298,7 +298,7 @@
         const teacherId = params.get('teacherId') || '';
         const schoolId = params.get('schoolId') || 'ydm';
         const schoolCode = params.get('schoolCode') || params.get('schoolId') || '44134';
-        const schoolName = params.get('schoolName') || '蹂대뜲?ㅽ듃 以묓븰援?;
+        const schoolName = params.get('schoolName') || '보데스트 중학교';
         const grade = params.get('grade') || '1';
         const classNum = params.get('classNum') || '1';
         const isHomeroom = params.get('isHomeroom') || 'true';
@@ -337,12 +337,12 @@
   <div id="app-splash-screen">
     <img src="favicon.png" alt="Boardest Teacher" class="splash-logo-img">
     <div class="splash-brand-text">Boardest Teacher</div>
-    <div class="splash-brand-sub">?좎깮???꾩슜 ??濡쒕뵫 以?..</div>
+    <div class="splash-brand-sub">선생님 전용 웹 로딩 중...</div>
     <div class="splash-progress-track">
       <div id="splash-progress-fill" class="splash-progress-fill"></div>
     </div>
     <div id="splash-percent-text" class="splash-percent-text">5%</div>
-    <div id="splash-log-text" class="splash-log-text">[1/5] Core WASM ?붿쭊 珥덇린??以?..</div>
+    <div id="splash-log-text" class="splash-log-text">[1/5] Core WASM 엔진 초기화 중...</div>
   </div>
 
   <script>
@@ -354,11 +354,11 @@
 
       let currentPercent = 5;
       const stages = [
-        { p: 25, log: '[1/5] WebAssembly 肄붿뼱 ?붿쭊 珥덇린??..' },
-        { p: 48, log: '[2/5] Google OAuth ?몄뀡 諛?釉뚮씪?곗? 罹먯떆 ?뺤씤...' },
-        { p: 72, log: '[3/5] Firebase Firestore & RTDB 梨꾨꼸 ?곌껐...' },
-        { p: 90, log: '[4/5] ?쒓컙??& 湲됱떇 ?숆린???붿쭊 諛붿씤??..' },
-        { p: 96, log: '[5/5] 援먯궗??UI 而⑦듃濡ㅻ윭 ?뚮뜑留?以鍮??꾨즺...' }
+        { p: 25, log: '[1/5] WebAssembly 코어 엔진 초기화...' },
+        { p: 48, log: '[2/5] Google OAuth 세션 및 브라우저 캐시 확인...' },
+        { p: 72, log: '[3/5] Firebase Firestore & RTDB 채널 연결...' },
+        { p: 90, log: '[4/5] 시간표 & 급식 동기화 엔진 바인딩...' },
+        { p: 96, log: '[5/5] 교사용 UI 컨트롤러 렌더링 준비 완료...' }
       ];
 
       let stageIdx = 0;
@@ -381,7 +381,7 @@
         clearInterval(timer);
         if (percentEl) percentEl.textContent = '100%';
         if (fillEl) fillEl.style.width = '100%';
-        if (logEl) logEl.textContent = '以鍮??꾨즺! 援먯궗???꾧뎄濡?吏꾩엯?⑸땲??';
+        if (logEl) logEl.textContent = '준비 완료! 교사용 도구로 진입합니다.';
         setTimeout(() => {
           if (splash) {
             splash.style.opacity = '0';
@@ -404,4 +404,3 @@
   <script src="flutter_bootstrap.js?v=4.0.9_20261017_v5" async></script>
 </body>
 </html>
-

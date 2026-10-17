@@ -120,8 +120,8 @@ class BstTodayTimetableStrip extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            color.withValues(alpha: 0.28),
-            color.withValues(alpha: 0.08),
+            color.withValues(alpha: 0.32),
+            color.withValues(alpha: 0.12),
           ],
         ),
       ),
@@ -134,26 +134,33 @@ class BstTodayTimetableStrip extends StatelessWidget {
             child: Text(
               icon,
               style: TextStyle(
-                fontSize: 34,
-                color: Colors.white.withValues(alpha: 0.12),
+                fontSize: 38,
+                color: Colors.white.withValues(alpha: 0.15),
               ),
             ),
           ),
           Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(icon, style: const TextStyle(fontSize: 24)),
-                const SizedBox(height: 3),
-                Text(
-                  '교과서',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.75),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(icon, style: const TextStyle(fontSize: 26)),
+                  const SizedBox(height: 5),
+                  Text(
+                    subject,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.4,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -243,11 +250,42 @@ class BstTodayTimetableStrip extends StatelessWidget {
                                 fit: StackFit.expand,
                                 children: [
                                   _buildTextbookCover(item.subject, imagePath, imageBytes, subjectColor),
+                                  // 교과서 하단 과목명 강조 배지
+                                  Positioned(
+                                    left: 2,
+                                    right: 2,
+                                    bottom: 2,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF070B14).withValues(alpha: 0.85),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(
+                                          color: item.isCurrent
+                                              ? const Color(0xFF00F5D4)
+                                              : Colors.white.withValues(alpha: 0.2),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        item.subject,
+                                        style: TextStyle(
+                                          color: item.isCurrent ? const Color(0xFF00F5D4) : Colors.white,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: -0.3,
+                                        ),
+                                        maxLines: 1,
+                                        textAlign: TextAlign.center,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
                                   if (isSpecialRoom && (item.targetClass?.isNotEmpty == true))
                                     Positioned(
                                       left: 2,
                                       right: 2,
-                                      bottom: 4,
+                                      top: 4,
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
                                         decoration: BoxDecoration(
@@ -277,7 +315,7 @@ class BstTodayTimetableStrip extends StatelessWidget {
                               color: Colors.white.withValues(alpha: 0.08),
                             ),
 
-                            // 2. 우측: 1.국어 시계방향 90도 회전 (flex: 2, 가독성 대폭 확대)
+                            // 2. 우측: 1.국어 시계방향 90도 회전 (대형 24px 폰트 & 가독성 극대화)
                             Expanded(
                               flex: 2,
                               child: Container(
@@ -298,28 +336,28 @@ class BstTodayTimetableStrip extends StatelessWidget {
                                           '${item.period}.',
                                           style: TextStyle(
                                             color: item.isCurrent ? const Color(0xFF00F5D4) : subjectColor,
-                                            fontSize: 18,
+                                            fontSize: 24,
                                             fontWeight: FontWeight.w900,
                                           ),
                                         ),
-                                        const SizedBox(width: 4),
+                                        const SizedBox(width: 5),
                                         Text(
                                           item.subject,
                                           style: TextStyle(
                                             color: item.isCurrent ? Colors.white : const Color(0xFFE2E8F0),
-                                            fontSize: 18,
+                                            fontSize: 24,
                                             fontWeight: FontWeight.w900,
                                             letterSpacing: -0.3,
                                           ),
                                           maxLines: 1,
                                         ),
                                         if (item.isCurrent) ...[
-                                          const SizedBox(width: 5),
+                                          const SizedBox(width: 6),
                                           const Text(
                                             '●',
                                             style: TextStyle(
                                               color: Color(0xFF00F5D4),
-                                              fontSize: 10,
+                                              fontSize: 12,
                                             ),
                                           ),
                                         ],

@@ -1,8 +1,8 @@
 @echo off
 setlocal
 cd /d "%~dp0.."
-set "VERSION=4.0.8"
-set "APPX_VERSION=4.0.8.0"
+set "VERSION=4.0.9"
+set "APPX_VERSION=4.0.9.0"
 set "PROJECT=jiwhosboardest"
 
 echo [1/7] Building Boardest and Teacher web releases...
@@ -51,14 +51,12 @@ git diff --cached --check || goto :fail
 git commit -m "release: Boardest v%VERSION%" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>" || goto :fail
 git push origin main || goto :fail
 
-echo [7/7] Publishing source snapshot and all app builds to GitHub...
-if not exist dist mkdir dist
-git archive --format=zip --output=dist\Boardest-v%VERSION%-source.zip HEAD || goto :fail
+echo [7/7] Publishing binary builds to GitHub Releases...
 gh release view v%VERSION% --repo hiJiwho/Boardest >nul 2>&1
 if errorlevel 1 (
-  gh release create v%VERSION% dist\Boardest-v%VERSION%-source.zip dist\appx\boardest-windows.zip dist\appx\bst-teacher-windows.zip dist\appx\boardest.appx dist\appx\bst-teacher.appx dist\appx\bst-overlay-panser.appx dist\appx\boardest-class-lite.appx dist\appx\boardest.apk dist\appx\bst-teacher.apk dist\appx\bst-teacher-lite.apk dist\appx\bst-class-lite.apk dist\appx\BoardestCert.cer --repo hiJiwho/Boardest --title "Boardest v%VERSION%" --generate-notes || goto :fail
+  gh release create v%VERSION% dist\appx\boardest-windows.zip dist\appx\bst-teacher-windows.zip dist\appx\boardest.appx dist\appx\bst-teacher.appx dist\appx\bst-overlay-panser.appx dist\appx\boardest-class-lite.appx dist\appx\boardest.apk dist\appx\bst-teacher.apk dist\appx\bst-teacher-lite.apk dist\appx\bst-class-lite.apk dist\appx\BoardestCert.cer --repo hiJiwho/Boardest --title "Boardest v%VERSION%" --generate-notes || goto :fail
 ) else (
-  gh release upload v%VERSION% dist\Boardest-v%VERSION%-source.zip dist\appx\boardest-windows.zip dist\appx\bst-teacher-windows.zip dist\appx\boardest.appx dist\appx\bst-teacher.appx dist\appx\bst-overlay-panser.appx dist\appx\boardest-class-lite.appx dist\appx\boardest.apk dist\appx\bst-teacher.apk dist\appx\bst-teacher-lite.apk dist\appx\bst-class-lite.apk dist\appx\BoardestCert.cer --repo hiJiwho/Boardest --clobber || goto :fail
+  gh release upload v%VERSION% dist\appx\boardest-windows.zip dist\appx\bst-teacher-windows.zip dist\appx\boardest.appx dist\appx\bst-teacher.appx dist\appx\bst-overlay-panser.appx dist\appx\boardest-class-lite.appx dist\appx\boardest.apk dist\appx\bst-teacher.apk dist\appx\bst-teacher-lite.apk dist\appx\bst-class-lite.apk dist\appx\BoardestCert.cer --repo hiJiwho/Boardest --clobber || goto :fail
 )
 
 echo [7/7] Verifying GitHub release assets and every published website...

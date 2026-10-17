@@ -20,6 +20,8 @@ class BstCloudTeacher {
   final String? directAccessToken;
   final String? refreshToken;
   final String? totpSecret;
+  final String shortId;
+  final String cloudId;
   final int lastConsumedWindow;
   final bool trustDeviceEnabled;
   final bool autoLessonFlowEnabled;
@@ -36,6 +38,8 @@ class BstCloudTeacher {
     this.directAccessToken,
     this.refreshToken,
     this.totpSecret,
+    this.shortId = '',
+    this.cloudId = '',
     this.lastConsumedWindow = 0,
     this.trustDeviceEnabled = false,
     this.autoLessonFlowEnabled = true,
@@ -53,6 +57,8 @@ class BstCloudTeacher {
     final token = (fields['accessToken'] as Map?)?['stringValue'] as String?;
     final refresh = (fields['refreshToken'] as Map?)?['stringValue'] as String?;
     final totpSec = (fields['totpSecret'] as Map?)?['stringValue'] as String?;
+    final sId = (fields['shortId'] as Map?)?['stringValue'] as String? ?? '';
+    final cId = (fields['cloudId'] as Map?)?['stringValue'] as String? ?? (sId.isNotEmpty ? sId.padLeft(2, '0').substring(0, 2) : '');
     final lastWindowStr = (fields['lastConsumedWindow'] as Map?)?['integerValue'] as String? ?? '0';
     final trustDevice = (fields['trustDeviceEnabled'] as Map?)?['booleanValue'] as bool? ?? false;
     final autoLesson = (fields['autoLessonFlowEnabled'] as Map?)?['booleanValue'] as bool? ?? true;
@@ -68,6 +74,8 @@ class BstCloudTeacher {
       directAccessToken: token,
       refreshToken: refresh,
       totpSecret: totpSec,
+      shortId: sId,
+      cloudId: cId,
       lastConsumedWindow: int.tryParse(lastWindowStr) ?? 0,
       trustDeviceEnabled: trustDevice,
       autoLessonFlowEnabled: autoLesson,
@@ -1582,7 +1590,24 @@ class BstCloudService {
           nowTime.add(const Duration(minutes: 1)),
         ];
 
-        for (final teacher in teachers) {
+        // 6자리 OTP인 경우, 스테가노그래피 2자리 cloudId와 일치하는 교사 우선 탐색
+        List<BstCloudTeacher> candidateTeachers = List.from(teachers);
+        if (cleanCode.length == 6) {
+          final nowParsed = TotpService.parseSteganography6(cleanCode, time: nowTime);
+          candidateTeachers.sort((a, b) {
+            final aCid = (a.cloudId.isNotEmpty ? a.cloudId : a.shortId).padLeft(2, '0');
+            final bCid = (b.cloudId.isNotEmpty ? b.cloudId : b.shortId).padLeft(2, '0');
+            final aMatch = (aCid == nowParsed.cloudId || a.ownerEmail.startsWith(nowParsed.cloudId)) ? 0 : 1;
+            final bMatch = (bCid == nowParsed.cloudId || b.ownerEmail.startsWith(nowParsed.cloudId)) ? 0 : 1;
+            if (aMatch != bMatch) return aMatch.compareTo(bMatch);
+            // 실제 교사(non-demo) 우선
+            final aDemo = a.ownerEmail.contains('demo') ? 1 : 0;
+            final bDemo = b.ownerEmail.contains('demo') ? 1 : 0;
+            return aDemo.compareTo(bDemo);
+          });
+        }
+
+        for (final teacher in candidateTeachers) {
           final sec = (teacher.totpSecret != null && teacher.totpSecret!.isNotEmpty)
               ? teacher.totpSecret!
               : TotpService.generateDeterministicSecret(teacher.ownerEmail);
@@ -1592,6 +1617,11 @@ class BstCloudService {
           for (final t in candidateTimes) {
             if (cleanCode.length == 6) {
               final parsed = TotpService.parseSteganography6(cleanCode, time: t);
+              final tCid = (teacher.cloudId.isNotEmpty ? teacher.cloudId : teacher.shortId).padLeft(2, '0');
+              // 등록된 cloudId/shortId가 존재할 경우, 입력된 코드의 2자리 cloudId와 일치해야만 유효 교사로 인정
+              if (tCid != '00' && tCid.isNotEmpty && tCid != parsed.cloudId && !teacher.ownerEmail.startsWith(parsed.cloudId)) {
+                continue;
+              }
               final v4 = TotpService.verify4DigitOtp(
                 secret: sec,
                 inputOtp4: parsed.otp,

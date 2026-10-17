@@ -425,7 +425,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     if (!widget.enabled || e.pointer != _activePointerId) return;
     final p = e.localPosition;
 
-    if (_pointerDownPos != null && (p - _pointerDownPos!).distance > 7.0) {
+    if (_pointerDownPos != null && (p - _pointerDownPos!).distance > 16.0) {
       _longPressTimer?.cancel();
       _hotspotHoldTimer?.cancel();
     }

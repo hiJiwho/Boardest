@@ -1,7 +1,7 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
-  <meta name="application-version" content="4.0.8">
+  <meta name="application-version" content="4.0.9">
   <!--
     If you are serving your web app in a path other than the root, change the
     href value below to reflect the base path you are serving from.
@@ -15,7 +15,7 @@
     This is a placeholder for base href that will be replaced by the value of
     the `--base-href` argument provided to `flutter build`.
   -->
-  <base href="/class/">
+  <base href="/">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
@@ -83,11 +83,11 @@
       }
     })();
   </script>
-  <!-- ?쒖젙 FIDO2 / WebAuthn Cross-Device ?⑥뒪??諛쒕룞 ?ы띁 -->
+  <!-- 순정 FIDO2 / WebAuthn Cross-Device 패스키 발동 헬퍼 -->
   <script>
     window.triggerNativePasskeyCreate = async function(email, displayName) {
       if (!window.PublicKeyCredential) {
-        throw new Error('??釉뚮씪?곗???FIDO2 WebAuthn ?⑥뒪?ㅻ? 吏?먰븯吏 ?딆뒿?덈떎.');
+        throw new Error('이 브라우저는 FIDO2 WebAuthn 패스키를 지원하지 않습니다.');
       }
       const challengeBytes = new Uint8Array(32);
       crypto.getRandomValues(challengeBytes);
@@ -103,7 +103,7 @@
           user: {
             id: userIdBytes,
             name: email || 'class@boardest.local',
-            displayName: displayName || '援먯떎 ?꾩옄移좏뙋'
+            displayName: displayName || '교실 전자칠판'
           },
           pubKeyCredParams: [
             { alg: -7, type: "public-key" },  // ES256
@@ -124,7 +124,7 @@
 
     window.triggerNativePasskeyGet = async function() {
       if (!window.PublicKeyCredential) {
-        throw new Error('??釉뚮씪?곗???FIDO2 WebAuthn ?⑥뒪?ㅻ? 吏?먰븯吏 ?딆뒿?덈떎.');
+        throw new Error('이 브라우저는 FIDO2 WebAuthn 패스키를 지원하지 않습니다.');
       }
       const challengeBytes = new Uint8Array(32);
       crypto.getRandomValues(challengeBytes);
@@ -290,12 +290,12 @@
   <div id="app-splash-screen">
     <img src="favicon.png" alt="Boardest" class="splash-logo-img">
     <div class="splash-brand-text">Boardest</div>
-    <div class="splash-brand-sub">?ㅻ쭏???꾩옄移좏뙋 援먯떎 濡쒕뵫 以?..</div>
+    <div class="splash-brand-sub">스마트 전자칠판 교실 로딩 중...</div>
     <div class="splash-progress-track">
       <div id="splash-progress-fill" class="splash-progress-fill"></div>
     </div>
     <div id="splash-percent-text" class="splash-percent-text">5%</div>
-    <div id="splash-log-text" class="splash-log-text">[1/5] Core WASM ?붿쭊 珥덇린??以?..</div>
+    <div id="splash-log-text" class="splash-log-text">[1/5] Core WASM 엔진 초기화 중...</div>
   </div>
 
   <script>
@@ -307,11 +307,11 @@
 
       let currentPercent = 5;
       const stages = [
-        { p: 25, log: '[1/5] WebAssembly 肄붿뼱 ?붿쭊 珥덇린??..' },
-        { p: 48, log: '[2/5] 釉뚮씪?곗? 罹먯떆 諛?ServiceWorker ?뺥빀??寃利?..' },
-        { p: 72, log: '[3/5] Firebase ?ㅼ떆媛??대씪?곕뱶 梨꾨꼸 ?곌껐...' },
-        { p: 90, log: '[4/5] ?꾩옄移좏뙋 ?쒓컙??& 湲됱떇 紐⑤뱢 諛붿씤??..' },
-        { p: 96, log: '[5/5] UI 而댄룷?뚰듃 ?뚮뜑留?以鍮??꾨즺...' }
+        { p: 25, log: '[1/5] WebAssembly 코어 엔진 초기화...' },
+        { p: 48, log: '[2/5] 브라우저 캐시 및 ServiceWorker 정합성 검증...' },
+        { p: 72, log: '[3/5] Firebase 실시간 클라우드 채널 연결...' },
+        { p: 90, log: '[4/5] 전자칠판 시간표 & 급식 모듈 바인딩...' },
+        { p: 96, log: '[5/5] UI 컴포넌트 렌더링 준비 완료...' }
       ];
 
       let stageIdx = 0;
@@ -334,7 +334,7 @@
         clearInterval(timer);
         if (percentEl) percentEl.textContent = '100%';
         if (fillEl) fillEl.style.width = '100%';
-        if (logEl) logEl.textContent = '以鍮??꾨즺! 援먯떎 ??쒕낫?쒕줈 吏꾩엯?⑸땲??';
+        if (logEl) logEl.textContent = '준비 완료! 교실 대시보드로 진입합니다.';
         setTimeout(() => {
           if (splash) {
             splash.style.opacity = '0';
@@ -357,4 +357,3 @@
   <script src="flutter_bootstrap.js?v=2.8.0_20261007_v2" async></script>
 </body>
 </html>
-

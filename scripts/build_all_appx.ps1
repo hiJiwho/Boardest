@@ -1,6 +1,7 @@
 param(
-  [string]$AppVersion = '4.0.8.0',
-  [switch]$SkipApk
+  [string]$AppVersion = '4.0.9.0',
+  [switch]$SkipApk,
+  [switch]$SkipWindowsBuild
 )
 
 $ErrorActionPreference = 'Stop'
@@ -76,9 +77,11 @@ function Pack-Signed([string]$Name) {
 }
 
 Write-Host "Building Boardest official v$AppVersion AppX and APK files..." -ForegroundColor Cyan
-Build-Windows (Join-Path $RootDir 'apps\boardest')
-Build-Windows (Join-Path $RootDir 'apps\boardest_teacher')
-Build-Windows (Join-Path $RootDir 'apps\boardest_class_lite')
+if (-not $SkipWindowsBuild) {
+  Build-Windows (Join-Path $RootDir 'apps\boardest')
+  Build-Windows (Join-Path $RootDir 'apps\boardest_teacher')
+  Build-Windows (Join-Path $RootDir 'apps\boardest_class_lite')
+}
 
 $BoardestRelease = Join-Path $RootDir 'apps\boardest\build\windows\x64\runner\Release'
 $TeacherRelease = Join-Path $RootDir 'apps\boardest_teacher\build\windows\x64\runner\Release'

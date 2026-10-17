@@ -1,11 +1,10 @@
 param(
-  [string]$Version = '4.0.8'
+  [string]$Version = '4.0.9'
 )
 
 $ErrorActionPreference = 'Stop'
 $Repository = 'hiJiwho/Boardest'
 $ExpectedAssets = @(
-  "Boardest-v$Version-source.zip",
   'boardest-windows.zip',
   'bst-teacher-windows.zip',
   'boardest.appx',

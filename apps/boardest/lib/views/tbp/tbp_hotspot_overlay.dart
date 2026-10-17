@@ -19,7 +19,6 @@ enum HotspotType {
   memo, // 📝 메모
   timer, // ⏱️ 타이머
   audio, // 🔊 오디오
-  page, // 🔗 TBP 내 페이지 이동
 }
 
 extension HotspotTypeExt on HotspotType {
@@ -39,8 +38,6 @@ extension HotspotTypeExt on HotspotType {
         return '⏱️';
       case HotspotType.audio:
         return '🔊';
-      case HotspotType.page:
-        return '🔗';
     }
   }
 
@@ -60,8 +57,6 @@ extension HotspotTypeExt on HotspotType {
         return '타이머';
       case HotspotType.audio:
         return '오디오';
-      case HotspotType.page:
-        return '페이지 이동';
     }
   }
 
@@ -81,8 +76,6 @@ extension HotspotTypeExt on HotspotType {
         return '타이머 시간(초) — 예: 180 (3분)';
       case HotspotType.audio:
         return '오디오 파일 경로 또는 음원 URL';
-      case HotspotType.page:
-        return '이동할 페이지 키 또는 URL';
     }
   }
 
@@ -102,8 +95,6 @@ extension HotspotTypeExt on HotspotType {
         return const Color(0xFFFF8906);
       case HotspotType.audio:
         return const Color(0xFF118AB2);
-      case HotspotType.page:
-        return const Color(0xFFEF476F);
     }
   }
 
@@ -127,8 +118,6 @@ extension HotspotTypeExt on HotspotType {
         return HotspotType.timer;
       case 'audio':
         return HotspotType.audio;
-      case 'page':
-        return HotspotType.page;
       default:
         return HotspotType.url;
     }
@@ -465,10 +454,6 @@ class _TbpHotspotOverlayState extends State<TbpHotspotOverlay> {
       case HotspotType.timer:
         final secs = int.tryParse(value) ?? 60;
         _startTimer(context, secs);
-        break;
-
-      case HotspotType.page:
-        debugPrint('[Hotspot] Page jump to dHash: $value');
         break;
     }
   }

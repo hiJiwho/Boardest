@@ -2982,8 +2982,8 @@ class _TeacherViewState extends State<TeacherView> {
                                     hasClass ? lesson.subject.replaceAll('*', '') : '— (공강)',
                                     style: GoogleFonts.notoSansKr(
                                       color: hasClass ? _textColor : _textColor24,
-                                      fontSize: 11 * s,
-                                      fontWeight: hasClass ? FontWeight.bold : FontWeight.normal,
+                                      fontSize: 14.5 * s,
+                                      fontWeight: hasClass ? FontWeight.w900 : FontWeight.normal,
                                     ),
                                   ),
                                 ),
@@ -3632,8 +3632,8 @@ class _TeacherViewState extends State<TeacherView> {
                                   hasClass ? lesson.subject.replaceAll('*', '') : '—',
                                   style: GoogleFonts.notoSansKr(
                                     color: hasClass ? _textColor : _textColor24,
-                                    fontSize: 11 * s,
-                                    fontWeight: hasClass ? FontWeight.bold : FontWeight.normal,
+                                    fontSize: 14.5 * s,
+                                    fontWeight: hasClass ? FontWeight.w900 : FontWeight.normal,
                                   ),
                                 ),
                               ),
@@ -4501,8 +4501,8 @@ class _TeacherViewState extends State<TeacherView> {
                                                         : (isTodayAndCurrentPeriod
                                                             ? accentColor
                                                             : Colors.white),
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 9.5 * s,
+                                                    fontWeight: FontWeight.w900,
+                                                    fontSize: 12.5 * s,
                                                   ),
                                                 ),
                                                 if (subLabel.isNotEmpty) ...[

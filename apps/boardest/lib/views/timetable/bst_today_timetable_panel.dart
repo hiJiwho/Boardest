@@ -419,8 +419,8 @@ class BstTodayTimetablePanel extends StatelessWidget {
                                                       : subject,
                                                   style: GoogleFonts.notoSansKr(
                                                     color: isCurrent ? const Color(0xFF00F5D4) : Colors.white,
-                                                    fontSize: (settings.specialClassroomMode ? 15.5 : 17.5) * scale,
-                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: (settings.specialClassroomMode ? 18.0 : 21.0) * scale,
+                                                    fontWeight: FontWeight.w900,
                                                     shadows: [
                                                       Shadow(
                                                         color: Colors.black.withValues(alpha: 0.9),
