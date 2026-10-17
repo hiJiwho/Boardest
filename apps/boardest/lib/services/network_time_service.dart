@@ -31,26 +31,7 @@ class NetworkTimeService {
 
   /// 외부 서버를 통한 시각 동기화 실행 (다중 Fallback)
   Future<DateTime> syncTime() async {
-    // 1. Cloudflare Worker API
-    try {
-      final start = DateTime.now();
-      final res = await http.get(
-        Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/time'),
-      ).timeout(const Duration(seconds: 3));
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final serverIso = data['datetime'] ?? data['utc_datetime'] ?? data['time'];
-        if (serverIso != null) {
-          final serverTime = DateTime.parse(serverIso.toString()).toUtc();
-          final rtt = DateTime.now().difference(start);
-          _applyServerTime(serverTime.add(rtt ~/ 2));
-          return now;
-        }
-      }
-    } catch (_) {}
-
-    // 2. WorldTimeAPI Fallback
+    // 1. WorldTimeAPI Fallback
     try {
       final start = DateTime.now();
       final res = await http.get(

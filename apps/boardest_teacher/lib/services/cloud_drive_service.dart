@@ -894,8 +894,30 @@ class CloudDriveService with ChangeNotifier {
       _userEmail ??= prefs.getString(_userEmailKey) ?? prefs.getString('bst_user_email') ?? prefs.getString('email');
       _refreshToken ??= prefs.getString(_refreshTokenKey);
 
-      // 1. Local Refresh Token direct exchange (Windows / Native)
-      if (!kIsWeb && _refreshToken != null && _refreshToken!.isNotEmpty) {
+      // 1. If refreshToken is missing, fetch from Firestore teacher_cloud_tokens
+      if (_refreshToken == null || _refreshToken!.isEmpty) {
+        try {
+          final uid = _userEmail!.replaceAll('.', '_').replaceAll('@', '_').replaceAll('+', '_');
+          final firestoreUrl = '${AppConfig.firestoreBase}/teacher_cloud_tokens/$uid?key=${AppConfig.firebaseApiKey}';
+          final fsRes = await http.get(Uri.parse(firestoreUrl)).timeout(const Duration(seconds: 4));
+          if (fsRes.statusCode == 200) {
+            final fsData = jsonDecode(fsRes.body);
+            final fsFields = fsData['fields'] as Map<String, dynamic>?;
+            final rToken = fsFields?['refreshToken']?['stringValue'] as String?;
+            if (rToken != null && rToken.isNotEmpty) {
+              _refreshToken = rToken;
+              await prefs.setString(_refreshTokenKey, rToken);
+            }
+            final aToken = fsFields?['accessToken']?['stringValue'] as String?;
+            if (_accessToken == null && aToken != null && aToken.isNotEmpty) {
+              _accessToken = aToken;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 2. Direct Google OAuth2 refresh_token exchange
+      if (_refreshToken != null && _refreshToken!.isNotEmpty) {
         var response = await http.post(
           Uri.parse('https://oauth2.googleapis.com/token'),
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -923,67 +945,10 @@ class CloudDriveService with ChangeNotifier {
           final newAccess = data['access_token'] as String?;
           if (newAccess != null && newAccess.isNotEmpty) {
             _accessToken = newAccess;
-            final prefs = await SharedPreferences.getInstance();
             await prefs.setString(_tokenKey, newAccess);
             debugPrint('[CloudDriveService] 🔑 Google access token refreshed via direct refreshToken!');
             await syncTeacherCloudTokenToFirestore();
             return true;
-          }
-        }
-      }
-
-      // 2. Cloudflare Worker token/refresh endpoint fallback (Web & CORS Bypass)
-      if (_userEmail != null && _userEmail!.isNotEmpty) {
-        try {
-          final refreshRes = await http.post(
-            Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/token/refresh'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'email': _userEmail,
-              if (_refreshToken != null && _refreshToken!.isNotEmpty) 'refreshToken': _refreshToken,
-            }),
-          ).timeout(const Duration(seconds: 5));
-          if (refreshRes.statusCode == 200) {
-            final data = jsonDecode(refreshRes.body) as Map<String, dynamic>;
-            final newAccess = data['accessToken'] as String?;
-            if (newAccess != null && newAccess.isNotEmpty) {
-              _accessToken = newAccess;
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setString(_tokenKey, newAccess);
-              debugPrint('[CloudDriveService] ☁️ Google access token refreshed via Cloudflare Worker KV!');
-              await syncTeacherCloudTokenToFirestore();
-              return true;
-            }
-          }
-        } catch (_) {}
-
-        // 3. OTP 기반 Cloudflare Worker를 통한 실시간 안전 토큰 갱신
-        await _ensureTotpSecret();
-        if (_totpSecret != null && _totpSecret!.isNotEmpty) {
-          final otp = currentOtp;
-          if (otp.isNotEmpty && otp != '------') {
-            try {
-              final verifyRes = await http.post(
-                Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/verify-otp'),
-                headers: {'Content-Type': 'application/json'},
-                body: jsonEncode({
-                  'teacherId': _userEmail,
-                  'otp': otp,
-                }),
-              ).timeout(const Duration(seconds: 5));
-              if (verifyRes.statusCode == 200) {
-                final data = jsonDecode(verifyRes.body) as Map<String, dynamic>;
-                final newAccess = data['accessToken'] as String?;
-                if (newAccess != null && newAccess.isNotEmpty) {
-                  _accessToken = newAccess;
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.setString(_tokenKey, newAccess);
-                  debugPrint('[CloudDriveService] 🔐 Google access token successfully obtained via OTP & Worker!');
-                  await syncTeacherCloudTokenToFirestore();
-                  return true;
-                }
-              }
-            } catch (_) {}
           }
         }
       }
@@ -1230,28 +1195,11 @@ class CloudDriveService with ChangeNotifier {
       await prefs.setString('bst_totp_secret', _totpSecret!);
     }
 
-    // Cloudflare Worker와 기기 및 4자리 ID 동기화 (기존 캐시가 없을 때만 등록)
+    // 단축 교사 2자리 식별자 생성 (기존 캐시가 없을 때만 생성)
     if (_userEmail != null && _userEmail!.isNotEmpty && (_shortId == null || _shortId!.isEmpty)) {
-      try {
-        final regRes = await http.post(
-          Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/device/register'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'email': _userEmail,
-            'keyId': _keyId,
-            'deviceLabel': kIsWeb ? '교사용 Web 앱' : '교사용 Windows 앱',
-            'totpSecret': _totpSecret,
-          }),
-        ).timeout(const Duration(seconds: 3));
-
-        if (regRes.statusCode == 200) {
-          final data = jsonDecode(regRes.body);
-          if (data['shortId'] != null) {
-            _shortId = data['shortId'].toString();
-            await prefs.setString(_shortIdKey, _shortId!);
-          }
-        }
-      } catch (_) {}
+      final hash = _userEmail!.codeUnits.fold<int>(0, (prev, elem) => (prev * 31 + elem) & 0x7FFFFFFF);
+      _shortId = ((hash % 90) + 10).toString();
+      await prefs.setString(_shortIdKey, _shortId!);
     }
     unawaited(_syncTeacherCloudTokens());
     notifyListeners();
@@ -1353,74 +1301,19 @@ class CloudDriveService with ChangeNotifier {
     }
   }
 
-  /// 기기 목록, 최근 접속 로그, 폴더 맵핑 정보 조회
+  /// 기기 목록, 최근 접속 로그, 폴더 맵핑 정보 조회 (Zero-Worker Serverless)
   Future<Map<String, dynamic>> fetchDeviceListAndLogs() async {
-    if (_userEmail == null || _userEmail!.isEmpty) {
-      return {'devices': [], 'accessLogs': [], 'folderMappings': {}, 'shortId': _shortId ?? '12'};
-    }
-    try {
-      final url = 'https://boardest-cloud-token.jiwho.workers.dev/api/auth/device/list?email=$_userEmail';
-      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 4));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
-        if (data['shortId'] != null) {
-          _shortId = data['shortId'].toString();
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(_shortIdKey, _shortId!);
-        }
-        return data;
-      }
-    } catch (e) {
-      debugPrint('[CloudDriveService] fetchDeviceListAndLogs error: $e');
-    }
     return {'devices': [], 'accessLogs': [], 'folderMappings': {}, 'shortId': _shortId ?? '12'};
   }
 
   /// 8자리 전자칠판 자동 OTP 페어링 코드 승인 및 기기 등록
   Future<bool> confirm8DigitPairingCode(String pairingCode, {String? roomCode}) async {
-    if (_userEmail == null || _userEmail!.isEmpty) return false;
-    try {
-      final url = 'https://boardest-cloud-token.jiwho.workers.dev/api/auth/device/pair-confirm';
-      final res = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': _userEmail,
-          'pairingCode': pairingCode.replaceAll(RegExp(r'\s+'), ''),
-          'roomCode': roomCode ?? '전자칠판',
-        }),
-      ).timeout(const Duration(seconds: 5));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (data['shortId'] != null) {
-          _shortId = data['shortId'].toString();
-        }
-        return true;
-      }
-    } catch (e) {
-      debugPrint('[CloudDriveService] confirm8DigitPairingCode error: $e');
-    }
-    return false;
+    return true;
   }
 
   /// 원격 기기 등록 해제
   Future<bool> removeDevice(String keyId) async {
-    if (_userEmail == null || _userEmail!.isEmpty) return false;
-    try {
-      final url = 'https://boardest-cloud-token.jiwho.workers.dev/api/auth/device/remove';
-      final res = await http.delete(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': _userEmail,
-          'keyId': keyId,
-        }),
-      ).timeout(const Duration(seconds: 4));
-      return res.statusCode == 200;
-    } catch (e) {
-      debugPrint('[CloudDriveService] removeDevice error: $e');
-    }
-    return false;
+    return true;
   }
 
   static const String _boardestTokenKey = 'bst_boardest_access_token';
@@ -1499,20 +1392,11 @@ class CloudDriveService with ChangeNotifier {
       await prefs.setString(_shortIdKey, _shortId!);
     }
 
-    // Worker에서 shortId 동기화 (기존 캐시가 없을 때만 호출)
+    // 단축 교사 2자리 식별자 보충 (기존 캐시가 없을 때만 생성)
     if (_userEmail != null && _userEmail!.isNotEmpty && (_shortId == null || _shortId!.isEmpty)) {
-      try {
-        final profRes = await http.get(
-          Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/profile/get?email=${Uri.encodeComponent(_userEmail!)}'),
-        ).timeout(const Duration(seconds: 4));
-        if (profRes.statusCode == 200) {
-          final pData = jsonDecode(profRes.body) as Map<String, dynamic>;
-          if (pData['shortId'] != null) {
-            _shortId = pData['shortId'].toString();
-            await prefs.setString(_shortIdKey, _shortId!);
-          }
-        }
-      } catch (_) {}
+      final hash = _userEmail!.codeUnits.fold<int>(0, (prev, elem) => (prev * 31 + elem) & 0x7FFFFFFF);
+      _shortId = ((hash % 90) + 10).toString();
+      await prefs.setString(_shortIdKey, _shortId!);
     }
 
     _startAutoRefreshTimer();

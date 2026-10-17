@@ -250,37 +250,7 @@ class BstTodayTimetableStrip extends StatelessWidget {
                                 fit: StackFit.expand,
                                 children: [
                                   _buildTextbookCover(item.subject, imagePath, imageBytes, subjectColor),
-                                  // 교과서 하단 과목명 강조 배지
-                                  Positioned(
-                                    left: 2,
-                                    right: 2,
-                                    bottom: 2,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF070B14).withValues(alpha: 0.85),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(
-                                          color: item.isCurrent
-                                              ? const Color(0xFF00F5D4)
-                                              : Colors.white.withValues(alpha: 0.2),
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        item.subject,
-                                        style: TextStyle(
-                                          color: item.isCurrent ? const Color(0xFF00F5D4) : Colors.white,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w900,
-                                          letterSpacing: -0.3,
-                                        ),
-                                        maxLines: 1,
-                                        textAlign: TextAlign.center,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ),
+
                                   if (isSpecialRoom && (item.targetClass?.isNotEmpty == true))
                                     Positioned(
                                       left: 2,

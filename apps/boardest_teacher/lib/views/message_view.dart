@@ -265,30 +265,6 @@ class _MessageViewState extends State<MessageView> {
             }
           } catch (_) {}
         }(),
-
-        // RTDB 실시간 전송만 사용 (0 Firestore Writes)
-
-        // 3. Worker FCM Push 동시 발송 (High-Priority Push)
-        () async {
-          try {
-            await http.post(
-              Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/push/send'),
-              headers: {"Content-Type": "application/json"},
-              body: json.encode({
-                'topic': 'eat_call_${docId.toLowerCase()}',
-                'title': '📩 $senderName 쪽지',
-                'body': text,
-                'data': {
-                  'type': 'message',
-                  'docId': docId,
-                  'message': text,
-                  'messageFrom': senderName,
-                  'messageSentAt': nowIso,
-                }
-              }),
-            ).timeout(const Duration(seconds: 4));
-          } catch (_) {}
-        }(),
       ]);
       return sent;
     });

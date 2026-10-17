@@ -876,22 +876,6 @@ class BstCloudService {
       }
     }
 
-    // 2. Stateless Worker Proxy (Web & CORS Bypass)
-    try {
-      final res = await http.post(
-        Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/token/refresh'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refreshToken': refreshToken}),
-      ).timeout(const Duration(seconds: 8));
-
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body) as Map<String, dynamic>;
-        return data['accessToken'] as String?;
-      }
-    } catch (e) {
-      debugPrint('[BstCloudService] Worker token refresh fallback error: $e');
-    }
-
     return null;
   }
 
@@ -1674,43 +1658,6 @@ class BstCloudService {
         debugPrint('[BstCloudService] Firestore OTP verification error: ' + fbErr.toString());
       }
 
-      // 2차: Cloudflare Worker `/api/auth/verify-otp` 검증 폴백
-      try {
-        final nowTime = DateTime.now();
-        final parsed = cleanCode.length == 6
-            ? TotpService.parseSteganography6(cleanCode, time: nowTime)
-            : (cloudId: '', otp: cleanCode);
-        final workerRes = await http.post(
-          Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/verify-otp'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'otp': cleanCode,
-            'otp4': parsed.otp,
-            'shortId': parsed.cloudId,
-          }),
-        ).timeout(const Duration(seconds: 5));
-
-        if (workerRes.statusCode == 200) {
-          final data = jsonDecode(workerRes.body) as Map<String, dynamic>;
-          final tok = (data['accessToken'] ?? data['token'])?.toString();
-          if (tok != null && tok.isNotEmpty) {
-            activeToken = tok;
-            activeRefreshToken = data['refreshToken']?.toString();
-            activeTeacherName = (data['teacherName'] ?? data['name'] ?? '선생님').toString();
-            activeOwnerEmail = (data['email'] ?? '').toString();
-            return (
-              success: true,
-              accessToken: activeToken,
-              teacherName: activeTeacherName,
-              email: activeOwnerEmail,
-              errorMessage: null,
-            );
-          }
-        }
-      } catch (wErr) {
-        debugPrint('[BstCloudService] Worker OTP fallback error: $wErr');
-      }
-
       return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '일회용 접속 코드가 일치하지 않거나 만료되었습니다.');
     } catch (e) {
       return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '네트워크 연결 오류: ' + e.toString());
@@ -1783,35 +1730,37 @@ class BstCloudService {
   Future<({bool success, String? accessToken, String? teacherName, String? email, String? errorMessage})> verify10DigitOtp(String fullCode) => verify6DigitSteganoOtp(fullCode);
   Future<({bool success, String? accessToken, String? teacherName, String? email, String? errorMessage})> verify4DigitAutoLogin(String shortId, String roomCode) => verify2DigitAutoLogin(shortId, roomCode);
 
-  /// 3. 전자칠판 자동 로그인 페어링 코드 발급 (3분 유효)
+  /// 3. 전자칠판 자동 로그인 페어링 코드 발급 (3분 유효, Zero-Worker Serverless RTDB)
   Future<({bool success, String? pairingCode, int? expiresIn, String? tempSecret, String? errorMessage})> requestPairingCode(String schoolCode, String roomCode) async {
     try {
+      final rand = Random.secure();
+      final pairingCode = (rand.nextInt(90000000) + 10000000).toString();
       final tempSecret = TotpService.generateDeterministicSecret('pair_${DateTime.now().millisecondsSinceEpoch}');
-      final res = await http.post(
-        Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/device/pair-request'),
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await http.put(
+        Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/passkey_pairs/$pairingCode.json'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
+          'pairingCode': pairingCode,
           'schoolCode': schoolCode,
           'roomCode': roomCode,
           'tempSecret': tempSecret,
+          'status': 'waiting',
+          'createdAt': now,
+          'expiresAt': now + 180000,
         }),
       ).timeout(const Duration(seconds: 4));
 
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_boardPairedSecretKey, tempSecret);
-        await prefs.setString(_boardPairedKeyIdKey, 'board_${schoolCode.toLowerCase()}_${roomCode.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}');
-        return (
-          success: true,
-          pairingCode: data['pairingCode']?.toString(),
-          expiresIn: data['expiresIn'] as int? ?? 180,
-          tempSecret: tempSecret,
-          errorMessage: null,
-        );
-      } else {
-        return (success: false, pairingCode: null, expiresIn: null, tempSecret: null, errorMessage: '페어링 요청 실패');
-      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_boardPairedSecretKey, tempSecret);
+      await prefs.setString(_boardPairedKeyIdKey, 'board_${schoolCode.toLowerCase()}_${roomCode.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}');
+      return (
+        success: true,
+        pairingCode: pairingCode,
+        expiresIn: 180,
+        tempSecret: tempSecret,
+        errorMessage: null,
+      );
     } catch (e) {
       return (success: false, pairingCode: null, expiresIn: null, tempSecret: null, errorMessage: '네트워크 오류: $e');
     }

@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
+import '../../services/cloud_drive_service.dart';
 import '../../services/passkey_service.dart';
 
 /// 교실 전자칠판 / 모바일 스마트폰 패스키(Passkey) QR 등록 다이얼로그
@@ -65,11 +68,34 @@ class _BstPasskeyQrDialogState extends State<BstPasskeyQrDialog> {
     _remainingSeconds = 120;
     _isExpired = false;
 
-    // Boardest Cloud Connect 등록 주소 (클라우드 연동 전용, 2분 유효 파라미터 포함)
+    final token = CloudDriveService.instance.accessToken ?? '';
+    final encToken = token.isNotEmpty ? '&token=${Uri.encodeComponent(token)}' : '';
+
+    // Boardest Cloud Connect 등록 주소 (클라우드 연동 전용, 2분 유효 파라미터 및 인증 토큰 포함)
     final encTeacher = Uri.encodeComponent(widget.teacherName);
     final encSchool = Uri.encodeComponent(widget.schoolName);
     final encDevice = Uri.encodeComponent(widget.homeroomClass);
-    _registrationUrl = 'https://boardest-cloud-connect.web.app/?action=register&key=$_challengeId&teacher=$encTeacher&school=$encSchool&device=$encDevice&t=$now';
+    _registrationUrl = 'https://boardest-cloud-connect.web.app/?action=register&key=$_challengeId&teacher=$encTeacher&school=$encSchool&device=$encDevice&t=$now$encToken';
+
+    if (token.isNotEmpty) {
+      final vaultPayload = jsonEncode({
+        'credId': 'passkey_qr',
+        'teacher': widget.teacherName,
+        'token': token,
+        'updatedAt': now,
+      });
+      http.put(
+        Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/passkey/vaults/$encTeacher.json'),
+        headers: {'Content-Type': 'application/json'},
+        body: vaultPayload,
+      ).ignore();
+      http.put(
+        Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/passkey_vaults/$encTeacher.json'),
+        headers: {'Content-Type': 'application/json'},
+        body: vaultPayload,
+      ).ignore();
+      CloudDriveService.instance.syncTeacherCloudTokenToFirestore(force: true).ignore();
+    }
 
     // 1초 카운트다운 타이머 (2분 시간제한)
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {

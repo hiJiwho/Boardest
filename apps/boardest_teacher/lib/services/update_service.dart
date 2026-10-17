@@ -20,16 +20,23 @@ class UpdateInfo {
 class UpdateService {
   UpdateService._internal();
   static final instance = UpdateService._internal();
-  static const String defaultVersion = '4.0.8';
+  static const String defaultVersion = '4.1.0';
   static const String _api = 'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String downloadPage = 'https://boardest-downloads.web.app';
   static bool _checking = false;
 
   static String get currentVersion {
     if (!kIsWeb && Platform.isWindows) {
-      final match = RegExp(r'jiwho\\.boardest\\.(?:teacher|bst)_([0-9.]+)_', caseSensitive: false)
+      final match = RegExp(r'jiwho\.boardest\.(?:teacher|bst|class-lite|overlay-panser)_([0-9.]+)_', caseSensitive: false)
           .firstMatch(Platform.resolvedExecutable);
-      if (match?.group(1) != null) return match!.group(1)!;
+      if (match?.group(1) != null) {
+        final v = match!.group(1)!;
+        final parts = v.split('.');
+        if (parts.length == 4 && parts[3] == '0') {
+          return '${parts[0]}.${parts[1]}.${parts[2]}';
+        }
+        return v;
+      }
     }
     return defaultVersion;
   }

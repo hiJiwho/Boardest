@@ -1,8 +1,8 @@
 @echo off
 setlocal
 cd /d "%~dp0.."
-set "VERSION=4.0.9"
-set "APPX_VERSION=4.0.9.0"
+set "VERSION=4.1.0"
+set "APPX_VERSION=4.1.0.0"
 set "PROJECT=jiwhosboardest"
 
 echo [1/7] Building Boardest and Teacher web releases...

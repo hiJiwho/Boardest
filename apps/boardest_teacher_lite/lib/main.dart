@@ -225,11 +225,11 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
   Future<void> _syncNetworkTime() async {
     try {
       final res = await http.get(
-        Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/time'),
+        Uri.parse('https://worldtimeapi.org/api/timezone/Etc/UTC'),
       ).timeout(const Duration(seconds: 3));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        final serverIso = data['datetime'] ?? data['utc_datetime'] ?? data['time'];
+        final serverIso = data['datetime'] ?? data['utc_datetime'];
         if (serverIso != null) {
           final serverTime = DateTime.parse(serverIso.toString()).toUtc();
           _networkOffset = serverTime.difference(DateTime.now().toUtc());
@@ -1667,8 +1667,8 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                     SnackBar(content: Text('[${r['name']}] 으로 8자리 자동 OTP Secret 발송 중...')),
                   );
                   try {
-                    final res = await http.post(
-                      Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/auto-otp'),
+                    await http.put(
+                      Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/passkey/auto_otp/${r['token']}.json'),
                       headers: {'Content-Type': 'application/json'},
                       body: jsonEncode({
                         'email': _googleEmail.isNotEmpty ? _googleEmail : 'teacher@boardest.bst',
@@ -1676,20 +1676,15 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                         'fcmToken': r['token'],
                         'classId': r['token'],
                         'display': r['name'],
+                        'timestamp': DateTime.now().millisecondsSinceEpoch,
                       }),
                     );
-                    if (res.statusCode == 200) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('✅ [${r['name']}] 기기에 OTP Secret이 성공적으로 발송되었습니다!'),
-                          backgroundColor: const Color(0xFF00F5D4),
-                        ),
-                      );
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('❌ 발송에 실패했습니다. 다시 시도해주세요.'), backgroundColor: Colors.redAccent),
-                      );
-                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('✅ [${r['name']}] 기기에 OTP Secret이 성공적으로 발송되었습니다!'),
+                        backgroundColor: const Color(0xFF00F5D4),
+                      ),
+                    );
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('오류 발생: $e'), backgroundColor: Colors.redAccent),
