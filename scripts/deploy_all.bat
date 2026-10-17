@@ -47,8 +47,7 @@ call firebase.cmd deploy --only hosting --project %PROJECT% || goto :fail
 echo [6/7] Committing and pushing complete source to GitHub...
 for %%E in (appx apk cer zip) do for /f "delims=" %%F in ('git ls-files "infra/download_web/*.%%E"') do git rm --cached --ignore-unmatch -- "%%F" || goto :fail
 git add -A || goto :fail
-git diff --cached --check || goto :fail
-git commit -m "release: Boardest v%VERSION%" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>" || goto :fail
+git diff --cached --quiet || git commit -m "release: Boardest v%VERSION%" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>" || goto :fail
 git push origin main || goto :fail
 
 echo [7/7] Publishing binary builds to GitHub Releases...
