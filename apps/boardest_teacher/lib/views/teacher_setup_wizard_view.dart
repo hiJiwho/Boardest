@@ -749,7 +749,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                       ],
                     ),
                   ),
-                ] else if (!_isLoggedIn) ...[
+                ] else if (!_isLoggedIn || !_needsRegistration) ...[
                   // 4. 구글 로그인 카드 (STEP 1)
                   Container(
                     padding: const EdgeInsets.all(20),
@@ -779,23 +779,6 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                           style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 12.5),
                         ),
                         const SizedBox(height: 18),
-                        if (AppConfig.isDemoMode) ...[
-                          ElevatedButton.icon(
-                            onPressed: _loginAsDemoTeacher,
-                            icon: const Icon(Icons.play_arrow_rounded, color: Colors.black87),
-                            label: Text(
-                              '데모 교사 계정으로 즉시 체험',
-                              style: GoogleFonts.notoSansKr(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00F5D4),
-                              foregroundColor: Colors.black87,
-                              minimumSize: const Size(double.infinity, 48),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                        ],
                         ElevatedButton.icon(
                           onPressed: _startGoogleLogin,
                           icon: const Icon(Icons.account_circle_rounded, color: Colors.black87),
@@ -810,6 +793,23 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
+                        if (AppConfig.isDemoMode) ...[
+                          const SizedBox(height: 10),
+                          ElevatedButton.icon(
+                            onPressed: _loginAsDemoTeacher,
+                            icon: const Icon(Icons.play_arrow_rounded, color: Colors.black87),
+                            label: Text(
+                              '데모 교사 계정으로 즉시 체험',
+                              style: GoogleFonts.notoSansKr(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00F5D4),
+                              foregroundColor: Colors.black87,
+                              minimumSize: const Size(double.infinity, 48),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         OutlinedButton.icon(
                           onPressed: () => launchUrl(Uri.parse(kIsWeb ? 'https://boardest-teacher-oauth.web.app?web' : 'https://boardest-teacher-oauth.web.app?win')),

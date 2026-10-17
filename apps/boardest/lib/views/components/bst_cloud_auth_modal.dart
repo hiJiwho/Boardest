@@ -62,7 +62,7 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
   // 6자리 OTP 상태
   String _enteredOtp = '';
   bool _isVerifyingOtp = false;
-  bool _saveOtpToDevice = true;
+  bool _saveOtpToDevice = false;
   String? _otpError;
 
   // 등록된 교사 목록
@@ -126,21 +126,15 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
             _isApproved = true;
           });
 
-          // Cloud 토큰 활성화
+          // Cloud 토큰 활성화 (1회성 세션만 연결, 자동 기기 등록 하지 않음 — 등록 버튼 클릭 시에만 등록)
           BstCloudService.instance.setDirectAccessToken(
             event.accessToken!,
             teacherName: event.teacherName ?? '선생님',
             ownerEmail: event.email ?? '',
           );
-
-          // 등록된 교사로 자동 등록 저장 (Web, Windows, Android 공통)
-          await PasskeyService.instance.saveProTeacher(
-            teacherName: event.teacherName ?? '선생님',
-            email: event.email ?? '',
-            schoolName: widget.schoolName,
-            accessToken: event.accessToken,
-            refreshToken: event.refreshToken,
-          );
+          if (event.refreshToken != null && event.refreshToken!.isNotEmpty) {
+            BstCloudService.instance.activeRefreshToken = event.refreshToken;
+          }
 
           await Future.delayed(const Duration(milliseconds: 700));
           if (mounted) {
@@ -176,24 +170,16 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
       if (!mounted) return;
 
       if (res.success && res.accessToken != null) {
+        // 1회성 세션 연결만 수행 (자동 기기 등록 하지 않음 — 사용자가 명시적으로 등록 버튼을 눌러야 등록)
         BstCloudService.instance.setDirectAccessToken(
           res.accessToken!,
           teacherName: res.teacherName ?? '선생님',
           ownerEmail: res.email ?? '',
         );
 
-        if (_saveOtpToDevice && res.teacherName != null) {
-          await PasskeyService.instance.saveProTeacher(
-            teacherName: res.teacherName!,
-            email: res.email ?? '',
-            schoolName: widget.schoolName,
-            accessToken: res.accessToken,
-          );
-        }
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('🎉 ${res.teacherName ?? "선생님"}의 Cloud 수업자료가 연결되었습니다!'),
+            content: Text('🎉 ${res.teacherName ?? "선생님"}의 Cloud 수업자료가 연결되었습니다! (기기 등록은 상단 [교사 등록] 버튼을 눌러주세요)'),
             backgroundColor: const Color(0xFF00F5D4),
           ),
         );
@@ -623,86 +609,6 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
                 ),
               ],
 
-              if (!kIsWeb) ...[
-                SizedBox(height: 10 * s),
-                Row(
-                  children: [
-                    Checkbox(
-                      value: _saveOtpToDevice,
-                      activeColor: const Color(0xFF00F5D4),
-                      checkColor: Colors.black,
-                      onChanged: (val) async {
-                        if (val == true) {
-                          final confirmed = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              backgroundColor: const Color(0xFF0F172A),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16 * s),
-                                side: const BorderSide(color: Color(0xFFEF4565), width: 1.5),
-                              ),
-                              title: Row(
-                                children: [
-                                  const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4565), size: 28),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '⚠️ 보안 취약 경고',
-                                    style: GoogleFonts.notoSansKr(
-                                      color: const Color(0xFFEF4565),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16 * s,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              content: Text(
-                                '공용 전자칠판에 계정을 영구 저장하면 다른 사람이나 학생이 교사 계정에 접근할 수 있어 보안이 취약해집니다.\n\n정말로 이 기기에 계정을 영구 저장하시겠습니까?',
-                                style: GoogleFonts.notoSansKr(
-                                  color: Colors.white70,
-                                  fontSize: 13 * s,
-                                  height: 1.5,
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: Text(
-                                    '취소 (RAM에만 임시 유지)',
-                                    style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2)),
-                                  ),
-                                ),
-                                ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFFEF4565),
-                                    foregroundColor: Colors.white,
-                                  ),
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: Text(
-                                    '동의하고 영구 등록',
-                                    style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirmed == true) {
-                            setState(() => _saveOtpToDevice = true);
-                          }
-                        } else {
-                          setState(() => _saveOtpToDevice = false);
-                        }
-                      },
-                    ),
-                    Expanded(
-                      child: Text(
-                        '이 전자칠판에 계정 영구 등록 (보안 주의)',
-                        style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 11 * s),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-
               SizedBox(height: 16 * s),
               ElevatedButton(
                 onPressed: _enteredOtp.length == 6 && !_isVerifyingOtp ? _submitOtp : null,
@@ -727,7 +633,7 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
                     ] else ...[
                       const Icon(Icons.lock_open_rounded, size: 18),
                       const SizedBox(width: 8),
-                      const Text('6자리 OTP로 즉시 로그인', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Text('6자리 OTP로 1회성 로그인', style: TextStyle(fontWeight: FontWeight.bold)),
                     ],
                   ],
                 ),
@@ -817,7 +723,7 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
             ),
             SizedBox(height: 6 * s),
             Text(
-              '모바일 Web QR 또는 6자리 OTP 인증 시 자동 등록되거나,\n아래 버튼을 눌러 교사를 직접 등록할 수 있습니다.',
+              'QR 또는 OTP로 1회 접속만으로는 자동 등록되지 않습니다.\n로그인 후 상단 [교사 등록] 버튼을 누르거나 아래 버튼을 눌러 직접 등록하세요.',
               textAlign: TextAlign.center,
               style: GoogleFonts.notoSansKr(
                 fontSize: 11.5 * s,

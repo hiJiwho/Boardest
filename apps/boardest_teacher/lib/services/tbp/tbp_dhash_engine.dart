@@ -1,41 +1,58 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:webview_windows/webview_windows.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'tbp_storage_service.dart';
 
-/// JS 기반 perceptual dHash 엔진 (DOM + URL Hash)
-/// - JS 스크립트 주입으로 256-bit dHash 계산 결과를 webMessage/JavaScriptChannel로 수신
-/// - 지수 버스트 폴링 (0, 215, 462, 994, 2137, 4594, 9877 ms)
-/// - 5초 포커스 폴링 + 12초 메인 폴백 폴링
+/// JS 기반 perceptual dHash 엔진 (Visual Canvas + DOM Page Fingerprint + Canonical Hash Matching)
+/// - 페이지 이동 시 실시간으로 256-bit dHash를 감지하고 기존 저장된 페이지 해시와 해밍 거리(<=36bit)로 매칭
+/// - 동일 페이지 내 미세 노이즈(<=32bit)는 무시하여 판서와 핫스팟이 흔들림 없이 유지됨
+/// - 마우스 모드에서 WebView 내부 우클릭 및 길게 누르기(Long-Press) 이벤트를 감지하여 핫스팟 모달 호출 지원
 class TbpDhashEngine {
   final Function(String dHash) onDhashChanged;
+  final Function(double rx, double ry)? onWebContextMenu;
 
-  TbpDhashEngine({required this.onDhashChanged});
+  TbpDhashEngine({
+    required this.onDhashChanged,
+    this.onWebContextMenu,
+  });
 
   WebviewController? _winController;
   WebViewController? _androidController;
 
   String _currentDhash = '';
+  final Set<String> _knownHashes = {};
+  int _webVirtualPage = 1;
+
   Timer? _focusPollingTimer;
   Timer? _fallbackPollingTimer;
   final List<Timer> _burstTimers = [];
   bool _disposed = false;
 
-  // boadbook 동일 지수 버스트 딜레이 (ms): 2.15^n * 100
-  static const List<int> _burstDelaysMs = [0, 215, 462, 994, 2137, 4594, 9877];
+  // 지수 버스트 딜레이 (ms): 페이지 넘김 직후 즉각 감지
+  static const List<int> _burstDelaysMs = [0, 120, 280, 550, 1000, 1800, 3200];
 
-  // Hamming distance 매칭 임계값
-  static const int _matchThreshold = 64;
-  // 노이즈 필터 (이 미만 차이면 무시)
-  static const int _noiseFilterBits = 3;
+  // 동일 페이지 판정 임계값 (256비트 중 32비트 이하 차이는 같은 페이지의 렌더링/커서 노이즈로 간주)
+  static const int _samePageThreshold = 32;
+  // 기존 저장된 페이지 해시와 매칭할 임계값 (36비트 이하 차이면 저장된 페이지 해시로 스냅)
+  static const int _knownMatchThreshold = 36;
 
-  /// JS 해시 추출 스크립트
+  /// 기존 저장된 페이지 dHash 목록을 등록하여 페이지 재방문 시 판서/핫스팟 100% 복원 보장
+  void registerKnownHashes(Iterable<String> hashes) {
+    for (final h in hashes) {
+      if (h.isNotEmpty && h != 'default') {
+        _knownHashes.add(TbpStorageService.toBinary256(h) ?? h);
+      }
+    }
+  }
+
+  /// JS 해시 추출 및 이벤트 후킹 스크립트
   static const String _hashJsScript = '''
     (function() {
-      function sendHash(hashStr) {
-        var msg = JSON.stringify({type: 'dhashResult', hash: hashStr});
+      function postToFlutter(payload) {
+        var msg = JSON.stringify(payload);
         if (window.chrome && window.chrome.webview) {
           window.chrome.webview.postMessage(msg);
         }
@@ -44,73 +61,234 @@ class TbpDhashEngine {
         }
       }
 
-      function computeDhash(canvas) {
-        var ctx = canvas.getContext('2d');
-        var w = canvas.width;
-        var h = canvas.height;
-        var size = Math.min(w, h);
-        var sx = (w - size) / 2;
-        var sy = (h - size) / 2;
-        
-        var offscreen = document.createElement('canvas');
-        offscreen.width = 17;
-        offscreen.height = 16;
-        var octx = offscreen.getContext('2d');
-        octx.drawImage(canvas, sx, sy, size, size, 0, 0, 17, 16);
-        
-        var imgData = octx.getImageData(0, 0, 17, 16).data;
-        var gray = [];
-        for (var i = 0; i < imgData.length; i += 4) {
-          gray.push(imgData[i] * 0.299 + imgData[i+1] * 0.587 + imgData[i+2] * 0.114);
-        }
-        
-        var hash = '';
-        for (var y = 0; y < 16; y++) {
-          for (var x = 0; x < 16; x++) {
-            var idx = y * 17 + x;
-            hash += (gray[idx] > gray[idx + 1] ? '1' : '0');
+      function sendHash(hashStr) {
+        if (!hashStr) return;
+        postToFlutter({type: 'dhashResult', hash: hashStr});
+      }
+
+      // 1회성: WebView 내부 우클릭(contextmenu) 및 길게 누르기(Long-Press) 감지 + 페이지 변화 즉시 감지 훅 설치
+      function bindDocEvents(doc, win, offsetLeft, offsetTop) {
+        if (!doc || doc.__bstBound) return;
+        doc.__bstBound = true;
+
+        doc.addEventListener('contextmenu', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var vw = window.innerWidth || document.documentElement.clientWidth || 1;
+          var vh = window.innerHeight || document.documentElement.clientHeight || 1;
+          var cx = (e.clientX || 0) + (offsetLeft || 0);
+          var cy = (e.clientY || 0) + (offsetTop || 0);
+          postToFlutter({
+            type: 'hotspotContext',
+            rx: Math.max(0.02, Math.min(0.98, cx / vw)),
+            ry: Math.max(0.02, Math.min(0.98, cy / vh))
+          });
+          return false;
+        }, true);
+
+        var lpTimer = null;
+        var startX = 0;
+        var startY = 0;
+        doc.addEventListener('pointerdown', function(e) {
+          if (e.button === 2) return;
+          startX = e.clientX || 0;
+          startY = e.clientY || 0;
+          if (lpTimer) clearTimeout(lpTimer);
+          lpTimer = setTimeout(function() {
+            var vw = window.innerWidth || document.documentElement.clientWidth || 1;
+            var vh = window.innerHeight || document.documentElement.clientHeight || 1;
+            var cx = startX + (offsetLeft || 0);
+            var cy = startY + (offsetTop || 0);
+            postToFlutter({
+              type: 'hotspotContext',
+              rx: Math.max(0.02, Math.min(0.98, cx / vw)),
+              ry: Math.max(0.02, Math.min(0.98, cy / vh))
+            });
+          }, 650);
+        }, true);
+
+        doc.addEventListener('pointermove', function(e) {
+          if (!lpTimer) return;
+          var dx = (e.clientX || 0) - startX;
+          var dy = (e.clientY || 0) - startY;
+          if (Math.sqrt(dx * dx + dy * dy) > 10) {
+            clearTimeout(lpTimer);
+            lpTimer = null;
           }
+        }, true);
+
+        var clearLp = function() {
+          if (lpTimer) {
+            clearTimeout(lpTimer);
+            lpTimer = null;
+          }
+        };
+        doc.addEventListener('pointerup', clearLp, true);
+        doc.addEventListener('pointercancel', clearLp, true);
+
+        doc.addEventListener('click', function() {
+          setTimeout(runCapture, 120);
+          setTimeout(runCapture, 450);
+        }, true);
+        doc.addEventListener('keyup', function() {
+          setTimeout(runCapture, 120);
+          setTimeout(runCapture, 450);
+        }, true);
+      }
+
+      try {
+        bindDocEvents(document, window, 0, 0);
+        var frames = document.querySelectorAll('iframe');
+        for (var fi = 0; fi < frames.length; fi++) {
+          try {
+            var fr = frames[fi];
+            var rect = fr.getBoundingClientRect();
+            if (fr.contentDocument && fr.contentWindow) {
+              bindDocEvents(fr.contentDocument, fr.contentWindow, rect.left, rect.top);
+            }
+          } catch (ie) {}
         }
-        sendHash(hash);
+      } catch (be) {}
+
+      function computeDhashFromSource(sourceEl, w, h) {
+        try {
+          if (!w || !h || w < 32 || h < 32) return false;
+          var size = Math.min(w, h);
+          var sx = (w - size) / 2;
+          var sy = (h - size) / 2;
+
+          var offscreen = document.createElement('canvas');
+          offscreen.width = 17;
+          offscreen.height = 16;
+          var octx = offscreen.getContext('2d');
+          octx.drawImage(sourceEl, sx, sy, size, size, 0, 0, 17, 16);
+
+          var imgData = octx.getImageData(0, 0, 17, 16).data;
+          var gray = [];
+          var nonZero = 0;
+          for (var i = 0; i < imgData.length; i += 4) {
+            var g = imgData[i] * 0.299 + imgData[i+1] * 0.587 + imgData[i+2] * 0.114;
+            if (g > 1 && g < 254) nonZero++;
+            gray.push(g);
+          }
+          // 완전히 단색(빈 캔버스)이면 폴백 사용
+          if (nonZero < 8) return false;
+
+          var hash = '';
+          for (var y = 0; y < 16; y++) {
+            for (var x = 0; x < 16; x++) {
+              var idx = y * 17 + x;
+              hash += (gray[idx] > gray[idx + 1] ? '1' : '0');
+            }
+          }
+          sendHash(hash);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function collectDocSignature(doc, win) {
+        if (!doc) return '';
+        var parts = [];
+        try {
+          parts.push(win && win.location ? win.location.href : '');
+          // 페이지 번호 입력창/표시 요소 우선 추출 (전자교과서/뷰어 표준 패턴)
+          var pageInputs = doc.querySelectorAll('input[type="text"], input[type="number"], .page, .pageNum, .page-num, .current-page, [class*="page"], [id*="page"], [aria-current="page"], [aria-selected="true"]');
+          var pageVals = [];
+          for (var i = 0; i < Math.min(pageInputs.length, 20); i++) {
+            var el = pageInputs[i];
+            var v = (el.value !== undefined && el.value !== '') ? ('val:' + el.value) : (el.innerText || el.textContent || '').trim();
+            if (v && v.length < 40) pageVals.push(v);
+          }
+          parts.push('PV:' + pageVals.join(','));
+
+          // 현재 보이는 주요 이미지 src 및 위치
+          var imgs = doc.images || [];
+          var imgSigs = [];
+          for (var j = 0; j < Math.min(imgs.length, 15); j++) {
+            var im = imgs[j];
+            var r = im.getBoundingClientRect ? im.getBoundingClientRect() : {width: im.width, height: im.height};
+            if (r.width > 40 && r.height > 40) {
+              imgSigs.push((im.currentSrc || im.src || '') + '@' + Math.round(r.left) + ',' + Math.round(r.top));
+            }
+          }
+          parts.push('IM:' + imgSigs.join('|'));
+
+          // 본문 가시 텍스트 요약
+          var bodyTxt = (doc.body && doc.body.innerText) ? doc.body.innerText.replace(/\\s+/g, ' ').trim().slice(0, 600) : '';
+          parts.push('TX:' + bodyTxt);
+          parts.push('SC:' + Math.round(((win && win.scrollY) || 0) / 80));
+        } catch (e) {}
+        return parts.join('||');
       }
 
       function computeOfflineFallbackHash() {
         try {
-          var urlStr = location.href || '';
-          var textStr = (document.body && document.body.innerText) ? document.body.innerText.replace(/\\s+/g, ' ').slice(0, 512) : '';
-          var imgs = Array.prototype.slice.call(document.images || [], 0, 8).map(function(img) { return img.src || ''; }).join('|');
-          var raw = urlStr + '||' + Math.round((window.scrollY || 0) / 100) + '||' + imgs + '||' + textStr;
+          var sig = collectDocSignature(document, window);
+          var frames = document.querySelectorAll('iframe');
+          for (var f = 0; f < frames.length; f++) {
+            try {
+              var fr = frames[f];
+              sig += '||FRSrc:' + (fr.src || '');
+              if (fr.contentDocument && fr.contentWindow) {
+                sig += '||FRDoc:' + collectDocSignature(fr.contentDocument, fr.contentWindow);
+              }
+            } catch (fe) {}
+          }
+
           var bits = '';
           var seeds = [2166136261, 16777619, 2654435761, 3266489917, 668265263, 374761393, 2246822519, 3266489919];
           for (var s = 0; s < 8; s++) {
             var h = seeds[s] >>> 0;
-            for (var i = 0; i < raw.length; i++) {
-              h ^= raw.charCodeAt(i);
+            for (var i = 0; i < sig.length; i++) {
+              h ^= sig.charCodeAt(i);
               h = Math.imul(h, 16777619) >>> 0;
             }
             bits += (h >>> 0).toString(2).padStart(32, '0');
           }
           sendHash(bits.slice(0, 256));
-        } catch (err) {
-          sendHash(null);
+        } catch (err) {}
+      }
+
+      function tryDirectCanvasHash(doc) {
+        if (!doc) return false;
+        var canvases = doc.querySelectorAll('canvas');
+        var bestCanvas = null;
+        var bestArea = 0;
+        for (var i = 0; i < canvases.length; i++) {
+          var c = canvases[i];
+          var r = c.getBoundingClientRect();
+          var area = r.width * r.height;
+          if (area > bestArea && r.width > 200 && r.height > 200) {
+            bestArea = area;
+            bestCanvas = c;
+          }
+        }
+        if (bestCanvas && computeDhashFromSource(bestCanvas, bestCanvas.width, bestCanvas.height)) {
+          return true;
+        }
+        return false;
+      }
+
+      function runCapture() {
+        try {
+          // 1. 페이지 내 대형 <canvas>(PDF.js/교과서 렌더러)가 있으면 즉시 픽셀 dHash 추출
+          if (tryDirectCanvasHash(document)) return;
+          var frames = document.querySelectorAll('iframe');
+          for (var f = 0; f < frames.length; f++) {
+            try {
+              if (frames[f].contentDocument && tryDirectCanvasHash(frames[f].contentDocument)) return;
+            } catch (e) {}
+          }
+          // 2. DOM + URL + 페이지번호 + 이미지 + 텍스트 기반 결정론적 256-bit 해시 추출 (빠르고 CSP/CORS 무관)
+          computeOfflineFallbackHash();
+        } catch (e) {
+          computeOfflineFallbackHash();
         }
       }
 
-      try {
-        if (typeof html2canvas === 'undefined') {
-          var script = document.createElement('script');
-          script.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
-          script.onload = function() {
-            html2canvas(document.body).then(computeDhash).catch(function(e){ computeOfflineFallbackHash(); });
-          };
-          script.onerror = function() { computeOfflineFallbackHash(); };
-          document.head.appendChild(script);
-        } else {
-          html2canvas(document.body).then(computeDhash).catch(function(e){ computeOfflineFallbackHash(); });
-        }
-      } catch(e) {
-        computeOfflineFallbackHash();
-      }
+      runCapture();
     })();
   ''';
 
@@ -119,20 +297,46 @@ class TbpDhashEngine {
     _winController = winController;
     _androidController = androidController;
     _startBackgroundPolling();
-    // 초기 dHash 획득 (2초 후)
-    Future.delayed(const Duration(seconds: 2), () {
+    Future.delayed(const Duration(milliseconds: 500), () {
       if (!_disposed) _triggerBurstCapture();
     });
   }
+
+  /// Web 환경(cross-origin iframe)에서 가상 페이지 이동 시 페이지별 dHash 전환 지원
+  void stepWebVirtualPage([int delta = 1, bool? isNext]) {
+    if (!kIsWeb) return;
+    final forward = isNext ?? (delta >= 0);
+    if (forward) {
+      _webVirtualPage++;
+    } else if (_webVirtualPage > 1) {
+      _webVirtualPage--;
+    }
+    final virtualHash = _webVirtualPage == 1 ? 'default' : 'web_page_$_webVirtualPage';
+    if (_currentDhash != virtualHash) {
+      _currentDhash = virtualHash;
+      onDhashChanged(virtualHash);
+    }
+  }
+
+  /// 외부(클릭 등)에서 버스트 캡처 트리거
+  void triggerBurstCapture() => _triggerBurstCapture();
 
   /// WebView에서 수신된 JS 메시지 처리 (viewer route에서 호출)
   void onDhashMessage(String rawMessage) {
     try {
       final data = jsonDecode(rawMessage);
-      if (data is Map && data['type'] == 'dhashResult') {
-        final hash = data['hash'] as String?;
-        if (hash != null && hash.isNotEmpty) {
-          _onNewHash(hash);
+      if (data is Map) {
+        if (data['type'] == 'dhashResult') {
+          final hash = data['hash'] as String?;
+          if (hash != null && hash.isNotEmpty) {
+            _onNewHash(hash);
+          }
+        } else if (data['type'] == 'hotspotContext' && onWebContextMenu != null) {
+          final rx = (data['rx'] as num?)?.toDouble();
+          final ry = (data['ry'] as num?)?.toDouble();
+          if (rx != null && ry != null) {
+            onWebContextMenu!(rx, ry);
+          }
         }
       }
     } catch (e) {
@@ -140,8 +344,13 @@ class TbpDhashEngine {
     }
   }
 
-  /// 페이지 이동 (ArrowRight / ArrowLeft)
+  /// 페이지 이동 (ArrowRight / ArrowLeft + 버스트 캡처)
   Future<void> navigatePage({required bool isNext}) async {
+    if (kIsWeb) {
+      stepWebVirtualPage(isNext ? 1 : -1);
+      return;
+    }
+
     final key = isNext ? 'ArrowRight' : 'ArrowLeft';
     final keyCode = isNext ? 39 : 37;
 
@@ -165,22 +374,21 @@ class TbpDhashEngine {
   // ─── 내부 구현 ─────────────────────────────────────────────
 
   void _startBackgroundPolling() {
-    // 5초 포커스 폴링
+    // 1.2초 실시간 페이지 감시 폴링
     _focusPollingTimer?.cancel();
-    _focusPollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _focusPollingTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) {
       if (!_disposed) _requestHashFromJs();
     });
 
-    // 12초 메인 폴백 폴링
+    // 5초 보조 폴링
     _fallbackPollingTimer?.cancel();
-    _fallbackPollingTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+    _fallbackPollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!_disposed) _requestHashFromJs();
     });
   }
 
-  /// boadbook 동일 지수 버스트 캡처
+  /// 지수 버스트 캡처
   void _triggerBurstCapture() {
-    // 기존 버스트 타이머 취소
     for (final t in _burstTimers) t.cancel();
     _burstTimers.clear();
 
@@ -202,34 +410,40 @@ class TbpDhashEngine {
     await _executeScript(_hashJsScript);
   }
 
-  void _onNewHash(String newHash) {
-    if (_currentDhash.isEmpty) {
-      _currentDhash = newHash;
-      onDhashChanged(newHash);
-      return;
+  void _onNewHash(String rawHash) {
+    final newHash = TbpStorageService.toBinary256(rawHash) ?? rawHash;
+
+    // 1. 현재 해시와 비교: 32비트 이하 차이면 동일 페이지(미세 노이즈)이므로 유지
+    if (_currentDhash.isNotEmpty && _currentDhash != 'default') {
+      final distToCurrent = TbpStorageService.hammingDistance(_currentDhash, newHash);
+      if (distToCurrent <= _samePageThreshold) {
+        return;
+      }
     }
 
-    final dist = _hammingDistance(_currentDhash, newHash);
+    // 2. 기존에 저장된/방문한 페이지 해시(_knownHashes) 중 가장 가까운 해시 검색 (<= 36비트)
+    String canonicalHash = newHash;
+    int bestDist = _knownMatchThreshold + 1;
+    for (final known in _knownHashes) {
+      final d = TbpStorageService.hammingDistance(newHash, known);
+      if (d < bestDist) {
+        bestDist = d;
+        canonicalHash = known;
+      }
+    }
+    _knownHashes.add(canonicalHash);
 
-    // 노이즈 필터: 3비트 미만 변화는 무시
-    if (dist < _noiseFilterBits) return;
-
-    // 매칭 실패 (64비트 초과 → 완전히 다른 페이지로 간주)
-    if (dist > _matchThreshold) {
-      _currentDhash = newHash;
-      onDhashChanged(newHash);
-    } else if (dist >= _noiseFilterBits) {
-      // 1~64비트 → 같은 페이지의 변형(해상도/렌더링 차이)이지만 일단 갱신
-      _currentDhash = newHash;
-      onDhashChanged(newHash);
+    if (_currentDhash != canonicalHash) {
+      _currentDhash = canonicalHash;
+      onDhashChanged(canonicalHash);
     }
   }
 
   Future<void> _executeScript(String script) async {
     try {
-      if (Platform.isWindows && _winController != null) {
+      if (!kIsWeb && Platform.isWindows && _winController != null) {
         await _winController!.executeScript(script);
-      } else if (!Platform.isWindows && _androidController != null) {
+      } else if (!kIsWeb && !Platform.isWindows && _androidController != null) {
         await _androidController!.runJavaScript(script);
       }
     } catch (e) {
@@ -243,15 +457,5 @@ class TbpDhashEngine {
     _fallbackPollingTimer?.cancel();
     for (final t in _burstTimers) t.cancel();
     _burstTimers.clear();
-  }
-
-  /// Hamming distance (서로 다른 비트 수 계산)
-  int _hammingDistance(String a, String b) {
-    if (a.length != b.length) return 256;
-    int dist = 0;
-    for (int i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) dist++;
-    }
-    return dist;
   }
 }

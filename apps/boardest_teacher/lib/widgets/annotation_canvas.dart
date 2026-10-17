@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:math';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 import '../models/board_tools.dart';
@@ -317,15 +319,79 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
   final GlobalKey _canvasKey = GlobalKey();
   List<Offset> _activePoints = [];
   bool _isDrawing = false;
+  int? _activePointerId;
+  Offset? _pointerDownPos;
+  Timer? _longPressTimer;
+  Timer? _hotspotHoldTimer;
+  bool _longPressTriggered = false;
+  DateTime? _lastRightClickTime;
 
-  Offset _local(Offset global) {
-    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-    return box?.globalToLocal(global) ?? global;
+  @override
+  void dispose() {
+    _longPressTimer?.cancel();
+    _hotspotHoldTimer?.cancel();
+    super.dispose();
   }
 
-  void _onPanStart(DragStartDetails d) {
+  void _handleRightClick(Offset pos) {
+    if (widget.onRightClick == null) return;
+    final now = DateTime.now();
+    if (_lastRightClickTime != null && now.difference(_lastRightClickTime!).inMilliseconds < 350) {
+      return;
+    }
+    _lastRightClickTime = now;
+    widget.onRightClick?.call(pos);
+  }
+
+  void _cancelActiveDrawing() {
+    if (_isDrawing || _activePoints.isNotEmpty) {
+      setState(() {
+        _isDrawing = false;
+        _activePoints = [];
+      });
+    }
+  }
+
+  void _onPointerDown(PointerDownEvent e) {
+    final p = e.localPosition;
+    // 우클릭(Secondary mouse button = 2) 감지 -> 마우스/스마트 모드에서 핫스팟 생성
+    if (e.buttons == kSecondaryMouseButton || (e.kind == PointerDeviceKind.mouse && e.buttons == 2)) {
+      _longPressTimer?.cancel();
+      _hotspotHoldTimer?.cancel();
+      _activePointerId = null;
+      _cancelActiveDrawing();
+      _handleRightClick(p);
+      return;
+    }
+
     if (!widget.enabled) return;
-    final p = _local(d.globalPosition);
+
+    _activePointerId = e.pointer;
+    _pointerDownPos = p;
+    _longPressTriggered = false;
+    _longPressTimer?.cancel();
+    _hotspotHoldTimer?.cancel();
+
+    // 스마트 모드:
+    // 1) 360ms 동안 움직이지 않고 꾹 누르면 그리던 점 취소 후 스마트 클릭 통과 발송
+    // 2) 900ms 이상 계속 길게 누르고 있으면 해당 위치에 핫스팟 생성 모달 호출
+    if (widget.onLongPressClick != null) {
+      _longPressTimer = Timer(const Duration(milliseconds: 360), () {
+        if (!mounted) return;
+        _longPressTriggered = true;
+        _cancelActiveDrawing();
+        widget.onLongPressClick!(p);
+      });
+
+      if (widget.onRightClick != null) {
+        _hotspotHoldTimer = Timer(const Duration(milliseconds: 900), () {
+          if (!mounted || _activePointerId == null) return;
+          _longPressTriggered = true;
+          _cancelActiveDrawing();
+          _handleRightClick(p);
+        });
+      }
+    }
 
     final ctrl = widget.controller;
     if (ctrl.toolMode == ToolMode.eraser) {
@@ -355,9 +421,16 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     });
   }
 
-  void _onPanUpdate(DragUpdateDetails d) {
-    if (!widget.enabled) return;
-    final p = _local(d.globalPosition);
+  void _onPointerMove(PointerMoveEvent e) {
+    if (!widget.enabled || e.pointer != _activePointerId) return;
+    final p = e.localPosition;
+
+    if (_pointerDownPos != null && (p - _pointerDownPos!).distance > 7.0) {
+      _longPressTimer?.cancel();
+      _hotspotHoldTimer?.cancel();
+    }
+
+    if (_longPressTriggered) return;
 
     final ctrl = widget.controller;
     if (ctrl.toolMode == ToolMode.eraser) {
@@ -372,7 +445,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
         ctrl.lastLassoPolygon = ctrl.lastLassoPolygon.map((pt) => pt + delta).toList();
       } else if (ctrl.isLassoActive) {
         ctrl.lassoPolygon.add(p);
-        ctrl.notifyLassoChanged(); // Force repaint
+        ctrl.notifyLassoChanged();
       }
       return;
     }
@@ -383,11 +456,25 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     });
   }
 
-  void _onPanEnd(DragEndDetails d) {
+  void _onPointerUp(PointerUpEvent e) {
+    _longPressTimer?.cancel();
+    _hotspotHoldTimer?.cancel();
+    if (_longPressTriggered) {
+      _longPressTriggered = false;
+      _activePointerId = null;
+      return;
+    }
+    if (!widget.enabled || e.pointer != _activePointerId) return;
+    _activePointerId = null;
+
     final ctrl = widget.controller;
     if (ctrl.toolMode == ToolMode.select) {
       if (ctrl.isLassoActive) {
-        ctrl.checkLassoSelection();
+        if (ctrl.lassoPolygon.length < 3) {
+          ctrl.clearLassoSelection();
+        } else {
+          ctrl.checkLassoSelection();
+        }
         ctrl.isLassoActive = false;
         ctrl.lassoPolygon.clear();
         setState(() {});
@@ -398,7 +485,7 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     if (_isDrawing) {
       if (ctrl.toolMode == ToolMode.pen && _activePoints.isNotEmpty) {
         final pts = _activePoints.length == 1
-            ? [_activePoints.first, _activePoints.first + const Offset(0.1, 0.1)]
+            ? [_activePoints.first, _activePoints.first + const Offset(0.5, 0.5)]
             : List<Offset>.from(_activePoints);
         final stroke = AnnotationStroke(
           points: pts,
@@ -414,61 +501,25 @@ class _AnnotationCanvasState extends State<AnnotationCanvas> {
     }
   }
 
-  DateTime? _lastRightClickTime;
-  void _handleRightClick(Offset pos) {
-    final now = DateTime.now();
-    if (_lastRightClickTime != null && now.difference(_lastRightClickTime!).inMilliseconds < 300) {
-      return;
-    }
-    _lastRightClickTime = now;
-    widget.onRightClick?.call(pos);
-  }
-
-  void _onTapUp(TapUpDetails d) {
-    if (!widget.enabled) return;
-    final ctrl = widget.controller;
-    final p = _local(d.globalPosition);
-    if (ctrl.toolMode == ToolMode.pen) {
-      // 스마트/주석 모드: 한 번 눌러도 점(dot) 드로잉
-      ctrl.addStroke(AnnotationStroke(
-        points: [p, p + const Offset(0.1, 0.1)],
-        color: ctrl.activeColor,
-        strokeWidth: ctrl.activeWidth,
-      ));
-    } else if (ctrl.toolMode == ToolMode.eraser) {
-      ctrl.eraseAt(p);
-    } else if (ctrl.toolMode == ToolMode.select) {
-      ctrl.clearLassoSelection();
-      setState(() {});
-    }
+  void _onPointerCancel(PointerCancelEvent e) {
+    _longPressTimer?.cancel();
+    _hotspotHoldTimer?.cancel();
+    _longPressTriggered = false;
+    _activePointerId = null;
+    _cancelActiveDrawing();
   }
 
   @override
   Widget build(BuildContext context) {
     final canvas = IgnorePointer(
       ignoring: !widget.enabled,
-      child: GestureDetector(
+      child: Listener(
         key: _canvasKey,
         behavior: widget.enabled ? HitTestBehavior.opaque : HitTestBehavior.translucent,
-        onTapUp: widget.enabled ? _onTapUp : null,
-        onPanStart: widget.enabled ? _onPanStart : null,
-        onPanUpdate: widget.enabled ? _onPanUpdate : null,
-        onPanEnd: widget.enabled ? _onPanEnd : null,
-        onLongPressStart: widget.enabled && widget.onLongPressClick != null
-            ? (details) {
-                // 스마트 모드: 길게 꾹 누르면 판서 선을 즉시 취소하고 웹 클릭 발송!
-                setState(() {
-                  _isDrawing = false;
-                  _activePoints.clear();
-                });
-                widget.onLongPressClick!(_local(details.globalPosition));
-              }
-            : null,
-        onSecondaryTapDown: widget.enabled
-            ? (details) {
-                _handleRightClick(details.localPosition);
-              }
-            : null,
+        onPointerDown: _onPointerDown,
+        onPointerMove: _onPointerMove,
+        onPointerUp: _onPointerUp,
+        onPointerCancel: _onPointerCancel,
         child: RepaintBoundary(
           child: ListenableBuilder(
             listenable: widget.controller,

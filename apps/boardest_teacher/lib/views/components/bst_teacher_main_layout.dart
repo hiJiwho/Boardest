@@ -794,7 +794,7 @@ class BstTeacherMainLayout extends StatelessWidget {
       case 'cloud_open':
         return '📂 Cloud 에서 열기 (드라이브 & 판서 파일)';
       case 'cloud_create':
-        return '✨ Cloud 에서 생성 (TBP, Canva, 파일 업로드 등)';
+        return '✨ Cloud 에서 생성 (TBP, HTML Present, 파일 업로드 등)';
       case 'cloud_settings':
         return '☁️ Cloud 설정 (국제 규격 패스키 & 인증 기기)';
       case 'meal':

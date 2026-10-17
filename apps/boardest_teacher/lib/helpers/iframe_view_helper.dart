@@ -6,3 +6,11 @@ import 'iframe_view_stub.dart'
 Widget getIframeViewWidget(String viewType, String url) {
   return buildIframeView(viewType, url);
 }
+
+void setIframePointerEvents(bool allow) {
+  setWebIframePointerEvents(allow);
+}
+
+void sendVirtualKeyToIframe(String key, int keyCode) {
+  sendWebVirtualKeyToIframe(key, keyCode);
+}

@@ -68,9 +68,18 @@ dev_dependencies:
 
   flutter_lints: ^6.0.0
 
+dependency_overrides:
+  google_fonts:
+    path: ../../packages/common/google_fonts
+
 flutter:
   uses-material-design: true
   assets:
     - assets/app_icon.ico
     - assets/bst-web/
     - assets/icons/
+    - assets/fonts/
+  fonts:
+    - family: SiwonhanSeolreim
+      fonts:
+        - asset: assets/fonts/SEOLEIMcool.ttf

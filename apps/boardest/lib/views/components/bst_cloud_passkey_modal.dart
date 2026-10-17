@@ -52,7 +52,7 @@ class _BstCloudPasskeyModalState extends State<BstCloudPasskeyModal> {
   bool _isLoadingSession = true;
   bool _isApproved = false;
   String? _errorMsg;
-  bool _saveToProBoard = !kIsWeb; // PRO에서는 기본 체크
+  bool _saveToProBoard = false; // 1회 접속 시 자동 등록 방지 (명시적 선택 또는 등록 버튼 클릭 시에만 저장)
   StreamSubscription? _approvalSubscription;
 
   // PRO 등록된 교사 목록

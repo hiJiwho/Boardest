@@ -52,12 +52,12 @@ function Set-PackageVersion([string]$Manifest) {
 }
 function Build-Windows([string]$Directory) {
   Push-Location $Directory
-  try { & flutter build windows --release; if ($LASTEXITCODE -ne 0) { throw "Windows build failed: $Directory" } }
+  try { & flutter build windows --release --no-tree-shake-icons --obfuscate --split-debug-info=build/debug-info; if ($LASTEXITCODE -ne 0) { throw "Windows build failed: $Directory" } }
   finally { Pop-Location }
 }
 function Build-Apk([string]$Directory, [string]$Name) {
   Push-Location $Directory
-  try { & flutter build apk --release; if ($LASTEXITCODE -ne 0) { throw "Android APK build failed: $Directory" } }
+  try { & flutter build apk --release --no-tree-shake-icons --obfuscate --split-debug-info=build/debug-info; if ($LASTEXITCODE -ne 0) { throw "Android APK build failed: $Directory" } }
   finally { Pop-Location }
   Copy-Item (Join-Path $Directory 'build\app\outputs\flutter-apk\app-release.apk') (Join-Path $OutDir $Name) -Force
 }

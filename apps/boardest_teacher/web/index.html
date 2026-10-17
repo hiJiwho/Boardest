@@ -28,22 +28,33 @@
   </script>
   <!-- Cache & ServiceWorker Purge Helper -->
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for (let reg of registrations) {
-          if (!reg.active || !reg.active.scriptURL.includes('firebase-messaging-sw.js')) {
-            reg.unregister();
+    (async function() {
+      try {
+        let hadSw = false;
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (let reg of registrations) {
+            if (!reg.active || !reg.active.scriptURL.includes('firebase-messaging-sw.js')) {
+              await reg.unregister();
+              hadSw = true;
+            }
           }
         }
-      });
-    }
-    if ('caches' in window) {
-      caches.keys().then(function(names) {
-        for (let name of names) {
-          caches.delete(name);
+        if ('caches' in window) {
+          const names = await caches.keys();
+          for (let name of names) {
+            await caches.delete(name);
+          }
         }
-      });
-    }
+        if (hadSw && !sessionStorage.getItem('bst_sw_reloaded_v6')) {
+          sessionStorage.setItem('bst_sw_reloaded_v6', 'true');
+          window.location.reload();
+        }
+      } catch (_) {}
+    })();
+    window.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+    });
   </script>
   <!-- 순정 FIDO2 / WebAuthn Cross-Device 패스키 발동 헬퍼 -->
   <script>
@@ -158,11 +169,21 @@
   </script>
 
   <style>
+    @font-face {
+      font-family: 'SiwonhanSeolreim';
+      src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2312-1@1.1/seolleimcool-SemiBold.woff2') format('woff2');
+      font-weight: normal;
+      font-display: swap;
+    }
+    * {
+      font-family: 'SiwonhanSeolreim', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
     body {
       background-color: #0F0E17;
       margin: 0;
       padding: 0;
       overflow: hidden;
+      font-family: 'SiwonhanSeolreim', sans-serif;
     }
     #app-splash-screen {
       position: fixed;
@@ -173,7 +194,7 @@
       align-items: center;
       justify-content: center;
       z-index: 999999;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: 'SiwonhanSeolreim', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     .splash-logo-img {
       width: 80px; height: 80px;
@@ -380,6 +401,6 @@
     })();
   </script>
 
-  <script src="flutter_bootstrap.js?v=2.8.0_20261007_v2" async></script>
+  <script src="flutter_bootstrap.js?v=4.0.9_20261017_v5" async></script>
 </body>
 </html>

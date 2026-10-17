@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>BST 급식 문자 & 호출</title>
+  <style>
+    body { background: #0f0e17; color: #fffffe; font-family: sans-serif; padding: 20px; }
+    .card { background: #16161a; border-radius: 12px; padding: 20px; border: 1px solid #2ec4b6; margin-bottom: 15px; }
+    h2 { color: #2ec4b6; margin-bottom: 10px; }
+    button { background: #2ec4b6; color: #000; font-weight: bold; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+    select, input { width: 100%; padding: 10px; margin: 8px 0; border-radius: 6px; border: 1px solid #333; background: #242629; color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>🍱 오늘 급식 메뉴 & 급식문자 전송</h2>
+    <div id="meal-info">급식 정보를 불러오는 중...</div>
+    <hr style="border-color:#333; margin: 15px 0;">
+    <h3>📢 학급 급식 순서 호출 (Realtime Sync)</h3>
+    <select id="class-select">
+      <option value="all">전체 학급</option>
+      <option value="1-1">1학년 1반</option>
+      <option value="1-2">1학년 2반</option>
+      <option value="2-1">2학년 1반</option>
+    </select>
+    <button onclick="sendEatCall()">급식 이동 신호 보네기</button>
+  </div>
+  <script>
+    function sendEatCall() {
+      const cls = document.getElementById('class-select').value;
+      alert(cls + '에 급식 호출 신호를 전송했습니다!');
+    }
+  </script>
+</body>
+</html>

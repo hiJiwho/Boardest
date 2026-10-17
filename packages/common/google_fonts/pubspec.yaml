@@ -1,0 +1,11 @@
+name: google_fonts
+description: "Local Boardest override for google_fonts mapping all typography to SiwonhanSeolreim (SEOLEIMcool.ttf)."
+version: 8.2.1
+publish_to: 'none'
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  flutter:
+    sdk: flutter

@@ -340,11 +340,12 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
             !name.endsWith('.bstpen') &&
             !name.endsWith('.bsttbp') &&
             !name.endsWith('.tbp') &&
+            !name.endsWith('.htmlp') &&
             !name.contains('canva');
       }
-      if (_categoryFilter == '📐 TBP & Canva' || _categoryFilter == 'TBP & Canva') {
+      if (_categoryFilter == '📐 TBP & HTML Present' || _categoryFilter == '📐 TBP & Canva' || _categoryFilter == 'TBP & Canva') {
         final isTbp = isTbpFolder || name.endsWith('.bsttbp') || name.endsWith('.tbp') || name.contains('tbp') || name.contains('교과서');
-        final isCanva = file['source'] == 'canva' || name.endsWith('.canva') || name.endsWith('.canva.bst') || name.endsWith('.bstcanva') || name.contains('canva');
+        final isCanva = file['source'] == 'canva' || name.endsWith('.htmlp') || name.endsWith('.canva') || name.endsWith('.canva.bst') || name.endsWith('.bstcanva') || name.contains('canva');
         return isTbp || isCanva;
       }
       if (_categoryFilter == '✏️ 판서 (.pen)' || _categoryFilter == '판서') {
@@ -531,7 +532,7 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
 
   // ─── 2. 검색 & 필터 ───
   Widget _buildSearchAndFilters(double s) {
-    final categories = ['전체', '📁 수업 자료', '📐 TBP & Canva', '✏️ 판서 (.pen)'];
+    final categories = ['전체', '📁 수업 자료', '📐 TBP & HTML Present', '✏️ 판서 (.pen)'];
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 8 * s),
@@ -835,8 +836,8 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
     if (lower.endsWith('.pdf')) {
       return _FileMeta(const Color(0xFFEF4565), Icons.picture_as_pdf_rounded, 'PDF');
     }
-    if (lower.endsWith('.canva') || lower.endsWith('.canva.bst') || lower.endsWith('.bstcanva')) {
-      return _FileMeta(const Color(0xFF00C4CC), Icons.palette_rounded, 'CANVA');
+    if (lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva') || lower.endsWith('.canva.bst') || lower.endsWith('.bstcanva')) {
+      return _FileMeta(const Color(0xFF00C4CC), Icons.slideshow_rounded, 'HTMLP');
     }
     if (lower.endsWith('.ppt') || lower.endsWith('.pptx')) {
       return _FileMeta(const Color(0xFFFF8906), Icons.slideshow_rounded, 'PPT');

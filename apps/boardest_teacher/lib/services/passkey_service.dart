@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -107,15 +108,18 @@ class PasskeyService {
     }
   }
 
-  /// 칠판의 챌린지 세션에 패스키 승인 전송
+  /// 칠판의 챌린지 세션에 패스키 승인 전송 (Challenge-Response SHA-256 서명 포함)
   Future<bool> approveBoardSession({
     required String sessionId,
+    String challenge = '',
     required String accessToken,
     String? refreshToken,
     required String teacherName,
     required String email,
   }) async {
     try {
+      final raw = '$sessionId:$challenge:$accessToken:bst_passkey_v2_hmac_guard';
+      final proof = sha256.convert(utf8.encode(raw)).toString();
       final res = await http.patch(
         Uri.parse('$_rtdbBase/sessions/$sessionId.json'),
         headers: {'Content-Type': 'application/json'},
@@ -125,6 +129,7 @@ class PasskeyService {
           if (refreshToken != null) 'refreshToken': refreshToken,
           'teacherName': teacherName,
           'email': email,
+          'proof': proof,
           'approvedAt': DateTime.now().millisecondsSinceEpoch,
         }),
       ).timeout(const Duration(seconds: 4));

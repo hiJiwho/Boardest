@@ -67,10 +67,21 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
   bool _winWebviewInitialized = false;
 
   Timer? _autoSavePenTimer;
+  Timer? _smartPassThroughTimer;
+  bool _smartClickPassThrough = false;
+
+  bool get _isWebTouchMode =>
+      _inputMode == TbpInputMode.touch ||
+      _tool == ToolMode.pointer ||
+      _smartClickPassThrough;
+
+  void _syncIframePointerEvents() {
+    setIframePointerEvents(_isWebTouchMode);
+  }
 
   void _scheduleAutoSavePenStrokes() {
     _autoSavePenTimer?.cancel();
-    _autoSavePenTimer = Timer(const Duration(milliseconds: 1000), () async {
+    _autoSavePenTimer = Timer(const Duration(milliseconds: 800), () async {
       if (!mounted) return;
       try {
         await TbpStorageService.instance.savePenStrokes(
@@ -86,6 +97,16 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
   }
 
   void _sendVirtualKey(String key, int keyCode) {
+    if (kIsWeb) {
+      sendVirtualKeyToIframe(key, keyCode);
+      if (key == 'PageDown' || key == 'ArrowRight') {
+        _dhashEngine.stepWebVirtualPage(1);
+      } else if (key == 'PageUp' || key == 'ArrowLeft') {
+        _dhashEngine.stepWebVirtualPage(-1);
+      }
+      _dhashEngine.triggerBurstCapture();
+      return;
+    }
     final script = '''
       (function() {
         const target = document.activeElement || document.body;
@@ -111,7 +132,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
         target.dispatchEvent(upEvt);
         window.dispatchEvent(upEvt);
 
-        // Fallback arrow keys for presentation frameworks (Canva, Slides, etc)
+        // Fallback arrow keys for presentation frameworks (HTML Present, Slides, etc)
         if ('$key' === 'PageDown' || '$key' === 'PageUp') {
           const arrowKey = '$key' === 'PageDown' ? 'ArrowRight' : 'ArrowLeft';
           const arrowCode = '$key' === 'PageDown' ? 39 : 37;
@@ -133,13 +154,41 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
     } else if (!kIsWeb && !Platform.isWindows) {
       _androidWebview.runJavaScript(script);
     }
+    _dhashEngine.triggerBurstCapture();
+  }
+
+  void _handleWebviewHotspotContext(double rx, double ry) {
+    if (!mounted) return;
+    // 마우스(터치) 모드 또는 스마트 모드에서만 우클릭/길게누르기 핫스팟 생성 허용
+    if (_inputMode == TbpInputMode.pen) return;
+    setIframePointerEvents(false);
+    TbpHotspotOverlay.showAddHotspotModal(
+      context,
+      rx.clamp(0.02, 0.98),
+      ry.clamp(0.02, 0.98),
+      _tbpFolderPath,
+      _currentDhash,
+      _currentHotspots,
+      (updated) {
+        if (mounted) {
+          setState(() {
+            _currentHotspots = updated;
+          });
+        }
+        _syncIframePointerEvents();
+      },
+    ).then((_) => _syncIframePointerEvents());
   }
 
   @override
   void initState() {
     super.initState();
     _annotationController.onStrokesChanged = _scheduleAutoSavePenStrokes;
-    _dhashEngine = TbpDhashEngine(onDhashChanged: _onDhashDetected);
+    _dhashEngine = TbpDhashEngine(
+      onDhashChanged: _onDhashDetected,
+      onWebContextMenu: _handleWebviewHotspotContext,
+    );
+    _syncIframePointerEvents();
     _loadTbpPackage();
   }
 
@@ -173,6 +222,10 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
       }
       _targetUrl = targetUrl;
 
+      // 기존에 저장된 페이지 해시들을 Dhash 엔진에 등록하여 해밍 거리 기반 페이지 매칭 활성화
+      final knownHashes = await TbpStorageService.instance.getKnownPageHashes(_tbpFolderPath);
+      _dhashEngine.registerKnownHashes(knownHashes);
+
       // 초기 페이지('default') 핫스팟 및 판서 스트로크 즉시 로드
       final initialHotspots = await TbpStorageService.instance.loadHotspots(
         _tbpFolderPath,
@@ -189,6 +242,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
         setState(() {
           _isLoading = false;
         });
+        _dhashEngine.startTracker(null, null);
         return;
       } else if (Platform.isWindows) {
         await _initWindowsWebview(targetUrl);
@@ -226,9 +280,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
         try {
           _dhashEngine.onDhashMessage(message);
           final data = jsonDecode(message);
-          if (data['type'] == 'dhashUpdated') {
-            _onDhashDetected(data['dhash']);
-          } else if (data['type'] == 'downloadRequest') {
+          if (data['type'] == 'downloadRequest') {
             TbpDownloadInterceptor.instance.handleDownload(
               context: context,
               tbpFolderPath: _tbpFolderPath,
@@ -260,9 +312,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
           try {
             _dhashEngine.onDhashMessage(msg.message);
             final data = jsonDecode(msg.message);
-            if (data['type'] == 'dhashUpdated') {
-              _onDhashDetected(data['dhash']);
-            } else if (data['type'] == 'downloadRequest') {
+            if (data['type'] == 'downloadRequest') {
               TbpDownloadInterceptor.instance.handleDownload(
                 context: context,
                 tbpFolderPath: _tbpFolderPath,
@@ -381,30 +431,36 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
 
   Widget _buildInputModeChip(TbpInputMode mode, String label, double s) {
     final isSelected = _inputMode == mode;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _inputMode = mode;
-          if (mode == TbpInputMode.touch) {
-            _tool = ToolMode.pointer;
-          } else if (mode == TbpInputMode.pen && _tool == ToolMode.pointer) {
-            _tool = ToolMode.pen;
-          }
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF7F5AF0) : Colors.transparent,
-          borderRadius: BorderRadius.circular(16 * s),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.notoSansKr(
-            color: isSelected ? Colors.white : Colors.white70,
-            fontSize: 12 * s,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16 * s),
+        onTap: () {
+          setState(() {
+            _inputMode = mode;
+            if (mode == TbpInputMode.touch) {
+              _tool = ToolMode.pointer;
+            } else if (_tool == ToolMode.pointer) {
+              _tool = ToolMode.pen;
+              _annotationController.toolMode = ToolMode.pen;
+            }
+          });
+          _syncIframePointerEvents();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF7F5AF0) : Colors.transparent,
+            borderRadius: BorderRadius.circular(16 * s),
+          ),
+          child: Text(
+            label,
+            style: GoogleFonts.notoSansKr(
+              color: isSelected ? Colors.white : Colors.white70,
+              fontSize: 12 * s,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
           ),
         ),
       ),
@@ -412,26 +468,42 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
   }
 
   Future<void> _onDhashDetected(String dHash) async {
-    if (_currentDhash == dHash) return;
+    if (dHash.isEmpty || _currentDhash == dHash) return;
+
+    final prevDhash = _currentDhash;
+    final prevStrokes = List<AnnotationStroke>.from(_annotationController.strokes);
+    final prevHotspots = List<Map<String, dynamic>>.from(_currentHotspots);
 
     // Save previous dHash strokes
-    if (_tbpFolderPath.isNotEmpty && _annotationController.strokes.isNotEmpty) {
+    if (_tbpFolderPath.isNotEmpty) {
       await TbpStorageService.instance.savePenStrokes(
         _tbpFolderPath,
-        _currentDhash,
-        _annotationController.strokes,
+        prevDhash,
+        prevStrokes,
       );
     }
 
     _currentDhash = dHash;
-    final hotspots = await TbpStorageService.instance.loadHotspots(
+    var hotspots = await TbpStorageService.instance.loadHotspots(
       _tbpFolderPath,
       dHash,
     );
-    final strokes = await TbpStorageService.instance.loadPenStrokes(
+    var strokes = await TbpStorageService.instance.loadPenStrokes(
       _tbpFolderPath,
       dHash,
     );
+
+    // 초기 'default' 상태에서 첫 실제 페이지 해시로 진입 시 작성 중이던 판서/핫스팟 자동 이관
+    if (prevDhash == 'default') {
+      if (strokes.isEmpty && prevStrokes.isNotEmpty) {
+        strokes = prevStrokes;
+        await TbpStorageService.instance.savePenStrokes(_tbpFolderPath, dHash, strokes);
+      }
+      if (hotspots.isEmpty && prevHotspots.isNotEmpty) {
+        hotspots = prevHotspots;
+        await TbpStorageService.instance.saveHotspots(_tbpFolderPath, dHash, hotspots);
+      }
+    }
 
     if (mounted) {
       setState(() {
@@ -445,16 +517,18 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
 
   void _onPointerDown(PointerDownEvent event) {
     _touchDhashTimer?.cancel();
-    _touchDhashTimer = Timer(const Duration(seconds: 1), () {
-      _dhashEngine.requestHashNow();
+    _touchDhashTimer = Timer(const Duration(milliseconds: 450), () {
+      _dhashEngine.triggerBurstCapture();
     });
   }
 
   @override
   void dispose() {
     _autoSavePenTimer?.cancel();
+    _smartPassThroughTimer?.cancel();
     _touchDhashTimer?.cancel();
     _activeSpotTimer?.cancel();
+    setIframePointerEvents(true);
     _dhashEngine.dispose();
     super.dispose();
   }
@@ -503,6 +577,10 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
       );
     }
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncIframePointerEvents();
+    });
+
     final webviewWidget = kIsWeb
         ? getIframeViewWidget('tbp-teacher-iframe-${_targetUrl.hashCode}', _targetUrl)
         : (Platform.isWindows
@@ -529,6 +607,9 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                       final cHeight = constraints.maxHeight > 0 ? constraints.maxHeight : MediaQuery.of(context).size.height;
 
                       void openHotspotModalAt(Offset pos) {
+                        // 마우스 모드 또는 스마트 모드에서만 핫스팟 생성 허용 (주석 전용 모드에서는 차단)
+                        if (_inputMode == TbpInputMode.pen) return;
+                        setIframePointerEvents(false);
                         final rx = (pos.dx / cWidth).clamp(0.02, 0.98);
                         final ry = (pos.dy / cHeight).clamp(0.02, 0.98);
                         TbpHotspotOverlay.showAddHotspotModal(
@@ -542,18 +623,36 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                             setState(() {
                               _currentHotspots = updated;
                             });
+                            _syncIframePointerEvents();
                           },
-                        );
+                        ).then((_) => _syncIframePointerEvents());
                       }
 
                       return Stack(
                         children: [
-                          // 1. Webview 메인 영역 (터치 모드일 때 우클릭 감지 지원)
+                          // 1. Webview 메인 영역 (마우스 모드일 때 우클릭/길게누르기 핫스팟 감지 지원)
                           Positioned.fill(
                             child: GestureDetector(
                               behavior: HitTestBehavior.translucent,
-                              onSecondaryTapDown: (d) => openHotspotModalAt(d.localPosition),
-                              child: webviewWidget,
+                              onSecondaryTapDown: (details) {
+                                if (_inputMode != TbpInputMode.pen) {
+                                  openHotspotModalAt(details.localPosition);
+                                }
+                              },
+                              onLongPressStart: (details) {
+                                if (_inputMode == TbpInputMode.touch) {
+                                  openHotspotModalAt(details.localPosition);
+                                }
+                              },
+                              child: Listener(
+                                behavior: HitTestBehavior.translucent,
+                                onPointerDown: (e) {
+                                  if (e.buttons == 2 && _inputMode != TbpInputMode.pen) {
+                                    openHotspotModalAt(e.localPosition);
+                                  }
+                                },
+                                child: webviewWidget,
+                              ),
                             ),
                           ),
 
@@ -561,34 +660,77 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                           Positioned.fill(
                             child: AnnotationCanvas(
                               controller: _annotationController,
-                              enabled:
-                                  _inputMode != TbpInputMode.touch &&
-                                  _tool != ToolMode.pointer,
-                              onRightClick: openHotspotModalAt,
-                              onLongPressClick: (pos) {
-                                final x = pos.dx.toInt();
-                                final y = pos.dy.toInt();
-                                final script = '''
-                                (function() {
-                                  const el = document.elementFromPoint($x, $y);
-                                  if (el) {
-                                    const evt = new MouseEvent('click', {
-                                      bubbles: true,
-                                      cancelable: true,
-                                      clientX: $x,
-                                      clientY: $y
-                                    });
-                                    el.dispatchEvent(evt);
-                                    if (typeof el.click === 'function') el.click();
-                                  }
-                                })();
-                              ''';
-                                if (!kIsWeb && Platform.isWindows && _winWebviewInitialized) {
-                                  _winWebview.executeScript(script);
-                                } else if (!kIsWeb && !Platform.isWindows) {
-                                  _androidWebview.runJavaScript(script);
-                                }
-                              },
+                              enabled: !_isWebTouchMode,
+                              onRightClick: _inputMode != TbpInputMode.pen ? openHotspotModalAt : null,
+                              onLongPressClick: _inputMode == TbpInputMode.smart
+                                  ? (pos) {
+                                      setState(() {
+                                        _smartClickPassThrough = true;
+                                      });
+                                      _syncIframePointerEvents();
+                                      _smartPassThroughTimer?.cancel();
+                                      _smartPassThroughTimer = Timer(const Duration(milliseconds: 2200), () {
+                                        if (mounted) {
+                                          setState(() {
+                                            _smartClickPassThrough = false;
+                                          });
+                                          _syncIframePointerEvents();
+                                          _dhashEngine.triggerBurstCapture();
+                                        }
+                                      });
+
+                                      ScaffoldMessenger.of(context).clearSnackBars();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('👆 스마트 클릭 통과 활성화 (교과서 버튼/요소 클릭 실행됨 • 2.2초간 직접 터치 가능)'),
+                                          duration: Duration(milliseconds: 1400),
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+
+                                      if (kIsWeb) {
+                                        return;
+                                      }
+
+                                      final rx = (pos.dx / cWidth).clamp(0.0, 1.0);
+                                      final ry = (pos.dy / cHeight).clamp(0.0, 1.0);
+                                      final script = '''
+                                      (function() {
+                                        function fireClickAt(doc, win, cx, cy) {
+                                          let el = doc.elementFromPoint(cx, cy);
+                                          if (!el) return;
+                                          if (el.tagName === 'IFRAME') {
+                                            try {
+                                              const rect = el.getBoundingClientRect();
+                                              const subDoc = el.contentDocument || (el.contentWindow && el.contentWindow.document);
+                                              if (subDoc) {
+                                                fireClickAt(subDoc, el.contentWindow || win, cx - rect.left, cy - rect.top);
+                                                return;
+                                              }
+                                            } catch (_) {}
+                                          }
+                                          const opts = { bubbles: true, cancelable: true, view: win, clientX: cx, clientY: cy, button: 0, buttons: 1 };
+                                          try { el.dispatchEvent(new PointerEvent('pointerdown', opts)); } catch (_) {}
+                                          try { el.dispatchEvent(new MouseEvent('mousedown', opts)); } catch (_) {}
+                                          try { el.dispatchEvent(new PointerEvent('pointerup', opts)); } catch (_) {}
+                                          try { el.dispatchEvent(new MouseEvent('mouseup', opts)); } catch (_) {}
+                                          try { el.dispatchEvent(new MouseEvent('click', opts)); } catch (_) {}
+                                          if (typeof el.click === 'function') el.click();
+                                          if (typeof el.focus === 'function') el.focus();
+                                        }
+                                        const x = Math.round($rx * (window.innerWidth || document.documentElement.clientWidth || 1280));
+                                        const y = Math.round($ry * (window.innerHeight || document.documentElement.clientHeight || 720));
+                                        fireClickAt(document, window, x, y);
+                                      })();
+                                      ''';
+                                      if (!kIsWeb && Platform.isWindows && _winWebviewInitialized) {
+                                        _winWebview.executeScript(script);
+                                      } else if (!kIsWeb && !Platform.isWindows) {
+                                        _androidWebview.runJavaScript(script);
+                                      }
+                                      _dhashEngine.triggerBurstCapture();
+                                    }
+                                  : null,
                             ),
                           ),
 
@@ -615,35 +757,44 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                             top: 0,
                             bottom: 0,
                             child: Center(
-                              child: PointerInterceptor(child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(24 * s),
-                                  onTap: () => _sendVirtualKey('PageUp', 33),
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF16161A).withOpacity(0.65),
+                              child: MouseRegion(
+                                onEnter: (_) => setIframePointerEvents(false),
+                                onExit: (_) => _syncIframePointerEvents(),
+                                child: PointerInterceptor(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
                                       borderRadius: BorderRadius.circular(24 * s),
-                                      border: Border.all(color: Colors.white.withOpacity(0.18)),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.35),
-                                          blurRadius: 10,
+                                      onTap: () {
+                                        _sendVirtualKey('PageUp', 33);
+                                        _dhashEngine.navigatePage(isNext: false);
+                                      },
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF16161A).withOpacity(0.75),
+                                          borderRadius: BorderRadius.circular(24 * s),
+                                          border: Border.all(color: Colors.white.withOpacity(0.22)),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.35),
+                                              blurRadius: 10,
+                                            ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.arrow_back_ios_new_rounded, size: 16 * s, color: Colors.white),
-                                        SizedBox(height: 4 * s),
-                                        Text('PgUp', style: TextStyle(color: Colors.white70, fontSize: 9 * s, fontWeight: FontWeight.bold)),
-                                      ],
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.arrow_back_ios_new_rounded, size: 16 * s, color: Colors.white),
+                                            SizedBox(height: 4 * s),
+                                            Text('PgUp', style: TextStyle(color: Colors.white70, fontSize: 9 * s, fontWeight: FontWeight.bold)),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              )),
+                              ),
                             ),
                           ),
 
@@ -652,35 +803,44 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                             top: 0,
                             bottom: 0,
                             child: Center(
-                              child: PointerInterceptor(child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(24 * s),
-                                  onTap: () => _sendVirtualKey('PageDown', 34),
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF16161A).withOpacity(0.65),
+                              child: MouseRegion(
+                                onEnter: (_) => setIframePointerEvents(false),
+                                onExit: (_) => _syncIframePointerEvents(),
+                                child: PointerInterceptor(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
                                       borderRadius: BorderRadius.circular(24 * s),
-                                      border: Border.all(color: Colors.white.withOpacity(0.18)),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.35),
-                                          blurRadius: 10,
+                                      onTap: () {
+                                        _sendVirtualKey('PageDown', 34);
+                                        _dhashEngine.navigatePage(isNext: true);
+                                      },
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF16161A).withOpacity(0.75),
+                                          borderRadius: BorderRadius.circular(24 * s),
+                                          border: Border.all(color: Colors.white.withOpacity(0.22)),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.35),
+                                              blurRadius: 10,
+                                            ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.arrow_forward_ios_rounded, size: 16 * s, color: Colors.white),
-                                        SizedBox(height: 4 * s),
-                                        Text('PgDn', style: TextStyle(color: Colors.white70, fontSize: 9 * s, fontWeight: FontWeight.bold)),
-                                      ],
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.arrow_forward_ios_rounded, size: 16 * s, color: Colors.white),
+                                            SizedBox(height: 4 * s),
+                                            Text('PgDn', style: TextStyle(color: Colors.white70, fontSize: 9 * s, fontWeight: FontWeight.bold)),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              )),
+                              ),
                             ),
                           ),
                           // 5. 활동 타이머 오버레이 (활성 시)
@@ -690,34 +850,36 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                               left: 0,
                               right: 0,
                               child: Center(
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 22 * s, vertical: 10 * s),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF16161A).withOpacity(0.95),
-                                    borderRadius: BorderRadius.circular(36 * s),
-                                    border: Border.all(color: const Color(0xFF00F5D4), width: 2),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text('⏱️ ', style: TextStyle(fontSize: 20 * s)),
-                                      Text(
-                                        '${((_spotTimerRemaining ?? 0) ~/ 60).toString().padLeft(2, '0')}:${((_spotTimerRemaining ?? 0) % 60).toString().padLeft(2, '0')}',
-                                        style: GoogleFonts.outfit(
-                                          color: (_spotTimerRemaining ?? 0) <= 10 ? const Color(0xFFEF4565) : Colors.white,
-                                          fontSize: 26 * s,
-                                          fontWeight: FontWeight.bold,
+                                child: PointerInterceptor(
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 22 * s, vertical: 10 * s),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF16161A).withOpacity(0.95),
+                                      borderRadius: BorderRadius.circular(36 * s),
+                                      border: Border.all(color: const Color(0xFF00F5D4), width: 2),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text('⏱️ ', style: TextStyle(fontSize: 20 * s)),
+                                        Text(
+                                          '${((_spotTimerRemaining ?? 0) ~/ 60).toString().padLeft(2, '0')}:${((_spotTimerRemaining ?? 0) % 60).toString().padLeft(2, '0')}',
+                                          style: GoogleFonts.outfit(
+                                            color: (_spotTimerRemaining ?? 0) <= 10 ? const Color(0xFFEF4565) : Colors.white,
+                                            fontSize: 26 * s,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
-                                      ),
-                                      SizedBox(width: 10 * s),
-                                      IconButton(
-                                        icon: const Icon(Icons.close_rounded, color: Colors.white54),
-                                        onPressed: () {
-                                          _activeSpotTimer?.cancel();
-                                          setState(() => _spotTimerRemaining = null);
-                                        },
-                                      ),
-                                    ],
+                                        SizedBox(width: 10 * s),
+                                        IconButton(
+                                          icon: const Icon(Icons.close_rounded, color: Colors.white54),
+                                          onPressed: () {
+                                            _activeSpotTimer?.cancel();
+                                            setState(() => _spotTimerRemaining = null);
+                                          },
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -730,239 +892,253 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
               ),
             ),
 
-            // 3. 상단 헤더 및 페이지 넘김 (PgUp / PgDn 1초 지연)
+            // 3. 상단 헤더 및 페이지 넘김
             Positioned(
               top: 16 * s,
               left: 24 * s,
               right: 24 * s,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  PointerInterceptor(child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 16 * s,
-                      vertical: 8 * s,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF16161A).withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(12 * s),
-                      border: Border.all(
-                        color: const Color(0xFF2EC4B6).withOpacity(0.5),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.arrow_back_rounded,
-                            color: Colors.white,
-                          ),
-                          onPressed: () async {
-                            if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty) {
-                              await TbpStorageService.instance.savePenStrokes(
-                                _tbpFolderPath,
-                                _currentDhash,
-                                _annotationController.strokes,
-                              );
-                            }
-                            if (context.mounted) Navigator.pop(context);
-                          },
+              child: MouseRegion(
+                onEnter: (_) => setIframePointerEvents(false),
+                onExit: (_) => _syncIframePointerEvents(),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    PointerInterceptor(
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16 * s,
+                          vertical: 8 * s,
                         ),
-                        SizedBox(width: 8 * s),
-                        Text(
-                          '📖 ${_metadata?.title} [${_metadata?.scopeKey}]',
-                          style: GoogleFonts.notoSansKr(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16 * s,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16161A).withOpacity(0.92),
+                          borderRadius: BorderRadius.circular(12 * s),
+                          border: Border.all(
+                            color: const Color(0xFF2EC4B6).withOpacity(0.5),
                           ),
                         ),
-                      ],
-                    ),
-                  )),
-
-                  // TBP 3모드 스위처 (마우스 / 스마트 / 주석)
-                  PointerInterceptor(child: Container(
-                    padding: EdgeInsets.all(4 * s),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF16161A).withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(20 * s),
-                      border: Border.all(
-                        color: const Color(0xFF7F5AF0).withOpacity(0.5),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        _buildInputModeChip(TbpInputMode.touch, '🖱️ 마우스', s),
-                        _buildInputModeChip(TbpInputMode.smart, '⚡ 스마트', s),
-                        _buildInputModeChip(TbpInputMode.pen, '✏️ 주석', s),
-                      ],
-                    ),
-                  )),
-
-                  PointerInterceptor(child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 12 * s,
-                      vertical: 6 * s,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF16161A).withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(30 * s),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.navigate_before_rounded,
-                            color: Colors.white,
-                            size: 28,
-                          ),
-                          tooltip: '이전 페이지 (PgUp)',
-                          onPressed: () {
-                            _sendVirtualKey('PageUp', 33);
-                            _dhashEngine.navigatePage(isNext: false);
-                          },
-                        ),
-                        SizedBox(width: 4 * s),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.navigate_next_rounded,
-                            color: Colors.white,
-                            size: 28,
-                          ),
-                          tooltip: '다음 페이지 (PgDn)',
-                          onPressed: () {
-                            _sendVirtualKey('PageDown', 34);
-                            _dhashEngine.navigatePage(isNext: true);
-                          },
-                        ),
-                        SizedBox(width: 8 * s),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.add_location_alt_rounded, size: 16),
-                          label: Text(
-                            '+ 핫스팟',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 12 * s,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2EC4B6),
-                            foregroundColor: Colors.black,
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 10 * s,
-                              vertical: 6 * s,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10 * s),
-                            ),
-                          ),
-                          onPressed: () {
-                            final offsetCount = _currentHotspots.length;
-                            final rx = (0.2 + (offsetCount % 5) * 0.14).clamp(0.1, 0.88);
-                            final ry = (0.22 + (offsetCount ~/ 5) * 0.14).clamp(0.15, 0.82);
-                            TbpHotspotOverlay.showAddHotspotModal(
-                              context,
-                              rx,
-                              ry,
-                              _tbpFolderPath,
-                              _currentDhash,
-                              _currentHotspots,
-                              (updated) {
-                                setState(() {
-                                  _currentHotspots = updated;
-                                });
-                              },
-                            );
-                          },
-                        ),
-                        SizedBox(width: 8 * s),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.save_rounded, size: 16),
-                          label: Text(
-                            'TBP 저장',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 12 * s,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF7F5AF0),
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 10 * s,
-                              vertical: 6 * s,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10 * s),
-                            ),
-                          ),
-                          onPressed: () async {
-                            if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty) {
-                              await TbpStorageService.instance.savePenStrokes(
-                                _tbpFolderPath,
-                                _currentDhash,
-                                _annotationController.strokes,
-                              );
-                            }
-
-                            final result = await SaveDestinationDialog.show(
-                              context: context,
-                              scaleFactor: widget.scaleFactor,
-                              title: '💾 TBP 스마트 교과서 저장',
-                              subTitle: 'TBP 교과서 폴더를 어디에 저장하시겠습니까?',
-                            );
-
-                            if (result != null) {
-                              final safeTitle = (_metadata?.title ?? 'textbook').replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-                              final folderName = safeTitle.toLowerCase().endsWith('.tbp') ? safeTitle : '$safeTitle.tbp';
-
-                              if (result.type == SaveTargetType.cloud) {
-                                if (_tbpFolderPath.isNotEmpty) {
-                                  await CloudDriveService.instance.saveTbpFolderProjectToDrive(
-                                    title: folderName,
-                                    localTbpDir: Directory(_tbpFolderPath),
-                                    existingDriveFolderId: TbpStorageService.instance.getDriveFolderIdForLocalPath(_tbpFolderPath),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.arrow_back_rounded,
+                                color: Colors.white,
+                              ),
+                              onPressed: () async {
+                                if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty) {
+                                  await TbpStorageService.instance.savePenStrokes(
+                                    _tbpFolderPath,
+                                    _currentDhash,
+                                    _annotationController.strokes,
                                   );
                                 }
-                              } else {
-                                final targetDir = Directory(
-                                  p.join(result.targetDirectory.path, folderName),
-                                );
-                                if (!targetDir.existsSync()) {
-                                  targetDir.createSync(recursive: true);
+                                if (context.mounted) Navigator.pop(context);
+                              },
+                            ),
+                            SizedBox(width: 8 * s),
+                            Text(
+                              '📖 ${_metadata?.title} [${_metadata?.scopeKey}]',
+                              style: GoogleFonts.notoSansKr(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16 * s,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // TBP 3모드 스위처 (마우스 / 스마트 / 주석)
+                    PointerInterceptor(
+                      child: Container(
+                        padding: EdgeInsets.all(4 * s),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16161A).withOpacity(0.92),
+                          borderRadius: BorderRadius.circular(20 * s),
+                          border: Border.all(
+                            color: const Color(0xFF7F5AF0).withOpacity(0.5),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            _buildInputModeChip(TbpInputMode.touch, '🖱️ 마우스', s),
+                            _buildInputModeChip(TbpInputMode.smart, '⚡ 스마트', s),
+                            _buildInputModeChip(TbpInputMode.pen, '✏️ 주석', s),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    PointerInterceptor(
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12 * s,
+                          vertical: 6 * s,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16161A).withOpacity(0.92),
+                          borderRadius: BorderRadius.circular(30 * s),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.navigate_before_rounded,
+                                color: Colors.white,
+                                size: 28,
+                              ),
+                              tooltip: '이전 페이지 (PgUp)',
+                              onPressed: () {
+                                _sendVirtualKey('PageUp', 33);
+                                _dhashEngine.navigatePage(isNext: false);
+                              },
+                            ),
+                            SizedBox(width: 4 * s),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.navigate_next_rounded,
+                                color: Colors.white,
+                                size: 28,
+                              ),
+                              tooltip: '다음 페이지 (PgDn)',
+                              onPressed: () {
+                                _sendVirtualKey('PageDown', 34);
+                                _dhashEngine.navigatePage(isNext: true);
+                              },
+                            ),
+                            SizedBox(width: 8 * s),
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.add_location_alt_rounded, size: 16),
+                              label: Text(
+                                '+ 핫스팟',
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 12 * s,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2EC4B6),
+                                foregroundColor: Colors.black,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 10 * s,
+                                  vertical: 6 * s,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10 * s),
+                                ),
+                              ),
+                              onPressed: () {
+                                setIframePointerEvents(false);
+                                final offsetCount = _currentHotspots.length;
+                                final rx = (0.2 + (offsetCount % 5) * 0.14).clamp(0.1, 0.88);
+                                final ry = (0.22 + (offsetCount ~/ 5) * 0.14).clamp(0.15, 0.82);
+                                TbpHotspotOverlay.showAddHotspotModal(
+                                  context,
+                                  rx,
+                                  ry,
+                                  _tbpFolderPath,
+                                  _currentDhash,
+                                  _currentHotspots,
+                                  (updated) {
+                                    setState(() {
+                                      _currentHotspots = updated;
+                                    });
+                                    _syncIframePointerEvents();
+                                  },
+                                ).then((_) => _syncIframePointerEvents());
+                              },
+                            ),
+                            SizedBox(width: 8 * s),
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.save_rounded, size: 16),
+                              label: Text(
+                                'TBP 저장',
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 12 * s,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF7F5AF0),
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 10 * s,
+                                  vertical: 6 * s,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10 * s),
+                                ),
+                              ),
+                              onPressed: () async {
+                                setIframePointerEvents(false);
+                                if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty) {
+                                  await TbpStorageService.instance.savePenStrokes(
+                                    _tbpFolderPath,
+                                    _currentDhash,
+                                    _annotationController.strokes,
+                                  );
                                 }
-                                if (_tbpFolderPath.isNotEmpty && Directory(_tbpFolderPath).existsSync()) {
-                                  await for (final entity in Directory(_tbpFolderPath).list(recursive: true)) {
-                                    if (entity is File) {
-                                      final rel = p.relative(entity.path, from: _tbpFolderPath);
-                                      final destFile = File(p.join(targetDir.path, rel));
-                                      destFile.parent.createSync(recursive: true);
-                                      await entity.copy(destFile.path);
+
+                                final result = await SaveDestinationDialog.show(
+                                  context: context,
+                                  scaleFactor: widget.scaleFactor,
+                                  title: '💾 TBP 스마트 교과서 저장',
+                                  subTitle: 'TBP 교과서 폴더를 어디에 저장하시겠습니까?',
+                                );
+                                _syncIframePointerEvents();
+
+                                if (result != null) {
+                                  final safeTitle = (_metadata?.title ?? 'textbook').replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+                                  final folderName = safeTitle.toLowerCase().endsWith('.tbp') ? safeTitle : '$safeTitle.tbp';
+
+                                  if (result.type == SaveTargetType.cloud) {
+                                    if (_tbpFolderPath.isNotEmpty) {
+                                      await CloudDriveService.instance.saveTbpFolderProjectToDrive(
+                                        title: folderName,
+                                        localTbpDir: Directory(_tbpFolderPath),
+                                        existingDriveFolderId: TbpStorageService.instance.getDriveFolderIdForLocalPath(_tbpFolderPath),
+                                      );
+                                    }
+                                  } else {
+                                    final targetDir = Directory(
+                                      p.join(result.targetDirectory.path, folderName),
+                                    );
+                                    if (!targetDir.existsSync()) {
+                                      targetDir.createSync(recursive: true);
+                                    }
+                                    if (_tbpFolderPath.isNotEmpty && Directory(_tbpFolderPath).existsSync()) {
+                                      await for (final entity in Directory(_tbpFolderPath).list(recursive: true)) {
+                                        if (entity is File) {
+                                          final rel = p.relative(entity.path, from: _tbpFolderPath);
+                                          final destFile = File(p.join(targetDir.path, rel));
+                                          destFile.parent.createSync(recursive: true);
+                                          await entity.copy(destFile.path);
+                                        }
+                                      }
                                     }
                                   }
-                                }
-                              }
 
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '✅ TBP 교과서 폴더가 [${result.type.name}]에 성공적으로 저장되었습니다!',
-                                    ),
-                                    backgroundColor: const Color(0xFF2CB67D),
-                                  ),
-                                );
-                              }
-                            }
-                          },
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          '✅ TBP 교과서 폴더가 [${result.type.name}]에 성공적으로 저장되었습니다!',
+                                        ),
+                                        backgroundColor: const Color(0xFF2CB67D),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  )),
-                ],
+                  ],
+                ),
               ),
             ),
 
@@ -972,41 +1148,53 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
               left: 0,
               right: 0,
               child: Center(
-                child: PointerInterceptor(child: BoardDockToolbar(
-                  scale: widget.scaleFactor,
-                  tool: _tool,
-                  onToolChanged: (tool) {
-                    setState(() {
-                      _tool = tool;
-                      _annotationController.toolMode = tool;
-                    });
-                  },
-                  penColor: _penColor,
-                  onColorChanged: (c) {
-                    setState(() {
-                      _penColor = c;
-                      _annotationController.activeColor = c;
-                    });
-                  },
-                  strokeWidth: _strokeWidth,
-                  onStrokeWidthChanged: (w) {
-                    setState(() {
-                      _strokeWidth = w;
-                      _annotationController.activeWidth = w;
-                    });
-                  },
-                  onUndo: () => _annotationController.undo(),
-                  onClear: () {
-                    _annotationController.clear();
-                    if (_tbpFolderPath.isNotEmpty) {
-                      TbpStorageService.instance.savePenStrokes(
-                        _tbpFolderPath,
-                        _currentDhash,
-                        [],
-                      );
-                    }
-                  },
-                )),
+                child: MouseRegion(
+                  onEnter: (_) => setIframePointerEvents(false),
+                  onExit: (_) => _syncIframePointerEvents(),
+                  child: PointerInterceptor(
+                    child: BoardDockToolbar(
+                      scale: widget.scaleFactor,
+                      tool: _tool,
+                      onToolChanged: (tool) {
+                        setState(() {
+                          _tool = tool;
+                          _annotationController.toolMode = tool;
+                          if (tool == ToolMode.pointer) {
+                            _inputMode = TbpInputMode.touch;
+                          } else if (_inputMode == TbpInputMode.touch) {
+                            _inputMode = TbpInputMode.smart;
+                          }
+                        });
+                        _syncIframePointerEvents();
+                      },
+                      penColor: _penColor,
+                      onColorChanged: (c) {
+                        setState(() {
+                          _penColor = c;
+                          _annotationController.activeColor = c;
+                        });
+                      },
+                      strokeWidth: _strokeWidth,
+                      onStrokeWidthChanged: (w) {
+                        setState(() {
+                          _strokeWidth = w;
+                          _annotationController.activeWidth = w;
+                        });
+                      },
+                      onUndo: () => _annotationController.undo(),
+                      onClear: () {
+                        _annotationController.clear();
+                        if (_tbpFolderPath.isNotEmpty) {
+                          TbpStorageService.instance.savePenStrokes(
+                            _tbpFolderPath,
+                            _currentDhash,
+                            [],
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ),
               ),
             ),
           ],

@@ -368,6 +368,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
         useMaterial3: true,
+        fontFamily: 'SiwonhanSeolreim',
         primaryColor: const Color(0xFF7F5AF0),
         scaffoldBackgroundColor: const Color(0xFF0F0E17),
         colorScheme: const ColorScheme.dark(

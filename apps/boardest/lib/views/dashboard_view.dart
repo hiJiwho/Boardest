@@ -240,8 +240,10 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     if (token != null && token.isNotEmpty) {
       _hideCloudPanel = false;
       _cloudFilesFuture = BstCloudService.instance.fetchAllCloudDriveFiles(accessToken: token);
+      _checkTrustDeviceStatus();
     } else {
       _cloudFilesFuture = null;
+      _isTrustDeviceSaved = false;
     }
   }
 
@@ -9959,10 +9961,12 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   itemBuilder: (ctx, idx) {
                     final f = filteredFiles[idx];
                     final name = f.name.toLowerCase();
-                    final isCanva = name.endsWith('.canva') ||
+                    final isCanva = name.endsWith('.htmlp') ||
+                        name.endsWith('.canva') ||
                         name.endsWith('.canva.bst') ||
                         name.endsWith('.bstcanva') ||
-                        name.contains('canva');
+                        name.contains('canva') ||
+                        name.contains('htmlp');
                     final isTbp = name.endsWith('.bsttbp') ||
                         name.endsWith('.tbp') ||
                         f.mimeType == 'application/x-bst-tbp-folder' ||
@@ -9977,9 +9981,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                     String badgeText = '자료';
 
                     if (isCanva) {
-                      iconData = Icons.palette_rounded;
+                      iconData = Icons.co_present_rounded;
                       itemColor = const Color(0xFF00C4CC);
-                      badgeText = 'Canva';
+                      badgeText = 'HTMLP';
                     } else if (isTbp) {
                       iconData = Icons.auto_stories_rounded;
                       itemColor = const Color(0xFF818CF8);
@@ -10132,10 +10136,12 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           name.endsWith('.tbp') ||
           f.mimeType == 'application/x-bst-tbp-folder' ||
           (f.mimeType == 'application/vnd.google-apps.folder' && (name.contains('tbp') || name.contains('교과서')));
-      final isCanva = name.endsWith('.canva') ||
+      final isCanva = name.endsWith('.htmlp') ||
+          name.endsWith('.canva') ||
           name.endsWith('.canva.bst') ||
           name.endsWith('.bstcanva') ||
-          name.contains('canva');
+          name.contains('canva') ||
+          name.contains('htmlp');
 
       switch (_cloudCategoryFilter) {
         case 'lesson':
@@ -10223,7 +10229,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                               ),
                               SizedBox(height: 4 * scale),
                               Text(
-                                'QR 인증이나 OTP 로그인 시 등록되거나\n상단의 [교사 등록] 버튼을 눌러 등록하세요.',
+                                'QR 또는 OTP 로그인 후 상단의 [교사 등록] 버튼을 눌러 등록하세요.',
                                 textAlign: TextAlign.center,
                                 style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 10.5 * scale),
                               ),
@@ -10385,9 +10391,15 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     try {
       final content = await BstCloudService.instance.readDriveFileText(file.id, token);
       if (content != null) {
-        final data = jsonDecode(content);
-        final canvaId = data['canvaId']?.toString() ?? '';
-        final title = data['title']?.toString() ?? file.name;
+        String canvaId = '';
+        String title = file.name;
+        try {
+          final data = jsonDecode(content);
+          canvaId = (data['embedUrl'] ?? data['url'] ?? data['webUrl'] ?? data['canvaUrl'] ?? data['canvaId'] ?? data['link'] ?? '').toString().trim();
+          title = data['title']?.toString() ?? file.name;
+        } catch (_) {
+          canvaId = content.trim();
+        }
         if (canvaId.isNotEmpty && mounted) {
           Navigator.push(
             context,
@@ -10402,7 +10414,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         }
       }
     } catch (e) {
-      debugPrint('[Dashboard] open Canva error: $e');
+      debugPrint('[Dashboard] open HTML Present/Canva error: $e');
     }
   }
 

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boardest BoardBook Engine</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #0f0e17; font-family: sans-serif; color: #ffffff; }
+    #textbook-frame { width: 100%; height: 100%; border: none; background: #ffffff; }
+    #hotspot-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+    .hotspot-btn { position: absolute; width: 44px; height: 44px; border-radius: 50%; background: rgba(46, 196, 182, 0.9); border: 3px solid #ffffff; box-shadow: 0 4px 15px rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; font-size: 22px; cursor: pointer; pointer-events: auto; transform: translate(-50%, -50%); }
+  </style>
+</head>
+<body>
+  <div style="width:100%; height:100%; position:relative;">
+    <iframe id="textbook-frame" src="about:blank"></iframe>
+    <div id="hotspot-layer"></div>
+  </div>
+  <script>
+    let currentUrl = "";
+    let currentHash = "";
+    function sendToFlutter(type, payload) {
+      const msg = JSON.stringify({ type: type, payload: payload });
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage(msg);
+      } else if (window.FlutterBridge) {
+        window.FlutterBridge.postMessage(msg);
+      }
+    }
+    function loadTextbookUrl(url) {
+      currentUrl = url;
+      document.getElementById('textbook-frame').src = url;
+      let hash = 0;
+      for (let i = 0; i < url.length; i++) hash = ((hash << 5) - hash) + url.charCodeAt(i);
+      currentHash = 'page_' + Math.abs(hash).toString(16);
+      sendToFlutter('page_hash_changed', { hash: currentHash, url: currentUrl });
+    }
+  </script>
+</body>
+</html>

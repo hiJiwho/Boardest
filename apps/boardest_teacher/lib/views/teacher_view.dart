@@ -1623,8 +1623,8 @@ class _TeacherViewState extends State<TeacherView> {
       return;
     }
 
-    // 4. Canva 디자인 (.canva, .bstcanva, .canva.bst, .canvaboard): Boardest Canva 뷰어로 열기
-    if (lower.endsWith('.canva') || lower.endsWith('.bstcanva') || lower.endsWith('.canva.bst') || lower.endsWith('.canvaboard')) {
+    // 4. HTML Present (.htmlp, .canva, .bstcanva, .canva.bst, .canvaboard): Boardest HTML Present 뷰어로 열기
+    if (lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva') || lower.endsWith('.bstcanva') || lower.endsWith('.canva.bst') || lower.endsWith('.canvaboard')) {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => CanvaBoardView(
@@ -2020,87 +2020,7 @@ class _TeacherViewState extends State<TeacherView> {
   }
 
   void _openCanvaWithUrlPrompt() {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0F172A),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF7F5AF0), width: 1.5),
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF7F5AF0).withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.palette_rounded, color: Color(0xFF7F5AF0), size: 20),
-            ),
-            const SizedBox(width: 10),
-            const Text(
-              'Canva 디자인 URL 입력',
-              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '열고자 하는 Canva 디자인 또는 템플릿의 공유 URL을 입력해주세요.\n(빈 칸으로 두시면 기본 Canva 홈으로 이동합니다)',
-              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5, height: 1.4),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'https://www.canva.com/design/...',
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.05),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFF7F5AF0)),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('취소', style: TextStyle(color: Colors.white60)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF7F5AF0),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () {
-              final url = controller.text.trim();
-              Navigator.pop(ctx);
-              setState(() {
-                if (url.isNotEmpty) {
-                  _activeFilePath = url;
-                }
-                _currentTeacherTab = 'canva';
-              });
-            },
-            child: const Text('열기 ✅', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
+    _showCanvaUrlInputDialog();
   }
 
   Widget _buildCloudOpenWorkspace(double scale) {
@@ -2189,9 +2109,7 @@ class _TeacherViewState extends State<TeacherView> {
         }
       },
       onUploadTap: _uploadLocalFileToDrive,
-      onCanvaTap: () {
-        setState(() => _currentTeacherTab = 'canva');
-      },
+      onCanvaTap: _showCanvaUrlInputDialog,
     );
   }
 
@@ -2221,7 +2139,7 @@ class _TeacherViewState extends State<TeacherView> {
                     style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
                   ),
                   Text(
-                    '교안 제작(TBP), 디자인(Canva), 파일 업로드 및 자유 판서를 시작합니다.',
+                    '교안 제작(TBP), 웹 프레젠테이션(HTML Present), 파일 업로드 및 자유 판서를 시작합니다.',
                     style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                   ),
                 ],
@@ -2254,13 +2172,13 @@ class _TeacherViewState extends State<TeacherView> {
                     }
                   },
                 ),
-                // 2. Canva 디자인 생성
+                // 2. HTML Present 생성
                 _buildCreateActionCard(
-                  icon: Icons.palette_rounded,
+                  icon: Icons.slideshow_rounded,
                   iconColor: const Color(0xFF7F5AF0),
-                  title: 'Canva 수업 디자인 열기 & 제작',
-                  desc: 'Canva 템플릿과 디자인을 연동하여 인터랙티브 시각 자료를 만듭니다.',
-                  buttonLabel: 'Canva 열기',
+                  title: 'HTML Present (.HTMLP) 등록 & 열기',
+                  desc: 'Canva, 구글 슬라이드, 미리캔버스 등 웹 발표 자료를 자동 임베딩하여 판서합니다.',
+                  buttonLabel: 'HTML Present 열기',
                   onTap: _openCanvaWithUrlPrompt,
                 ),
                 // 3. 파일 클라우드 업로드
@@ -3109,7 +3027,7 @@ class _TeacherViewState extends State<TeacherView> {
       }
       if (_cloudCategoryFilter == 'PDF' && !name.endsWith('.pdf')) return false;
       if (_cloudCategoryFilter == '한글' && !name.endsWith('.hwp') && !name.endsWith('.hwpx')) return false;
-      if (_cloudCategoryFilter == 'Canva' && !name.endsWith('.canva.bst') && !name.endsWith('.canva') && !name.endsWith('.bstcanva')) return false;
+      if ((_cloudCategoryFilter == 'Canva' || _cloudCategoryFilter == 'HTML Present') && !name.endsWith('.htmlp') && !name.endsWith('.canva.bst') && !name.endsWith('.canva') && !name.endsWith('.bstcanva')) return false;
       if (_cloudCategoryFilter == 'TBP' && !name.endsWith('.tbp') && !name.endsWith('.bsttbp')) return false;
       if (_cloudCategoryFilter == 'PPT' && !name.endsWith('.ppt') && !name.endsWith('.pptx')) return false;
       if (_cloudCategoryFilter == '판서' && !name.endsWith('.pen') && !name.endsWith('.iwb')) return false;
@@ -3286,94 +3204,9 @@ class _TeacherViewState extends State<TeacherView> {
     }
   }
 
-  /// Canva 디자인 등록 다이얼로그
+  /// HTML Present (.HTMLP) 등록 다이얼로그
   void _showRegisterCanvaDialog() {
-    final titleController = TextEditingController();
-    final urlController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E2028),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Icon(Icons.palette_rounded, color: Color(0xFF00C4CC), size: 22),
-            const SizedBox(width: 8),
-            Text('Canva 디자인 등록', style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('교안으로 사용할 Canva 디자인의 공유/보기 URL을 입력하세요.\n(디자인 ID를 자동 추출하여 .canva.bst 파일로 클라우드에 보관합니다.)',
-                style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12)),
-            const SizedBox(height: 14),
-            TextField(
-              controller: titleController,
-              style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 13),
-              decoration: InputDecoration(
-                labelText: '수업/디자인 제목',
-                labelStyle: GoogleFonts.notoSansKr(color: Colors.white60),
-                hintText: '예: 2단원 1차시 과학 탐구',
-                hintStyle: GoogleFonts.notoSansKr(color: Colors.white24),
-                filled: true,
-                fillColor: Colors.black26,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: urlController,
-              style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 13),
-              decoration: InputDecoration(
-                labelText: 'Canva URL 전체 주소',
-                labelStyle: GoogleFonts.notoSansKr(color: Colors.white60),
-                hintText: 'https://www.canva.com/design/DAG...',
-                hintStyle: GoogleFonts.notoSansKr(color: Colors.white24),
-                filled: true,
-                fillColor: Colors.black26,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('취소', style: GoogleFonts.notoSansKr(color: Colors.white60)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00C4CC),
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              final title = titleController.text.trim();
-              final url = urlController.text.trim();
-              if (url.isEmpty) return;
-              Navigator.pop(ctx);
-              final ok = await CloudDriveService.instance.registerCanvaDesign(title: title, canvaUrl: url);
-              if (mounted) {
-                if (ok) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('🎨 Canva 디자인이 클라우드에 성공적으로 등록되었습니다!')),
-                  );
-                  _refreshDriveFiles();
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('⚠️ Canva URL 형식이 올바르지 않거나 등록에 실패했습니다.')),
-                  );
-                }
-              }
-            },
-            child: Text('등록하기', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
+    _showCanvaUrlInputDialog();
   }
 
   /// Google Drive 파일 이름 변경 다이얼로그
@@ -5899,7 +5732,7 @@ class _TeacherViewState extends State<TeacherView> {
       {'name': 'BST Cloud 자료', 'icon': Icons.cloud_rounded, 'color': const Color(0xFF2EC4B6), 'action': () { Navigator.of(context).pop(); _openBstCloud(); }},
       {'name': '인증 관리 (OTP)', 'icon': Icons.security_rounded, 'color': const Color(0xFF00F5D4), 'action': () { Navigator.of(context).pop(); _openAuthManagement(); }},
       {'name': '문서 판서', 'icon': Icons.picture_as_pdf_rounded, 'color': const Color(0xFFEF4565), 'action': () { Navigator.of(context).pop(); _openPdfBoard(); }},
-      {'name': 'Canva 슬라이드', 'icon': Icons.palette_rounded, 'color': const Color(0xFF8B5CF6), 'action': () { Navigator.of(context).pop(); _openCanvaBoard(); }},
+      {'name': 'HTML Present (.HTMLP)', 'icon': Icons.slideshow_rounded, 'color': const Color(0xFF00F5D4), 'action': () { Navigator.of(context).pop(); _openCanvaBoard(); }},
       {'name': '급식 지도 & 문자', 'icon': Icons.restaurant_menu_rounded, 'color': const Color(0xFF2EC4B6), 'action': () { Navigator.of(context).pop(); Navigator.of(context).push(MaterialPageRoute(builder: (_) => MealView(scaleFactor: s))); }},
       {'name': '학급 쪽지', 'icon': Icons.mail_rounded, 'color': const Color(0xFFFF8906), 'action': () { Navigator.of(context).pop(); Navigator.of(context).push(MaterialPageRoute(builder: (_) => MessageView(scaleFactor: s))); }},
       {'name': '날씨 정보', 'icon': Icons.wb_sunny_rounded, 'color': const Color(0xFFFF8906), 'action': () { Navigator.of(context).pop(); showDialog(context: context, builder: (_) => WeatherDialog(scaleFactor: s)); }},
@@ -6142,7 +5975,7 @@ class _TeacherViewState extends State<TeacherView> {
 
   void _openCanvaBoard({String? url, String? filePath}) {
     if (!CloudDriveService.instance.isLoggedIn) {
-      _showCloudRequiredDialog('Canva');
+      _showCloudRequiredDialog('HTML Present');
       return;
     }
     _showCanvaActionDialog(initialUrl: url, filePath: filePath);
@@ -6156,10 +5989,10 @@ class _TeacherViewState extends State<TeacherView> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            const Icon(Icons.palette_rounded, color: Color(0xFF8B5CF6), size: 28),
+            const Icon(Icons.slideshow_rounded, color: Color(0xFF00F5D4), size: 28),
             const SizedBox(width: 10),
             Text(
-              '🎨 Canva 슬라이드',
+              '🌐 HTML Present (.HTMLP)',
               style: GoogleFonts.notoSansKr(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -6173,7 +6006,7 @@ class _TeacherViewState extends State<TeacherView> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              '진행할 Canva 수업 방식을 선택해 주세요.',
+              '진행할 HTML Present 수업 방식을 선택해 주세요.',
               style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13),
             ),
             const SizedBox(height: 20),
@@ -6209,7 +6042,7 @@ class _TeacherViewState extends State<TeacherView> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '✨ 새 Canva URL로 시작',
+                            '✨ 새 HTML Present URL로 시작 (.HTMLP)',
                             style: GoogleFonts.notoSansKr(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -6218,7 +6051,7 @@ class _TeacherViewState extends State<TeacherView> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Canva 공유/임베드 웹 링크를 입력하여 즉시 수업 판서 시작',
+                            'Canva, 구글 슬라이드, 미리캔버스 등 URL을 자동 임베딩 변환하여 수업 판서 시작',
                             style: GoogleFonts.notoSansKr(
                               color: Colors.white.withOpacity(0.85),
                               fontSize: 12,
@@ -6255,7 +6088,7 @@ class _TeacherViewState extends State<TeacherView> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '📂 최근 / 저장된 Canva 열기',
+                            '📂 최근 / 저장된 HTML Present 열기',
                             style: GoogleFonts.notoSansKr(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -6264,7 +6097,7 @@ class _TeacherViewState extends State<TeacherView> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '이전에 진행했던 Canva 프로젝트 및 URL 목록에서 열기',
+                            '이전에 진행했던 HTML Present 프로젝트 및 URL 목록에서 열기',
                             style: GoogleFonts.notoSansKr(
                               color: Colors.white60,
                               fontSize: 12,
@@ -6306,7 +6139,7 @@ class _TeacherViewState extends State<TeacherView> {
             const Icon(Icons.folder_open_rounded, color: Color(0xFF00F5D4)),
             const SizedBox(width: 8),
             Text(
-              '📂 최근 Canva 프로젝트',
+              '📂 최근 HTML Present (.HTMLP)',
               style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold),
             ),
           ],
@@ -6318,7 +6151,7 @@ class _TeacherViewState extends State<TeacherView> {
                   padding: const EdgeInsets.all(24),
                   child: Center(
                     child: Text(
-                      '저장된 최근 Canva URL이 없습니다.\n[✨ 새 Canva URL로 시작]을 이용해 주세요.',
+                      '저장된 최근 HTML Present URL이 없습니다.\n[✨ 새 HTML Present URL로 시작]을 이용해 주세요.',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 13),
                     ),
@@ -6338,7 +6171,7 @@ class _TeacherViewState extends State<TeacherView> {
                           color: const Color(0xFF8B5CF6).withOpacity(0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.palette_rounded, color: Color(0xFF8B5CF6), size: 20),
+                        child: const Icon(Icons.slideshow_rounded, color: Color(0xFF00F5D4), size: 20),
                       ),
                       title: Text(
                         u,
@@ -6401,7 +6234,7 @@ class _TeacherViewState extends State<TeacherView> {
             children: [
               const Icon(Icons.slideshow_rounded, color: Color(0xFF00F5D4)),
               const SizedBox(width: 8),
-              Text('✨ HTML Present 등록', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
+              Text('✨ HTML Present (.HTMLP) 등록', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
             ],
           ),
           content: SingleChildScrollView(
@@ -6409,13 +6242,13 @@ class _TeacherViewState extends State<TeacherView> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Canva, 구글 슬라이드, 미리캔버스, 패들렛 등 모든 웹 프레젠테이션 주소를 입력하면 Dhash 기반 페이지별 판서 & 스마트 모드로 실행됩니다.', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13, height: 1.4)),
+              Text('Canva, 구글 슬라이드, 미리캔버스, Figma, Prezi, 유튜브 등 공유 URL이나 <iframe> 코드를 입력하면 자동으로 임베드 주소로 변환하여 .HTMLP 파일로 저장 & 실행합니다.', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13, height: 1.4)),
               const SizedBox(height: 12),
               TextField(
                 controller: titleCtrl,
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
-                  labelText: '이름 (파일 이름)',
+                  labelText: '파일 이름 (.HTMLP 자동 부착)',
                   labelStyle: TextStyle(color: Colors.white60),
                   hintText: '예: 2단원 1차시 과학 탐구',
                   hintStyle: TextStyle(color: Colors.white38),
@@ -6429,9 +6262,9 @@ class _TeacherViewState extends State<TeacherView> {
                 controller: urlCtrl,
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
-                  labelText: 'URL',
+                  labelText: '프레젠테이션 URL 또는 <iframe> 코드 (자동 임베드 변환)',
                   labelStyle: TextStyle(color: Colors.white60),
-                  hintText: 'https://www.canva.com 또는 구글 슬라이드 링크',
+                  hintText: 'https://www.canva.com/design/... 또는 구글 슬라이드 링크',
                   hintStyle: TextStyle(color: Colors.white38),
                   filled: true,
                   fillColor: Color(0xFF242629),
@@ -6448,10 +6281,10 @@ class _TeacherViewState extends State<TeacherView> {
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
                 dense: true,
-                title: Text('내 드라이브에 이 이름으로 저장', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12.5)),
+                title: Text('내 드라이브에 .HTMLP 파일로 저장', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12.5)),
               ),
               const SizedBox(height: 6),
-              Text('💾 추천 바로가기:', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text('💾 자주 쓰는 사이트 바로가기:', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -6497,12 +6330,13 @@ class _TeacherViewState extends State<TeacherView> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4)),
               onPressed: () async {
-                final val = urlCtrl.text.trim();
+                final rawVal = urlCtrl.text.trim();
                 final name = titleCtrl.text.trim();
-                if (val.isEmpty) {
+                if (rawVal.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('URL을 입력해 주세요.')));
                   return;
                 }
+                final val = HtmlPresentView.formatPresentUrl(rawVal);
                 final list = prefs.getStringList('saved_canva_urls') ?? [];
                 if (!list.contains(val)) list.insert(0, val);
                 await prefs.setStringList('saved_canva_urls', list);
@@ -6514,7 +6348,7 @@ class _TeacherViewState extends State<TeacherView> {
                   );
                   if (mounted) {
                     ScaffoldMessenger.of(this.context).showSnackBar(
-                      SnackBar(content: Text(ok ? '☁️ "${name.isNotEmpty ? name : 'HTML Present'}" 이(가) 내 드라이브에 저장되었습니다.' : '⚠️ 드라이브 저장에 실패했습니다.')),
+                      SnackBar(content: Text(ok ? '☁️ "${name.isNotEmpty ? name : 'HTML Present'}.HTMLP" 이(가) 내 드라이브에 저장되었습니다.' : '⚠️ 드라이브 저장에 실패했습니다.')),
                     );
                     if (ok) _refreshDriveFiles();
                   }

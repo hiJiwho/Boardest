@@ -82,7 +82,7 @@ void main(List<String> args) async {
       i++;
     } else if (!arg.startsWith('-')) {
       final lower = arg.toLowerCase();
-      if (lower.endsWith('.bst') || lower.endsWith('.bsttbp') || lower.endsWith('.bstcanva') || lower.endsWith('.bstpen')) {
+      if (lower.endsWith('.bst') || lower.endsWith('.bsttbp') || lower.endsWith('.bstcanva') || lower.endsWith('.htmlp') || lower.endsWith('.bstpen')) {
         viewBstPath = arg;
         initialTool = 'view_bst';
       }
@@ -110,26 +110,25 @@ void main(List<String> args) async {
     // Query param & persistent email based demo detection
     final qDemo = params['Demo'] ?? params['demo'] ?? params['isDemo'];
     final qEmail = params['email'] ?? '';
-    final existingSavedEmail = prefs.getString('bst_google_user_email') ?? prefs.getString('bst_user_email') ?? '';
-    if (qDemo?.toLowerCase() == 'yes' ||
-        qDemo?.toLowerCase() == 'true' ||
-        qEmail.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz') ||
-        existingSavedEmail.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) {
-      AppConfig.isDemoMode = true;
+    final hasOAuthCallback = params['auth'] == 'success' || params.containsKey('token') || params.containsKey('access_token');
+    final isIncomingRealUser = hasOAuthCallback && qEmail.isNotEmpty && !qEmail.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz');
+    if (isIncomingRealUser) {
+      AppConfig.isDemoMode = false;
+    } else {
+      final existingSavedEmail = prefs.getString('bst_google_user_email') ?? prefs.getString('bst_user_email') ?? '';
+      if (qDemo?.toLowerCase() == 'yes' ||
+          qDemo?.toLowerCase() == 'true' ||
+          qEmail.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz') ||
+          (!hasOAuthCallback && existingSavedEmail.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz'))) {
+        AppConfig.isDemoMode = true;
+      }
     }
 
-    if (!AppConfig.isDemoMode && (params['auth'] == 'success' || params.containsKey('token') || params.containsKey('access_token') || params.containsKey('email'))) {
+    if (hasOAuthCallback || (!AppConfig.isDemoMode && params.containsKey('email'))) {
       final email = params['email'] ?? '';
       final token = params['token'] ?? params['access_token'] ?? '';
       String teacherName = params['teacherName'] ?? '';
-      String teacherId = params['teacherId'] ?? '';
-      String schoolId = params['schoolId'] ?? 'ydm';
-      String schoolCode = params['schoolCode'] ?? params['schoolId'] ?? '';
       String schoolName = params['schoolName'] ?? '양동중학교';
-      int grade = int.tryParse(params['grade'] ?? '1') ?? 1;
-      int classNum = int.tryParse(params['classNum'] ?? '1') ?? 1;
-      bool isHomeroom = params['isHomeroom'] == 'true';
-      String cafeteria = params['cafeteriaNum'] ?? '1';
 
       if (token.isNotEmpty || email.isNotEmpty) {
         String? totpSecret = params['totpSecret'];
@@ -547,6 +546,7 @@ class _TeacherAppState extends State<TeacherApp> with WindowListener {
     final darkTheme = ThemeData(
       brightness: Brightness.dark,
       useMaterial3: true,
+      fontFamily: 'SiwonhanSeolreim',
       primaryColor: primaryColor,
       scaffoldBackgroundColor: const Color(0xFF0F0E17),
       colorScheme: ColorScheme.dark(
@@ -564,6 +564,7 @@ class _TeacherAppState extends State<TeacherApp> with WindowListener {
     final lightTheme = ThemeData(
       brightness: Brightness.light,
       useMaterial3: true,
+      fontFamily: 'SiwonhanSeolreim',
       primaryColor: primaryColor,
       scaffoldBackgroundColor: const Color(0xFFF3F3F5),
       colorScheme: ColorScheme.light(

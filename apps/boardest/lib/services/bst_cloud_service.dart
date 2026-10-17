@@ -412,105 +412,84 @@ class BstCloudService {
     } catch (_) {}
   }
 
-  List<BstCloudFile> _generateDemoCloudFiles() {
-    return [
-      BstCloudFile(
-        id: 'demo_file_pdf_1',
-        name: '1학기 교안_단원별_정리.pdf',
-        mimeType: 'application/pdf',
-        size: 2450000,
-      ),
-      BstCloudFile(
-        id: 'demo_file_tbp_1',
-        name: '국어_교과서_디지털_학습자료.bsttbp',
-        mimeType: 'application/octet-stream',
-        size: 5120000,
-      ),
-      BstCloudFile(
-        id: 'demo_file_canva_1',
-        name: '모둠별_발표수업_템플릿.bstcanva',
-        mimeType: 'application/octet-stream',
-        size: 1048576,
-      ),
-      BstCloudFile(
-        id: 'demo_file_hwp_1',
-        name: '수업_형성평가지_1단원.hwp',
-        mimeType: 'application/x-hwp',
-        size: 345000,
-      ),
-      BstCloudFile(
-        id: 'demo_file_ppt_1',
-        name: '오늘의_학습목표_슬라이드.pptx',
-        mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        size: 4200000,
-      ),
-      BstCloudFile(
-        id: 'demo_file_pen_1',
-        name: '1단원_핵심판서기록.pen',
-        mimeType: 'application/octet-stream',
-        size: 89000,
-      ),
-    ];
-  }
-
-  /// 5. Google Drive API를 통해 boardest-cloud-connect 폴더 내 파일 리스트 조회 (Short-lived Token 사용)
+  /// 5. Google Drive API를 통해 boardest-cloud-connect / bst-save 폴더 내 파일 리스트 조회 (ADF 및 Root 통합 조회, 가상 데모 파일 제거)
   Future<List<BstCloudFile>> fetchDriveFiles(String folderId, String token) async {
-    if (token.startsWith('demo_token') || token == 'web_qr_approved_token' || AppConfig.isDemoMode) {
-      return _generateDemoCloudFiles();
-    }
-    String targetFolderId = folderId;
-    if (targetFolderId.isEmpty || targetFolderId == 'root') {
-      final saveFolder = await findDriveFolderByName('bst-save', 'root', token) ??
-                         await findDriveFolderByName('bst-cld', 'root', token) ??
-                         await findDriveFolderByName('boardest-cloud-connect', 'root', token);
-      if (saveFolder != null) {
-        targetFolderId = saveFolder;
-      }
-    }
-
-    final query = (targetFolderId.isNotEmpty && targetFolderId != 'root')
-        ? "'$targetFolderId' in parents and trashed = false"
-        : "trashed = false";
-    final url = 'https://www.googleapis.com/drive/v3/files'
-        '?q=${Uri.encodeComponent(query)}'
-        '&fields=files(id,name,mimeType)';
-
-    try {
-      var currentToken = token;
-      var res = await http.get(
-        Uri.parse(url),
-        headers: {
-          'Authorization': 'Bearer $currentToken',
-        },
-      ).timeout(const Duration(seconds: 8));
-
-      if (res.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
-        debugPrint('[BstCloudService] fetchDriveFiles 401 Unauthorized. Auto-refreshing access token...');
-        final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
-        if (newToken != null && newToken.isNotEmpty) {
-          activeToken = newToken;
-          currentToken = newToken;
-          res = await http.get(
-            Uri.parse(url),
-            headers: {
-              'Authorization': 'Bearer $currentToken',
-            },
-          ).timeout(const Duration(seconds: 8));
-        }
-      }
-
-      if (res.statusCode != 200) {
-        debugPrint('[BstCloudService] fetchDriveFiles HTTP error: ${res.statusCode} ${res.body}');
-        return [];
-      }
-
-      final data = json.decode(res.body) as Map<String, dynamic>;
-      final filesJson = data['files'] as List<dynamic>? ?? [];
-      return filesJson.map((f) => BstCloudFile.fromJson(f as Map<String, dynamic>)).toList();
-    } catch (e) {
-      debugPrint('[BstCloudService] fetchDriveFiles error: $e');
+    if (token.isEmpty || token.startsWith('demo_token') || token == 'web_qr_approved_token') {
       return [];
     }
+
+    final List<String> targetFolderIds = [];
+    if (folderId.isNotEmpty && folderId != 'root') {
+      targetFolderIds.add(folderId);
+    } else {
+      for (final space in ['appDataFolder', 'root']) {
+        for (final name in ['bst-save', 'bst-cld', 'boardest-cloud-connect']) {
+          final fid = await findDriveFolderByName(name, space, token);
+          if (fid != null && fid.isNotEmpty && !targetFolderIds.contains(fid)) {
+            targetFolderIds.add(fid);
+          }
+        }
+      }
+    }
+
+    final List<BstCloudFile> allFiles = [];
+    var currentToken = token;
+
+    Future<void> queryFolderInSpace(String? fid, String? space) async {
+      final q = (fid != null && fid.isNotEmpty && fid != 'root')
+          ? "'$fid' in parents and trashed = false"
+          : "trashed = false";
+      final spaceParam = space != null ? 'spaces=$space&' : '';
+      final url = 'https://www.googleapis.com/drive/v3/files'
+          '?${spaceParam}q=${Uri.encodeComponent(q)}'
+          '&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=100&orderBy=modifiedTime desc';
+
+      try {
+        var res = await http.get(
+          Uri.parse(url),
+          headers: {'Authorization': 'Bearer $currentToken'},
+        ).timeout(const Duration(seconds: 8));
+
+        if (res.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+          final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+          if (newToken != null && newToken.isNotEmpty) {
+            activeToken = newToken;
+            currentToken = newToken;
+            res = await http.get(
+              Uri.parse(url),
+              headers: {'Authorization': 'Bearer $currentToken'},
+            ).timeout(const Duration(seconds: 8));
+          }
+        }
+
+        if (res.statusCode == 200) {
+          final data = json.decode(res.body) as Map<String, dynamic>;
+          final filesJson = data['files'] as List<dynamic>? ?? [];
+          for (final item in filesJson) {
+            final f = BstCloudFile.fromJson(item as Map<String, dynamic>);
+            final lower = f.name.toLowerCase();
+            if (lower.endsWith('.file.pen') || lower == 'classroom_mappings.json' || lower == 'subject_mappings.json') continue;
+            if (!allFiles.any((existing) => existing.id == f.id)) {
+              allFiles.add(f);
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[BstCloudService] fetchDriveFiles space($space) error: $e');
+      }
+    }
+
+    if (targetFolderIds.isEmpty) {
+      await queryFolderInSpace(null, 'appDataFolder');
+      await queryFolderInSpace(null, null);
+    } else {
+      for (final fid in targetFolderIds) {
+        await queryFolderInSpace(fid, 'appDataFolder');
+        await queryFolderInSpace(fid, null);
+      }
+    }
+
+    return allFiles;
   }
 
   String getDriveMediaUrl(String fileId) {
@@ -920,47 +899,45 @@ class BstCloudService {
     return fetchDriveFiles(targetFolderId, token);
   }
 
-  /// 특정 전용 폴더(bst-save, bst-canva, bst-tbs, bst-pen) 내 파일만 엄격히 분리 조회
+  /// 특정 전용 폴더(bst-save, bst-canva, bst-tbs, bst-pen) 내 파일만 엄격히 분리 조회 (Teacher 앱과 동일하게 appDataFolder + root 통합 조회, 가상 데모 파일 제거)
   Future<List<BstCloudFile>> fetchFilesBySpecificFolder({
     required String accessToken,
     required String folderName,
   }) async {
-    if (accessToken.startsWith('demo_token') || accessToken == 'web_qr_approved_token' || AppConfig.isDemoMode) {
-      final allDemos = _generateDemoCloudFiles();
-      if (folderName == 'bst-canva') {
-        return allDemos.where((f) => f.name.toLowerCase().endsWith('.bstcanva') || f.name.toLowerCase().endsWith('.canva.bst') || f.name.toLowerCase().endsWith('.canva')).toList();
-      } else if (folderName == 'bst-tbs' || folderName == 'bst-textbookpro') {
-        return allDemos.where((f) => f.name.toLowerCase().endsWith('.bsttbp') || f.name.toLowerCase().endsWith('.tbp')).toList();
-      } else if (folderName == 'bst-pen') {
-        return allDemos.where((f) => f.name.toLowerCase().endsWith('.pen')).toList();
-      } else {
-        // bst-save: 일반 교안 (PDF, HWP, PPT)
-        return allDemos.where((f) => f.name.toLowerCase().endsWith('.pdf') || f.name.toLowerCase().endsWith('.ppt') || f.name.toLowerCase().endsWith('.pptx') || f.name.toLowerCase().endsWith('.hwp')).toList();
-      }
+    if (accessToken.isEmpty || accessToken.startsWith('demo_token') || accessToken == 'web_qr_approved_token') {
+      return [];
     }
 
     try {
       final List<BstCloudFile> results = [];
       List<String> targetFolderNames = [folderName];
-      if (folderName == 'bst-tbs') {
+      if (folderName == 'bst-tbs' || folderName == 'bst-textbookpro') {
         targetFolderNames = ['bst-tbs', 'bst-textbookpro'];
-      }
-
-      final List<String> folderIds = [];
-      for (final fn in targetFolderNames) {
-        final fid = await findDriveFolderByName(fn, 'root', accessToken) ??
-                    await findDriveFolderByName(fn, 'appDataFolder', accessToken);
-        if (fid != null && fid.isNotEmpty && !folderIds.contains(fid)) {
-          folderIds.add(fid);
-        }
+      } else if (folderName == 'bst-save') {
+        targetFolderNames = ['bst-save', 'boardest-cloud-connect', 'bst-cld'];
       }
 
       String currentToken = accessToken;
-      for (final fid in folderIds) {
+      final List<({String id, String? space})> folderTargets = [];
+      for (final fn in targetFolderNames) {
+        final adfId = await findDriveFolderByName(fn, 'appDataFolder', currentToken);
+        if (adfId != null && adfId.isNotEmpty && !folderTargets.any((t) => t.id == adfId && t.space == 'appDataFolder')) {
+          folderTargets.add((id: adfId, space: 'appDataFolder'));
+        }
+        final rootId = await findDriveFolderByName(fn, 'root', currentToken);
+        if (rootId != null && rootId.isNotEmpty && !folderTargets.any((t) => t.id == rootId && t.space == null)) {
+          folderTargets.add((id: rootId, space: null));
+        }
+      }
+
+      Future<void> queryFilesInFolder(String fid, String? space) async {
         final q = (folderName == 'bst-tbs' || folderName == 'bst-textbookpro')
             ? "'$fid' in parents and trashed = false"
             : "'$fid' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'";
-        final url = Uri.parse("https://www.googleapis.com/drive/v3/files?q=${Uri.encodeComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=100&orderBy=modifiedTime desc");
+        final spaceParam = space != null ? 'spaces=$space&' : '';
+        final url = Uri.parse(
+          "https://www.googleapis.com/drive/v3/files?${spaceParam}q=${Uri.encodeComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=100&orderBy=modifiedTime desc",
+        );
         var res = await http.get(url, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
         if (res.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
           final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
@@ -974,7 +951,9 @@ class BstCloudService {
           final data = jsonDecode(res.body);
           for (final f in (data['files'] as List? ?? [])) {
             final name = (f['name'] ?? '').toString();
-            if (name.endsWith('.json') && !name.endsWith('.pen.json')) continue;
+            final lower = name.toLowerCase();
+            if (lower.endsWith('.file.pen') || lower == 'classroom_mappings.json' || lower == 'subject_mappings.json') continue;
+            if (lower.endsWith('.json') && !lower.endsWith('.pen.json')) continue;
             final isFolder = f['mimeType'] == 'application/vnd.google-apps.folder';
             final mimeType = (isFolder && (folderName == 'bst-tbs' || folderName == 'bst-textbookpro'))
                 ? 'application/x-bst-tbp-folder'
@@ -991,11 +970,15 @@ class BstCloudService {
         }
       }
 
-      // 만약 폴더가 아직 생성 전이거나 폴더 ID로 못 찾은 경우, 파일 확장자 필터 fallback (Google Drive 루트 검색)
-      if (results.isEmpty && folderIds.isEmpty) {
+      for (final target in folderTargets) {
+        await queryFilesInFolder(target.id, target.space);
+      }
+
+      // 만약 폴더가 아직 생성 전이거나 폴더 ID로 못 찾은 경우, 파일 확장자 필터 fallback (appDataFolder + root 모두 검색)
+      if (results.isEmpty && folderTargets.isEmpty) {
         String extQuery = '';
         if (folderName == 'bst-canva') {
-          extQuery = "and (name contains '.bstcanva' or name contains '.canva')";
+          extQuery = "and (name contains '.htmlp' or name contains '.HTMLP' or name contains '.bstcanva' or name contains '.canva')";
         } else if (folderName == 'bst-tbs' || folderName == 'bst-textbookpro') {
           extQuery = "and (name contains '.bsttbp' or name contains '.tbp' or mimeType = 'application/vnd.google-apps.folder')";
         } else if (folderName == 'bst-pen') {
@@ -1003,31 +986,39 @@ class BstCloudService {
         } else {
           extQuery = "and (name contains '.pdf' or name contains '.ppt' or name contains '.hwp')";
         }
-        final fallbackUrl = Uri.parse("https://www.googleapis.com/drive/v3/files?q=trashed=false $extQuery&fields=files(id,name,mimeType,size)&pageSize=100&orderBy=modifiedTime desc");
-        var fbRes = await http.get(fallbackUrl, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
-        if (fbRes.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
-          final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
-          if (newToken != null && newToken.isNotEmpty) {
-            activeToken = newToken;
-            currentToken = newToken;
-            fbRes = await http.get(fallbackUrl, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
+
+        for (final space in ['appDataFolder', null]) {
+          final spaceParam = space != null ? 'spaces=$space&' : '';
+          final fallbackUrl = Uri.parse(
+            "https://www.googleapis.com/drive/v3/files?${spaceParam}q=${Uri.encodeComponent('trashed=false $extQuery')}&fields=files(id,name,mimeType,size)&pageSize=100&orderBy=modifiedTime desc",
+          );
+          var fbRes = await http.get(fallbackUrl, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
+          if (fbRes.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+            final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+            if (newToken != null && newToken.isNotEmpty) {
+              activeToken = newToken;
+              currentToken = newToken;
+              fbRes = await http.get(fallbackUrl, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
+            }
           }
-        }
-        if (fbRes.statusCode == 200) {
-          final data = jsonDecode(fbRes.body);
-          for (final f in (data['files'] as List? ?? [])) {
-            final name = (f['name'] ?? '').toString();
-            final isFolder = f['mimeType'] == 'application/vnd.google-apps.folder';
-            final mimeType = (isFolder && (folderName == 'bst-tbs' || folderName == 'bst-textbookpro'))
-                ? 'application/x-bst-tbp-folder'
-                : (f['mimeType'] ?? '');
-            if (!results.any((r) => r.id == f['id'])) {
-              results.add(BstCloudFile(
-                id: f['id'] ?? '',
-                name: name,
-                mimeType: mimeType,
-                size: f['size'] != null ? int.tryParse(f['size'].toString()) : null,
-              ));
+          if (fbRes.statusCode == 200) {
+            final data = jsonDecode(fbRes.body);
+            for (final f in (data['files'] as List? ?? [])) {
+              final name = (f['name'] ?? '').toString();
+              final lower = name.toLowerCase();
+              if (lower.endsWith('.file.pen') || lower == 'classroom_mappings.json' || lower == 'subject_mappings.json') continue;
+              final isFolder = f['mimeType'] == 'application/vnd.google-apps.folder';
+              final mimeType = (isFolder && (folderName == 'bst-tbs' || folderName == 'bst-textbookpro'))
+                  ? 'application/x-bst-tbp-folder'
+                  : (f['mimeType'] ?? '');
+              if (!results.any((r) => r.id == f['id'])) {
+                results.add(BstCloudFile(
+                  id: f['id'] ?? '',
+                  name: name,
+                  mimeType: mimeType,
+                  size: f['size'] != null ? int.tryParse(f['size'].toString()) : null,
+                ));
+              }
             }
           }
         }
@@ -1040,10 +1031,10 @@ class BstCloudService {
     }
   }
 
-  /// 모든 클라우드 폴더(수업자료 bst-save, Canva bst-canva, TBP 교과서 bst-tbs, 판서 bst-pen) 통합 조회
+  /// 모든 클라우드 폴더(수업자료 bst-save, HTML Present bst-canva, TBP 교과서 bst-tbs, 판서 bst-pen) 통합 조회
   Future<List<BstCloudFile>> fetchAllCloudDriveFiles({required String accessToken}) async {
-    if (accessToken.startsWith('demo_token') || accessToken == 'web_qr_approved_token' || AppConfig.isDemoMode) {
-      return _generateDemoCloudFiles();
+    if (accessToken.isEmpty || accessToken.startsWith('demo_token') || accessToken == 'web_qr_approved_token') {
+      return [];
     }
 
     final List<BstCloudFile> results = [];
@@ -1095,7 +1086,7 @@ class BstCloudService {
     return results;
   }
 
-  /// 10-1. 1번 탭: 수업 자료 (Save) 파일 조회 (PDF, PPT, Canva 등 순수 교안)
+  /// 10-1. 1번 탭: 수업 자료 (Save) 파일 조회 (PDF, PPT, HTML Present 등 순수 교안)
   Future<List<BstCloudFile>> fetchDriveFolderFiles({
     required String accessToken,
     String folderName = 'bst-save',
@@ -1108,37 +1099,38 @@ class BstCloudService {
     return fetchFilesBySpecificFolder(accessToken: accessToken, folderName: 'bst-tbs');
   }
 
-  /// 10-3. 3번 탭: 화이트보드 판서보드 (Free) 파일 목록 조회 ('bst-Free' 폴더 내 .Free.pen)
+  /// 10-3. 3번 탭: 화이트보드 판서보드 (Free) 파일 목록 조회 ('bst-Free' 및 'bst-pen' 폴더 내 .Free.pen / .pen)
   Future<List<BstCloudFile>> fetchBstFreeFiles({required String accessToken}) async {
+    if (accessToken.isEmpty || accessToken.startsWith('demo_token') || accessToken == 'web_qr_approved_token') {
+      return [];
+    }
     try {
       final List<BstCloudFile> results = [];
 
-      // 1. 'bst-Free' 폴더 ID 찾기
-      String? freeFolderId = await findDriveFolderByName('bst-Free', 'root', accessToken);
-      freeFolderId ??= await findDriveFolderByName('bst-Free', 'appDataFolder', accessToken);
-
-      final q = freeFolderId != null
-          ? "'$freeFolderId' in parents and trashed=false"
-          : "trashed=false and (name contains '.Free.pen' or name contains '.pen')";
-
-      final url = Uri.parse(
-        "https://www.googleapis.com/drive/v3/files?q=${Uri.encodeComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=100&orderBy=modifiedTime desc",
-      );
-      final res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'});
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        for (final f in (data['files'] as List? ?? [])) {
-          if (f['mimeType'] == 'application/vnd.google-apps.folder') continue;
-          final name = (f['name'] ?? '').toString();
-          // .file.pen (파일 위 판서)는 3번 탭에서도 제외! 오직 .Free.pen 또는 자유 판서만 포함!
-          if (name.toLowerCase().endsWith('.file.pen')) continue;
-          if (name.toLowerCase().endsWith('.pen') || name.toLowerCase().contains('free')) {
-            results.add(BstCloudFile(
-              id: f['id'] ?? '',
-              name: name,
-              mimeType: f['mimeType'] ?? '',
-              size: f['size'] != null ? int.tryParse(f['size'].toString()) : null,
-            ));
+      for (final space in ['appDataFolder', null]) {
+        final spaceParam = space != null ? 'spaces=$space&' : '';
+        final q = "trashed=false and (name contains '.Free.pen' or name contains '.pen')";
+        final url = Uri.parse(
+          "https://www.googleapis.com/drive/v3/files?${spaceParam}q=${Uri.encodeComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=100&orderBy=modifiedTime desc",
+        );
+        final res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 8));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          for (final f in (data['files'] as List? ?? [])) {
+            if (f['mimeType'] == 'application/vnd.google-apps.folder') continue;
+            final name = (f['name'] ?? '').toString();
+            // .file.pen (파일 위 판서)는 3번 탭에서도 제외! 오직 .Free.pen 또는 자유 판서만 포함!
+            if (name.toLowerCase().endsWith('.file.pen')) continue;
+            if (name.toLowerCase().endsWith('.pen') || name.toLowerCase().contains('free')) {
+              if (!results.any((r) => r.id == f['id'])) {
+                results.add(BstCloudFile(
+                  id: f['id'] ?? '',
+                  name: name,
+                  mimeType: f['mimeType'] ?? '',
+                  size: f['size'] != null ? int.tryParse(f['size'].toString()) : null,
+                ));
+              }
+            }
           }
         }
       }
@@ -1580,62 +1572,9 @@ class BstCloudService {
         return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '6자리 OTP 코드를 입력해주세요.');
       }
 
-      // 0차: 데모 모드 및 데모 OTP 검증 (123456 또는 계정별 동적 2자리 shortId 6자리 Steganography OTP)
-      final nowTime = DateTime.now();
-      final demoCandidateTimes = [
-        nowTime,
-        nowTime.subtract(const Duration(minutes: 1)),
-        nowTime.add(const Duration(minutes: 1)),
-      ];
-
-      bool isDemoMatch = (cleanCode == '123456');
-      String matchedShortId = '53';
-
-      if (!isDemoMatch && cleanCode.length == 6) {
-        for (final t in demoCandidateTimes) {
-          final parsed = TotpService.parseSteganography6(cleanCode, time: t);
-          final idNum = int.tryParse(parsed.cloudId);
-          if (idNum != null && idNum >= 10 && idNum <= 99) {
-            isDemoMatch = true;
-            matchedShortId = parsed.cloudId;
-            break;
-          }
-        }
-      }
-
-      if (isDemoMatch || (AppConfig.isDemoMode && (cleanCode.length == 6 || cleanCode.length == 10))) {
-        const demoTeacherNames = {
-          '11': '김국어',
-          '12': '이수학',
-          '13': '박영어',
-          '14': '최과학',
-          '15': '정사회',
-          '16': '강역사',
-          '17': '송음악',
-          '18': '윤체육',
-          '19': '조미술',
-        };
-        final sId = matchedShortId.isNotEmpty ? matchedShortId : '11';
-        final teacherName = demoTeacherNames[sId] ?? '김국어';
-        final demoNum = sId == '11' ? '01' : (sId == '12' ? '02' : sId);
-
-        activeToken = 'demo_token_teacher_$sId';
-        activeTeacherName = teacherName;
-        activeOwnerEmail = '$demoNum@boardest-teacher-demo.753210.xyz';
-        activeTotpSecret = TotpService.generateDeterministicSecret(activeOwnerEmail!);
-        activeFolderId = 'demo_folder_id';
-        return (
-          success: true,
-          accessToken: activeToken,
-          teacherName: activeTeacherName,
-          email: activeOwnerEmail,
-          errorMessage: null,
-        );
-      }
-
-      // 2차: Firestore 직접 Fallback 검증 (시간 디버깅과 무관하게 무조건 실제 현재 시각 DateTime.now() 기준)
+      // 1차: Firestore teacher_cloud_tokens 에 동기화된 실제 교사 계정 (일반 및 데모 모두 포함) 직접 검증
       try {
-        final teachers = await getCloudTeachers();
+        final teachers = await getCloudTeachers(forceRefresh: true);
         final nowTime = DateTime.now();
         final candidateTimes = [
           nowTime,
@@ -1679,10 +1618,14 @@ class BstCloudService {
           if (isMatched) {
             String? tok = teacher.directAccessToken;
             if (teacher.refreshToken != null && teacher.refreshToken!.isNotEmpty) {
-              tok = await exchangeRefreshTokenForAccessToken(teacher.refreshToken!);
+              final refreshed = await exchangeRefreshTokenForAccessToken(teacher.refreshToken!);
+              if (refreshed != null && refreshed.isNotEmpty) {
+                tok = refreshed;
+              }
             }
             if (tok != null && tok.isNotEmpty) {
               activeToken = tok;
+              activeRefreshToken = teacher.refreshToken;
               activeTeacherName = teacher.teacherName;
               activeOwnerEmail = teacher.ownerEmail;
               activeTotpSecret = teacher.totpSecret;
@@ -1698,7 +1641,44 @@ class BstCloudService {
           }
         }
       } catch (fbErr) {
-        debugPrint('[BstCloudService] Firestore OTP fallback error: ' + fbErr.toString());
+        debugPrint('[BstCloudService] Firestore OTP verification error: ' + fbErr.toString());
+      }
+
+      // 2차: Cloudflare Worker `/api/auth/verify-otp` 검증 폴백
+      try {
+        final nowTime = DateTime.now();
+        final parsed = cleanCode.length == 6
+            ? TotpService.parseSteganography6(cleanCode, time: nowTime)
+            : (cloudId: '', otp: cleanCode);
+        final workerRes = await http.post(
+          Uri.parse('https://boardest-cloud-token.jiwho.workers.dev/api/auth/verify-otp'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'otp': cleanCode,
+            'otp4': parsed.otp,
+            'shortId': parsed.cloudId,
+          }),
+        ).timeout(const Duration(seconds: 5));
+
+        if (workerRes.statusCode == 200) {
+          final data = jsonDecode(workerRes.body) as Map<String, dynamic>;
+          final tok = (data['accessToken'] ?? data['token'])?.toString();
+          if (tok != null && tok.isNotEmpty) {
+            activeToken = tok;
+            activeRefreshToken = data['refreshToken']?.toString();
+            activeTeacherName = (data['teacherName'] ?? data['name'] ?? '선생님').toString();
+            activeOwnerEmail = (data['email'] ?? '').toString();
+            return (
+              success: true,
+              accessToken: activeToken,
+              teacherName: activeTeacherName,
+              email: activeOwnerEmail,
+              errorMessage: null,
+            );
+          }
+        }
+      } catch (wErr) {
+        debugPrint('[BstCloudService] Worker OTP fallback error: $wErr');
       }
 
       return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '일회용 접속 코드가 일치하지 않거나 만료되었습니다.');

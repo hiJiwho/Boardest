@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>Bst-Cloud-Remote</title>
+  <style>
+    body { background: #0f0e17; color: #fffffe; font-family: sans-serif; padding: 20px; }
+    .card { background: #16161a; border-radius: 12px; padding: 20px; border: 1px solid #7f5af0; }
+    h2 { color: #7f5af0; margin-bottom: 10px; }
+    select, input { width: 100%; padding: 10px; margin: 8px 0; border-radius: 6px; border: 1px solid #333; background: #242629; color: #fff; }
+    button { background: #7f5af0; color: #fff; font-weight: bold; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>📡 Bst-Cloud-Remote (전자칠판 파일 리모컨)</h2>
+    <p>특정 반 또는 특별실을 선택하여 원하는 교안/.bb을 즉시 열어보내세요.</p>
+    <label>수업 장소/반 선택:</label>
+    <select id="target-room">
+      <option value="room_sci">🔬 과학실 (특별실)</option>
+      <option value="room_mus">🎵 음악실 (특별실)</option>
+      <option value="class_1_1">1학년 1반</option>
+    </select>
+    <button onclick="sendRemoteOpen()">교안 띄우기 전송</button>
+  </div>
+  <script>
+    function sendRemoteOpen() {
+      const room = document.getElementById('target-room').value;
+      alert(room + ' 전자칠판으로 선택한 교안 전송 완료!');
+    }
+  </script>
+</body>
+</html>

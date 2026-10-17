@@ -22,3 +22,5 @@ dependency_overrides:
     path: ..\\..\\packages\\common\\bst_ui
   bst_video:
     path: ..\\..\\packages\\plugins\\bst_video
+  google_fonts:
+    path: ..\\..\\packages\\common\\google_fonts

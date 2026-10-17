@@ -186,7 +186,10 @@ class _BstCloudModalState extends State<BstCloudModal> {
     if (_categoryFilter == 'pdf') {
       list = list.where((f) => f.name.toLowerCase().endsWith('.pdf')).toList();
     } else if (_categoryFilter == 'canva') {
-      list = list.where((f) => f.name.toLowerCase().endsWith('.canva.bst') || f.name.toLowerCase().endsWith('.canva') || f.name.toLowerCase().endsWith('.bstcanva')).toList();
+      list = list.where((f) {
+        final l = f.name.toLowerCase();
+        return l.endsWith('.htmlp') || l.endsWith('.canva.bst') || l.endsWith('.canva') || l.endsWith('.bstcanva');
+      }).toList();
     } else if (_categoryFilter == 'tbp') {
       list = list.where((f) => f.name.toLowerCase().endsWith('.tbp') || f.name.toLowerCase().endsWith('.bsttbp')).toList();
     } else if (_categoryFilter == 'ppt') {
@@ -299,15 +302,15 @@ class _BstCloudModalState extends State<BstCloudModal> {
     if (token == null) return;
     final lower = file.name.toLowerCase();
 
-    if (lower.endsWith('.canva.bst') || lower.endsWith('.canva') || lower.endsWith('.bstcanva')) {
-      // Canva 디자인 열기
+    if (lower.endsWith('.htmlp') || lower.endsWith('.canva.bst') || lower.endsWith('.canva') || lower.endsWith('.bstcanva')) {
+      // HTML Present / Canva 디자인 열기
       final content = await BstCloudService.instance.readDriveFileText(file.id, token);
       if (content != null) {
         String canvaId = '';
         String title = file.name;
         try {
           final data = jsonDecode(content);
-          canvaId = data['canvaId']?.toString() ?? data['embedUrl']?.toString() ?? data['url']?.toString() ?? '';
+          canvaId = (data['embedUrl'] ?? data['url'] ?? data['webUrl'] ?? data['canvaUrl'] ?? data['canvaId'] ?? data['link'] ?? '').toString().trim();
           title = data['title']?.toString() ?? file.name;
         } catch (_) {
           canvaId = content.trim();

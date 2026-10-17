@@ -12,16 +12,17 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../helpers/iframe_view_helper.dart';
 import '../models/board_tools.dart';
-import '../models/tbp_metadata.dart';
 import '../services/cloud_drive_service.dart';
 import '../services/tbp/tbp_dhash_engine.dart';
 import '../services/tbp/tbp_download_interceptor.dart';
 import '../services/tbp/tbp_storage_service.dart';
 import '../widgets/annotation_canvas.dart';
+import '../widgets/board_toolbar.dart';
+import '../widgets/save_destination_dialog.dart';
 import 'tbp/tbp_hotspot_overlay.dart';
 
-/// HTML 기반 모든 프레젠테이션 사이트(Canva, 미리캔버스, Google Slides, Genially 등)를
-/// TBP와 완벽히 동일한 Dhash 페이지별 판서, 스마트 모드, 핫스팟, 가상 넘기기(PgUp/PgDn)로 지원하는 뷰어
+/// HTML 기반 모든 프레젠테이션 사이트(Canva, 미리캔버스, Google Slides, Figma, Prezi, Genially, YouTube 등)를
+/// TBP와 완벽히 동일한 Dhash 페이지별 판서, 스마트 모드, 핫스팟, 가상 넘기기(PgUp/PgDn)로 지원하는 뷰어 (.HTMLP)
 class HtmlPresentView extends StatefulWidget {
   final String? embedUrl;
   final String? title;
@@ -40,40 +41,135 @@ class HtmlPresentView extends StatefulWidget {
     this.isTeacherApp = true,
   });
 
-  /// Canva, 구글 슬라이드 등의 임베드 URL 자동 정규화
-  static String formatPresentUrl(String rawUrl) {
-    var url = rawUrl.trim();
-    if (url.isEmpty) return 'https://www.canva.com';
+  /// 자주 쓰는 프레젠테이션/수업 사이트 URL 및 iframe 코드를 자동으로 임베드(Embed) 가능 URL로 변환
+  static String formatPresentUrl(String rawInput) {
+    var url = rawInput.trim();
+    if (url.isEmpty) return 'https://docs.google.com/presentation';
+
+    // 1. <iframe ... src="..."> 형태 코드가 붙여넣어진 경우 src 속성 자동 추출
+    if (url.contains('<iframe') || url.contains('src=')) {
+      final srcMatch = RegExp(r'''src\s*=\s*["']([^"']+)["']''', caseSensitive: false).firstMatch(url);
+      if (srcMatch != null && srcMatch.group(1) != null) {
+        url = srcMatch.group(1)!.trim();
+      }
+    }
+
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       url = 'https://$url';
     }
 
-    // Canva URL 포맷팅: /design/{id}/{token}/(edit|view|watch...) → 공개 임베드 뷰
-    // (edit/utm 등 쿼리가 붙은 주소는 비공개 편집 화면이라 403이 발생함)
-    if (url.contains('canva.com')) {
-      final uri = Uri.tryParse(url);
-      if (uri != null) {
-        final segs = uri.pathSegments.where((e) => e.isNotEmpty).toList();
-        final di = segs.indexOf('design');
-        if (di >= 0 && segs.length >= di + 3) {
-          final id = segs[di + 1];
-          final token = segs[di + 2];
-          return 'https://www.canva.com/design/$id/$token/view?embed';
-        }
-        if (di >= 0 && segs.length == di + 2) {
-          return 'https://www.canva.com/design/${segs[di + 1]}/view?embed';
-        }
+    final uri = Uri.tryParse(url);
+    final host = uri?.host.toLowerCase() ?? '';
+    final segs = uri?.pathSegments.where((e) => e.isNotEmpty).toList() ?? const <String>[];
+
+    // 2. Canva: /design/{id}/{token}/(edit|view|watch) -> /design/{id}/{token}/view?embed
+    if (host.contains('canva.com')) {
+      final di = segs.indexOf('design');
+      if (di >= 0 && segs.length >= di + 3) {
+        final id = segs[di + 1];
+        final token = segs[di + 2];
+        return 'https://www.canva.com/design/$id/$token/view?embed';
       }
-      if (url.contains('/view?embed')) return url;
+      if (di >= 0 && segs.length == di + 2) {
+        return 'https://www.canva.com/design/${segs[di + 1]}/view?embed';
+      }
+      if (!url.contains('embed')) {
+        return url.contains('?') ? '$url&embed' : '$url?embed';
+      }
       return url;
     }
 
-    // Google Slides URL 포맷팅 (/pub?start=false&loop=false&delayms=3000)
-    if (url.contains('docs.google.com/presentation') && url.contains('/edit')) {
-      return url.replaceAll(RegExp(r'/edit.*$'), '/embed?start=false&loop=false');
+    // 3. Google Slides / Docs / Forms
+    if (host.contains('docs.google.com')) {
+      if (url.contains('/presentation/d/')) {
+        if (url.contains('/embed') || url.contains('/pubembed')) return url;
+        final m = RegExp(r'/presentation/d/([a-zA-Z0-9_-]+)').firstMatch(url);
+        if (m != null) {
+          return 'https://docs.google.com/presentation/d/${m.group(1)}/embed?start=false&loop=false&delayms=3000';
+        }
+      }
+      if (url.contains('/document/d/') && url.contains('/edit')) {
+        return url.replaceAll(RegExp(r'/edit.*$'), '/preview');
+      }
+      if (url.contains('/spreadsheets/d/') && url.contains('/edit')) {
+        return url.replaceAll(RegExp(r'/edit.*$'), '/preview');
+      }
+      return url;
+    }
+
+    // 4. 미리캔버스 (MiriCanvas): miricanvas.com/v/{id}
+    if (host.contains('miricanvas.com')) {
+      final vi = segs.indexOf('v');
+      if (vi >= 0 && segs.length >= vi + 2) {
+        return 'https://www.miricanvas.com/v/${segs[vi + 1]}';
+      }
+      return url;
+    }
+
+    // 5. Figma (Figma Slides / Design / Proto / FigJam)
+    if (host.contains('figma.com') && !url.contains('figma.com/embed')) {
+      return 'https://www.figma.com/embed?embed_host=boardest&url=${Uri.encodeComponent(url)}';
+    }
+
+    // 6. Prezi
+    if (host.contains('prezi.com')) {
+      if (url.contains('/embed/')) return url;
+      final pi = segs.indexOf('p');
+      if (pi >= 0 && segs.length >= pi + 2 && segs[pi + 1] != 'embed') {
+        return 'https://prezi.com/p/embed/${segs[pi + 1]}/';
+      }
+      final vi = segs.indexOf('v');
+      if (vi >= 0 && segs.length >= vi + 2 && segs[vi + 1] != 'embed') {
+        final id = segs[vi + 1] == 'view' && segs.length >= vi + 3 ? segs[vi + 2] : segs[vi + 1];
+        return 'https://prezi.com/v/embed/$id/';
+      }
+      return url;
+    }
+
+    // 7. Slides.com
+    if (host.contains('slides.com') && segs.length >= 2 && segs.last != 'embed' && segs.last != 'fullscreen') {
+      return 'https://slides.com/${segs[0]}/${segs[1]}/embed';
+    }
+
+    // 8. YouTube (watch?v= / youtu.be / shorts)
+    if (host.contains('youtube.com') || host.contains('youtu.be')) {
+      if (url.contains('/embed/')) return url;
+      String? videoId = uri?.queryParameters['v'];
+      if ((videoId == null || videoId.isEmpty) && host.contains('youtu.be') && segs.isNotEmpty) {
+        videoId = segs.first;
+      } else if ((videoId == null || videoId.isEmpty) && segs.length >= 2 && (segs[0] == 'shorts' || segs[0] == 'live')) {
+        videoId = segs[1];
+      }
+      if (videoId != null && videoId.isNotEmpty) {
+        return 'https://www.youtube.com/embed/$videoId?rel=0';
+      }
+    }
+
+    // 9. Vimeo
+    if (host.contains('vimeo.com') && !host.contains('player.vimeo.com') && segs.isNotEmpty) {
+      final id = segs.last;
+      if (RegExp(r'^\d+$').hasMatch(id)) {
+        return 'https://player.vimeo.com/video/$id';
+      }
     }
 
     return url;
+  }
+
+  /// URL로부터 사이트 종류 감지 배지 반환
+  static String detectSiteLabel(String rawInput) {
+    final lower = rawInput.toLowerCase();
+    if (lower.contains('canva.com')) return 'Canva';
+    if (lower.contains('docs.google.com/presentation')) return 'Google Slides';
+    if (lower.contains('docs.google.com')) return 'Google Docs';
+    if (lower.contains('miricanvas.com')) return '미리캔버스';
+    if (lower.contains('figma.com')) return 'Figma';
+    if (lower.contains('prezi.com')) return 'Prezi';
+    if (lower.contains('genial.ly') || lower.contains('genially.com')) return 'Genially';
+    if (lower.contains('slides.com')) return 'Slides.com';
+    if (lower.contains('youtube.com') || lower.contains('youtu.be')) return 'YouTube';
+    if (lower.contains('padlet.com')) return 'Padlet';
+    return 'HTML Present';
   }
 
   // 레거시 호환용 별칭 메서드
@@ -97,6 +193,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
   String? _errorMessage;
 
   String _targetUrl = '';
+  String _displayTitle = 'HTML Present';
   String _projectKey = '';
   String _tbpFolderPath = '';
 
@@ -111,43 +208,105 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
 
   Timer? _touchDhashTimer;
   Timer? _autoSavePenTimer;
+  Timer? _smartPassThroughTimer;
+  bool _smartClickPassThrough = false;
   Timer? _activeSpotTimer;
   int? _spotTimerRemaining;
+
+  bool get _isWebTouchMode =>
+      _inputMode == TbpInputMode.touch ||
+      _tool == ToolMode.pointer ||
+      _smartClickPassThrough;
+
+  void _syncIframePointerEvents() {
+    setIframePointerEvents(_isWebTouchMode);
+  }
+
+  void _handleWebviewHotspotContext(double rx, double ry) {
+    if (!mounted) return;
+    if (_inputMode == TbpInputMode.pen) return;
+    setIframePointerEvents(false);
+    TbpHotspotOverlay.showAddHotspotModal(
+      context,
+      rx.clamp(0.02, 0.98),
+      ry.clamp(0.02, 0.98),
+      _tbpFolderPath,
+      _currentDhash,
+      _currentHotspots,
+      (updated) {
+        if (mounted) {
+          setState(() {
+            _currentHotspots = updated;
+          });
+        }
+        _syncIframePointerEvents();
+      },
+    ).then((_) => _syncIframePointerEvents());
+  }
 
   @override
   void initState() {
     super.initState();
-    _dhashEngine = TbpDhashEngine(onDhashChanged: _onDhashDetected);
+    _displayTitle = widget.title ?? 'HTML Present';
+    _dhashEngine = TbpDhashEngine(
+      onDhashChanged: _onDhashDetected,
+      onWebContextMenu: _handleWebviewHotspotContext,
+    );
     _annotationController.onStrokesChanged = _scheduleAutoSavePenStrokes;
     _annotationController.activeColor = _penColor;
     _annotationController.activeWidth = _strokeWidth;
+    _syncIframePointerEvents();
     _initProjectAndWebview();
+  }
+
+  String _extractUrlFromRawContent(String content) {
+    final trimmed = content.trim();
+    if (trimmed.isEmpty) return '';
+    try {
+      final parsed = jsonDecode(trimmed) as Map<String, dynamic>;
+      if (parsed['title'] != null && parsed['title'].toString().trim().isNotEmpty && widget.title == null) {
+        _displayTitle = parsed['title'].toString().trim();
+      }
+      return (parsed['embedUrl'] ?? parsed['url'] ?? parsed['webUrl'] ?? parsed['canvaUrl'] ?? parsed['link'] ?? '').toString().trim();
+    } catch (_) {
+      if (trimmed.startsWith('http') || trimmed.contains('<iframe')) {
+        return trimmed;
+      }
+    }
+    return '';
   }
 
   Future<void> _initProjectAndWebview() async {
     try {
-      var rawUrl = widget.embedUrl ?? widget.initialUrl ?? '';
+      var rawUrl = (widget.embedUrl ?? widget.initialUrl ?? '').trim();
 
-      // 파일에서 URL 읽기 지원
+      // 파일 경로 또는 Web 메모리 파일에서 URL 읽기 지원
       if (rawUrl.isEmpty && widget.filePath != null && widget.filePath!.isNotEmpty) {
-        try {
-          final f = File(widget.filePath!);
-          if (await f.exists()) {
-            final content = await f.readAsString();
-            try {
-              final parsed = jsonDecode(content) as Map<String, dynamic>;
-              rawUrl = (parsed['embedUrl'] ?? parsed['url'] ?? parsed['canvaUrl'] ?? parsed['link'] ?? '').toString();
-            } catch (_) {
-              if (content.trim().startsWith('http')) {
-                rawUrl = content.trim();
-              }
+        final fp = widget.filePath!.trim();
+        if (fp.startsWith('http://') || fp.startsWith('https://') || fp.contains('<iframe')) {
+          rawUrl = fp;
+        } else if (kIsWeb && CloudDriveService.webMemoryFiles.containsKey(fp)) {
+          try {
+            final content = utf8.decode(CloudDriveService.webMemoryFiles[fp]!);
+            rawUrl = _extractUrlFromRawContent(content);
+          } catch (_) {}
+        } else if (!kIsWeb) {
+          try {
+            final f = File(fp);
+            if (await f.exists()) {
+              final content = await f.readAsString();
+              rawUrl = _extractUrlFromRawContent(content);
             }
-          }
-        } catch (_) {}
+          } catch (_) {}
+        }
       }
 
       if (rawUrl.isEmpty) {
-        rawUrl = 'https://www.canva.com';
+        setState(() {
+          _errorMessage = '프레젠테이션 URL을 찾을 수 없습니다. 올바른 .HTMLP 파일 또는 URL을 열어주세요.';
+          _isLoading = false;
+        });
+        return;
       }
 
       _targetUrl = HtmlPresentView.formatPresentUrl(rawUrl);
@@ -159,14 +318,17 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
       // TBP 가상 프로젝트 등록 (Dhash별 판서 및 핫스팟 보관용)
       _tbpFolderPath = await TbpStorageService.instance.registerCreatedTbpProject(
         meta: {
-          'title': widget.title ?? 'HTML Present',
+          'title': _displayTitle,
           'folderId': _projectKey,
           'webUrl': _targetUrl,
-          'scopeKey': 'HTML',
+          'scopeKey': 'HTMLP',
           'createdAt': DateTime.now().toIso8601String(),
         },
         localDirPath: kIsWeb ? 'web://tbp/$_projectKey' : null,
       );
+
+      final knownHashes = await TbpStorageService.instance.getKnownPageHashes(_tbpFolderPath);
+      _dhashEngine.registerKnownHashes(knownHashes);
 
       // 초기 Dhash ('default') 핫스팟 및 판서 스트로크 로드
       _currentHotspots = await TbpStorageService.instance.loadHotspots(_tbpFolderPath, _currentDhash);
@@ -175,6 +337,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
 
       if (kIsWeb) {
         if (mounted) setState(() => _isLoading = false);
+        _dhashEngine.startTracker(null, null);
         return;
       } else if (Platform.isWindows) {
         await _initWindowsWebview(_targetUrl);
@@ -210,9 +373,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
         try {
           _dhashEngine.onDhashMessage(message);
           final data = jsonDecode(message);
-          if (data['type'] == 'dhashUpdated') {
-            _onDhashDetected(data['dhash']);
-          } else if (data['type'] == 'downloadRequest') {
+          if (data['type'] == 'downloadRequest') {
             TbpDownloadInterceptor.instance.handleDownload(
               context: context,
               tbpFolderPath: _tbpFolderPath,
@@ -243,10 +404,6 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
         onMessageReceived: (JavaScriptMessage msg) {
           try {
             _dhashEngine.onDhashMessage(msg.message);
-            final data = jsonDecode(msg.message);
-            if (data['type'] == 'dhashUpdated') {
-              _onDhashDetected(data['dhash']);
-            }
           } catch (_) {}
         },
       )
@@ -255,7 +412,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
 
   void _scheduleAutoSavePenStrokes() {
     _autoSavePenTimer?.cancel();
-    _autoSavePenTimer = Timer(const Duration(milliseconds: 1000), () async {
+    _autoSavePenTimer = Timer(const Duration(milliseconds: 800), () async {
       if (!mounted) return;
       try {
         await TbpStorageService.instance.savePenStrokes(
@@ -271,20 +428,35 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
   }
 
   void _onDhashDetected(String dHash) async {
-    if (dHash == _currentDhash) return;
+    if (dHash.isEmpty || dHash == _currentDhash) return;
+
+    final prevDhash = _currentDhash;
+    final prevStrokes = List<AnnotationStroke>.from(_annotationController.strokes);
+    final prevHotspots = List<Map<String, dynamic>>.from(_currentHotspots);
 
     // 이전 페이지 판서 자동 저장
-    if (_annotationController.strokes.isNotEmpty) {
+    if (_tbpFolderPath.isNotEmpty) {
       await TbpStorageService.instance.savePenStrokes(
         _tbpFolderPath,
-        _currentDhash,
-        _annotationController.strokes,
+        prevDhash,
+        prevStrokes,
       );
     }
 
     _currentDhash = dHash;
-    final hotspots = await TbpStorageService.instance.loadHotspots(_tbpFolderPath, dHash);
-    final strokes = await TbpStorageService.instance.loadPenStrokes(_tbpFolderPath, dHash);
+    var hotspots = await TbpStorageService.instance.loadHotspots(_tbpFolderPath, dHash);
+    var strokes = await TbpStorageService.instance.loadPenStrokes(_tbpFolderPath, dHash);
+
+    if (prevDhash == 'default') {
+      if (strokes.isEmpty && prevStrokes.isNotEmpty) {
+        strokes = prevStrokes;
+        await TbpStorageService.instance.savePenStrokes(_tbpFolderPath, dHash, strokes);
+      }
+      if (hotspots.isEmpty && prevHotspots.isNotEmpty) {
+        hotspots = prevHotspots;
+        await TbpStorageService.instance.saveHotspots(_tbpFolderPath, dHash, hotspots);
+      }
+    }
 
     if (mounted) {
       setState(() {
@@ -295,6 +467,16 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
   }
 
   void _sendVirtualKey(String key, int keyCode) {
+    if (kIsWeb) {
+      sendVirtualKeyToIframe(key, keyCode);
+      if (key == 'PageDown' || key == 'ArrowRight') {
+        _dhashEngine.stepWebVirtualPage(1);
+      } else if (key == 'PageUp' || key == 'ArrowLeft') {
+        _dhashEngine.stepWebVirtualPage(-1);
+      }
+      _dhashEngine.triggerBurstCapture();
+      return;
+    }
     final script = '''
       (function() {
         const target = document.activeElement || document.body;
@@ -320,7 +502,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
         target.dispatchEvent(upEvt);
         window.dispatchEvent(upEvt);
 
-        // Fallback arrow keys for presentation frameworks (Canva, Slides, etc)
+        // Fallback arrow keys for presentation frameworks (HTML Present, Slides, etc)
         if ('$key' === 'PageDown' || '$key' === 'PageUp') {
           const arrowKey = '$key' === 'PageDown' ? 'ArrowRight' : 'ArrowLeft';
           const arrowCode = '$key' === 'PageDown' ? 39 : 37;
@@ -342,6 +524,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
     } else if (!kIsWeb && !Platform.isWindows) {
       _androidWebview.runJavaScript(script);
     }
+    _dhashEngine.triggerBurstCapture();
   }
 
   void _triggerHotspot(Map<String, dynamic> spot) async {
@@ -358,30 +541,32 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
       case 'memo':
         showDialog(
           context: context,
-          builder: (_) => AlertDialog(
-            backgroundColor: const Color(0xFF16161A),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Row(
-              children: [
-                const Text('📌 ', style: TextStyle(fontSize: 20)),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+          builder: (_) => PointerInterceptor(
+            child: AlertDialog(
+              backgroundColor: const Color(0xFF16161A),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Row(
+                children: [
+                  const Text('📌 ', style: TextStyle(fontSize: 20)),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
                   ),
+                ],
+              ),
+              content: Text(
+                val,
+                style: GoogleFonts.notoSansKr(color: const Color(0xFFE2E8F0), fontSize: 14, height: 1.6),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('닫기', style: TextStyle(color: Color(0xFF00F5D4), fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
-            content: Text(
-              val,
-              style: GoogleFonts.notoSansKr(color: const Color(0xFFE2E8F0), fontSize: 14, height: 1.6),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('닫기', style: TextStyle(color: Color(0xFF00F5D4), fontWeight: FontWeight.bold)),
-              ),
-            ],
           ),
         );
         break;
@@ -414,16 +599,18 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
 
   void _onPointerDown(PointerDownEvent event) {
     _touchDhashTimer?.cancel();
-    _touchDhashTimer = Timer(const Duration(seconds: 1), () {
-      _dhashEngine.requestHashNow();
+    _touchDhashTimer = Timer(const Duration(milliseconds: 450), () {
+      _dhashEngine.triggerBurstCapture();
     });
   }
 
   @override
   void dispose() {
     _autoSavePenTimer?.cancel();
+    _smartPassThroughTimer?.cancel();
     _touchDhashTimer?.cancel();
     _activeSpotTimer?.cancel();
+    setIframePointerEvents(true);
     _dhashEngine.dispose();
     if (!kIsWeb && Platform.isWindows) {
       _winWebview.dispose();
@@ -433,30 +620,36 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
 
   Widget _buildInputModeChip(TbpInputMode mode, String label, double s) {
     final isSelected = _inputMode == mode;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _inputMode = mode;
-          if (mode == TbpInputMode.touch) {
-            _tool = ToolMode.pointer;
-          } else if (mode == TbpInputMode.pen && _tool == ToolMode.pointer) {
-            _tool = ToolMode.pen;
-          }
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 5 * s),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00F5D4) : Colors.transparent,
-          borderRadius: BorderRadius.circular(16 * s),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.black : Colors.white70,
-            fontSize: 11 * s,
-            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16 * s),
+        onTap: () {
+          setState(() {
+            _inputMode = mode;
+            if (mode == TbpInputMode.touch) {
+              _tool = ToolMode.pointer;
+            } else if (_tool == ToolMode.pointer) {
+              _tool = ToolMode.pen;
+              _annotationController.toolMode = ToolMode.pen;
+            }
+          });
+          _syncIframePointerEvents();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 5 * s),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF00F5D4) : Colors.transparent,
+            borderRadius: BorderRadius.circular(16 * s),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.black : Colors.white70,
+              fontSize: 11 * s,
+              fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+            ),
           ),
         ),
       ),
@@ -507,6 +700,10 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
       );
     }
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncIframePointerEvents();
+    });
+
     final webviewWidget = kIsWeb
         ? getIframeViewWidget('html-present-iframe-${_targetUrl.hashCode}', _targetUrl)
         : (Platform.isWindows
@@ -531,6 +728,8 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                       final cHeight = constraints.maxHeight > 0 ? constraints.maxHeight : MediaQuery.of(context).size.height;
 
                       void openHotspotModalAt(Offset pos) {
+                        if (_inputMode == TbpInputMode.pen) return;
+                        setIframePointerEvents(false);
                         final rx = (pos.dx / cWidth).clamp(0.02, 0.98);
                         final ry = (pos.dy / cHeight).clamp(0.02, 0.98);
                         TbpHotspotOverlay.showAddHotspotModal(
@@ -544,18 +743,36 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                             setState(() {
                               _currentHotspots = updated;
                             });
+                            _syncIframePointerEvents();
                           },
-                        );
+                        ).then((_) => _syncIframePointerEvents());
                       }
 
                       return Stack(
                         children: [
-                          // 1. Webview 메인 영역 (터치 모드일 때 우클릭 감지 지원)
+                          // 1. Webview 메인 영역 (마우스 모드일 때 우클릭/길게누르기 핫스팟 감지 지원)
                           Positioned.fill(
                             child: GestureDetector(
                               behavior: HitTestBehavior.translucent,
-                              onSecondaryTapDown: (d) => openHotspotModalAt(d.localPosition),
-                              child: webviewWidget,
+                              onSecondaryTapDown: (details) {
+                                if (_inputMode != TbpInputMode.pen) {
+                                  openHotspotModalAt(details.localPosition);
+                                }
+                              },
+                              onLongPressStart: (details) {
+                                if (_inputMode == TbpInputMode.touch) {
+                                  openHotspotModalAt(details.localPosition);
+                                }
+                              },
+                              child: Listener(
+                                behavior: HitTestBehavior.translucent,
+                                onPointerDown: (e) {
+                                  if (e.buttons == 2 && _inputMode != TbpInputMode.pen) {
+                                    openHotspotModalAt(e.localPosition);
+                                  }
+                                },
+                                child: webviewWidget,
+                              ),
                             ),
                           ),
 
@@ -563,32 +780,77 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                           Positioned.fill(
                             child: AnnotationCanvas(
                               controller: _annotationController,
-                              enabled: _inputMode != TbpInputMode.touch && _tool != ToolMode.pointer,
-                              onRightClick: openHotspotModalAt,
-                              onLongPressClick: (pos) {
-                                final x = pos.dx.toInt();
-                                final y = pos.dy.toInt();
-                                final script = '''
-                                (function() {
-                                  const el = document.elementFromPoint($x, $y);
-                                  if (el) {
-                                    const evt = new MouseEvent('click', {
-                                      bubbles: true,
-                                      cancelable: true,
-                                      clientX: $x,
-                                      clientY: $y
-                                    });
-                                    el.dispatchEvent(evt);
-                                    if (typeof el.click === 'function') el.click();
-                                  }
-                                })();
-                              ''';
-                                if (!kIsWeb && Platform.isWindows && _winWebviewInitialized) {
-                                  _winWebview.executeScript(script);
-                                } else if (!kIsWeb && !Platform.isWindows) {
-                                  _androidWebview.runJavaScript(script);
-                                }
-                              },
+                              enabled: !_isWebTouchMode,
+                              onRightClick: _inputMode != TbpInputMode.pen ? openHotspotModalAt : null,
+                              onLongPressClick: _inputMode == TbpInputMode.smart
+                                  ? (pos) {
+                                      setState(() {
+                                        _smartClickPassThrough = true;
+                                      });
+                                      _syncIframePointerEvents();
+                                      _smartPassThroughTimer?.cancel();
+                                      _smartPassThroughTimer = Timer(const Duration(milliseconds: 2200), () {
+                                        if (mounted) {
+                                          setState(() {
+                                            _smartClickPassThrough = false;
+                                          });
+                                          _syncIframePointerEvents();
+                                          _dhashEngine.triggerBurstCapture();
+                                        }
+                                      });
+
+                                      ScaffoldMessenger.of(context).clearSnackBars();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('👆 스마트 클릭 통과 활성화 (프레젠테이션 요소 클릭 실행됨 • 2.2초간 직접 터치 가능)'),
+                                          duration: Duration(milliseconds: 1400),
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+
+                                      if (kIsWeb) {
+                                        return;
+                                      }
+
+                                      final rx = (pos.dx / cWidth).clamp(0.0, 1.0);
+                                      final ry = (pos.dy / cHeight).clamp(0.0, 1.0);
+                                      final script = '''
+                                      (function() {
+                                        function fireClickAt(doc, win, cx, cy) {
+                                          let el = doc.elementFromPoint(cx, cy);
+                                          if (!el) return;
+                                          if (el.tagName === 'IFRAME') {
+                                            try {
+                                              const rect = el.getBoundingClientRect();
+                                              const subDoc = el.contentDocument || (el.contentWindow && el.contentWindow.document);
+                                              if (subDoc) {
+                                                fireClickAt(subDoc, el.contentWindow || win, cx - rect.left, cy - rect.top);
+                                                return;
+                                              }
+                                            } catch (_) {}
+                                          }
+                                          const opts = { bubbles: true, cancelable: true, view: win, clientX: cx, clientY: cy, button: 0, buttons: 1 };
+                                          try { el.dispatchEvent(new PointerEvent('pointerdown', opts)); } catch (_) {}
+                                          try { el.dispatchEvent(new MouseEvent('mousedown', opts)); } catch (_) {}
+                                          try { el.dispatchEvent(new PointerEvent('pointerup', opts)); } catch (_) {}
+                                          try { el.dispatchEvent(new MouseEvent('mouseup', opts)); } catch (_) {}
+                                          try { el.dispatchEvent(new MouseEvent('click', opts)); } catch (_) {}
+                                          if (typeof el.click === 'function') el.click();
+                                          if (typeof el.focus === 'function') el.focus();
+                                        }
+                                        const x = Math.round($rx * (window.innerWidth || document.documentElement.clientWidth || 1280));
+                                        const y = Math.round($ry * (window.innerHeight || document.documentElement.clientHeight || 720));
+                                        fireClickAt(document, window, x, y);
+                                      })();
+                                      ''';
+                                      if (!kIsWeb && Platform.isWindows && _winWebviewInitialized) {
+                                        _winWebview.executeScript(script);
+                                      } else if (!kIsWeb && !Platform.isWindows) {
+                                        _androidWebview.runJavaScript(script);
+                                      }
+                                      _dhashEngine.triggerBurstCapture();
+                                    }
+                                  : null,
                             ),
                           ),
 
@@ -615,35 +877,44 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                             top: 0,
                             bottom: 0,
                             child: Center(
-                              child: PointerInterceptor(child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(24 * s),
-                                  onTap: () => _sendVirtualKey('PageUp', 33),
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF16161A).withOpacity(0.65),
+                              child: MouseRegion(
+                                onEnter: (_) => setIframePointerEvents(false),
+                                onExit: (_) => _syncIframePointerEvents(),
+                                child: PointerInterceptor(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
                                       borderRadius: BorderRadius.circular(24 * s),
-                                      border: Border.all(color: Colors.white.withOpacity(0.18)),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.35),
-                                          blurRadius: 10,
+                                      onTap: () {
+                                        _sendVirtualKey('PageUp', 33);
+                                        _dhashEngine.navigatePage(isNext: false);
+                                      },
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF16161A).withOpacity(0.75),
+                                          borderRadius: BorderRadius.circular(24 * s),
+                                          border: Border.all(color: Colors.white.withOpacity(0.22)),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.35),
+                                              blurRadius: 10,
+                                            ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.arrow_back_ios_new_rounded, size: 16 * s, color: Colors.white),
-                                        SizedBox(height: 4 * s),
-                                        Text('PgUp', style: TextStyle(color: Colors.white70, fontSize: 9 * s, fontWeight: FontWeight.bold)),
-                                      ],
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.arrow_back_ios_new_rounded, size: 16 * s, color: Colors.white),
+                                            SizedBox(height: 4 * s),
+                                            Text('PgUp', style: TextStyle(color: Colors.white70, fontSize: 9 * s, fontWeight: FontWeight.bold)),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              )),
+                              ),
                             ),
                           ),
 
@@ -652,35 +923,44 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                             top: 0,
                             bottom: 0,
                             child: Center(
-                              child: PointerInterceptor(child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(24 * s),
-                                  onTap: () => _sendVirtualKey('PageDown', 34),
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF16161A).withOpacity(0.65),
+                              child: MouseRegion(
+                                onEnter: (_) => setIframePointerEvents(false),
+                                onExit: (_) => _syncIframePointerEvents(),
+                                child: PointerInterceptor(
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
                                       borderRadius: BorderRadius.circular(24 * s),
-                                      border: Border.all(color: Colors.white.withOpacity(0.18)),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.35),
-                                          blurRadius: 10,
+                                      onTap: () {
+                                        _sendVirtualKey('PageDown', 34);
+                                        _dhashEngine.navigatePage(isNext: true);
+                                      },
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF16161A).withOpacity(0.75),
+                                          borderRadius: BorderRadius.circular(24 * s),
+                                          border: Border.all(color: Colors.white.withOpacity(0.22)),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.35),
+                                              blurRadius: 10,
+                                            ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.arrow_forward_ios_rounded, size: 16 * s, color: Colors.white),
-                                        SizedBox(height: 4 * s),
-                                        Text('PgDn', style: TextStyle(color: Colors.white70, fontSize: 9 * s, fontWeight: FontWeight.bold)),
-                                      ],
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.arrow_forward_ios_rounded, size: 16 * s, color: Colors.white),
+                                            SizedBox(height: 4 * s),
+                                            Text('PgDn', style: TextStyle(color: Colors.white70, fontSize: 9 * s, fontWeight: FontWeight.bold)),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              )),
+                              ),
                             ),
                           ),
                         ],
@@ -698,34 +978,36 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                 left: 0,
                 right: 0,
                 child: Center(
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 22 * s, vertical: 10 * s),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF16161A).withOpacity(0.95),
-                      borderRadius: BorderRadius.circular(36 * s),
-                      border: Border.all(color: const Color(0xFF00F5D4), width: 2),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('⏱️ ', style: TextStyle(fontSize: 20 * s)),
-                        Text(
-                          '${((_spotTimerRemaining ?? 0) ~/ 60).toString().padLeft(2, '0')}:${((_spotTimerRemaining ?? 0) % 60).toString().padLeft(2, '0')}',
-                          style: GoogleFonts.outfit(
-                            color: (_spotTimerRemaining ?? 0) <= 10 ? const Color(0xFFEF4565) : Colors.white,
-                            fontSize: 26 * s,
-                            fontWeight: FontWeight.bold,
+                  child: PointerInterceptor(
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 22 * s, vertical: 10 * s),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF16161A).withOpacity(0.95),
+                        borderRadius: BorderRadius.circular(36 * s),
+                        border: Border.all(color: const Color(0xFF00F5D4), width: 2),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('⏱️ ', style: TextStyle(fontSize: 20 * s)),
+                          Text(
+                            '${((_spotTimerRemaining ?? 0) ~/ 60).toString().padLeft(2, '0')}:${((_spotTimerRemaining ?? 0) % 60).toString().padLeft(2, '0')}',
+                            style: GoogleFonts.outfit(
+                              color: (_spotTimerRemaining ?? 0) <= 10 ? const Color(0xFFEF4565) : Colors.white,
+                              fontSize: 26 * s,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                        SizedBox(width: 10 * s),
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded, color: Colors.white54),
-                          onPressed: () {
-                            _activeSpotTimer?.cancel();
-                            setState(() => _spotTimerRemaining = null);
-                          },
-                        ),
-                      ],
+                          SizedBox(width: 10 * s),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, color: Colors.white54),
+                            onPressed: () {
+                              _activeSpotTimer?.cancel();
+                              setState(() => _spotTimerRemaining = null);
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -736,118 +1018,249 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
               top: 12 * s,
               left: 16 * s,
               right: 16 * s,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  PointerInterceptor(child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 14 * s, vertical: 8 * s),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF16161A).withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(24 * s),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                          onPressed: () async {
-                            if (_annotationController.strokes.isNotEmpty) {
-                              await TbpStorageService.instance.savePenStrokes(
-                                _tbpFolderPath,
-                                _currentDhash,
-                                _annotationController.strokes,
-                              );
-                            }
-                            if (context.mounted) Navigator.pop(context);
-                          },
+              child: MouseRegion(
+                onEnter: (_) => setIframePointerEvents(false),
+                onExit: (_) => _syncIframePointerEvents(),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    PointerInterceptor(
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 14 * s, vertical: 8 * s),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16161A).withOpacity(0.92),
+                          borderRadius: BorderRadius.circular(24 * s),
+                          border: Border.all(color: Colors.white24),
                         ),
-                        SizedBox(width: 8 * s),
-                        Text(
-                          '✨ ${widget.title ?? 'HTML Present'}',
-                          style: GoogleFonts.notoSansKr(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15 * s,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                              onPressed: () async {
+                                if (_annotationController.strokes.isNotEmpty) {
+                                  await TbpStorageService.instance.savePenStrokes(
+                                    _tbpFolderPath,
+                                    _currentDhash,
+                                    _annotationController.strokes,
+                                  );
+                                }
+                                if (context.mounted) Navigator.pop(context);
+                              },
+                            ),
+                            SizedBox(width: 8 * s),
+                            Text(
+                              '🌐 $_displayTitle [${HtmlPresentView.detectSiteLabel(_targetUrl)}]',
+                              style: GoogleFonts.notoSansKr(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15 * s,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  )),
 
-                  // 3모드 스위처 (마우스 / 스마트 / 주석)
-                  PointerInterceptor(child: Container(
-                    padding: EdgeInsets.all(4 * s),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF16161A).withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(20 * s),
-                      border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.4)),
+                    // 3모드 스위처 (마우스 / 스마트 / 주석)
+                    PointerInterceptor(
+                      child: Container(
+                        padding: EdgeInsets.all(4 * s),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16161A).withOpacity(0.92),
+                          borderRadius: BorderRadius.circular(20 * s),
+                          border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.4)),
+                        ),
+                        child: Row(
+                          children: [
+                            _buildInputModeChip(TbpInputMode.touch, '🖱️ 마우스', s),
+                            _buildInputModeChip(TbpInputMode.smart, '⚡ 스마트', s),
+                            _buildInputModeChip(TbpInputMode.pen, '✏️ 주석', s),
+                          ],
+                        ),
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        _buildInputModeChip(TbpInputMode.touch, '🖱️ 마우스', s),
-                        _buildInputModeChip(TbpInputMode.smart, '⚡ 스마트', s),
-                        _buildInputModeChip(TbpInputMode.pen, '✏️ 주석', s),
-                      ],
-                    ),
-                  )),
 
-                  // 이전/다음 슬라이드 & 핫스팟 추가
-                  PointerInterceptor(child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 6 * s),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF16161A).withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(30 * s),
-                      border: Border.all(color: Colors.white24),
+                    // 이전/다음 슬라이드 & 핫스팟 추가 & .HTMLP 저장
+                    PointerInterceptor(
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 6 * s),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16161A).withOpacity(0.92),
+                          borderRadius: BorderRadius.circular(30 * s),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.navigate_before_rounded, color: Colors.white, size: 28),
+                              tooltip: '이전 페이지 (PgUp)',
+                              onPressed: () {
+                                _sendVirtualKey('PageUp', 33);
+                                _dhashEngine.navigatePage(isNext: false);
+                              },
+                            ),
+                            SizedBox(width: 4 * s),
+                            IconButton(
+                              icon: const Icon(Icons.navigate_next_rounded, color: Colors.white, size: 28),
+                              tooltip: '다음 페이지 (PgDn)',
+                              onPressed: () {
+                                _sendVirtualKey('PageDown', 34);
+                                _dhashEngine.navigatePage(isNext: true);
+                              },
+                            ),
+                            SizedBox(width: 8 * s),
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.add_location_alt_rounded, size: 16),
+                              label: Text(
+                                '+ 핫스팟',
+                                style: GoogleFonts.notoSansKr(fontSize: 12 * s, fontWeight: FontWeight.bold),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF00F5D4),
+                                foregroundColor: Colors.black,
+                                padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 8 * s),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20 * s)),
+                              ),
+                              onPressed: () {
+                                setIframePointerEvents(false);
+                                final offsetCount = _currentHotspots.length;
+                                final rx = (0.2 + (offsetCount % 5) * 0.14).clamp(0.1, 0.88);
+                                final ry = (0.22 + (offsetCount ~/ 5) * 0.14).clamp(0.15, 0.82);
+                                TbpHotspotOverlay.showAddHotspotModal(
+                                  context,
+                                  rx,
+                                  ry,
+                                  _tbpFolderPath,
+                                  _currentDhash,
+                                  _currentHotspots,
+                                  (updated) {
+                                    setState(() => _currentHotspots = updated);
+                                    _syncIframePointerEvents();
+                                  },
+                                ).then((_) => _syncIframePointerEvents());
+                              },
+                            ),
+                            SizedBox(width: 8 * s),
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.save_rounded, size: 16),
+                              label: Text(
+                                'HTMLP 저장',
+                                style: GoogleFonts.notoSansKr(fontSize: 12 * s, fontWeight: FontWeight.bold),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF7F5AF0),
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 8 * s),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20 * s)),
+                              ),
+                              onPressed: () async {
+                                setIframePointerEvents(false);
+                                if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty) {
+                                  await TbpStorageService.instance.savePenStrokes(
+                                    _tbpFolderPath,
+                                    _currentDhash,
+                                    _annotationController.strokes,
+                                  );
+                                }
+                                final result = await SaveDestinationDialog.show(
+                                  context: context,
+                                  scaleFactor: widget.scaleFactor,
+                                  title: '💾 HTML Present (.HTMLP) 저장',
+                                  subTitle: '프레젠테이션 파일(.HTMLP)을 어디에 저장하시겠습니까?',
+                                );
+                                _syncIframePointerEvents();
+                                if (result != null) {
+                                  final safeName = _displayTitle.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+                                  final fileName = safeName.toUpperCase().endsWith('.HTMLP') ? safeName : '$safeName.HTMLP';
+                                  if (result.type == SaveTargetType.cloud) {
+                                    await CloudDriveService.instance.registerCanvaDesign(
+                                      title: _displayTitle,
+                                      canvaUrl: _targetUrl,
+                                    );
+                                  } else if (!kIsWeb) {
+                                    final outFile = File(p.join(result.targetDirectory.path, fileName));
+                                    await outFile.writeAsString(jsonEncode({
+                                      'type': 'boardest_html_present',
+                                      'title': _displayTitle,
+                                      'url': _targetUrl,
+                                      'embedUrl': _targetUrl,
+                                      'createdAt': DateTime.now().toIso8601String(),
+                                    }));
+                                  }
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('✅ [$fileName] 파일이 저장되었습니다!'),
+                                        backgroundColor: const Color(0xFF2CB67D),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.navigate_before_rounded, color: Colors.white, size: 28),
-                          tooltip: '이전 페이지 (PgUp)',
-                          onPressed: () {
-                            _sendVirtualKey('PageUp', 33);
-                            _dhashEngine.navigatePage(isNext: false);
-                          },
-                        ),
-                        SizedBox(width: 4 * s),
-                        IconButton(
-                          icon: const Icon(Icons.navigate_next_rounded, color: Colors.white, size: 28),
-                          tooltip: '다음 페이지 (PgDn)',
-                          onPressed: () {
-                            _sendVirtualKey('PageDown', 34);
-                            _dhashEngine.navigatePage(isNext: true);
-                          },
-                        ),
-                        SizedBox(width: 8 * s),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.add_location_alt_rounded, size: 16),
-                          label: Text(
-                            '+ 핫스팟',
-                            style: GoogleFonts.notoSansKr(fontSize: 12 * s, fontWeight: FontWeight.bold),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF00F5D4),
-                            foregroundColor: Colors.black,
-                            padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 8 * s),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20 * s)),
-                          ),
-                          onPressed: () {
-                            TbpHotspotOverlay.showAddHotspotModal(
-                              context,
-                              0.5,
-                              0.5,
-                              _tbpFolderPath,
-                              _currentDhash,
-                              _currentHotspots,
-                              (updated) => setState(() => _currentHotspots = updated),
-                            );
-                          },
-                        ),
-                      ],
+                  ],
+                ),
+              ),
+            ),
+
+            // ── 하단 스마트 판서 툴바 (BoardDockToolbar) ──
+            Positioned(
+              bottom: 16 * s,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: MouseRegion(
+                  onEnter: (_) => setIframePointerEvents(false),
+                  onExit: (_) => _syncIframePointerEvents(),
+                  child: PointerInterceptor(
+                    child: BoardDockToolbar(
+                      scale: widget.scaleFactor,
+                      tool: _tool,
+                      onToolChanged: (tool) {
+                        setState(() {
+                          _tool = tool;
+                          _annotationController.toolMode = tool;
+                          if (tool == ToolMode.pointer) {
+                            _inputMode = TbpInputMode.touch;
+                          } else if (_inputMode == TbpInputMode.touch) {
+                            _inputMode = TbpInputMode.smart;
+                          }
+                        });
+                        _syncIframePointerEvents();
+                      },
+                      penColor: _penColor,
+                      onColorChanged: (c) {
+                        setState(() {
+                          _penColor = c;
+                          _annotationController.activeColor = c;
+                        });
+                      },
+                      strokeWidth: _strokeWidth,
+                      onStrokeWidthChanged: (w) {
+                        setState(() {
+                          _strokeWidth = w;
+                          _annotationController.activeWidth = w;
+                        });
+                      },
+                      onUndo: () => _annotationController.undo(),
+                      onClear: () {
+                        _annotationController.clear();
+                        if (_tbpFolderPath.isNotEmpty) {
+                          TbpStorageService.instance.savePenStrokes(
+                            _tbpFolderPath,
+                            _currentDhash,
+                            [],
+                          );
+                        }
+                      },
                     ),
-                  )),
-                ],
+                  ),
+                ),
               ),
             ),
           ],

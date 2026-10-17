@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>BST 학급 메시지</title>
+  <style>
+    body { background: #0f0e17; color: #fffffe; font-family: sans-serif; padding: 20px; }
+    .card { background: #16161a; border-radius: 12px; padding: 20px; border: 1px solid #ff8906; }
+    h2 { color: #ff8906; margin-bottom: 10px; }
+    textarea { width: 100%; height: 100px; padding: 10px; margin: 10px 0; border-radius: 6px; border: 1px solid #333; background: #242629; color: #fff; }
+    button { background: #ff8906; color: #000; font-weight: bold; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>✉️ 학급 쪽지 및 공지 전송</h2>
+    <textarea id="msg-input" placeholder="전자칠판으로 전달할 메시지를 입력하세요..."></textarea>
+    <button onclick="sendMessage()">메시지 전송</button>
+  </div>
+  <script>
+    function sendMessage() {
+      const msg = document.getElementById('msg-input').value;
+      if (!msg) return;
+      alert('전자칠판으로 메시지를 전송했습니다: ' + msg);
+    }
+  </script>
+</body>
+</html>

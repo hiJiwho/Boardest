@@ -1,0 +1,407 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta name="application-version" content="4.0.8">
+  <base href="/lite/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Boardest Teacher ???좎깮???꾩슜 ?듯빀 ??PWA ?쒕퉬??>
+
+  <!-- Mobile & PWA meta tags -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Boardest Teacher">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Boardest Teacher</title>
+  <link rel="manifest" href="manifest.json">
+  <!-- Mobile UA: teacher & teacher-lite both supported in boardest-teacher domain -->
+  <script>
+    (function() {
+      // Keep on same domain: no cross-domain redirects
+    })();
+  </script>
+  <!-- Cache & ServiceWorker Purge Helper -->
+  <script>
+    (async function() {
+      try {
+        let hadSw = false;
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (let reg of registrations) {
+            if (!reg.active || !reg.active.scriptURL.includes('firebase-messaging-sw.js')) {
+              await reg.unregister();
+              hadSw = true;
+            }
+          }
+        }
+        if ('caches' in window) {
+          const names = await caches.keys();
+          for (let name of names) {
+            await caches.delete(name);
+          }
+        }
+        if (hadSw && !sessionStorage.getItem('bst_sw_reloaded_v6')) {
+          sessionStorage.setItem('bst_sw_reloaded_v6', 'true');
+          window.location.reload();
+        }
+      } catch (_) {}
+    })();
+    window.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+    });
+  </script>
+  <!-- ?쒖젙 FIDO2 / WebAuthn Cross-Device ?⑥뒪??諛쒕룞 ?ы띁 -->
+  <script>
+    window.triggerNativePasskeyCreate = async function(email, displayName) {
+      if (!window.PublicKeyCredential) {
+        throw new Error('??釉뚮씪?곗???FIDO2 WebAuthn ?⑥뒪?ㅻ? 吏?먰븯吏 ?딆뒿?덈떎.');
+      }
+      const challengeBytes = new Uint8Array(32);
+      crypto.getRandomValues(challengeBytes);
+      const userIdBytes = new TextEncoder().encode(email || 'teacher@boardest.local');
+
+      const createOptions = {
+        publicKey: {
+          challenge: challengeBytes,
+          rp: {
+            name: "BOARDEST",
+            id: window.location.hostname
+          },
+          user: {
+            id: userIdBytes,
+            name: email || 'teacher@boardest.local',
+            displayName: displayName || '?좎깮??
+          },
+          pubKeyCredParams: [
+            { alg: -7, type: "public-key" },  // ES256
+            { alg: -257, type: "public-key" } // RS256
+          ],
+          authenticatorSelection: {
+            userVerification: "preferred",
+            residentKey: "preferred"
+          },
+          timeout: 60000,
+          attestation: "none"
+        }
+      };
+
+      const cred = await navigator.credentials.create(createOptions);
+      return cred ? true : false;
+    };
+
+    window.triggerNativePasskeyGet = async function() {
+      if (!window.PublicKeyCredential) {
+        throw new Error('??釉뚮씪?곗???FIDO2 WebAuthn ?⑥뒪?ㅻ? 吏?먰븯吏 ?딆뒿?덈떎.');
+      }
+      const challengeBytes = new Uint8Array(32);
+      crypto.getRandomValues(challengeBytes);
+      const getOptions = {
+        publicKey: {
+          challenge: challengeBytes,
+          timeout: 60000,
+          userVerification: "preferred",
+          rpId: window.location.hostname
+        }
+      };
+      try {
+        const assertion = await navigator.credentials.get(getOptions);
+        if (assertion) {
+          let userEmail = '';
+          if (assertion.response && assertion.response.userHandle) {
+            userEmail = new TextDecoder().decode(assertion.response.userHandle);
+          }
+          return JSON.stringify({
+            id: assertion.id,
+            email: userEmail,
+            success: true
+          });
+        }
+      } catch (e) {
+        console.warn('Native passkey get error:', e);
+      }
+      return null;
+    };
+  </script>
+  <!-- Firebase Compat App & Messaging SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBMoJZHMBN4eYJtiZR2iGePcmIB7bg8wGo",
+      authDomain: "jiwhosboardest.firebaseapp.com",
+      projectId: "jiwhosboardest",
+      storageBucket: "jiwhosboardest.appspot.com",
+      messagingSenderId: "287519871774",
+      appId: "1:287519871774:web:d259c730cb85b001a1c34a"
+    };
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+
+    let fcmMessaging = null;
+    try {
+      if (firebase.messaging.isSupported()) {
+        fcmMessaging = firebase.messaging();
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register('/firebase-cloud-messaging-push-scope/firebase-messaging-sw.js', {
+            scope: '/firebase-cloud-messaging-push-scope/'
+          }).then((registration) => {
+            window.bstFcmServiceWorkerRegistration = registration;
+          }).catch((err) => {
+            console.log('[FCM SW] ServiceWorker registration warning: ', err);
+          });
+        }
+      }
+    } catch(e) {
+      console.log('FCM not supported: ', e);
+    }
+
+    window.bst = {
+      ver: function() { return "Boardest Teacher 2.8.0 (Antigravity Engine - 2026.10.07)"; }
+    };
+  </script>
+
+  <style>
+    @font-face {
+      font-family: 'SiwonhanSeolreim';
+      src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2312-1@1.1/seolleimcool-SemiBold.woff2') format('woff2');
+      font-weight: normal;
+      font-display: swap;
+    }
+    * {
+      font-family: 'SiwonhanSeolreim', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    body {
+      background-color: #0F0E17;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: 'SiwonhanSeolreim', sans-serif;
+    }
+    #app-splash-screen {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background-color: #0F0E17;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 999999;
+      font-family: 'SiwonhanSeolreim', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .splash-logo-img {
+      width: 80px; height: 80px;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(127, 90, 240, 0.25);
+      animation: splash-pulse 1.8s infinite ease-in-out;
+    }
+    .splash-brand-text {
+      margin-top: 20px;
+      font-size: 24px;
+      font-weight: 800;
+      color: #FFFFFF;
+      letter-spacing: -0.5px;
+    }
+    .splash-brand-sub {
+      margin-top: 4px;
+      font-size: 13.5px;
+      color: #7F5AF0;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .splash-progress-track {
+      width: 260px; height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 24px;
+      position: relative;
+    }
+    .splash-progress-fill {
+      width: 5%; height: 100%;
+      background: linear-gradient(90deg, #7F5AF0, #00F5D4);
+      border-radius: 999px;
+      transition: width 0.25s ease-out;
+    }
+    .splash-percent-text {
+      margin-top: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #7F5AF0;
+      font-variant-numeric: tabular-nums;
+    }
+    .splash-log-text {
+      margin-top: 6px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      min-height: 18px;
+      text-align: center;
+    }
+    @keyframes splash-pulse {
+      0%, 100% { transform: scale(1); opacity: 0.92; }
+      50% { transform: scale(1.08); opacity: 1; }
+    }
+  </style>
+
+  <!-- Flutter Web Bootstrapper JS -->
+  <script src="flutter.js" defer></script>
+</head>
+<body>
+  <script>
+    // ??? Pro vs Lite Device Detection & Route Handling ???
+    (function() {
+      const path = window.location.pathname.toLowerCase();
+      const search = window.location.search;
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      const isExplicitPro = path.includes('/pro');
+      const isExplicitLite = path.includes('/lite');
+
+      if (!isExplicitPro && !isExplicitLite && isMobile && !new URLSearchParams(search).has('desktop')) {
+        window.location.replace('/lite/' + search + window.location.hash);
+      }
+    })();
+
+    // PWA Install Prompt Restriction Policy:
+    // Block PWA install prompt on Android & Windows; allow ONLY on iOS, ChromeOS, Linux!
+    window.addEventListener('beforeinstallprompt', (e) => {
+      const ua = navigator.userAgent.toLowerCase();
+      const isAndroid = ua.includes('android');
+      const isWindows = ua.includes('windows');
+      const isIOS = /iphone|ipad|ipod/.test(ua);
+      const isChromeOS = ua.includes('cros');
+      const isLinux = ua.includes('linux') && !isAndroid;
+
+      if (isAndroid || isWindows) {
+        e.preventDefault();
+        console.log('[PWA Guard] PWA install prompt blocked on Android/Windows per policy.');
+      } else if (isIOS || isChromeOS || isLinux) {
+        console.log('[PWA Guard] PWA installation allowed for iOS/ChromeOS/Linux.');
+      }
+    });
+
+    // auth=success ?뚮씪誘명꽣媛 ?좎엯?섏뿀????Flutter Web 濡쒕뵫 ???좎떎 諛⑹?瑜??꾪빐 利됱떆 localStorage 諛깆뾽
+    if (window.location.search && window.location.search.includes('auth=success')) {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get('token') || '';
+        const email = params.get('email') || '';
+        const teacherName = params.get('teacherName') || '';
+        const teacherId = params.get('teacherId') || '';
+        const schoolId = params.get('schoolId') || 'ydm';
+        const schoolCode = params.get('schoolCode') || params.get('schoolId') || '44134';
+        const schoolName = params.get('schoolName') || '蹂대뜲?ㅽ듃 以묓븰援?;
+        const grade = params.get('grade') || '1';
+        const classNum = params.get('classNum') || '1';
+        const isHomeroom = params.get('isHomeroom') || 'true';
+        const cafeteria = params.get('cafeteriaNum') || '1';
+        const totpSecret = params.get('totpSecret') || '';
+
+        localStorage.setItem('boardest_auth_callback_search', window.location.search);
+        if (totpSecret) {
+          localStorage.setItem('flutter.bst_totp_secret_key', totpSecret);
+          localStorage.setItem('flutter.bst_totp_secret', totpSecret);
+          localStorage.setItem('boardest_totp_secret', totpSecret);
+        }
+        if (token) {
+          localStorage.setItem('flutter.bst_google_access_token', token);
+          localStorage.setItem('flutter.bst_token', token);
+          localStorage.setItem('boardest_google_access_token', token);
+        }
+        if (email) {
+          localStorage.setItem('flutter.bst_google_user_email', email);
+          localStorage.setItem('flutter.bst_user_email', email);
+          localStorage.setItem('boardest_user_email', email);
+        }
+        if (teacherName) {
+          localStorage.setItem('flutter.bst_google_user_name', teacherName);
+          localStorage.setItem('flutter.bst_user_name', teacherName);
+        }
+        if (schoolName) {
+          localStorage.setItem('flutter.bst_school_name', schoolName);
+        }
+      } catch (e) {
+        console.warn('Backup auth query error:', e);
+      }
+    }
+
+  </script>
+  <div id="app-splash-screen">
+    <img src="favicon.png" alt="Boardest Teacher" class="splash-logo-img">
+    <div class="splash-brand-text">Boardest Teacher</div>
+    <div class="splash-brand-sub">?좎깮???꾩슜 ??濡쒕뵫 以?..</div>
+    <div class="splash-progress-track">
+      <div id="splash-progress-fill" class="splash-progress-fill"></div>
+    </div>
+    <div id="splash-percent-text" class="splash-percent-text">5%</div>
+    <div id="splash-log-text" class="splash-log-text">[1/5] Core WASM ?붿쭊 珥덇린??以?..</div>
+  </div>
+
+  <script>
+    (function() {
+      const percentEl = document.getElementById('splash-percent-text');
+      const fillEl = document.getElementById('splash-progress-fill');
+      const logEl = document.getElementById('splash-log-text');
+      const splash = document.getElementById('app-splash-screen');
+
+      let currentPercent = 5;
+      const stages = [
+        { p: 25, log: '[1/5] WebAssembly 肄붿뼱 ?붿쭊 珥덇린??..' },
+        { p: 48, log: '[2/5] Google OAuth ?몄뀡 諛?釉뚮씪?곗? 罹먯떆 ?뺤씤...' },
+        { p: 72, log: '[3/5] Firebase Firestore & RTDB 梨꾨꼸 ?곌껐...' },
+        { p: 90, log: '[4/5] ?쒓컙??& 湲됱떇 ?숆린???붿쭊 諛붿씤??..' },
+        { p: 96, log: '[5/5] 援먯궗??UI 而⑦듃濡ㅻ윭 ?뚮뜑留?以鍮??꾨즺...' }
+      ];
+
+      let stageIdx = 0;
+      const timer = setInterval(() => {
+        if (stageIdx < stages.length) {
+          const target = stages[stageIdx];
+          if (currentPercent < target.p) {
+            currentPercent += Math.floor(Math.random() * 4) + 2;
+            if (currentPercent > target.p) currentPercent = target.p;
+          } else {
+            stageIdx++;
+          }
+          if (percentEl) percentEl.textContent = currentPercent + '%';
+          if (fillEl) fillEl.style.width = currentPercent + '%';
+          if (logEl && target.log) logEl.textContent = target.log;
+        }
+      }, 120);
+
+      function finishLoading() {
+        clearInterval(timer);
+        if (percentEl) percentEl.textContent = '100%';
+        if (fillEl) fillEl.style.width = '100%';
+        if (logEl) logEl.textContent = '以鍮??꾨즺! 援먯궗???꾧뎄濡?吏꾩엯?⑸땲??';
+        setTimeout(() => {
+          if (splash) {
+            splash.style.opacity = '0';
+            setTimeout(() => splash.remove(), 400);
+          }
+        }, 200);
+      }
+
+      const observer = new MutationObserver((mutations) => {
+        if (document.querySelector('flt-glass-pane') || document.querySelector('flutter-view')) {
+          observer.disconnect();
+          finishLoading();
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      window.addEventListener('flutter-first-frame', finishLoading);
+    })();
+  </script>
+
+  <script src="flutter_bootstrap.js?v=4.0.9_20261017_v5" async></script>
+</body>
+</html>
+

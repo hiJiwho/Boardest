@@ -159,11 +159,34 @@ class TbpStorageService {
       // 3. 인메모리 캐시 폴백
       final cachedRaw = _webJsonCache['$tbpFilePath::info'];
       if (cachedRaw != null) {
+        _extractCache[tbpFilePath] = tbpFilePath;
         return TbpMetadata.fromJson(jsonDecode(cachedRaw) as Map<String, dynamic>);
       }
 
+      if (kIsWeb && CloudDriveService.webMemoryFiles.containsKey(tbpFilePath)) {
+        final memBytes = CloudDriveService.webMemoryFiles[tbpFilePath]!;
+        try {
+          final rawStr = utf8.decode(memBytes);
+          final json = jsonDecode(rawStr) as Map<String, dynamic>;
+          _extractCache[tbpFilePath] = tbpFilePath;
+          _webJsonCache['$tbpFilePath::info'] = rawStr;
+          return TbpMetadata.fromJson(json);
+        } catch (_) {
+          final archive = ZipDecoder().decodeBytes(memBytes);
+          for (final f in archive) {
+            if (f.isFile && (f.name.endsWith('meta.bstsave') || f.name.endsWith('manifest.json') || f.name.endsWith('info.json'))) {
+              final rawStr = utf8.decode(f.content as List<int>);
+              final json = jsonDecode(rawStr) as Map<String, dynamic>;
+              _extractCache[tbpFilePath] = tbpFilePath;
+              _webJsonCache['$tbpFilePath::info'] = rawStr;
+              return TbpMetadata.fromJson(json);
+            }
+          }
+        }
+      }
+
       // 4. 레거시: .bstTBP (ZIP) 또는 .TBP (JSON)
-      if (tbpFilePath.toLowerCase().endsWith('.bsttbp')) {
+      if (!kIsWeb && tbpFilePath.toLowerCase().endsWith('.bsttbp')) {
         return await _loadFromBstTbpZip(tbpFilePath);
       }
       if (!kIsWeb) {
@@ -353,9 +376,113 @@ class TbpStorageService {
     return key;
   }
 
+  /// 64자리 16진수(hex) 키를 256비트 이진 문자열로 복원 (해밍 거리 비교용)
+  static String? toBinary256(String keyOrHash) {
+    final trimmed = keyOrHash.trim();
+    if (trimmed.length == 256 && RegExp(r'^[01]+$').hasMatch(trimmed)) {
+      return trimmed;
+    }
+    if (trimmed.length == 64 && RegExp(r'^[0-9a-fA-F]+$').hasMatch(trimmed)) {
+      final sb = StringBuffer();
+      for (int i = 0; i < 64; i++) {
+        final v = int.parse(trimmed[i], radix: 16);
+        sb.write(v.toRadixString(2).padLeft(4, '0'));
+      }
+      return sb.toString();
+    }
+    return null;
+  }
+
+  /// 두 dHash(256비트 이진 또는 64자 hex) 간의 해밍 거리 계산
+  static int hammingDistance(String a, String b) {
+    if (a == b) return 0;
+    final binA = toBinary256(a);
+    final binB = toBinary256(b);
+    if (binA == null || binB == null || binA.length != binB.length) return 256;
+    int dist = 0;
+    for (int i = 0; i < binA.length; i++) {
+      if (binA[i] != binB[i]) dist++;
+    }
+    return dist;
+  }
+
+  /// TBP 폴더에 저장된 모든 페이지 dHash 목록 조회 (핫스팟/판서가 존재하는 페이지 추적용)
+  Future<List<String>> getKnownPageHashes(String tbpFolderPath) async {
+    final result = <String>{};
+    try {
+      final prefixHotspot = '$tbpFolderPath::hotspot::';
+      final prefixPen = '$tbpFolderPath::PEN::';
+      for (final k in _webJsonCache.keys) {
+        if (k.startsWith(prefixHotspot)) {
+          final h = k.substring(prefixHotspot.length);
+          if (h.isNotEmpty && h != 'default') result.add(toBinary256(h) ?? h);
+        } else if (k.startsWith(prefixPen)) {
+          final h = k.substring(prefixPen.length);
+          if (h.isNotEmpty && h != 'default') result.add(toBinary256(h) ?? h);
+        }
+      }
+
+      if (!kIsWeb && tbpFolderPath.isNotEmpty) {
+        final rootDir = Directory(tbpFolderPath);
+        if (rootDir.existsSync()) {
+          for (final entity in rootDir.listSync()) {
+            final name = p.basename(entity.path);
+            if (entity is File) {
+              if (name.startsWith('hotspot_') && name.endsWith('.bstsave')) {
+                final k = name.substring('hotspot_'.length, name.length - '.bstsave'.length);
+                if (k.isNotEmpty && k != 'default') result.add(toBinary256(k) ?? k);
+              } else if (name.startsWith('pen_') && name.endsWith('.bstpen')) {
+                final k = name.substring('pen_'.length, name.length - '.bstpen'.length);
+                if (k.isNotEmpty && k != 'default') result.add(toBinary256(k) ?? k);
+              }
+            }
+          }
+          final hotspotDir = Directory(p.join(tbpFolderPath, 'HOTspot'));
+          if (hotspotDir.existsSync()) {
+            for (final sub in hotspotDir.listSync()) {
+              if (sub is Directory) {
+                final k = p.basename(sub.path);
+                if (k.isNotEmpty && k != 'default') result.add(toBinary256(k) ?? k);
+              }
+            }
+          }
+          final penDir = Directory(p.join(tbpFolderPath, 'PEN'));
+          if (penDir.existsSync()) {
+            for (final f in penDir.listSync()) {
+              if (f is File && f.path.endsWith('.bstpen')) {
+                final k = p.basenameWithoutExtension(f.path);
+                if (k.isNotEmpty && k != 'default') result.add(toBinary256(k) ?? k);
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return result.toList();
+  }
+
+  /// 해밍 거리 오차 범위(<= 36 bits) 내의 기존 저장된 페이지 키를 찾아 반환
+  Future<String> _resolveCanonicalKey(String tbpFolderPath, String rawDhash) async {
+    final exactKey = sanitizeKey(rawDhash);
+    if (rawDhash == 'default' || toBinary256(rawDhash) == null) {
+      return exactKey;
+    }
+    final knownList = await getKnownPageHashes(tbpFolderPath);
+    String? bestKey;
+    int bestDist = 37; // 36비트 이하일 때만 동일 페이지로 매칭
+    for (final known in knownList) {
+      final d = hammingDistance(rawDhash, known);
+      if (d < bestDist) {
+        bestDist = d;
+        bestKey = sanitizeKey(known);
+      }
+    }
+    return bestKey ?? exactKey;
+  }
+
   Future<List<Map<String, dynamic>>> loadHotspots(String tbpFolderPath, String dHash) async {
     try {
-      final key = sanitizeKey(dHash);
+      final key = await _resolveCanonicalKey(tbpFolderPath, dHash);
 
       if (kIsWeb) {
         final cached = _webJsonCache['$tbpFolderPath::hotspot::$key'];
@@ -458,7 +585,7 @@ class TbpStorageService {
     String? filename,
   }) async {
     try {
-      final safeKey = sanitizeKey(scopeKey);
+      final safeKey = await _resolveCanonicalKey(tbpFolderPath, scopeKey);
       final base = filename != null && filename.isNotEmpty ? '$safeKey$filename' : safeKey;
       final rawBase = filename != null && filename.isNotEmpty ? '$scopeKey$filename' : scopeKey;
 

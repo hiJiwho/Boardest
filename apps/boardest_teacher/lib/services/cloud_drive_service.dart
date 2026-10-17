@@ -847,9 +847,8 @@ class CloudDriveService with ChangeNotifier {
   }
 
   Future<bool> ensureValidAccessToken() async {
-    if (AppConfig.isDemoMode ||
-        (_userEmail != null && _userEmail!.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) ||
-        (_accessToken != null && _accessToken!.startsWith('demo_token'))) {
+    if ((_userEmail != null && _userEmail!.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) ||
+        (_accessToken != null && _accessToken!.startsWith('demo_token') && (_refreshToken == null || _refreshToken!.isEmpty))) {
       return true;
     }
     if (_accessToken == null || _accessToken!.isEmpty) {
@@ -886,9 +885,8 @@ class CloudDriveService with ChangeNotifier {
   }
 
   Future<bool> _executeRefreshAccessToken({bool force = false}) async {
-    if (AppConfig.isDemoMode ||
-        (_userEmail != null && _userEmail!.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) ||
-        (_accessToken != null && _accessToken!.startsWith('demo_token'))) {
+    if ((_userEmail != null && _userEmail!.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) ||
+        (_accessToken != null && _accessToken!.startsWith('demo_token') && (_refreshToken == null || _refreshToken!.isEmpty))) {
       return true;
     }
     try {
@@ -1806,9 +1804,9 @@ class CloudDriveService with ChangeNotifier {
       String source = 'cloud';
 
       if (folderIdToQuery == null) {
-        if (category == 'Canva') {
+        if (category == 'Canva' || category == 'HTML Present') {
           folderIdToQuery = await getOrCreateCanvaFolder();
-          sourceLabel = '🎨 Canva';
+          sourceLabel = '🌐 HTML Present';
           source = 'canva';
         } else if (category == 'TBP') {
           folderIdToQuery = await getOrCreateTextbookProFolder();
@@ -1879,7 +1877,7 @@ class CloudDriveService with ChangeNotifier {
 
         final canvaFolderId = await getOrCreateCanvaFolder();
         if (canvaFolderId != null && canvaFolderId != saveFolderId) {
-          foldersToQuery.add((id: canvaFolderId, label: '🎨 Canva', src: 'canva'));
+          foldersToQuery.add((id: canvaFolderId, label: '🌐 HTML Present', src: 'canva'));
         }
 
         final tbpFolderId = await getOrCreateTextbookProFolder();
@@ -1913,7 +1911,7 @@ class CloudDriveService with ChangeNotifier {
     return merged;
   }
 
-  /// Canva 디자인을 .canva.bst 파일로 전용 bst-canva 폴더 및 bst-save 에 등록
+  /// HTML Present (.HTMLP) 파일로 전용 bst-canva 폴더 및 bst-save 에 등록
   Future<bool> registerCanvaDesign({required String title, required String canvaUrl}) async {
     try {
       final regExp = RegExp(r'design/([A-Za-z0-9_-]+)');
@@ -1921,12 +1919,13 @@ class CloudDriveService with ChangeNotifier {
       final canvaId = match != null ? match.group(1) : canvaUrl.trim();
       if (canvaId == null || canvaId.isEmpty) return false;
 
-      final safeTitle = title.trim().isNotEmpty ? title.trim() : '켄바 디자인';
-      final fileName = '$safeTitle.canva.bst';
+      final safeTitle = title.trim().isNotEmpty ? title.trim() : 'HTML Present';
+      final fileName = safeTitle.toUpperCase().endsWith('.HTMLP') ? safeTitle : '$safeTitle.HTMLP';
       final content = jsonEncode({
         'canvaId': canvaId,
         'title': safeTitle,
         'url': canvaUrl.trim(),
+        'embedUrl': canvaUrl.trim(),
         'created': DateTime.now().toIso8601String(),
       });
 
