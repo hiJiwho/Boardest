@@ -810,16 +810,47 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
   }
 
   Widget _buildEmptyState(double s) {
+    final isDriveConnected = CloudDriveService.instance.isGoogleDriveConnected;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.folder_open_rounded, size: 48 * s, color: Colors.white24),
+          Icon(
+            isDriveConnected ? Icons.folder_open_rounded : Icons.cloud_off_rounded,
+            size: 48 * s,
+            color: isDriveConnected ? Colors.white24 : const Color(0xFFFF8906).withOpacity(0.4),
+          ),
           SizedBox(height: 12 * s),
           Text(
-            _searchQuery.isNotEmpty ? '검색된 자료가 없습니다.' : '이 폴더에 자료가 없습니다.',
+            !isDriveConnected
+                ? 'Google Drive가 연동되지 않았습니다.'
+                : _searchQuery.isNotEmpty
+                    ? '검색된 자료가 없습니다.'
+                    : '이 폴더에 자료가 없습니다.',
             style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 13 * s),
           ),
+          if (!isDriveConnected) ...[
+            SizedBox(height: 14 * s),
+            ElevatedButton.icon(
+              onPressed: () async {
+                final ok = await CloudDriveService.instance.loginWithBrowserOAuth();
+                if (ok && mounted) {
+                  _loadFiles();
+                }
+              },
+              icon: Icon(Icons.login_rounded, size: 16 * s),
+              label: Text(
+                'Google Drive 로그인 및 연동',
+                style: GoogleFonts.notoSansKr(fontSize: 12 * s, fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF7F5AF0),
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 10 * s),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * s)),
+              ),
+            ),
+          ],
         ],
       ),
     );

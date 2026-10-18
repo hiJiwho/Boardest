@@ -62,13 +62,13 @@ import 'plugin_store_view.dart';
 import 'canva_overlay_view.dart';
 import 'plugin_runner_view.dart';
 import '../services/auth_service.dart';
-import '../services/local_server_service.dart';
 import '../services/update_service.dart';
 import 'components/bst_class_main_layout.dart';
 import 'components/bst_today_timetable_strip.dart';
 import 'components/bst_app_header.dart';
 import 'components/bst_academic_schedule_card.dart';
 import 'components/bst_dual_meal_card.dart';
+import 'components/monthly_meal_calendar_dialog.dart';
 import 'components/bst_tools_dock.dart';
 import 'components/bst_cloud_passkey_modal.dart';
 import 'components/bst_cloud_auth_modal.dart';
@@ -125,11 +125,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   MealDayInfo? _tomorrowMeal;
   final Set<String> _highlightedDishes = {};
   List<Map<String, dynamic>> _apiScheduleEvents = [];
-
-  // 광고 배너 (삭제됨 - 호환성 유지)
-  List<Map<String, dynamic>> _adBanners = [];
-  int _currentBannerIndex = 0;
-  Timer? _bannerRollingTimer;
 
   DateTime? _debugTimeOverride;
 
@@ -285,7 +280,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     _loadSavedTextbooksToMemory().then((_) {
       _syncSchoolTextbooksFromFirestore();
     });
-    // _startLocalServer(); // LAN 서버 가동 (연동 철회)
 
     if (!kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -379,12 +373,10 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
   @override
   void dispose() {
-    // LocalServerService.instance.stop(); // LAN 서버 종료 (연동 철회)
     MealCallService.instance.stopListening();
     _timer?.cancel();
     _cloudAutoLogoutTimer?.cancel();
     _usbTimer?.cancel();
-    _bannerRollingTimer?.cancel();
     _miniTimerInstance?.cancel();
     _sleepWarningTimer?.cancel();
     _sleepScheduler.dispose();
@@ -1775,7 +1767,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       try {
         _fetchLunchMenu(schoolName, targetDate);
         _fetchSchoolSchedule(schoolName, targetDate);
-        _loadAdBanners();
+        _syncSchoolConfigsFromFirestore();
         _updateOnlineStatusBackground();
       } catch (e) {
         debugPrint('Error fetching lunch or schedule: $e');
@@ -2645,193 +2637,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
     if (classInfo == null) return null;
     return '${classInfo['grade']}학년 ${classInfo['classNum']}반';
-  }
-
-  Future<void> _startLocalServer() async {
-    final server = LocalServerService.instance;
-    server.onStatusRequest = () {
-      return {
-        'schoolName': _settings.selectedSchool?.name ?? '',
-        'grade': _settings.selectedGrade,
-        'classNum': _settings.selectedClass,
-        'specialClassroomMode': _settings.specialClassroomMode,
-        'currentLesson': _currentLesson != null
-            ? {
-                'subject': _currentLesson!.subject,
-                'classroom': _currentLesson!.classroom,
-                'period': _currentLesson!.classTime,
-              }
-            : null,
-        'nextLesson': _nextLesson != null
-            ? {
-                'subject': _nextLesson!.subject,
-                'classroom': _nextLesson!.classroom,
-                'period': _nextLesson!.classTime,
-              }
-            : null,
-        'timetable': _timetableResult != null
-            ? {
-                'schoolName': _timetableResult!.schoolName,
-                'classCounts': _timetableResult!.classCounts,
-                'lessons': _timetableResult!.lessons
-                    .map(
-                      (l) => {
-                        'grade': l.grade,
-                        'classNum': l.classNum,
-                        'weekday': l.weekday,
-                        'classTime': l.classTime,
-                        'subject': l.subject,
-                        'classroom': l.classroom,
-                        'teacher': AppSettings.formatTeacherDisplayName(
-                          l.teacher,
-                        ), // 마스킹된 교사명 포함
-                      },
-                    )
-                    .toList(),
-              }
-            : null,
-      };
-    };
-
-    server.onCommandReceived = (command, params) {
-      if (!mounted) return;
-      debugPrint('[Boardest] 원격 명령 수신: $command (파라미터: $params)');
-
-      switch (command) {
-        case BoardCommand.mealCall:
-          // Firebase meal_call과 동일한 급식 호출
-          MealCallService.instance.triggerMealCallDirectly();
-          break;
-        case BoardCommand.showMessage:
-          final msg = params['message'] as String? ?? '';
-          final from = params['from'] as String? ?? '선생님';
-          if (msg.isNotEmpty) {
-            _showMessageNotificationAlert(msg, from);
-          }
-          break;
-        case BoardCommand.openTool:
-          final toolId = params['id'] as String? ?? '';
-          if (toolId.isNotEmpty) {
-            final toolOnTap = _getToolOnTap(toolId);
-            toolOnTap();
-          }
-          break;
-        case BoardCommand.nextSlide:
-          _sendKeyEventToActivePresentation(true);
-          break;
-        case BoardCommand.prevSlide:
-          _sendKeyEventToActivePresentation(false);
-          break;
-        case BoardCommand.startTimer:
-          final sec = (params['seconds'] as num?)?.toInt() ?? 300;
-          _startMiniTimerFromRemote(sec);
-          break;
-        case BoardCommand.stopTimer:
-          _stopMiniTimerFromRemote();
-          break;
-      }
-    };
-    server.onFileReceived = (filePath) {
-      _handleRemoteReceivedFile(filePath);
-    };
-
-    final success = await server.start();
-    if (success) {
-      setState(() {});
-    }
-  }
-
-  void _handleRemoteReceivedFile(String filePath) {
-    if (!mounted) return;
-    final extension = p.extension(filePath).toLowerCase();
-
-    Future.microtask(() async {
-      if (extension == '.pdf') {
-        _pushBoardRoute(
-          PdfBoardView(
-            initialFilePath: filePath,
-            scaleFactor: _settings.scaleFactor,
-          ),
-        );
-      } else if ([
-        '.png',
-        '.jpg',
-        '.jpeg',
-        '.gif',
-        '.webp',
-      ].contains(extension)) {
-        _showRemoteImageDialog(filePath);
-      } else {
-        if (!kIsWeb && Platform.isWindows) {
-          try {
-            await Process.run('cmd.exe', ['/c', 'start', '""', filePath]);
-          } catch (e) {
-            debugPrint('[Boardest] 로컬 실행 실패: $e');
-            await launchUrl(Uri.file(filePath));
-          }
-        } else {
-          await launchUrl(Uri.file(filePath));
-        }
-      }
-    });
-  }
-
-  void _showRemoteImageDialog(String filePath) {
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) {
-        final scale = _settings.scaleFactor;
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.all(24),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              GestureDetector(
-                onTap: () => Navigator.of(context).pop(),
-                child: Container(
-                  width: double.infinity,
-                  height: double.infinity,
-                  color: Colors.black.withValues(alpha: 0.85),
-                  alignment: Alignment.center,
-                  child: InteractiveViewer(
-                    maxScale: 4.0,
-                    child: Image.file(File(filePath), fit: BoxFit.contain),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 20,
-                right: 20,
-                child: FloatingActionButton(
-                  backgroundColor: const Color(0xFFEF4565),
-                  mini: true,
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Icon(Icons.close_rounded, color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _startMiniTimerFromRemote(int seconds) {
-    if (!mounted) return;
-    setState(() {
-      _showMiniTimer = true;
-      _timerTargetSeconds = seconds;
-      _timerSecondsElapsed = seconds;
-    });
-    _startMiniTimer();
-  }
-
-  void _stopMiniTimerFromRemote() {
-    if (!mounted) return;
-    _pauseMiniTimer();
   }
 
   void _sendKeyEventToActivePresentation(bool isNext) {
@@ -5784,380 +5589,12 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
-  void _showMonthlyMealsDialog() async {
-    final scale = _settings.scaleFactor;
-    DateTime viewingMonth = _debugTimeOverride ?? DateTime.now();
-    bool loadingMonth = true;
-    List<MealDayInfo> monthMeals = [];
-    Map<String, Map<String, int>> monthHistoryVotes = {};
-    String? selectedAllergyFilter;
-
-    await showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            void loadMonth(DateTime month) async {
-              setDialogState(() {
-                loadingMonth = true;
-                viewingMonth = month;
-              });
-              // 학교명 정확히 전달 (schoolId 대신 selectedSchool?.name 우선)
-              final schoolName = _settings.selectedSchool?.name ?? (_settings.schoolId.isNotEmpty ? _settings.schoolId : '보데스트 중학교');
-              final mealMap = await _neisService.fetchMonthMeals(schoolName, month.year, month.month);
-              final sId = _settings.schoolId.isNotEmpty ? _settings.schoolId : (_settings.selectedSchool?.name ?? 'Demo');
-              final Map<String, Map<String, int>> historyVotes = {};
-              for (final m in mealMap.values) {
-                final hv = await MealVoteService.instance.getHistoricalVotes(sId, m.date);
-                if (hv.isNotEmpty) {
-                  historyVotes[MealVoteService.instance.getDateKey(m.date)] = hv;
-                }
-              }
-              if (ctx.mounted) {
-                setDialogState(() {
-                  monthMeals = mealMap.values.toList();
-                  monthHistoryVotes = historyVotes;
-                  loadingMonth = false;
-                });
-              }
-            }
-
-            if (loadingMonth && monthMeals.isEmpty) {
-              loadMonth(viewingMonth);
-            }
-
-            final allergyOptions = [
-              '난류', '우유', '메밀', '땅콩', '대두', '밀', '고등어', '게', '새우',
-              '돼지', '복숭아', '토마토', '아황산', '호두', '닭고기', '소고기', '오징어', '조개', '잣'
-            ];
-
-            return Dialog(
-              backgroundColor: const Color(0xFF161F2E),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20 * scale),
-                side: BorderSide(color: const Color(0xFF00F5D4).withValues(alpha: 0.3)),
-              ),
-              child: Container(
-                width: MediaQuery.of(context).size.width * 0.9,
-                height: MediaQuery.of(context).size.height * 0.85,
-                padding: EdgeInsets.all(20 * scale),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Top Bar
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.calendar_month_rounded, color: Color(0xFF00F5D4), size: 28),
-                            const SizedBox(width: 10),
-                            Text(
-                              '${viewingMonth.year}년 ${viewingMonth.month}월 급식 식단표',
-                              style: GoogleFonts.notoSansKr(
-                                color: Colors.white,
-                                fontSize: 20 * scale,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.chevron_left_rounded, color: Colors.white70),
-                              onPressed: () {
-                                loadMonth(DateTime(viewingMonth.year, viewingMonth.month - 1, 1));
-                              },
-                              tooltip: '이전 달',
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.chevron_right_rounded, color: Colors.white70),
-                              onPressed: () {
-                                loadMonth(DateTime(viewingMonth.year, viewingMonth.month + 1, 1));
-                              },
-                              tooltip: '다음 달',
-                            ),
-                            const SizedBox(width: 10),
-                            IconButton(
-                              icon: const Icon(Icons.close_rounded, color: Colors.white70),
-                              onPressed: () => Navigator.pop(ctx),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 8 * scale),
-                    // 투표 가능 시간 안내 배너
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 7 * scale),
-                      decoration: BoxDecoration(
-                        color: _isMealVoteTimeNow()
-                            ? const Color(0xFF00F5D4).withValues(alpha: 0.12)
-                            : Colors.white.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(10 * scale),
-                        border: Border.all(
-                          color: _isMealVoteTimeNow()
-                              ? const Color(0xFF00F5D4).withValues(alpha: 0.4)
-                              : Colors.white12,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _isMealVoteTimeNow() ? Icons.how_to_vote_rounded : Icons.info_outline_rounded,
-                            color: _isMealVoteTimeNow() ? const Color(0xFF00F5D4) : Colors.white60,
-                            size: 16 * scale,
-                          ),
-                          SizedBox(width: 8 * scale),
-                          Expanded(
-                            child: Text(
-                              _isMealVoteTimeNow()
-                                  ? '🍽️ 지금은 메뉴 투표 가능 시간입니다! 오늘 식단을 탭하여 투표해보세요. (종료 10분 전 자동 마감)'
-                                  : '🍽️ 메뉴 투표는 점심시간 시작부터 종료 10분 전까지만 가능합니다. (이전 투표 결과 🔥도 함께 보실 수 있습니다)',
-                              style: GoogleFonts.notoSansKr(
-                                color: _isMealVoteTimeNow() ? const Color(0xFF00F5D4) : Colors.white70,
-                                fontSize: 11.5 * scale,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: 8 * scale),
-                    // Allergy Filter Chips Bar
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 8 * scale),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(12 * scale),
-                        border: Border.all(color: Colors.white10),
-                      ),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            Text(
-                              '알레르기 강조: ',
-                              style: GoogleFonts.notoSansKr(
-                                color: const Color(0xFF00F5D4),
-                                fontSize: 13 * scale,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(width: 8 * scale),
-                            ChoiceChip(
-                              label: Text('전체', style: GoogleFonts.notoSansKr(fontSize: 12 * scale)),
-                              selected: selectedAllergyFilter == null,
-                              onSelected: (_) {
-                                setDialogState(() {
-                                  selectedAllergyFilter = null;
-                                });
-                              },
-                              selectedColor: const Color(0xFF00F5D4),
-                              labelStyle: TextStyle(
-                                color: selectedAllergyFilter == null ? Colors.black : Colors.white70,
-                                fontWeight: selectedAllergyFilter == null ? FontWeight.bold : FontWeight.normal,
-                              ),
-                              backgroundColor: Colors.white10,
-                            ),
-                            SizedBox(width: 6 * scale),
-                            ...allergyOptions.map((allergy) {
-                              final isSelected = selectedAllergyFilter == allergy;
-                              return Padding(
-                                padding: EdgeInsets.only(right: 6 * scale),
-                                child: ChoiceChip(
-                                  label: Text(allergy, style: GoogleFonts.notoSansKr(fontSize: 12 * scale)),
-                                  selected: isSelected,
-                                  onSelected: (selected) {
-                                    setDialogState(() {
-                                      selectedAllergyFilter = selected ? allergy : null;
-                                    });
-                                  },
-                                  selectedColor: const Color(0xFFFFB703),
-                                  labelStyle: TextStyle(
-                                    color: isSelected ? Colors.black : Colors.white70,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                  ),
-                                  backgroundColor: Colors.white10,
-                                ),
-                              );
-                            }),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Divider(color: Colors.white12, height: 20 * scale),
-                    Expanded(
-                      child: loadingMonth
-                          ? const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)))
-                          : monthMeals.isEmpty
-                              ? Center(
-                                  child: Text(
-                                    '해당 월의 급식 정보가 없습니다.',
-                                    style: GoogleFonts.notoSansKr(color: Colors.white60, fontSize: 16 * scale),
-                                  ),
-                                )
-                              : GridView.builder(
-                                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 5,
-                                    childAspectRatio: 0.85,
-                                    crossAxisSpacing: 10 * scale,
-                                    mainAxisSpacing: 10 * scale,
-                                  ),
-                                  itemCount: monthMeals.length,
-                                  itemBuilder: (context, idx) {
-                                    final meal = monthMeals[idx];
-                                    final now = _debugTimeOverride ?? DateTime.now();
-                                    final isToday = meal.date.year == now.year && meal.date.month == now.month && meal.date.day == now.day;
-                                    final dateKey = MealVoteService.instance.getDateKey(meal.date);
-                                    final pastDayVotes = monthHistoryVotes[dateKey] ?? {};
-
-                                    return Container(
-                                      decoration: BoxDecoration(
-                                        color: isToday
-                                            ? const Color(0xFF12222E)
-                                            : const Color(0xFF0F1722),
-                                        borderRadius: BorderRadius.circular(12 * scale),
-                                        border: Border.all(
-                                          color: isToday
-                                              ? const Color(0xFF00F5D4).withValues(alpha: 0.5)
-                                              : Colors.white.withValues(alpha: 0.08),
-                                          width: isToday ? 1.5 : 1.0,
-                                        ),
-                                      ),
-                                      padding: EdgeInsets.all(10 * scale),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text(
-                                                '${meal.date.month}/${meal.date.day} (${['월','화','수','목','금','토','일'][meal.date.weekday - 1]})',
-                                                style: GoogleFonts.notoSansKr(
-                                                  color: isToday ? const Color(0xFF00F5D4) : Colors.white70,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 13 * scale,
-                                                ),
-                                              ),
-                                              if (isToday)
-                                                Container(
-                                                  padding: EdgeInsets.symmetric(horizontal: 5 * scale, vertical: 1 * scale),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFF00F5D4).withValues(alpha: 0.2),
-                                                    borderRadius: BorderRadius.circular(4 * scale),
-                                                  ),
-                                                  child: Text(
-                                                    '오늘',
-                                                    style: GoogleFonts.notoSansKr(
-                                                      color: const Color(0xFF00F5D4),
-                                                      fontSize: 10 * scale,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Expanded(
-                                            child: SingleChildScrollView(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: meal.dishes.map((d) {
-                                                  final isFiltered = selectedAllergyFilter != null &&
-                                                      (d.allergies.any((a) => a.contains(selectedAllergyFilter!)) ||
-                                                          d.name.contains(selectedAllergyFilter!));
-                                                  final dKey = MealVoteService.instance.sanitizeKey(d.name);
-                                                  final int voteCount = isToday
-                                                      ? MealVoteService.instance.getTotalVotes(d.name)
-                                                      : (pastDayVotes[dKey] ?? 0);
-                                                  final showVoteCount = !isToday || _isMealVoteResultTimeNow();
-
-                                                  return InkWell(
-                                                    onTap: () async {
-                                                      if (isToday) {
-                                                        await _handleDishVote(d.name);
-                                                        setDialogState(() {});
-                                                      } else {
-                                                        _showDishAllergyDialog(d);
-                                                      }
-                                                    },
-                                                    onLongPress: () {
-                                                      if (isToday && _isMealVoteResultTimeNow()) {
-                                                        _showDishVotesBreakdown(d.name);
-                                                      } else {
-                                                        _showDishAllergyDialog(d);
-                                                      }
-                                                    },
-                                                    borderRadius: BorderRadius.circular(4 * scale),
-                                                    child: Container(
-                                                      margin: const EdgeInsets.only(bottom: 3),
-                                                      padding: EdgeInsets.symmetric(
-                                                        horizontal: isFiltered ? 4 * scale : 2 * scale,
-                                                        vertical: 2 * scale,
-                                                      ),
-                                                      decoration: BoxDecoration(
-                                                        color: isFiltered
-                                                            ? const Color(0xFFFFEE58).withValues(alpha: 0.35)
-                                                            : (isToday && _isMealVoteTimeNow() ? const Color(0xFF00F5D4).withValues(alpha: 0.08) : Colors.transparent),
-                                                        borderRadius: BorderRadius.circular(4 * scale),
-                                                        border: isFiltered
-                                                            ? Border.all(color: const Color(0xFFFFEE58).withValues(alpha: 0.8))
-                                                            : (isToday && _isMealVoteTimeNow() ? Border.all(color: const Color(0xFF00F5D4).withValues(alpha: 0.2)) : null),
-                                                      ),
-                                                      child: Row(
-                                                        children: [
-                                                          Expanded(
-                                                            child: Text(
-                                                              '• ${d.name}',
-                                                              style: GoogleFonts.notoSansKr(
-                                                                color: isFiltered ? const Color(0xFFFFF9C4) : Colors.white70,
-                                                                fontSize: 11 * scale,
-                                                                fontWeight: isFiltered ? FontWeight.bold : FontWeight.normal,
-                                                             ),
-                                                            ),
-                                                          ),
-                                                          if (showVoteCount && voteCount > 0)
-                                                            Container(
-                                                              margin: EdgeInsets.only(left: 4 * scale),
-                                                              padding: EdgeInsets.symmetric(horizontal: 5 * scale, vertical: 1 * scale),
-                                                              decoration: BoxDecoration(
-                                                                color: const Color(0xFFFF7043).withValues(alpha: 0.25),
-                                                                borderRadius: BorderRadius.circular(6 * scale),
-                                                                border: Border.all(color: const Color(0xFFFF7043).withValues(alpha: 0.6)),
-                                                              ),
-                                                              child: Text(
-                                                                '🔥 $voteCount표',
-                                                                style: GoogleFonts.notoSansKr(
-                                                                  color: const Color(0xFFFFAB91),
-                                                                  fontSize: 9.5 * scale,
-                                                                  fontWeight: FontWeight.bold,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  );
-                                                }).toList(),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+  void _showMonthlyMealsDialog() {
+    final schoolName = _settings.selectedSchool?.name ?? (_settings.schoolId.isNotEmpty ? _settings.schoolId : '양동중학교');
+    MonthlyMealCalendarDialog.show(
+      context,
+      schoolName: schoolName,
+      initialDate: _debugTimeOverride ?? DateTime.now(),
     );
   }
 
@@ -7770,68 +7207,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
-  // --- 4. PPT Ad Banner Card (Center Bottom-Right - A4 비율 1:1.414) ---
-  Widget _buildPptAdBannerCard() {
-    final scale = _settings.scaleFactor;
-    final String currentTitle = (_adBanners.isNotEmpty &&
-            _currentBannerIndex < _adBanners.length &&
-            _adBanners[_currentBannerIndex]['title'] != null &&
-            (_adBanners[_currentBannerIndex]['title'] as String).isNotEmpty)
-        ? (_adBanners[_currentBannerIndex]['title'] as String)
-        : '';
-
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF081714),
-        borderRadius: BorderRadius.circular(24 * scale),
-        border: Border.all(
-          color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
-          width: 1.2,
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          // Background / Poster Image
-          Positioned.fill(
-            child: _buildAdBannerPanel(),
-          ),
-          // Top pill badge: 광고물 실제 제목 반영
-          if (currentTitle.isNotEmpty)
-            Positioned(
-              top: 12 * scale,
-              left: 12 * scale,
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 6 * scale),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(8 * scale),
-                  border: Border.all(
-                    color: const Color(0xFF2EC4B6).withValues(alpha: 0.4),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.4),
-                      blurRadius: 4 * scale,
-                      offset: Offset(0, 2 * scale),
-                    ),
-                  ],
-                ),
-                child: Text(
-                  currentTitle,
-                  style: GoogleFonts.notoSansKr(
-                    color: Colors.white,
-                    fontSize: 13.5 * scale,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 
     // --- 5. Top Right 3x2 Tools Grid (6개 도구 2열 x 3행) ---
   Widget _buildTopPpt3x2Tools() {
@@ -9301,202 +8676,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
-  // --- Right Panel Bottom Right: Ad Banner / Cloud Dock Display ---
-  Widget _buildAdBannerPanel() {
-    final scale = _settings.scaleFactor;
-    if (BstCloudService.instance.activeToken != null) {
-      return _buildInlineCloudDockPanel(scale);
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A).withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFF6366F1).withValues(alpha: 0.3),
-          width: 1.2,
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: _adBanners.isEmpty
-              ? Container(
-                  padding: EdgeInsets.all(20 * scale),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(12 * scale),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF00F5D4).withOpacity(0.12),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(0xFF00F5D4).withOpacity(0.3),
-                              width: 1.2,
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.campaign_rounded,
-                            color: const Color(0xFF00F5D4),
-                            size: 32 * scale,
-                          ),
-                        ),
-                        SizedBox(height: 12 * scale),
-                        Text(
-                          '📢 교내 알림판',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 15 * scale,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        SizedBox(height: 6 * scale),
-                        Text(
-                          '등록된 공지 또는 행사 알림이 없습니다',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 11 * scale,
-                            color: Colors.white60,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        SizedBox(height: 4 * scale),
-                        Text(
-                          '오늘 하루도 활기차고 행복한 시간 되세요! 🌟',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 10 * scale,
-                            color: const Color(0xFF00F5D4).withOpacity(0.7),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (_adBanners[_currentBannerIndex]['imageUrl'] != null &&
-                        (_adBanners[_currentBannerIndex]['imageUrl'] as String).isNotEmpty)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
-                        child: Builder(
-                          builder: (_) {
-                            final imgUrl = _adBanners[_currentBannerIndex]['imageUrl'] as String;
-                            if (imgUrl.startsWith('data:image')) {
-                              try {
-                                final comma = imgUrl.indexOf(',');
-                                final b64 = comma != -1 ? imgUrl.substring(comma + 1) : imgUrl;
-                                final bytes = base64Decode(b64);
-                                return Image.memory(bytes, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox());
-                              } catch (_) {
-                                return const SizedBox();
-                              }
-                            }
-                            return Image.network(
-                              _getCorsSafeImageUrl(imgUrl),
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Image.network(
-                                'https://images.weserv.nl/?url=${Uri.encodeComponent(imgUrl)}',
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Image.network(
-                                  imgUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const SizedBox(),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    if (_adBanners.length > 1) ...[
-                      // Left flip button
-                      Positioned(
-                        left: 6 * scale,
-                        top: 0,
-                        bottom: 0,
-                        child: Center(
-                          child: InkWell(
-                            onTap: () {
-                              setState(() {
-                                _currentBannerIndex = (_currentBannerIndex - 1 + _adBanners.length) % _adBanners.length;
-                              });
-                            },
-                            borderRadius: BorderRadius.circular(20 * scale),
-                            child: Container(
-                              padding: EdgeInsets.all(5 * scale),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.55),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white24, width: 0.8),
-                              ),
-                              child: Icon(Icons.chevron_left_rounded, color: Colors.white, size: 20 * scale),
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Right flip button
-                      Positioned(
-                        right: 6 * scale,
-                        top: 0,
-                        bottom: 0,
-                        child: Center(
-                          child: InkWell(
-                            onTap: () {
-                              setState(() {
-                                _currentBannerIndex = (_currentBannerIndex + 1) % _adBanners.length;
-                              });
-                            },
-                            borderRadius: BorderRadius.circular(20 * scale),
-                            child: Container(
-                              padding: EdgeInsets.all(5 * scale),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.55),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white24, width: 0.8),
-                              ),
-                              child: Icon(Icons.chevron_right_rounded, color: Colors.white, size: 20 * scale),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 8 * scale,
-                        right: 8 * scale,
-                        child: Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 8 * scale,
-                            vertical: 4 * scale,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.6),
-                            borderRadius: BorderRadius.circular(12 * scale),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              width: 0.8,
-                            ),
-                          ),
-                          child: Text(
-                            '${_currentBannerIndex + 1}/${_adBanners.length}',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 10 * scale,
-                              color: Colors.white.withValues(alpha: 0.9),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-        ),
-      ),
-    );
-  }
-
-  /// 전자칠판 대시보드 광고판 위치 인라인 Cloud & TBP Explorer Dock
   /// 기기가 꺼져있을 때 수신된 부재 중 FCM 알림 확인 및 표시
   Future<void> _checkUnreadFcmNotifications() async {
     try {
@@ -10541,8 +9720,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     _showTbpWebSelectionDialog();
   }
 
-  /// 광고 배너 데이터 로드 (Firestore control_configs announcements)
-  Future<void> _loadAdBanners() async {
+  /// 학교 설정 데이터 실시간 동기화 (TimeSettings, Textbooks)
+  Future<void> _syncSchoolConfigsFromFirestore() async {
     try {
       final rawSchoolId = _settings.schoolId.isNotEmpty
           ? _settings.schoolId
@@ -10558,68 +9737,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final fields = data['fields'] as Map<String, dynamic>?;
-        final announcementsField = fields?['announcements'];
-
-        final values = announcementsField?['arrayValue']?['values'] as List<dynamic>? ?? [];
-        final now = DateTime.now();
-        final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-
-        final banners = values.where((v) {
-          final f = v['mapValue']?['fields'] as Map<String, dynamic>?;
-          if (f == null) return false;
-          final imgUrl = f['imageUrl']?['stringValue'] ?? '';
-          if (imgUrl.isEmpty) return false;
-          final startDate = (f['startDate']?['stringValue'] ?? '').replaceAll('.', '-').replaceAll('/', '-').trim();
-          final endDate = (f['endDate']?['stringValue'] ?? '').replaceAll('.', '-').replaceAll('/', '-').trim();
-          if (startDate.isNotEmpty && startDate.compareTo(todayStr) > 0) return false;
-          if (endDate.isNotEmpty && endDate.compareTo(todayStr) < 0 && endDate != todayStr) return false;
-          return true;
-        }).map((v) {
-          final f = v['mapValue']['fields'] as Map<String, dynamic>;
-          return <String, dynamic>{
-            'title': f['title']?['stringValue'] ?? '',
-            'imageUrl': f['imageUrl']?['stringValue'] ?? '',
-          };
-        }).toList();
-
-        // If date filter excluded all announcements, fallback to showing all valid announcements
-        if (banners.isEmpty && values.isNotEmpty) {
-          for (final v in values) {
-            final f = v['mapValue']?['fields'] as Map<String, dynamic>?;
-            final imgUrl = f?['imageUrl']?['stringValue'] ?? '';
-            if (imgUrl.isNotEmpty) {
-              banners.add({
-                'title': f?['title']?['stringValue'] ?? '',
-                'imageUrl': imgUrl,
-              });
-            }
-          }
-        }
-
-        if (banners.isEmpty) {
-          banners.add({
-            'title': 'Welcome to Boardest !!',
-            'imageUrl': 'https://cdn.phototourl.com/free/2026-09-05-567651a9-9745-4de2-97e9-3ff58b103931.png',
-          });
-        }
-
-        if (mounted) {
-          setState(() {
-            _adBanners = banners;
-            _currentBannerIndex = 0;
-          });
-
-          _bannerRollingTimer?.cancel();
-          if (_adBanners.length > 1) {
-            _bannerRollingTimer = Timer.periodic(const Duration(seconds: 8), (_) {
-              if (mounted) {
-                setState(() {
-                  _currentBannerIndex = (_currentBannerIndex + 1) % _adBanners.length;
-                });
-              }
-            });
-          }
-        }
 
         // 학년별 교과서 ZIP 자동 다운로드 및 압축 해제 동기화
         await _syncSchoolTextbooksFromFirestore(fields);
@@ -10628,17 +9745,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         await _syncSchoolTimeSettingsFromFirestore(fields);
       }
     } catch (e) {
-      debugPrint('[Boardest] Load ad banners error: $e');
-      if (_adBanners.isEmpty && mounted) {
-        setState(() {
-          _adBanners = [
-            {
-              'title': 'Welcome to Boardest !!',
-              'imageUrl': 'https://cdn.phototourl.com/free/2026-09-05-567651a9-9745-4de2-97e9-3ff58b103931.png',
-            }
-          ];
-        });
-      }
+      debugPrint('[Boardest] Sync school configs error: $e');
     }
   }
 

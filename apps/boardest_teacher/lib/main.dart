@@ -233,7 +233,7 @@ void main(List<String> args) async {
     final demoClassNum = assigned.classNum;
     final demoTotpSecret = TotpService.generateDeterministicSecret(demoEmail);
     final demoToken = 'demo_token_teacher_${assigned.shortId}';
-    const demoSchoolId = 'demo';
+    const demoSchoolId = 'Demo';
     const demoSchoolName = '데모 중학교';
     const demoIsHomeroom = true;
     const demoCafeteria = '1';
@@ -245,6 +245,7 @@ void main(List<String> args) async {
     await prefs.setString('bst_cld_access_token', demoToken);
     await prefs.setString('bst_google_access_token', demoToken);
     await prefs.setString('bst_school_name', demoSchoolName);
+    await prefs.setString('bst_school_id', demoSchoolId);
     await prefs.setString('bst_totp_secret_key', demoTotpSecret);
     await prefs.setString('bst_totp_secret', demoTotpSecret);
     await prefs.setString('bst_teacher_short_id', demoShortId);

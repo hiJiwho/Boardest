@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../services/storage_service.dart';
 import '../services/cloud_drive_service.dart';
 import '../models/app_settings.dart';
+import '../config/app_config.dart';
 
 /// Boardest 학급 쪽지 및 긴급 알림/공지 발송 네이티브 뷰어 (온라인 교실 전용)
 class MessageView extends StatefulWidget {
@@ -19,7 +20,7 @@ class MessageView extends StatefulWidget {
 }
 
 class _MessageViewState extends State<MessageView> {
-  static const String _apiKey = 'AIzaSyBMoJZHMBN4eYJtiZR2iGePcmIB7bg8wGo';
+  static String get _apiKey => AppConfig.firebaseApiKey;
 
   final TextEditingController _msgController = TextEditingController();
   

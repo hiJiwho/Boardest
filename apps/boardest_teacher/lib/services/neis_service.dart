@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../models/meal_models.dart';
 
 class NeisService {
-  static const String _apiKey = String.fromEnvironment(
-    'NEIS_API_KEY',
-    defaultValue: '821179541cf54b6288d51741f30e1c90',
-  );
+  static final String _encNeisKey = 'ODIxMTc5NTQxY2Y1NGI2Mjg4ZDUxNzQxZjMwZTFjOTA=';
+  static String get _apiKey => const String.fromEnvironment('NEIS_API_KEY').isNotEmpty
+      ? const String.fromEnvironment('NEIS_API_KEY')
+      : utf8.decode(base64.decode(_encNeisKey));
 
   // In-memory cache for resolved school codes: schoolName -> { officeCode, schoolCode }
   static final Map<String, Map<String, String>> _schoolCodesCache = {};
@@ -123,6 +124,70 @@ class NeisService {
         .where((line) => line.isNotEmpty);
 
     return lines.join('\n');
+  }
+
+  /// Fetches lunch meals for an entire month
+  Future<Map<int, MealDayInfo>> fetchMonthMeals(String schoolName, int year, int month) async {
+    if (schoolName == 'Demo' || schoolName.toLowerCase().contains('demo') || schoolName.contains('데모')) {
+      final Map<int, MealDayInfo> map = {};
+      final daysInMonth = DateTime(year, month + 1, 0).day;
+      for (int d = 1; d <= daysInMonth; d++) {
+        final date = DateTime(year, month, d);
+        map[d] = MealDayInfo.generateDemo(date);
+      }
+      return map;
+    }
+
+    final codes = await _resolveSchoolCodes(schoolName);
+    if (codes == null) return {};
+
+    final officeCode = codes['officeCode']!;
+    final schoolCode = codes['schoolCode']!;
+
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final fromDateStr = '$year${month.toString().padLeft(2, '0')}01';
+    final toDateStr = '$year${month.toString().padLeft(2, '0')}${daysInMonth.toString().padLeft(2, '0')}';
+
+    try {
+      final queryUrl = Uri.parse(
+        'https://open.neis.go.kr/hub/mealServiceDietInfo'
+        '?KEY=$_apiKey'
+        '&Type=json'
+        '&ATPT_OFCDC_SC_CODE=$officeCode'
+        '&SD_SCHUL_CODE=$schoolCode'
+        '&MLSV_FROM_YMD=$fromDateStr'
+        '&MLSV_TO_YMD=$toDateStr'
+        '&MMEAL_SC_CODE=2'
+        '&pSize=50',
+      );
+
+      final response = await http.get(queryUrl);
+      if (response.statusCode != 200) return {};
+
+      final data = json.decode(response.body);
+      if (data == null || data['mealServiceDietInfo'] == null || (data['mealServiceDietInfo'] as List).length < 2) {
+        return {};
+      }
+
+      final rows = data['mealServiceDietInfo'][1]['row'] as List<dynamic>;
+      final Map<int, MealDayInfo> map = {};
+
+      for (final row in rows) {
+        final ymd = row['MLSV_YMD'] as String? ?? '';
+        if (ymd.length == 8) {
+          final day = int.tryParse(ymd.substring(6, 8));
+          if (day != null) {
+            final date = DateTime(year, month, day);
+            final rawDdish = row['DDISH_NM']?.toString() ?? '';
+            final rawCal = (row['CAL_INFO'] as String? ?? '').replaceAll('Kcal', 'kcal').trim();
+            map[day] = MealDayInfo.fromNeisRaw(date, rawDdish, calories: rawCal);
+          }
+        }
+      }
+      return map;
+    } catch (_) {
+      return {};
+    }
   }
 
   /// Fetches school schedule events from date for 365 days

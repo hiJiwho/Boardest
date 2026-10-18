@@ -56,7 +56,6 @@ import 'video_board_view.dart';
 import 'web_hwp_ppt_view.dart';
 import 'school_calendar_view.dart';
 import 'website_board_view.dart';
-import 'billboard_management_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path/path.dart' as p;
 import '../services/bst_save_service.dart';
@@ -1562,18 +1561,6 @@ class _TeacherViewState extends State<TeacherView> {
     }
   }
 
-  void _openBillboardManagement() {
-    showDialog(
-      context: context,
-      builder: (ctx) => BillboardManagementDialog(
-        scaleFactor: _settings.scaleFactor,
-        schoolId: _settings.schoolId.isNotEmpty ? _settings.schoolId : 'ydm',
-        teacherName: _settings.selectedTeacherName.isNotEmpty
-            ? _settings.selectedTeacherName
-            : _settings.selectedTeacher,
-      ),
-    );
-  }
 
   void _openFile(String path, {Uint8List? memoryBytes}) {
     if (path.isEmpty && memoryBytes == null) return;
@@ -1930,20 +1917,6 @@ class _TeacherViewState extends State<TeacherView> {
             ],
           ),
         ),
-      ),
-    );
-  }
-  void _openAuthAndDeviceManager() {
-    showDialog(
-      context: context,
-      builder: (ctx) => _BstCloudDialog(
-        scaleFactor: _settings.scaleFactor,
-        onFileDownloaded: (file) {
-          _openFile(file.path);
-        },
-        onStatusChanged: () {
-          if (mounted) setState(() {});
-        },
       ),
     );
   }
@@ -4666,15 +4639,6 @@ class _TeacherViewState extends State<TeacherView> {
     final color = isSelected ? const Color(0xFF2EC4B6) : _textColor54;
     return InkWell(
       onTap: () {
-        if (index == 4 && AppConfig.isDemoMode) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('🔒 데모 모드에서는 설정을 변경할 수 없습니다.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-          return;
-        }
         setState(() {
           _mobileTabIndex = index;
         });
@@ -4873,16 +4837,7 @@ class _TeacherViewState extends State<TeacherView> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6 * s)),
                           elevation: 0,
                         ),
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => _BstCloudDialog(
-                              scaleFactor: _settings.scaleFactor,
-                              onFileDownloaded: (file) => _openFile(file.path),
-                              onStatusChanged: () => setState(() {}),
-                            ),
-                          );
-                        },
+                        onPressed: _showCreateFolderDialog,
                       ),
                       SizedBox(width: 6 * s),
                       ElevatedButton.icon(
@@ -4895,16 +4850,7 @@ class _TeacherViewState extends State<TeacherView> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6 * s)),
                           elevation: 0,
                         ),
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => _BstCloudDialog(
-                              scaleFactor: _settings.scaleFactor,
-                              onFileDownloaded: (file) => _openFile(file.path),
-                              onStatusChanged: () => setState(() {}),
-                            ),
-                          );
-                        },
+                        onPressed: _uploadLocalFileToDrive,
                       ),
                       SizedBox(width: 6 * s),
                       TextButton.icon(
@@ -5112,16 +5058,7 @@ class _TeacherViewState extends State<TeacherView> {
                                             Text('수업 자료 폴더에 파일이 없습니다', style: TextStyle(color: _textColor38, fontSize: 10.5 * s)),
                                             SizedBox(height: 4 * s),
                                             TextButton.icon(
-                                              onPressed: () {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (context) => _BstCloudDialog(
-                                                    scaleFactor: _settings.scaleFactor,
-                                                    onFileDownloaded: (file) => _openFile(file.path),
-                                                    onStatusChanged: () => setState(() {}),
-                                                  ),
-                                                );
-                                              },
+                                              onPressed: _uploadLocalFileToDrive,
                                               icon: Icon(Icons.add_circle_outline_rounded, size: 13 * s, color: const Color(0xFF2EC4B6)),
                                               label: Text('파일 추가하기', style: TextStyle(color: const Color(0xFF2EC4B6), fontSize: 11 * s)),
                                             ),
@@ -5142,14 +5079,7 @@ class _TeacherViewState extends State<TeacherView> {
                                         return InkWell(
                                           onTap: () async {
                                             if (isFolder) {
-                                              showDialog(
-                                                context: context,
-                                                builder: (context) => _BstCloudDialog(
-                                                  scaleFactor: _settings.scaleFactor,
-                                                  onFileDownloaded: (file) => _openFile(file.path),
-                                                  onStatusChanged: () => setState(() {}),
-                                                ),
-                                              );
+                                              await _refreshDriveFiles();
                                               return;
                                             }
                                             // 일반 파일 직접 열기
@@ -5547,16 +5477,6 @@ class _TeacherViewState extends State<TeacherView> {
     switch (id) {
       case 'cloud_settings':
       case 'auth_management':
-        if (AppConfig.isDemoMode) {
-          return () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('🔒 데모 모드에서는 Cloud 설정을 변경할 수 없습니다.'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          };
-        }
         return _openAuthManagement;
       case 'bst_cloud':
         return _openBstCloud;
@@ -5599,16 +5519,6 @@ class _TeacherViewState extends State<TeacherView> {
       case 'app_drawer':
         return _openAppDrawer;
       case 'settings':
-        if (AppConfig.isDemoMode) {
-          return () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('🔒 데모 모드에서는 설정을 변경할 수 없습니다.'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          };
-        }
         return _openSettings;
       default:
         return () {};
@@ -5691,22 +5601,7 @@ class _TeacherViewState extends State<TeacherView> {
   }
 
     void _openBstCloud() {
-    if (!CloudDriveService.instance.isLoggedIn) {
-      _showLoginRequiredDialog('BST Cloud (수업자료 드라이브)');
-      return;
-    }
-    showDialog(
-      context: context,
-      builder: (context) => _BstCloudDialog(
-        scaleFactor: _settings.scaleFactor,
-        onFileDownloaded: (file) {
-          _openFile(file.path);
-        },
-        onStatusChanged: () {
-          if (mounted) setState(() {});
-        },
-      ),
-    );
+    _openAuthManagement();
   }
 
   void _openAuthManagement() {
@@ -6544,7 +6439,7 @@ class _TeacherViewState extends State<TeacherView> {
     final IconData icon = _getToolIcon(id);
     final VoidCallback onTap = _getToolOnTap(id);
 
-    final isLockedInDemo = AppConfig.isDemoMode && (id == 'settings' || id == 'cloud_settings' || id == 'auth_management');
+    final isLockedInDemo = false;
 
     return Material(
       color: Colors.transparent,
@@ -7575,16 +7470,7 @@ class _TeacherViewState extends State<TeacherView> {
               constraints: BoxConstraints(minWidth: 28 * s, minHeight: 28 * s),
             ),
           ),
-          SizedBox(width: 8 * s),
-          Tooltip(
-            message: '전자칠판 광고판 / 공지 관리',
-            child: IconButton(
-              onPressed: _openBillboardManagement,
-              icon: Icon(Icons.campaign_rounded, size: 18 * s, color: const Color(0xFF00F5D4)),
-              padding: EdgeInsets.zero,
-              constraints: BoxConstraints(minWidth: 28 * s, minHeight: 28 * s),
-            ),
-          ),
+
           SizedBox(width: 12 * s),
 
           // USB Status Badge (Only when physical USB is connected)
@@ -7629,23 +7515,23 @@ class _TeacherViewState extends State<TeacherView> {
             child: Container(
               padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 3 * s),
               decoration: BoxDecoration(
-                color: CloudDriveService.instance.isLoggedIn ? const Color(0xFF2EC4B6).withOpacity(0.2) : const Color(0xFFFF8906).withOpacity(0.2),
+                color: CloudDriveService.instance.isGoogleDriveConnected ? const Color(0xFF2EC4B6).withOpacity(0.2) : const Color(0xFFFF8906).withOpacity(0.2),
                 borderRadius: BorderRadius.circular(10 * s),
-                border: Border.all(color: CloudDriveService.instance.isLoggedIn ? const Color(0xFF2EC4B6) : const Color(0xFFFF8906)),
+                border: Border.all(color: CloudDriveService.instance.isGoogleDriveConnected ? const Color(0xFF2EC4B6) : const Color(0xFFFF8906)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    CloudDriveService.instance.isLoggedIn ? Icons.cloud_done_rounded : Icons.account_circle_rounded,
+                    CloudDriveService.instance.isGoogleDriveConnected ? Icons.cloud_done_rounded : Icons.account_circle_rounded,
                     size: 13 * s,
-                    color: CloudDriveService.instance.isLoggedIn ? const Color(0xFF2EC4B6) : const Color(0xFFFF8906),
+                    color: CloudDriveService.instance.isGoogleDriveConnected ? const Color(0xFF2EC4B6) : const Color(0xFFFF8906),
                   ),
                   SizedBox(width: 4 * s),
                   Text(
-                    CloudDriveService.instance.isLoggedIn ? (CloudDriveService.instance.userName ?? 'Google 연결됨') : '로그인 필요',
+                    CloudDriveService.instance.isGoogleDriveConnected ? (CloudDriveService.instance.userName ?? 'Google 연결됨') : 'Google Drive 연동',
                     style: TextStyle(
-                      color: CloudDriveService.instance.isLoggedIn ? const Color(0xFF2EC4B6) : const Color(0xFFFF8906),
+                      color: CloudDriveService.instance.isGoogleDriveConnected ? const Color(0xFF2EC4B6) : const Color(0xFFFF8906),
                       fontSize: 11 * s,
                       fontWeight: FontWeight.w600,
                     ),
@@ -8028,7 +7914,7 @@ class _TeacherViewState extends State<TeacherView> {
                       ),
                     ),
                     const Spacer(),
-                    if (cloud.isLoggedIn) ...[
+                    if (cloud.isGoogleDriveConnected) ...[
                       Tooltip(
                         message: '${cloud.userName ?? "선생님"} (${cloud.userEmail ?? ""}) 연동됨\n클릭 시 계정 관리',
                         child: InkWell(
@@ -8266,14 +8152,6 @@ class _TeacherViewState extends State<TeacherView> {
                             onTap: _showRegisterCanvaDialog,
                             s: s,
                           ),
-                          _buildSlimActionBtn(
-                            icon: Icons.campaign_rounded,
-                            iconColor: const Color(0xFF00F5D4),
-                            label: '광고판',
-                            tooltip: '교내 광고판 / 공지 관리',
-                            onTap: _openBillboardManagement,
-                            s: s,
-                          ),
                         ],
                       ),
                       SizedBox(height: 4 * s),
@@ -8376,46 +8254,7 @@ class _TeacherViewState extends State<TeacherView> {
                             child: Column(
                               children: [
                                 InkWell(
-                                  onTap: _openBillboardManagement,
-                                  borderRadius: BorderRadius.circular(8 * s),
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 6 * s),
-                                    margin: EdgeInsets.only(bottom: 6 * s),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF00F5D4).withOpacity(0.08),
-                                      borderRadius: BorderRadius.circular(8 * s),
-                                      border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.25)),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.campaign_rounded, size: 14 * s, color: const Color(0xFF00F5D4)),
-                                        SizedBox(width: 8 * s),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                '전자칠판 광고판 / 공지 관리',
-                                                style: GoogleFonts.notoSansKr(
-                                                  color: Colors.white,
-                                                  fontSize: 10 * s,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                              Text(
-                                                '배너 사진 업로드 및 게시',
-                                                style: TextStyle(color: Colors.white38, fontSize: 8 * s),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Icon(Icons.chevron_right_rounded, size: 13 * s, color: const Color(0xFF00F5D4)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                InkWell(
-                                  onTap: kIsWeb ? _triggerWebPip : _enterMiniMode,
+                                    onTap: kIsWeb ? _triggerWebPip : _enterMiniMode,
                                   borderRadius: BorderRadius.circular(8 * s),
                                   child: Container(
                                     padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 6 * s),
@@ -8908,493 +8747,6 @@ class _SyncPairPreview {
   final dynamic preview;
 
   _SyncPairPreview(this.local, this.usb, this.preview);
-}
-
-// ─── BST CLOUD GOOGLE DRIVE API DIALOG ───────────────────────────
-
-class _BstCloudDialog extends StatefulWidget {
-  final double scaleFactor;
-  final void Function(File file) onFileDownloaded;
-  final VoidCallback onStatusChanged;
-
-  const _BstCloudDialog({
-    required this.scaleFactor,
-    required this.onFileDownloaded,
-    required this.onStatusChanged,
-  });
-
-  @override
-  State<_BstCloudDialog> createState() => _BstCloudDialogState();
-}
-
-class _BstCloudDialogState extends State<_BstCloudDialog> {
-  List<CloudDriveFile> _files = [];
-  bool _loading = false;
-  Timer? _totpTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadFiles();
-    _totpTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _totpTimer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _loadFiles() async {
-    if (!CloudDriveService.instance.isLoggedIn) return;
-    setState(() => _loading = true);
-    final list = await CloudDriveService.instance.fetchDriveFiles();
-    if (mounted) {
-      setState(() {
-        _files = list;
-        _loading = false;
-      });
-    }
-  }
-
-  void _showTokenInputDialog() {
-    final tokenCtrl = TextEditingController(text: CloudDriveService.instance.accessToken ?? '');
-    final emailCtrl = TextEditingController(text: CloudDriveService.instance.userEmail ?? '');
-    final nameCtrl = TextEditingController(text: CloudDriveService.instance.userName ?? '');
-    final schoolCtrl = TextEditingController(text: CloudDriveService.instance.schoolName ?? '');
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF16161A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Google Drive Access Token / 세션 연동',
-            style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'https://bst-cloud.web.app 에서 로그인 후 발급받은 Google Access Token 또는 세션을 직접 입력합니다.',
-                style: GoogleFonts.notoSansKr(color: Colors.white60, fontSize: 12),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: tokenCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Google OAuth Access Token',
-                  labelStyle: TextStyle(color: Colors.white60),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: emailCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Google 계정 이메일',
-                  labelStyle: TextStyle(color: Colors.white60),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: nameCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: '교사 성명',
-                  labelStyle: TextStyle(color: Colors.white60),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('취소', style: GoogleFonts.notoSansKr(color: Colors.white38)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final tok = tokenCtrl.text.trim();
-              if (tok.isNotEmpty) {
-                await CloudDriveService.instance.setSession(
-                  accessToken: tok,
-                  email: emailCtrl.text.trim(),
-                  name: nameCtrl.text.trim(),
-                  school: schoolCtrl.text.trim(),
-                );
-                if (mounted) {
-                  Navigator.pop(ctx);
-                  widget.onStatusChanged();
-                  _loadFiles();
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF006a60)),
-            child: Text('연동 저장', style: GoogleFonts.notoSansKr(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = widget.scaleFactor;
-    final isLoggedIn = CloudDriveService.instance.isLoggedIn;
-
-    return Dialog(
-      backgroundColor: const Color(0xFF16161A),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24 * s)),
-      child: Container(
-        width: 600 * s,
-        height: 520 * s,
-        padding: EdgeInsets.all(24 * s),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Header
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF006a60).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.cloud_sync_rounded, color: Color(0xFF74f8e5), size: 24),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Boardest Cloud (Google Drive API)',
-                        style: GoogleFonts.outfit(
-                          color: Colors.white,
-                          fontSize: 16 * s,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        isLoggedIn
-                            ? '${CloudDriveService.instance.userEmail ?? "구글 로그인 완료"} · Drive API 실시간 연동'
-                            : '구글 계정 로그인 및 Drive API 직접 연동',
-                        style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 11 * s),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white54),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Main View
-            Expanded(
-              child: !isLoggedIn
-                  ? _buildLoggedOutView(s)
-                  : _buildLoggedInView(s),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoggedOutView(double s) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
-      ),
-      padding: EdgeInsets.all(20 * s),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.cloud_off_rounded, color: Colors.white38, size: 56),
-          const SizedBox(height: 16),
-          Text(
-            'Google 계정 및 Drive API가 연동되어 있지 않습니다.',
-            style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13 * s),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF242629),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF2EC4B6).withOpacity(0.3)),
-            ),
-            child: Text(
-              '📌 교사용 앱 로그인 가이드:\nBoardest.web.app 접속 ➔ 학교명 기입 ➔ 구글 로그인 ➔ 교사용 앱 로그인 눌러주세요',
-              style: GoogleFonts.notoSansKr(color: const Color(0xFF2EC4B6), fontWeight: FontWeight.bold, fontSize: 11 * s, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton.icon(
-                icon: const Icon(Icons.open_in_browser_rounded, size: 18),
-                label: Text('🌐 Chrome에서 구글 로그인 (Drive API)', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF7F5AF0),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () async {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Chrome 브라우저에서 구글 로그인을 진행해 주세요...', style: GoogleFonts.notoSansKr()),
-                      backgroundColor: const Color(0xFF7F5AF0),
-                    ),
-                  );
-                  final ok = await CloudDriveService.instance.loginWithBrowserOAuth();
-                  if (ok && mounted) {
-                    widget.onStatusChanged();
-                    _loadFiles();
-                  }
-                },
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.vpn_key_rounded, size: 18),
-                label: Text('토큰/세션 수동 입력', style: GoogleFonts.notoSansKr()),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF74f8e5),
-                  side: const BorderSide(color: Color(0xFF006a60)),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: _showTokenInputDialog,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _uploadFile() async {
-    final result = await FilePicker.pickFiles(
-      allowMultiple: true,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-
-    setState(() => _loading = true);
-    int success = 0;
-    for (final file in result.files) {
-      if (file.bytes != null) {
-        final ok = await CloudDriveService.instance.uploadBytesToDrive(file.bytes!, file.name);
-        if (ok) success++;
-      } else if (file.path != null) {
-        final ok = await CloudDriveService.instance.uploadFileToDrive(File(file.path!));
-        if (ok) success++;
-      }
-    }
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success > 0
-                ? '$success개 파일이 Google Drive에 성공적으로 업로드되었습니다! ☁️'
-                : '파일 업로드에 실패했습니다.',
-            style: GoogleFonts.notoSansKr(),
-          ),
-          backgroundColor: success > 0 ? const Color(0xFF2CB67D) : Colors.redAccent,
-        ),
-      );
-      _loadFiles();
-    }
-  }
-
-
-  void _showCreateFolderDialog() {
-    final folderCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF16161A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('📁 새 폴더 만들기', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: folderCtrl,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            labelText: '폴더 이름 입력',
-            labelStyle: TextStyle(color: Colors.white70),
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소', style: TextStyle(color: Colors.white54))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2CB67D)),
-            onPressed: () async {
-              final name = folderCtrl.text.trim();
-              if (name.isNotEmpty) {
-                Navigator.pop(ctx);
-                setState(() => _loading = true);
-                final folderId = await CloudDriveService.instance.createFolderPairInDrive(name);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(folderId != null ? '📁 [ $name ] 폴더가 생성되었습니다!' : '폴더 생성 실패'),
-                      backgroundColor: folderId != null ? const Color(0xFF2CB67D) : Colors.redAccent,
-                    ),
-                  );
-                  _loadFiles();
-                }
-              }
-            },
-            child: const Text('생성', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoggedInView(double s) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Action Bar
-        Row(
-          children: [
-            Text('수업 자료 파일 (${_files.length}개)',
-                style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12 * s)),
-            const Spacer(),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.create_new_folder_rounded, size: 14),
-              label: Text('폴더 생성', style: GoogleFonts.notoSansKr(fontSize: 11 * s, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00F5D4),
-                foregroundColor: Colors.black,
-                padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * s)),
-              ),
-              onPressed: _showCreateFolderDialog,
-            ),
-            const SizedBox(width: 6),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.upload_file_rounded, size: 14),
-              label: Text('파일 업로드', style: GoogleFonts.notoSansKr(fontSize: 11 * s, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2CB67D),
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * s)),
-              ),
-              onPressed: _uploadFile,
-            ),
-            const SizedBox(width: 6),
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: Color(0xFF74f8e5), size: 18),
-              tooltip: 'Drive 새로고침',
-              onPressed: _loadFiles,
-            ),
-            IconButton(
-              icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
-              tooltip: '구글 로그아웃',
-              onPressed: () async {
-                await CloudDriveService.instance.logout();
-                widget.onStatusChanged();
-                setState(() {});
-              },
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-
-        // File List
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator(color: Color(0xFF2CB67D)))
-              : _files.isEmpty
-                  ? Center(
-                      child: Text('Google Drive에 저장된 수업 파일이 없습니다.',
-                          style: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 12 * s)),
-                    )
-                  : ListView.builder(
-                      itemCount: _files.length,
-                      itemBuilder: (ctx, idx) {
-                        final f = _files[idx];
-                        final isFolder = f.mimeType == 'application/vnd.google-apps.folder';
-                        IconData iconData = isFolder ? Icons.folder_rounded : Icons.insert_drive_file_rounded;
-                        Color iconColor = isFolder ? const Color(0xFFFF8E3C) : const Color(0xFF2EC4B6);
-
-                        if (!isFolder) {
-                          if (f.name.endsWith('.pdf')) {
-                            iconData = Icons.picture_as_pdf_rounded;
-                            iconColor = const Color(0xFFFF8906);
-                          } else if (f.name.endsWith('.bb')) {
-                            iconData = Icons.auto_stories_rounded;
-                            iconColor = const Color(0xFF7F5AF0);
-                          } else if (f.name.endsWith('.pptx') || f.name.endsWith('.ppt')) {
-                            iconData = Icons.slideshow_rounded;
-                            iconColor = const Color(0xFFEF4565);
-                          }
-                        }
-
-                        return Card(
-                          color: Colors.white.withOpacity(0.04),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          child: ListTile(
-                            leading: Icon(iconData, color: iconColor),
-                            title: Text(f.name,
-                                style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12 * s)),
-                            subtitle: Text(
-                              isFolder ? '폴더' : '${f.size > 0 ? (f.size / 1024).round() : 0} KB',
-                              style: const TextStyle(color: Colors.white38, fontSize: 10),
-                            ),
-                            trailing: isFolder
-                                ? null
-                                : ElevatedButton.icon(
-                                    icon: const Icon(Icons.download_rounded, size: 14),
-                                    label: Text('열기', style: GoogleFonts.notoSansKr(fontSize: 11)),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF006a60),
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    ),
-                                    onPressed: () async {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('Drive API에서 \'${f.name}\' 다운로드 중...'),
-                                          backgroundColor: const Color(0xFF006a60),
-                                        ),
-                                      );
-                                      final downloaded = await CloudDriveService.instance.downloadDriveFileToTemp(f);
-                                      if (downloaded != null && mounted) {
-                                        Navigator.pop(context);
-                                        widget.onFileDownloaded(downloaded);
-                                      }
-                                    },
-                                  ),
-                          ),
-                        );
-                      },
-                    ),
-        ),
-      ],
-    );
-  }
 }
 
 // ─── AUTH MANAGEMENT DIALOG (GOOGLE OTP / TRUSTED DEVICE / AUTO LESSON FLOW) ──────

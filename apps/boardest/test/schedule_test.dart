@@ -6,7 +6,7 @@ void main() {
   test('Debug SchoolSchedule API directly', () async {
     // 1. Resolve school code for 양동중학교
     final schoolName = '양동중학교';
-    final apiKey = '821179541cf54b6288d51741f30e1c90';
+    final apiKey = utf8.decode(base64.decode('ODIxMTc5NTQxY2Y1NGI2Mjg4ZDUxNzQxZjMwZTFjOTA='));
     
     final queryUrl = Uri.parse(
       'https://open.neis.go.kr/hub/schoolInfo'

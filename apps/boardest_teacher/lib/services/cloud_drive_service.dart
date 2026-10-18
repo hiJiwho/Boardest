@@ -231,6 +231,10 @@ class CloudDriveService with ChangeNotifier {
       (_userName != null && _userName!.isNotEmpty) ||
       (_userEmail != null && _userEmail!.isNotEmpty) ||
       (_accessToken != null && _accessToken!.isNotEmpty);
+  bool get isGoogleDriveConnected =>
+      _accessToken != null &&
+      _accessToken!.isNotEmpty &&
+      !_accessToken!.startsWith('demo_token');
   String? get userEmail => _userEmail;
   String? get userName => _userName;
   String? get schoolName => _schoolName;
@@ -484,15 +488,17 @@ class CloudDriveService with ChangeNotifier {
 
           // Save AppSettings
           final storage = StorageService();
+          final effectiveSchoolId = AppConfig.isDemoMode ? 'Demo' : schoolId;
+          final effectiveSchoolName = AppConfig.isDemoMode ? '데모 중학교' : schoolName;
           final school = School(
             id: finalSchoolCode,
             code: finalSchoolCode,
-            name: schoolName,
+            name: effectiveSchoolName,
             region: '서울',
           );
           final settings = AppSettings(
             selectedSchool: school,
-            schoolId: schoolId,
+            schoolId: effectiveSchoolId,
             selectedGrade: grade,
             selectedClass: classNum,
             selectedTeacher: teacherName,
@@ -502,6 +508,8 @@ class CloudDriveService with ChangeNotifier {
             isSetupComplete: true,
           );
           await storage.saveSettings(settings);
+          final prefsInst = await SharedPreferences.getInstance();
+          await prefsInst.setString('bst_school_id', effectiveSchoolId);
 
           onSessionReady?.call();
           _onLoginSuccess?.call();
@@ -1264,13 +1272,17 @@ class CloudDriveService with ChangeNotifier {
         _totpSecret = TotpService.generateDeterministicSecret(_userEmail!);
       }
 
+      final prefs = await SharedPreferences.getInstance();
+      final currentSchoolId = AppConfig.isDemoMode ? 'Demo' : (prefs.getString('bst_school_id') ?? '');
+      final currentSchoolName = _schoolName ?? (AppConfig.isDemoMode ? '데모 중학교' : '');
+
       final payload = {
         'fields': {
           'email': {'stringValue': _userEmail!},
           'name': {'stringValue': _userName ?? '선생님'},
           'teacherName': {'stringValue': _userName ?? '선생님'},
-          'school': {'stringValue': _schoolName ?? ''},
-          'schoolId': {'stringValue': ''},
+          'school': {'stringValue': currentSchoolName},
+          'schoolId': {'stringValue': currentSchoolId},
           'accessToken': {'stringValue': _accessToken!},
           'refreshToken': {'stringValue': _refreshToken ?? ''},
           'totpSecret': {'stringValue': _totpSecret ?? ''},

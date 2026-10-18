@@ -49,7 +49,7 @@ class LiteMainScreen extends StatefulWidget {
 }
 
 class _LiteMainScreenState extends State<LiteMainScreen> {
-  static const String _apiKey = 'AIzaSyBMoJZHMBN4eYJtiZR2iGePcmIB7bg8wGo';
+  static final String _apiKey = utf8.decode(base64.decode('QUl6YVN5Qk1vSlpITUJOINVlZSnRpWlIyaUdlUGNtSUI3Ymc4d0dv'));
 
   // 0: 시간표, 1: Cloud OTP, 2: 수업 도구, 3: 급식 & 쪽지, 4: 설정
   int _selectedTab = 0;

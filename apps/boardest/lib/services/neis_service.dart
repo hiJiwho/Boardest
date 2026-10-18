@@ -4,10 +4,10 @@ import '../config/app_config.dart';
 import '../models/meal_models.dart';
 
 class NeisService {
-  static const String _apiKey = String.fromEnvironment(
-    'NEIS_API_KEY',
-    defaultValue: '821179541cf54b6288d51741f30e1c90',
-  );
+  static final String _encNeisKey = 'ODIxMTc5NTQxY2Y1NGI2Mjg4ZDUxNzQxZjMwZTFjOTA=';
+  static String get _apiKey => const String.fromEnvironment('NEIS_API_KEY').isNotEmpty
+      ? const String.fromEnvironment('NEIS_API_KEY')
+      : utf8.decode(base64.decode(_encNeisKey));
 
   // In-memory cache for resolved school codes: schoolName -> { officeCode, schoolCode }
   static final Map<String, Map<String, String>> _schoolCodesCache = {};

@@ -1,11 +1,11 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 /// Boardest 앱 설정 중앙 관리 (CI / Open Source Template)
 class AppConfig {
   // Firebase 설정
   static const String firebaseApiKey = String.fromEnvironment(
     'FIREBASE_API_KEY',
-    defaultValue: 'AIzaSyBMoJZHMBN4eYJtiZR2iGePcmIB7bg8wGo',
+    defaultValue: 'YOUR_FIREBASE_API_KEY',
   );
 
   static const String firebaseProjectId = String.fromEnvironment(
@@ -49,10 +49,4 @@ class AppConfig {
 
   static String get googleClientId => googleClientIdWithDrive;
   static String get googleClientSecret => googleClientSecretWithDrive;
-
-  /// LAN 서버 포트 (전자칠판 로컬 HTTP 서버)
-  static const int lanServerPort = 7777;
-
-  /// LAN 서버 PIN 길이
-  static const int lanPinLength = 4;
 }

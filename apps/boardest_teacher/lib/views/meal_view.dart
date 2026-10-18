@@ -7,6 +7,8 @@ import '../services/storage_service.dart';
 import '../services/cloud_drive_service.dart';
 import '../services/neis_service.dart';
 import '../models/app_settings.dart';
+import '../config/app_config.dart';
+import 'monthly_meal_calendar_dialog.dart';
 
 /// Boardest 네이티브 실시간 급식 지도 & 반별 급식 호출 뷰어
 class MealView extends StatefulWidget {
@@ -20,7 +22,7 @@ class MealView extends StatefulWidget {
 }
 
 class _MealViewState extends State<MealView> {
-  static const String _apiKey = 'AIzaSyBMoJZHMBN4eYJtiZR2iGePcmIB7bg8wGo';
+  static String get _apiKey => AppConfig.firebaseApiKey;
 
   AppSettings? _settings;
   bool _isLoading = true;
@@ -568,6 +570,40 @@ class _MealViewState extends State<MealView> {
                           Text(
                             '$_mealDateLabel ($schoolName)',
                             style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14 * s),
+                          ),
+                          const Spacer(),
+                          InkWell(
+                            onTap: () {
+                              MonthlyMealCalendarDialog.show(
+                                context,
+                                schoolName: schoolName,
+                                initialDate: DateTime.now(),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(8 * s),
+                            child: Container(
+                              padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 5 * s),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2EC4B6).withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(8 * s),
+                                border: Border.all(color: const Color(0xFF2EC4B6).withOpacity(0.4)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.calendar_month_rounded, size: 14 * s, color: const Color(0xFF2EC4B6)),
+                                  SizedBox(width: 5 * s),
+                                  Text(
+                                    '📆 월간 식단표 (달력)',
+                                    style: TextStyle(
+                                      color: const Color(0xFF2EC4B6),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12 * s,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),

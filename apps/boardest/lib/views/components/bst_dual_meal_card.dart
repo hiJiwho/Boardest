@@ -3,6 +3,7 @@ export '../../models/meal_models.dart';
 import '../../models/meal_models.dart';
 import '../../services/meal_vote_service.dart';
 import '../../services/neis_service.dart';
+import 'monthly_meal_calendar_dialog.dart';
 
 class BstDualMealCard extends StatefulWidget {
   final String schoolName;
@@ -532,32 +533,39 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 1. 월간 식단표 토글 버튼
+                  // 1. 월간 식단표 달력 버튼
                   InkWell(
-                    onTap: () => setState(() => _isMonthlyView = !_isMonthlyView),
+                    onTap: () {
+                      MonthlyMealCalendarDialog.show(
+                        context,
+                        schoolName: widget.schoolName,
+                        initialDate: _now,
+                      );
+                    },
                     borderRadius: BorderRadius.circular(6),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: _isMonthlyView
-                            ? const Color(0xFFFF8906).withOpacity(0.2)
-                            : Colors.white.withOpacity(0.05),
+                        color: const Color(0xFF00F5D4).withOpacity(0.12),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
-                          color: _isMonthlyView
-                              ? const Color(0xFFFF8906)
-                              : Colors.white.withOpacity(0.1),
+                          color: const Color(0xFF00F5D4).withOpacity(0.35),
                         ),
                       ),
-                      child: Text(
-                        _isMonthlyView ? '📅 일간 보기' : '📆 월간 식단표',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w800,
-                          color: _isMonthlyView
-                              ? const Color(0xFFFF8906)
-                              : Colors.white.withOpacity(0.85),
-                        ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.calendar_month_rounded, size: 13, color: Color(0xFF00F5D4)),
+                          SizedBox(width: 4),
+                          Text(
+                            '📆 월간 식단표',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF00F5D4),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
