@@ -39,7 +39,6 @@ class _WebsiteBoardViewState extends State<WebsiteBoardView> {
   double _strokeWidth = 4.0;
   ToolMode _tool = ToolMode.pen;
   ShapeType _activeShape = ShapeType.line;
-  bool _isPenDetailsOpen = false;
   bool _eraseEntireStroke = false;
   double _eraserSize = 30.0;
 
@@ -98,16 +97,6 @@ class _WebsiteBoardViewState extends State<WebsiteBoardView> {
     _annotationController.eraseEntireStroke = _eraseEntireStroke;
     _annotationController.eraserSize = _eraserSize;
     _annotationController.activeShape = _activeShape;
-  }
-
-  void _setTool(ToolMode mode) {
-    setState(() {
-      _isDrawMode = true;
-      _tool = mode;
-      _isPenDetailsOpen = false;
-    });
-    _syncControllerTooling();
-    _updateWebviewClickThrough();
   }
 
   Future<void> _initWindowsWebview() async {
@@ -293,7 +282,6 @@ class _WebsiteBoardViewState extends State<WebsiteBoardView> {
         setState(() {
           if (mode == ToolMode.pointer) {
             _isDrawMode = false;
-            _isPenDetailsOpen = false;
           } else {
             _isDrawMode = true;
             _tool = mode;

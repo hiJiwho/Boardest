@@ -33,44 +33,8 @@ $stackTrace
   }
 
   static void runWindowsStartupTasks() {
-    if (Platform.isWindows) {
-      SystemAppScanner.createWindowsShortcuts();
-      SystemAppScanner.ensureWindowsRunAtStartup();
-      _startWindowsWatchdog();
-    }
-  }
-
-  static void _startWindowsWatchdog() async {
-    try {
-      final int myPid = pid;
-      final String exePath = Platform.resolvedExecutable;
-      final String exeDir = File(exePath).parent.path;
-      String watchdogExe = p.join(exeDir, 'watchdog.exe');
-      if (!await File(watchdogExe).exists()) {
-        watchdogExe = p.join(Directory.current.path, 'watchdog.exe');
-      }
-      if (!await File(watchdogExe).exists()) {
-        watchdogExe = p.join(Directory.current.path, 'build', 'windows', 'x64', 'runner', 'Release', 'watchdog.exe');
-      }
-      if (!await File(watchdogExe).exists()) {
-        watchdogExe = p.join(Directory.current.path, 'build', 'windows', 'x64', 'runner', 'Debug', 'watchdog.exe');
-      }
-      if (!await File(watchdogExe).exists()) {
-        watchdogExe = p.join(Directory.current.path, 'build', 'outputs', 'windows', 'Release', 'watchdog.exe');
-      }
-
-      if (await File(watchdogExe).exists()) {
-        await Process.start(
-          watchdogExe,
-          ['$myPid', exePath],
-          mode: ProcessStartMode.detached,
-        );
-        debugPrint('[Boardest Watchdog] Background resurrection C# watchdog started for PID $myPid.');
-      } else {
-        debugPrint('[Boardest Watchdog] C# watchdog executable not found at: $watchdogExe');
-      }
-    } catch (e) {
-      debugPrint('[Boardest Watchdog] Failed to start C# watchdog: $e');
-    }
+    if (kDebugMode || kIsWeb || !Platform.isWindows) return;
+    SystemAppScanner.createWindowsShortcuts();
+    SystemAppScanner.ensureWindowsRunAtStartup();
   }
 }

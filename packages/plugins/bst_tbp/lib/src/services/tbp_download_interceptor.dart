@@ -34,7 +34,9 @@ class TbpDownloadInterceptor {
     if (hasExisting) {
       // 기존 파일 존재 시 다운로드 거부 및 기존 판서 보존 열기
       final localFilePath = p.join(tbpFolderPath, 'Downloads', currentDhash, filename);
-      openSupportedViewer(context: context, filePath: localFilePath, scaleFactor: scaleFactor);
+      if (context.mounted) {
+        openSupportedViewer(context: context, filePath: localFilePath, scaleFactor: scaleFactor);
+      }
     } else if (isSupportedExt) {
       // 지원되는 확장자는 USB 내 Downloads/{dHash}/ 로 다운로드 및 뷰어 열기
       final client = HttpClient();
@@ -49,7 +51,9 @@ class TbpDownloadInterceptor {
         final bytes = await res.fold<List<int>>([], (p, e) => p..addAll(e));
         await saveFile.writeAsBytes(bytes);
 
-        openSupportedViewer(context: context, filePath: saveFile.path, scaleFactor: scaleFactor);
+        if (context.mounted) {
+          openSupportedViewer(context: context, filePath: saveFile.path, scaleFactor: scaleFactor);
+        }
       } catch (e) {
         debugPrint('[TbpDownloadInterceptor] Intercept error: $e');
       } finally {

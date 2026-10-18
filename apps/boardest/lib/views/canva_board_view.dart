@@ -1,771 +1,1008 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:universal_io/io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
+import 'package:path/path.dart' as p;
 import 'package:webview_windows/webview_windows.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+
+import '../helpers/iframe_view_helper.dart';
 import '../models/board_tools.dart';
+import '../services/tbp/tbp_dhash_engine.dart';
+import '../services/tbp/tbp_download_interceptor.dart';
+import '../services/tbp/tbp_storage_service.dart';
 import '../widgets/annotation_canvas.dart';
 import '../widgets/board_toolbar.dart';
 import '../widgets/save_destination_dialog.dart';
-import '../services/annotation_storage_service.dart';
-import '../services/storage_service.dart';
+import 'tbp/tbp_hotspot_overlay.dart';
 
-/// Boardest Canva 스마트 PPT 프레젠테이션 뷰 (.BSTcanva 지원 - 전자칠판 전용)
-class CanvaBoardView extends StatefulWidget {
+/// HTML 기반 모든 프레젠테이션 사이트(Canva, 미리캔버스, Google Slides, Figma, Prezi, Genially, YouTube 등)를
+/// TBP와 완벽히 동일한 Dhash 페이지별 판서, 스마트 모드, 핫스팟, 가상 넘기기(PgUp/PgDn)로 지원하는 뷰어 (.HTMLP)
+class HtmlPresentView extends StatefulWidget {
+  final String? embedUrl;
+  final String? title;
   final double scaleFactor;
   final String? initialUrl;
   final String? filePath;
-  final VoidCallback? onBack;
+  final bool isTeacherApp;
 
-  const CanvaBoardView({
+  const HtmlPresentView({
     super.key,
-    required this.scaleFactor,
+    this.embedUrl,
+    this.title,
+    this.scaleFactor = 1.0,
     this.initialUrl,
     this.filePath,
-    this.onBack,
+    this.isTeacherApp = false,
   });
 
+  /// 자주 쓰는 프레젠테이션/수업 사이트 URL 및 iframe 코드를 자동으로 임베드(Embed) 가능 URL로 변환
+  static String formatPresentUrl(String rawInput) {
+    var url = rawInput.trim();
+    if (url.isEmpty) return 'https://docs.google.com/presentation';
+
+    // 1. <iframe ... src="..."> 형태 코드가 붙여넣어진 경우 src 속성 자동 추출
+    if (url.contains('<iframe') || url.contains('src=')) {
+      final srcMatch = RegExp(r'''src\s*=\s*["']([^"']+)["']''', caseSensitive: false).firstMatch(url);
+      if (srcMatch != null && srcMatch.group(1) != null) {
+        url = srcMatch.group(1)!.trim();
+      }
+    }
+
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://$url';
+    }
+
+    final uri = Uri.tryParse(url);
+    final host = uri?.host.toLowerCase() ?? '';
+    final segs = uri?.pathSegments.where((e) => e.isNotEmpty).toList() ?? const <String>[];
+
+    // 2. Canva: /design/{id}/{token}/(edit|view|watch) -> /design/{id}/{token}/view?embed
+    if (host.contains('canva.com')) {
+      final di = segs.indexOf('design');
+      if (di >= 0 && segs.length >= di + 3) {
+        final id = segs[di + 1];
+        final token = segs[di + 2];
+        return 'https://www.canva.com/design/$id/$token/view?embed';
+      }
+      if (di >= 0 && segs.length == di + 2) {
+        return 'https://www.canva.com/design/${segs[di + 1]}/view?embed';
+      }
+      if (!url.contains('embed')) {
+        return url.contains('?') ? '$url&embed' : '$url?embed';
+      }
+      return url;
+    }
+
+    // 3. Google Slides / Docs / Forms
+    if (host.contains('docs.google.com')) {
+      if (url.contains('/presentation/d/')) {
+        if (url.contains('/embed') || url.contains('/pubembed')) return url;
+        final m = RegExp(r'/presentation/d/([a-zA-Z0-9_-]+)').firstMatch(url);
+        if (m != null) {
+          return 'https://docs.google.com/presentation/d/${m.group(1)}/embed?start=false&loop=false&delayms=3000';
+        }
+      }
+      if (url.contains('/document/d/') && url.contains('/edit')) {
+        return url.replaceAll(RegExp(r'/edit.*$'), '/preview');
+      }
+      if (url.contains('/spreadsheets/d/') && url.contains('/edit')) {
+        return url.replaceAll(RegExp(r'/edit.*$'), '/preview');
+      }
+      return url;
+    }
+
+    // 4. 미리캔버스 (MiriCanvas): miricanvas.com/v/{id}
+    if (host.contains('miricanvas.com')) {
+      final vi = segs.indexOf('v');
+      if (vi >= 0 && segs.length >= vi + 2) {
+        return 'https://www.miricanvas.com/v/${segs[vi + 1]}';
+      }
+      return url;
+    }
+
+    // 5. Figma (Figma Slides / Design / Proto / FigJam)
+    if (host.contains('figma.com') && !url.contains('figma.com/embed')) {
+      return 'https://www.figma.com/embed?embed_host=boardest&url=${Uri.encodeComponent(url)}';
+    }
+
+    // 6. Prezi
+    if (host.contains('prezi.com')) {
+      if (url.contains('/embed/')) return url;
+      final pi = segs.indexOf('p');
+      if (pi >= 0 && segs.length >= pi + 2 && segs[pi + 1] != 'embed') {
+        return 'https://prezi.com/p/embed/${segs[pi + 1]}/';
+      }
+      final vi = segs.indexOf('v');
+      if (vi >= 0 && segs.length >= vi + 2 && segs[vi + 1] != 'embed') {
+        final id = segs[vi + 1] == 'view' && segs.length >= vi + 3 ? segs[vi + 2] : segs[vi + 1];
+        return 'https://prezi.com/v/embed/$id/';
+      }
+      return url;
+    }
+
+    // 7. Slides.com
+    if (host.contains('slides.com') && segs.length >= 2 && segs.last != 'embed' && segs.last != 'fullscreen') {
+      return 'https://slides.com/${segs[0]}/${segs[1]}/embed';
+    }
+
+    // 8. YouTube (watch?v= / youtu.be / shorts)
+    if (host.contains('youtube.com') || host.contains('youtu.be')) {
+      if (url.contains('/embed/')) return url;
+      String? videoId = uri?.queryParameters['v'];
+      if ((videoId == null || videoId.isEmpty) && host.contains('youtu.be') && segs.isNotEmpty) {
+        videoId = segs.first;
+      } else if ((videoId == null || videoId.isEmpty) && segs.length >= 2 && (segs[0] == 'shorts' || segs[0] == 'live')) {
+        videoId = segs[1];
+      }
+      if (videoId != null && videoId.isNotEmpty) {
+        return 'https://www.youtube.com/embed/$videoId?rel=0';
+      }
+    }
+
+    // 9. Vimeo
+    if (host.contains('vimeo.com') && !host.contains('player.vimeo.com') && segs.isNotEmpty) {
+      final id = segs.last;
+      if (RegExp(r'^\d+$').hasMatch(id)) {
+        return 'https://player.vimeo.com/video/$id';
+      }
+    }
+
+    return url;
+  }
+
+  /// URL로부터 사이트 종류 감지 배지 반환
+  static String detectSiteLabel(String rawInput) {
+    final lower = rawInput.toLowerCase();
+    if (lower.contains('canva.com')) return 'Canva';
+    if (lower.contains('docs.google.com/presentation')) return 'Google Slides';
+    if (lower.contains('docs.google.com')) return 'Google Docs';
+    if (lower.contains('miricanvas.com')) return '미리캔버스';
+    if (lower.contains('figma.com')) return 'Figma';
+    if (lower.contains('prezi.com')) return 'Prezi';
+    if (lower.contains('genial.ly') || lower.contains('genially.com')) return 'Genially';
+    if (lower.contains('slides.com')) return 'Slides.com';
+    if (lower.contains('youtube.com') || lower.contains('youtu.be')) return 'YouTube';
+    if (lower.contains('padlet.com')) return 'Padlet';
+    return 'HTML Present';
+  }
+
+  // 레거시 호환용 별칭 메서드
+  static String formatCanvaEmbedUrl(String rawUrl) => formatPresentUrl(rawUrl);
+
   @override
-  State<CanvaBoardView> createState() => _CanvaBoardViewState();
+  State<HtmlPresentView> createState() => _HtmlPresentViewState();
 }
 
-class _CanvaBoardViewState extends State<CanvaBoardView> {
-  late final TextEditingController _urlController;
-  final FocusNode _keyboardFocusNode = FocusNode();
+/// 레거시 호환을 위한 CanvaBoardView 별칭
+typedef CanvaBoardView = HtmlPresentView;
 
-  WebviewController? _winWebviewController;
-  WebViewController? _androidWebController;
+class _HtmlPresentViewState extends State<HtmlPresentView> {
+  final AnnotationController _annotationController = AnnotationController();
+  final WebviewController _winWebview = WebviewController();
+  late final WebViewController _androidWebview;
+  late final TbpDhashEngine _dhashEngine;
 
-  bool _isWebviewInitialized = false;
-  String _canvaTitle = 'Canva 수업 프레젠테이션';
+  bool _isLoading = true;
+  bool _winWebviewInitialized = false;
+  String? _errorMessage;
 
-  int _currentPage = 0;
-  int _totalPages = 1;
+  String _targetUrl = '';
+  String _displayTitle = 'HTML Present';
+  String _projectKey = '';
+  String _tbpFolderPath = '';
 
-  final Map<int, List<AnnotationStroke>> _pageAnnotations = {};
-  final Map<int, AnnotationController> _pageControllers = {};
+  String _currentDhash = 'default';
+  List<Map<String, dynamic>> _currentHotspots = [];
 
-  Color _penColor = const Color(0xFF8B5CF6);
-  double _strokeWidth = 4.0;
+  // TBP 입력 모드 및 도구
+  TbpInputMode _inputMode = TbpInputMode.smart;
   ToolMode _tool = ToolMode.pen;
+  Color _penColor = const Color(0xFF00F5D4);
+  double _strokeWidth = 4.0;
   ShapeType _activeShape = ShapeType.rectangle;
-  bool _eraseEntireStroke = false;
-  double _eraserSize = 30.0;
 
-  String _selectedClassForPen = '';
+  Timer? _touchDhashTimer;
+  Timer? _autoSavePenTimer;
 
-  static const String _defaultUrl = 'https://www.canva.com';
+  bool get _isWebTouchMode =>
+      _inputMode == TbpInputMode.touch ||
+      _tool == ToolMode.pointer;
 
-  static const String _canvaJsObserver = '''
-    (function() {
-      function purgeNoise() {
-        const selectors = [
-          '[data-testid="cookie-banner"]', '[aria-label*="cookie"]', '[class*="cookieBanner"]',
-          'header', 'nav', '[data-testid="header"]', 'footer', '[class*="footer"]',
-          'button[aria-label*="Canva"]', '._cookie_banner', 'div[role="dialog"][aria-label*="Cookie"]'
-        ];
-        selectors.forEach(s => {
-          document.querySelectorAll(s).forEach(el => {
-            try {
-              el.style.display = 'none';
-              el.style.visibility = 'hidden';
-              el.style.opacity = '0';
-              el.style.pointerEvents = 'none';
-            } catch(_) {}
+  void _handleWebviewHotspotContext(double rx, double ry) {
+    if (!mounted) return;
+    if (_inputMode == TbpInputMode.pen) return;
+    TbpHotspotOverlay.showAddHotspotModal(
+      context,
+      rx.clamp(0.02, 0.98),
+      ry.clamp(0.02, 0.98),
+      _tbpFolderPath,
+      _currentDhash,
+      _currentHotspots,
+      (updated) {
+        if (mounted) {
+          setState(() {
+            _currentHotspots = updated;
           });
-        });
-
-        document.querySelectorAll('button').forEach(btn => {
-          if (btn.innerText && (btn.innerText.includes('모든 쿠키') || btn.innerText.includes('모두 허용') || btn.innerText === 'Accept all' || btn.innerText === 'Accept')) {
-            try { btn.click(); } catch(_) {}
-          }
-        });
-      }
-
-      const style = document.createElement('style');
-      style.innerHTML = `
-        header, nav, footer, [data-testid="header"], [aria-label*="cookie"], [class*="cookie"] {
-          display: none !important;
-          pointer-events: none !important;
         }
-        body, html {
-          overflow: hidden !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          background: #000000 !important;
-        }
-      `;
-      document.head.appendChild(style);
-      setInterval(purgeNoise, 500);
-      purgeNoise();
-
-      let lastPage = -1;
-      let lastTotal = -1;
-
-      function parsePageText(text) {
-          if (!text) return null;
-          let t = text.trim();
-          let m = t.match(/(\\d+)\\s*(?:\\/|of)\\s*(\\d+)/);
-          if (m) {
-              return { current: parseInt(m[1], 10), total: parseInt(m[2], 10) };
-          }
-          return null;
-      }
-
-      function checkPage() {
-          let indicators = document.querySelectorAll('[data-testid="page-indicator"], .slide-counter, [class*="pageNum"]');
-          let parsed = null;
-          for (let i = 0; i < indicators.length; i++) {
-              let res = parsePageText(indicators[i].innerText);
-              if (res) {
-                  parsed = res;
-                  break;
-              }
-          }
-          
-          if (!parsed) {
-              let all = document.querySelectorAll('*');
-              for (let i = 0; i < all.length; i++) {
-                  if (all[i].children.length === 0 && all[i].innerText) {
-                      let res = parsePageText(all[i].innerText);
-                      if (res) {
-                          parsed = res;
-                          break;
-                      }
-                  }
-              }
-          }
-
-          if (parsed && (parsed.current !== lastPage || parsed.total !== lastTotal)) {
-              lastPage = parsed.current;
-              lastTotal = parsed.total;
-              let msg = JSON.stringify({ type: 'canva_page', page: parsed.current, total: parsed.total });
-              if (window.chrome && window.chrome.webview && window.chrome.webview.postMessage) {
-                  window.chrome.webview.postMessage(msg);
-              } else if (window.TbpChannel && window.TbpChannel.postMessage) {
-                  window.TbpChannel.postMessage(msg);
-              }
-          }
-      }
-
-      const observer = new MutationObserver((mutations) => {
-          checkPage();
-      });
-      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-      setInterval(checkPage, 500);
-    })();
-  ''';
+      },
+    );
+  }
 
   @override
   void initState() {
     super.initState();
-    _loadEraserPrefs();
-
-    String targetUrl = widget.initialUrl ?? _defaultUrl;
-
-    if (widget.filePath != null && widget.filePath!.isNotEmpty) {
-      try {
-        final file = File(widget.filePath!);
-        if (file.existsSync()) {
-          final content = file.readAsStringSync();
-          final data = jsonDecode(content);
-          if (data['embedUrl'] != null)
-            targetUrl = data['embedUrl'];
-          else if (data['url'] != null)
-            targetUrl = data['url'];
-          if (data['title'] != null) _canvaTitle = data['title'];
-        }
-      } catch (e) {
-        debugPrint('[CanvaBoardView] .BSTcanva parse error: $e');
-      }
-    }
-
-    _urlController = TextEditingController(text: targetUrl);
-    _loadDiskAnnotations();
-
-    if (Platform.isWindows) {
-      _initWindowsWebview();
-    } else if (Platform.isAndroid) {
-      _initAndroidWebview();
-    }
+    _displayTitle = widget.title ?? 'HTML Present';
+    _dhashEngine = TbpDhashEngine(onDhashChanged: _onDhashDetected);
+    _annotationController.activeColor = _penColor;
+    _annotationController.activeWidth = _strokeWidth;
+    _annotationController.activeShape = _activeShape;
+    _annotationController.addListener(_onAnnotationChanged);
+    _initProjectAndWebview();
   }
 
-  Future<void> _loadEraserPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final s = await StorageService().getSettings();
-    if (!mounted) return;
-    setState(() {
-      _selectedClassForPen = '${s.selectedGrade}학년 ${s.selectedClass}반';
-      _eraseEntireStroke = prefs.getBool('whiteboard_erase_entire') ?? false;
-      _eraserSize = prefs.getDouble('whiteboard_eraser_size') ?? 30.0;
-    });
+  void _onAnnotationChanged() {
+    _scheduleAutoSavePenStrokes();
   }
 
-  Future<void> _loadDiskAnnotations() async {
-    final loaded = await AnnotationStorageService.instance
-        .loadDocumentAnnotations(
-          'CANVA',
-          _canvaTitle,
-          fullFilePath: widget.filePath ?? _urlController.text,
-          className: _selectedClassForPen,
-        );
-    if (mounted) {
-      setState(() {
-        _pageAnnotations.clear();
-        _pageAnnotations.addAll(loaded);
-      });
-    }
-  }
-
-  Future<void> _saveAllAnnotations() async {
-    final metadata = {
-      'title': _canvaTitle,
-      'url': _urlController.text,
-      'lastPage': _currentPage,
-      'totalPages': _totalPages,
-      'updatedAt': DateTime.now().toIso8601String(),
-    };
-    await AnnotationStorageService.instance.saveDocumentAnnotations(
-      'CANVA',
-      _canvaTitle,
-      metadata,
-      _pageAnnotations,
-      fullFilePath: widget.filePath ?? _urlController.text,
-      className: _selectedClassForPen,
-    );
-  }
-
-  Future<void> _exportCanvaPackage() async {
+  String _extractUrlFromRawContent(String content) {
+    final trimmed = content.trim();
+    if (trimmed.isEmpty) return '';
     try {
-      await _saveAllAnnotations();
-
-      final result = await SaveDestinationDialog.show(
-        context: context,
-        scaleFactor: widget.scaleFactor,
-      );
-
-      if (result == null) return;
-
-      final canvaDir = Directory(
-        '${result.targetDirectory.path}/BstSave/CANVA',
-      );
-      if (!canvaDir.existsSync()) canvaDir.createSync(recursive: true);
-
-      final sanitizedTitle = _canvaTitle.replaceAll(
-        RegExp(r'[\\/:*?"<>|]'),
-        '_',
-      );
-      final fileName = '$sanitizedTitle.BSTcanva';
-      final file = File('${canvaDir.path}/$fileName');
-
-      final jsonContent = jsonEncode({
-        'version': 1,
-        'title': _canvaTitle,
-        'embedUrl': _convertCanvaEmbedUrl(_urlController.text),
-      });
-
-      await file.writeAsString(jsonContent, flush: true);
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('🎉 [$fileName] 패키지가 저장되었습니다!')));
+      final parsed = jsonDecode(trimmed) as Map<String, dynamic>;
+      if (parsed['title'] != null && parsed['title'].toString().trim().isNotEmpty && widget.title == null) {
+        _displayTitle = parsed['title'].toString().trim();
       }
-    } catch (e) {
-      debugPrint('[CanvaBoardView] export .BSTcanva error: $e');
-    }
-  }
-
-  AnnotationController _getOrCreateController(int pageIndex) {
-    return _pageControllers.putIfAbsent(pageIndex, () {
-      final ctrl = AnnotationController();
-      ctrl.toolMode = _tool;
-      ctrl.activeColor = _penColor;
-      ctrl.activeWidth = _strokeWidth;
-      ctrl.eraseEntireStroke = _eraseEntireStroke;
-      ctrl.eraserSize = _eraserSize;
-
-      final existing = _pageAnnotations[pageIndex];
-      if (existing != null && existing.isNotEmpty) {
-        ctrl.strokes.addAll(existing);
+      return (parsed['embedUrl'] ?? parsed['url'] ?? parsed['webUrl'] ?? parsed['canvaUrl'] ?? parsed['link'] ?? '').toString().trim();
+    } catch (_) {
+      if (trimmed.startsWith('http') || trimmed.contains('<iframe')) {
+        return trimmed;
       }
-
-      ctrl.addListener(() {
-        _pageAnnotations[pageIndex] = List<AnnotationStroke>.from(ctrl.strokes);
-        unawaited(_saveAllAnnotations());
-        if (mounted) setState(() {});
-      });
-
-      return ctrl;
-    });
-  }
-
-  void _syncAllControllers() {
-    for (final ctrl in _pageControllers.values) {
-      ctrl.toolMode = _tool;
-      ctrl.activeColor = _penColor;
-      ctrl.activeWidth = _strokeWidth;
-      ctrl.eraseEntireStroke = _eraseEntireStroke;
-      ctrl.eraserSize = _eraserSize;
     }
+    return '';
   }
 
-  void _handleWebMessage(String message) {
+  Future<void> _initProjectAndWebview() async {
     try {
-      final data = jsonDecode(message);
-      if (data['type'] == 'canva_page') {
-        int newPage = data['page'] - 1; // Convert to 0-indexed for internal use
-        if (newPage < 0) newPage = 0;
-        int total = data['total'];
+      var rawUrl = (widget.embedUrl ?? widget.initialUrl ?? '').trim();
 
-        if (newPage != _currentPage || total != _totalPages) {
-          _onPageChangedFromCanva(newPage, total);
+      // 파일 경로에서 URL 읽기 지원
+      if (rawUrl.isEmpty && widget.filePath != null && widget.filePath!.isNotEmpty) {
+        final fp = widget.filePath!.trim();
+        if (fp.startsWith('http://') || fp.startsWith('https://') || fp.contains('<iframe')) {
+          rawUrl = fp;
+        } else if (!kIsWeb) {
+          try {
+            final f = File(fp);
+            if (await f.exists()) {
+              final content = await f.readAsString();
+              rawUrl = _extractUrlFromRawContent(content);
+            }
+          } catch (_) {}
         }
       }
-    } catch (e) {
-      // Ignore JSON parse errors
-    }
-  }
 
-  void _onPageChangedFromCanva(int newPage, int newTotal) async {
-    if (_currentPage != newPage) {
-      await _saveAllAnnotations();
-      if (mounted) {
+      if (rawUrl.isEmpty) {
         setState(() {
-          _currentPage = newPage;
-          _totalPages = newTotal;
+          _errorMessage = '프레젠테이션 URL을 찾을 수 없습니다. 올바른 .HTMLP 파일 또는 URL을 열어주세요.';
+          _isLoading = false;
         });
+        return;
       }
-    } else if (_totalPages != newTotal) {
+
+      _targetUrl = HtmlPresentView.formatPresentUrl(rawUrl);
+
+      // 프로젝트 고유 식별키 생성 (URL 해시 기반)
+      final safeUrlKey = _targetUrl.replaceAll(RegExp(r'[^\w-]'), '_');
+      _projectKey = 'html_present_${safeUrlKey.length > 32 ? safeUrlKey.substring(0, 32) : safeUrlKey}';
+
+      // TBP 가상 프로젝트 등록 (Dhash별 판서 및 핫스팟 보관용)
+      _tbpFolderPath = await TbpStorageService.instance.registerCreatedTbpProject(
+        meta: {
+          'title': _displayTitle,
+          'folderId': _projectKey,
+          'webUrl': _targetUrl,
+          'scopeKey': 'HTMLP',
+          'createdAt': DateTime.now().toIso8601String(),
+        },
+        localDirPath: kIsWeb ? 'web://tbp/$_projectKey' : null,
+      );
+
+      // 초기 Dhash ('default') 핫스팟 및 판서 스트로크 로드
+      _currentHotspots = await TbpStorageService.instance.loadHotspots(_tbpFolderPath, _currentDhash);
+      final initialStrokes = await TbpStorageService.instance.loadPenStrokes(_tbpFolderPath, _currentDhash);
+      _annotationController.strokes.clear();
+      _annotationController.strokes.addAll(initialStrokes);
+
+      if (kIsWeb) {
+        if (mounted) setState(() => _isLoading = false);
+        _dhashEngine.startTracker(null, null);
+        return;
+      } else if (Platform.isWindows) {
+        await _initWindowsWebview(_targetUrl);
+      } else {
+        _initAndroidWebview(_targetUrl);
+      }
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+
+      _dhashEngine.startTracker(
+        _winWebviewInitialized ? _winWebview : null,
+        Platform.isWindows ? null : _androidWebview,
+      );
+    } catch (e) {
       if (mounted) {
         setState(() {
-          _totalPages = newTotal;
+          _errorMessage = 'HTML Present 로딩 중 오류 발생: $e';
+          _isLoading = false;
         });
       }
     }
   }
 
-  Future<void> _initWindowsWebview() async {
+  Future<void> _initWindowsWebview(String url) async {
     try {
-      _winWebviewController = WebviewController();
-      await _winWebviewController!.initialize();
+      await _winWebview.initialize();
+      await _winWebview.setBackgroundColor(Colors.transparent);
+      await _winWebview.loadUrl(url);
 
-      _winWebviewController!.webMessage.listen((msg) {
-        if (msg.isNotEmpty) {
-          _handleWebMessage(msg);
-        }
+      _winWebview.webMessage.listen((message) {
+        try {
+          _dhashEngine.onDhashMessage(message);
+          final data = jsonDecode(message);
+          if (data['type'] == 'downloadRequest') {
+            if (mounted) {
+              TbpDownloadInterceptor.instance.handleDownload(
+                context: context,
+                tbpFolderPath: _tbpFolderPath,
+                currentDhash: _currentDhash,
+                downloadUrl: data['url'],
+                filename: data['filename'],
+                scaleFactor: widget.scaleFactor,
+              );
+            }
+          }
+        } catch (_) {}
       });
 
-      _winWebviewController!.url.listen((url) {
-        if (mounted) setState(() => _urlController.text = url);
-      });
-      await _winWebviewController!.loadUrl(
-        _convertCanvaEmbedUrl(_urlController.text),
-      );
-      await _winWebviewController!.executeScript(_canvaJsObserver);
-      if (mounted) setState(() => _isWebviewInitialized = true);
+      if (mounted) {
+        setState(() {
+          _winWebviewInitialized = true;
+        });
+      }
     } catch (e) {
-      debugPrint('[CanvaBoardView] Windows WebView init error: $e');
+      debugPrint('[HtmlPresentView] Windows webview init error: $e');
     }
   }
 
-  void _initAndroidWebview() {
-    _androidWebController = WebViewController()
+  void _initAndroidWebview(String url) {
+    _androidWebview = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..addJavaScriptChannel(
         'TbpChannel',
-        onMessageReceived: (msg) {
-          _handleWebMessage(msg.message);
+        onMessageReceived: (JavaScriptMessage msg) {
+          try {
+            _dhashEngine.onDhashMessage(msg.message);
+          } catch (_) {}
         },
       )
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageFinished: (url) {
-            _androidWebController?.runJavaScript(_canvaJsObserver);
-          },
-        ),
-      )
-      ..loadRequest(Uri.parse(_convertCanvaEmbedUrl(_urlController.text)));
-    setState(() => _isWebviewInitialized = true);
+      ..loadRequest(Uri.parse(url));
   }
 
-  static String formatCanvaEmbedUrl(String rawUrl) {
-    var url = rawUrl.trim();
-    if (url.isEmpty) return 'https://www.canva.com/design/DAGXxxx/watch?embed';
-    if (!url.startsWith('http')) url = 'https://\$url';
-
-    if (url.contains('canva.com')) {
-      final base = url.split('?')[0];
-      if (base.endsWith('/view') ||
-          base.endsWith('/edit') ||
-          base.endsWith('/watch') ||
-          base.endsWith('/present')) {
-        final cleanBase = base.substring(0, base.lastIndexOf('/'));
-        return '\$cleanBase/watch?embed';
+  void _scheduleAutoSavePenStrokes() {
+    _autoSavePenTimer?.cancel();
+    _autoSavePenTimer = Timer(const Duration(milliseconds: 800), () async {
+      if (!mounted) return;
+      try {
+        await TbpStorageService.instance.savePenStrokes(
+          _tbpFolderPath,
+          _currentDhash,
+          _annotationController.strokes,
+        );
+        debugPrint('[HtmlPresentView] Auto-saved pen strokes for dhash: $_currentDhash');
+      } catch (e) {
+        debugPrint('[HtmlPresentView] Auto-save pen strokes error: $e');
       }
-      if (!base.endsWith('?embed')) {
-        return '\$base/watch?embed';
+    });
+  }
+
+  void _onDhashDetected(String dHash) async {
+    if (dHash.isEmpty || dHash == _currentDhash) return;
+
+    final prevDhash = _currentDhash;
+    final prevStrokes = List<AnnotationStroke>.from(_annotationController.strokes);
+    final prevHotspots = List<Map<String, dynamic>>.from(_currentHotspots);
+
+    // 이전 페이지 판서 자동 저장
+    if (_tbpFolderPath.isNotEmpty) {
+      await TbpStorageService.instance.savePenStrokes(
+        _tbpFolderPath,
+        prevDhash,
+        prevStrokes,
+      );
+    }
+
+    _currentDhash = dHash;
+    var hotspots = await TbpStorageService.instance.loadHotspots(_tbpFolderPath, dHash);
+    var strokes = await TbpStorageService.instance.loadPenStrokes(_tbpFolderPath, dHash);
+
+    if (prevDhash == 'default') {
+      if (strokes.isEmpty && prevStrokes.isNotEmpty) {
+        strokes = prevStrokes;
+        await TbpStorageService.instance.savePenStrokes(_tbpFolderPath, dHash, strokes);
+      }
+      if (hotspots.isEmpty && prevHotspots.isNotEmpty) {
+        hotspots = prevHotspots;
+        await TbpStorageService.instance.saveHotspots(_tbpFolderPath, dHash, hotspots);
       }
     }
-    return url;
-  }
 
-  String _convertCanvaEmbedUrl(String rawUrl) {
-    var url = rawUrl.trim();
-    if (url.isEmpty) return _defaultUrl;
-    if (!url.startsWith('http')) url = 'https://\$url';
-    if (url.contains('canva.com/design/') && !url.contains('view?embed')) {
-      if (url.endsWith('/view')) {
-        url = '\$url?embed';
-      } else if (!url.endsWith('/')) {
-        url = '\$url/view?embed';
-      }
-    }
-    return url;
-  }
-
-  void _navigateToUrl() {
-    final targetUrl = _convertCanvaEmbedUrl(_urlController.text);
-    if (Platform.isWindows && _winWebviewController != null) {
-      _winWebviewController!.loadUrl(targetUrl);
-      _winWebviewController!.executeScript(_canvaJsObserver);
-    } else if (Platform.isAndroid && _androidWebController != null) {
-      _androidWebController!.loadRequest(Uri.parse(targetUrl));
+    if (mounted) {
+      setState(() {
+        _currentHotspots = hotspots;
+      });
+      _annotationController.strokes.clear();
+      _annotationController.strokes.addAll(strokes);
     }
   }
 
-  void _sendPageNavSignal(bool isNext) {
-    final jsKey = isNext ? 'ArrowRight' : 'ArrowLeft';
-    final keyCode = isNext ? 39 : 37;
-    final jsCode = '''
+  void _sendVirtualKey(String key, int keyCode) {
+    final script = '''
       (function() {
-        var evt = new KeyboardEvent('keydown', { key: '\$jsKey', code: '\$jsKey', keyCode: \$keyCode, which: \$keyCode, bubbles: true, cancelable: true });
-        document.dispatchEvent(evt);
-        window.dispatchEvent(evt);
-        if (document.activeElement) document.activeElement.dispatchEvent(evt);
+        const target = document.activeElement || document.body;
+        const downEvt = new KeyboardEvent('keydown', {
+          key: '$key',
+          code: '$key',
+          keyCode: $keyCode,
+          which: $keyCode,
+          bubbles: true,
+          cancelable: true
+        });
+        target.dispatchEvent(downEvt);
+        window.dispatchEvent(downEvt);
+
+        const upEvt = new KeyboardEvent('keyup', {
+          key: '$key',
+          code: '$key',
+          keyCode: $keyCode,
+          which: $keyCode,
+          bubbles: true,
+          cancelable: true
+        });
+        target.dispatchEvent(upEvt);
+        window.dispatchEvent(upEvt);
+
+        // Fallback arrow keys for presentation frameworks (HTML Present, Slides, etc)
+        if ('$key' === 'PageDown' || '$key' === 'PageUp') {
+          const arrowKey = '$key' === 'PageDown' ? 'ArrowRight' : 'ArrowLeft';
+          const arrowCode = '$key' === 'PageDown' ? 39 : 37;
+          const aEvt = new KeyboardEvent('keydown', {
+            key: arrowKey,
+            code: arrowKey,
+            keyCode: arrowCode,
+            which: arrowCode,
+            bubbles: true,
+            cancelable: true
+          });
+          target.dispatchEvent(aEvt);
+          window.dispatchEvent(aEvt);
+        }
       })();
     ''';
-
-    if (Platform.isWindows && _winWebviewController != null) {
-      _winWebviewController!.executeScript(jsCode);
-    } else if (Platform.isAndroid && _androidWebController != null) {
-      _androidWebController!.runJavaScript(jsCode);
+    if (!kIsWeb && Platform.isWindows && _winWebviewInitialized) {
+      _winWebview.executeScript(script);
+    } else if (!kIsWeb && !Platform.isWindows) {
+      _androidWebview.runJavaScript(script);
     }
   }
 
-  void _handleKeyEvent(KeyEvent event) {
-    if (event is! KeyDownEvent) return;
-    final key = event.logicalKey;
-
-    if (key == LogicalKeyboardKey.arrowRight ||
-        key == LogicalKeyboardKey.arrowDown ||
-        key == LogicalKeyboardKey.space ||
-        key == LogicalKeyboardKey.pageDown) {
-      _sendPageNavSignal(true);
-    } else if (key == LogicalKeyboardKey.arrowLeft ||
-        key == LogicalKeyboardKey.arrowUp ||
-        key == LogicalKeyboardKey.pageUp ||
-        key == LogicalKeyboardKey.backspace) {
-      _sendPageNavSignal(false);
-    }
+  void _onPointerDown(PointerDownEvent event) {
+    _touchDhashTimer?.cancel();
+    _touchDhashTimer = Timer(const Duration(milliseconds: 450), () {
+      _dhashEngine.navigatePage(isNext: true);
+    });
   }
 
   @override
   void dispose() {
-    unawaited(_saveAllAnnotations());
-    for (final ctrl in _pageControllers.values) {
-      ctrl.dispose();
+    _annotationController.removeListener(_onAnnotationChanged);
+    _autoSavePenTimer?.cancel();
+    _touchDhashTimer?.cancel();
+    _dhashEngine.dispose();
+    if (!kIsWeb && Platform.isWindows) {
+      _winWebview.dispose();
     }
-    _urlController.dispose();
-    _keyboardFocusNode.dispose();
-    _winWebviewController?.dispose();
     super.dispose();
+  }
+
+  Widget _buildInputModeChip(TbpInputMode mode, String label, double s) {
+    final isSelected = _inputMode == mode;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16 * s),
+        onTap: () {
+          setState(() {
+            _inputMode = mode;
+            if (mode == TbpInputMode.touch) {
+              _tool = ToolMode.pointer;
+            } else if (_tool == ToolMode.pointer) {
+              _tool = ToolMode.pen;
+              _annotationController.toolMode = ToolMode.pen;
+            }
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 5 * s),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF00F5D4) : Colors.transparent,
+            borderRadius: BorderRadius.circular(16 * s),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.black : Colors.white70,
+              fontSize: 11 * s,
+              fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final scale = widget.scaleFactor;
-    final ctrl = _getOrCreateController(_currentPage);
+    final s = widget.scaleFactor;
+
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0F0E17),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: Color(0xFF00F5D4)),
+              SizedBox(height: 16),
+              Text(
+                '⚡ HTML Present 불러오는 중...',
+                style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF0F0E17),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4565), size: 48),
+              const SizedBox(height: 16),
+              Text(_errorMessage!, style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 16)),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('뒤로 가기'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final webviewWidget = kIsWeb
+        ? getIframeViewWidget('html-present-iframe-${_targetUrl.hashCode}', _targetUrl)
+        : (Platform.isWindows
+            ? (_winWebviewInitialized ? Webview(_winWebview) : const SizedBox.shrink())
+            : WebViewWidget(controller: _androidWebview));
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0E17),
-      body: KeyboardListener(
-        focusNode: _keyboardFocusNode,
-        autofocus: true,
-        onKeyEvent: _handleKeyEvent,
+      body: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: _onPointerDown,
         child: Stack(
-          fit: StackFit.expand,
           children: [
-            _buildWebView(),
-            IgnorePointer(
-              ignoring: _tool == ToolMode.pointer,
-              child: AnnotationCanvas(
-                controller: ctrl,
-                enabled: _tool != ToolMode.pointer,
+            // ── 16:9 메인 프레젠테이션 컨테이너 ──
+            Positioned.fill(
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final cWidth = constraints.maxWidth > 0 ? constraints.maxWidth : MediaQuery.of(context).size.width;
+                      final cHeight = constraints.maxHeight > 0 ? constraints.maxHeight : MediaQuery.of(context).size.height;
+
+                      void openHotspotModalAt(Offset pos) {
+                        if (_inputMode == TbpInputMode.pen) return;
+                        final rx = (pos.dx / cWidth).clamp(0.02, 0.98);
+                        final ry = (pos.dy / cHeight).clamp(0.02, 0.98);
+                        _handleWebviewHotspotContext(rx, ry);
+                      }
+
+                      return Stack(
+                        children: [
+                          // 1. Webview 메인 영역
+                          Positioned.fill(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onSecondaryTapDown: (details) {
+                                if (_inputMode != TbpInputMode.pen) {
+                                  openHotspotModalAt(details.localPosition);
+                                }
+                              },
+                              child: Listener(
+                                behavior: HitTestBehavior.translucent,
+                                onPointerDown: (e) {
+                                  if (e.buttons == 2 && _inputMode != TbpInputMode.pen) {
+                                    openHotspotModalAt(e.localPosition);
+                                  }
+                                },
+                                child: webviewWidget,
+                              ),
+                            ),
+                          ),
+
+                          // 2. 스마트 판서 캔버스 레이어
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              ignoring: _isWebTouchMode,
+                              child: AnnotationCanvas(
+                                controller: _annotationController,
+                                enabled: !_isWebTouchMode,
+                                onRightClick: _inputMode != TbpInputMode.pen ? openHotspotModalAt : null,
+                              ),
+                            ),
+                          ),
+
+                          // 3. 모듈화된 핫스팟 오버레이 핀 레이어
+                          Positioned.fill(
+                            child: TbpHotspotOverlay(
+                              hotspots: _currentHotspots,
+                              tbpFolderPath: _tbpFolderPath,
+                              currentDhash: _currentDhash,
+                              scaleFactor: widget.scaleFactor,
+                              inputMode: _inputMode,
+                              longPressActive: false,
+                              onHotspotsUpdated: (updated) {
+                                setState(() {
+                                  _currentHotspots = updated;
+                                });
+                                TbpStorageService.instance.saveHotspots(_tbpFolderPath, _currentDhash, updated);
+                              },
+                            ),
+                          ),
+
+                          // 4. 가상 슬라이드 넘기기 버튼 (좌: PgUp, 우: PgDn)
+                          Positioned(
+                            left: 12 * s,
+                            top: 0,
+                            bottom: 0,
+                            child: Center(
+                              child: PointerInterceptor(
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(24 * s),
+                                    onTap: () {
+                                      _sendVirtualKey('PageUp', 33);
+                                      _dhashEngine.navigatePage(isNext: false);
+                                    },
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF16161A).withValues(alpha: 0.75),
+                                        borderRadius: BorderRadius.circular(24 * s),
+                                        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.35),
+                                            blurRadius: 10,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.arrow_back_ios_new_rounded, size: 16 * s, color: Colors.white),
+                                          SizedBox(height: 4 * s),
+                                          Text('PgUp', style: TextStyle(color: Colors.white70, fontSize: 9 * s, fontWeight: FontWeight.bold)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          Positioned(
+                            right: 12 * s,
+                            top: 0,
+                            bottom: 0,
+                            child: Center(
+                              child: PointerInterceptor(
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(24 * s),
+                                    onTap: () {
+                                      _sendVirtualKey('PageDown', 34);
+                                      _dhashEngine.navigatePage(isNext: true);
+                                    },
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF16161A).withValues(alpha: 0.75),
+                                        borderRadius: BorderRadius.circular(24 * s),
+                                        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.35),
+                                            blurRadius: 10,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.arrow_forward_ios_rounded, size: 16 * s, color: Colors.white),
+                                          SizedBox(height: 4 * s),
+                                          Text('PgDn', style: TextStyle(color: Colors.white70, fontSize: 9 * s, fontWeight: FontWeight.bold)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
 
-            // Top UI Row
+            // ── 상단 타이틀 & 툴바 ──
             Positioned(
-              top: 16 * scale,
-              left: 16 * scale,
-              right: 16 * scale,
+              top: 12 * s,
+              left: 16 * s,
+              right: 16 * s,
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 12 * scale,
-                      vertical: 4 * scale,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF16161A).withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(12 * scale),
-                      border: Border.all(
-                        color: const Color(0xFF8B5CF6).withOpacity(0.6),
+                  PointerInterceptor(
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 14 * s, vertical: 8 * s),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF16161A).withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(24 * s),
+                        border: Border.all(color: Colors.white24),
                       ),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black54, blurRadius: 8),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.slideshow_rounded,
-                          color: Color(0xFF8B5CF6),
-                          size: 20,
-                        ),
-                        SizedBox(width: 8 * scale),
-                        Text(
-                          _canvaTitle,
-                          style: GoogleFonts.outfit(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14 * scale,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                            onPressed: () async {
+                              if (_annotationController.strokes.isNotEmpty) {
+                                await TbpStorageService.instance.savePenStrokes(
+                                  _tbpFolderPath,
+                                  _currentDhash,
+                                  _annotationController.strokes,
+                                );
+                              }
+                              if (context.mounted) Navigator.pop(context);
+                            },
                           ),
-                        ),
-                        SizedBox(width: 12 * scale),
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 8 * scale,
-                            vertical: 3 * scale,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF00F5D4).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(6 * scale),
-                            border: Border.all(
-                              color: const Color(0xFF00F5D4).withOpacity(0.4),
-                              width: 1,
-                            ),
-                          ),
-                          child: Text(
-                            _selectedClassForPen.isNotEmpty ? _selectedClassForPen : '현재 학급',
+                          SizedBox(width: 8 * s),
+                          Text(
+                            '🌐 $_displayTitle [${HtmlPresentView.detectSiteLabel(_targetUrl)}]',
                             style: GoogleFonts.notoSansKr(
-                              color: const Color(0xFF00F5D4),
-                              fontSize: 11 * scale,
+                              color: Colors.white,
                               fontWeight: FontWeight.bold,
+                              fontSize: 15 * s,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  SizedBox(width: 12 * scale),
-
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Color(0xFF8B5CF6)),
-                      backgroundColor: Colors.black54,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 12 * scale,
-                        vertical: 8 * scale,
+                        ],
                       ),
                     ),
-                    icon: const Icon(Icons.save_alt_rounded, size: 16),
-                    label: const Text('.BSTcanva 저장'),
-                    onPressed: _exportCanvaPackage,
                   ),
 
-                  SizedBox(width: 12 * scale),
-
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _tool == ToolMode.pointer
-                          ? const Color(0xFF2EC4B6)
-                          : const Color(0xFF8B5CF6),
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 12 * scale,
-                        vertical: 8 * scale,
+                  // 3모드 스위처 (마우스 / 스마트 / 주석)
+                  PointerInterceptor(
+                    child: Container(
+                      padding: EdgeInsets.all(4 * s),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF16161A).withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(20 * s),
+                        border: Border.all(color: const Color(0xFF00F5D4).withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          _buildInputModeChip(TbpInputMode.touch, '🖱️ 마우스', s),
+                          _buildInputModeChip(TbpInputMode.smart, '⚡ 스마트', s),
+                          _buildInputModeChip(TbpInputMode.pen, '✏️ 주석', s),
+                        ],
                       ),
                     ),
-                    icon: Icon(
-                      _tool == ToolMode.pointer
-                          ? Icons.mouse_rounded
-                          : Icons.edit_rounded,
-                      size: 16,
-                    ),
-                    label: Text(
-                      _tool == ToolMode.pointer ? '마우스 모드 (클릭 통과)' : '판서 모드',
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _tool = _tool == ToolMode.pointer
-                            ? ToolMode.pen
-                            : ToolMode.pointer;
-                        _syncAllControllers();
-                      });
-                    },
                   ),
 
-                  const Spacer(),
-
-                  IconButton(
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.black.withOpacity(0.7),
+                  // 이전/다음 슬라이드 & 핫스팟 추가 & .HTMLP 저장
+                  PointerInterceptor(
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 6 * s),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF16161A).withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(30 * s),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.navigate_before_rounded, color: Colors.white, size: 28),
+                            tooltip: '이전 페이지 (PgUp)',
+                            onPressed: () {
+                              _sendVirtualKey('PageUp', 33);
+                              _dhashEngine.navigatePage(isNext: false);
+                            },
+                          ),
+                          SizedBox(width: 4 * s),
+                          IconButton(
+                            icon: const Icon(Icons.navigate_next_rounded, color: Colors.white, size: 28),
+                            tooltip: '다음 페이지 (PgDn)',
+                            onPressed: () {
+                              _sendVirtualKey('PageDown', 34);
+                              _dhashEngine.navigatePage(isNext: true);
+                            },
+                          ),
+                          SizedBox(width: 8 * s),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.add_location_alt_rounded, size: 16),
+                            label: Text(
+                              '+ 핫스팟',
+                              style: GoogleFonts.notoSansKr(fontSize: 12 * s, fontWeight: FontWeight.bold),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00F5D4),
+                              foregroundColor: Colors.black,
+                              padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 8 * s),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20 * s)),
+                            ),
+                            onPressed: () {
+                              final offsetCount = _currentHotspots.length;
+                              final rx = (0.2 + (offsetCount % 5) * 0.14).clamp(0.1, 0.88);
+                              final ry = (0.22 + (offsetCount ~/ 5) * 0.14).clamp(0.15, 0.82);
+                              _handleWebviewHotspotContext(rx, ry);
+                            },
+                          ),
+                          SizedBox(width: 8 * s),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.save_rounded, size: 16),
+                            label: Text(
+                              'HTMLP 저장',
+                              style: GoogleFonts.notoSansKr(fontSize: 12 * s, fontWeight: FontWeight.bold),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF7F5AF0),
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 8 * s),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20 * s)),
+                            ),
+                            onPressed: () async {
+                              if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty) {
+                                await TbpStorageService.instance.savePenStrokes(
+                                  _tbpFolderPath,
+                                  _currentDhash,
+                                  _annotationController.strokes,
+                                );
+                              }
+                              if (!context.mounted) return;
+                              final result = await SaveDestinationDialog.show(
+                                context: context,
+                                scaleFactor: widget.scaleFactor,
+                                title: '💾 HTML Present (.HTMLP) 저장',
+                                subTitle: '프레젠테이션 파일(.HTMLP)을 어디에 저장하시겠습니까?',
+                              );
+                              if (result != null) {
+                                final safeName = _displayTitle.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+                                final fileName = safeName.toUpperCase().endsWith('.HTMLP') ? safeName : '$safeName.HTMLP';
+                                if (!kIsWeb) {
+                                  final outFile = File(p.join(result.targetDirectory.path, fileName));
+                                  await outFile.writeAsString(jsonEncode({
+                                    'type': 'boardest_html_present',
+                                    'title': _displayTitle,
+                                    'url': _targetUrl,
+                                    'embedUrl': _targetUrl,
+                                    'createdAt': DateTime.now().toIso8601String(),
+                                  }));
+                                }
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('✅ [$fileName] 파일이 저장되었습니다!'),
+                                      backgroundColor: const Color(0xFF2CB67D),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                        ],
+                      ),
                     ),
-                    icon: const Icon(Icons.close_rounded, color: Colors.white),
-                    onPressed: () {
-                      if (widget.onBack != null) {
-                        widget.onBack!();
-                      } else {
-                        Navigator.pop(context);
-                      }
-                    },
                   ),
                 ],
               ),
             ),
 
-            // Bottom UI Row
+            // ── 하단 스마트 판서 툴바 (BoardDockToolbar) ──
             Positioned(
-              bottom: 16 * scale,
-              left: 16 * scale,
-              right: 16 * scale,
+              bottom: 16 * s,
+              left: 0,
+              right: 0,
               child: Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 10 * scale,
-                        vertical: 4 * scale,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF16161A).withOpacity(0.95),
-                        borderRadius: BorderRadius.circular(20 * scale),
-                        border: Border.all(
-                          color: const Color(0xFF8B5CF6).withOpacity(0.5),
-                        ),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black54, blurRadius: 10),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(
-                              Icons.chevron_left_rounded,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                            tooltip: '이전 슬라이드 (←, PageUp)',
-                            onPressed: () => _sendPageNavSignal(false),
-                          ),
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 10 * scale,
-                              vertical: 4 * scale,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF8B5CF6).withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8 * scale),
-                            ),
-                            child: Text(
-                              '\${_currentPage + 1} / \$_totalPages',
-                              style: GoogleFonts.outfit(
-                                color: const Color(0xFF00F5D4),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13 * scale,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.chevron_right_rounded,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                            tooltip: '다음 슬라이드 (→, PageDown)',
-                            onPressed: () => _sendPageNavSignal(true),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    SizedBox(width: 12 * scale),
-
-                    BoardDockToolbar(
-                      scale: scale,
-                      tool: _tool,
-                      onToolChanged: (mode) {
-                        setState(() {
-                          _tool = mode;
-                        });
-                        _syncAllControllers();
-                      },
-                      strokeWidth: _strokeWidth,
-                      onStrokeWidthChanged: (w) {
-                        setState(() {
-                          _strokeWidth = w;
-                          if (_tool == ToolMode.pointer) _tool = ToolMode.pen;
-                        });
-                        _syncAllControllers();
-                      },
-                      penColor: _penColor,
-                      onColorChanged: (c) {
-                        setState(() {
-                          _penColor = c;
-                          if (_tool == ToolMode.pointer) _tool = ToolMode.pen;
-                        });
-                        _syncAllControllers();
-                      },
-                      activeShape: _activeShape,
-                      onShapeChanged: (s) {
-                        setState(() {
-                          _activeShape = s;
-                          _tool = ToolMode.shape;
-                        });
-                        _syncAllControllers();
-                      },
-                      onUndo: ctrl.undo,
-                      onClear: () => setState(() => ctrl.clear()),
-                      onClose: () => Navigator.pop(context),
-                      showUrlSearch: true,
-                      urlValue: _urlController.text,
-                      onUrlSubmitted: (val) {
-                        _urlController.text = val;
-                        _navigateToUrl();
-                      },
-                      onUrlRefresh: () {
-                        if (Platform.isWindows &&
-                            _winWebviewController != null) {
-                          _winWebviewController!.reload();
-                          _winWebviewController!.executeScript(
-                            _canvaJsObserver,
-                          );
-                        } else if (Platform.isAndroid &&
-                            _androidWebController != null) {
-                          _androidWebController!.reload();
+                child: PointerInterceptor(
+                  child: BoardDockToolbar(
+                    scale: widget.scaleFactor,
+                    tool: _tool,
+                    activeShape: _activeShape,
+                    onShapeChanged: (sh) {
+                      setState(() {
+                        _activeShape = sh;
+                        _annotationController.activeShape = sh;
+                      });
+                    },
+                    onToolChanged: (tool) {
+                      setState(() {
+                        _tool = tool;
+                        _annotationController.toolMode = tool;
+                        if (tool == ToolMode.pointer) {
+                          _inputMode = TbpInputMode.touch;
+                        } else if (_inputMode == TbpInputMode.touch) {
+                          _inputMode = TbpInputMode.smart;
                         }
-                      },
-                    ),
-                  ],
+                      });
+                    },
+                    penColor: _penColor,
+                    onColorChanged: (c) {
+                      setState(() {
+                        _penColor = c;
+                        _annotationController.activeColor = c;
+                      });
+                    },
+                    strokeWidth: _strokeWidth,
+                    onStrokeWidthChanged: (w) {
+                      setState(() {
+                        _strokeWidth = w;
+                        _annotationController.activeWidth = w;
+                      });
+                    },
+                    onUndo: () => _annotationController.undo(),
+                    onClear: () {
+                      _annotationController.clear();
+                      if (_tbpFolderPath.isNotEmpty) {
+                        TbpStorageService.instance.savePenStrokes(
+                          _tbpFolderPath,
+                          _currentDhash,
+                          [],
+                        );
+                      }
+                    },
+                  ),
                 ),
               ),
             ),
@@ -773,22 +1010,5 @@ class _CanvaBoardViewState extends State<CanvaBoardView> {
         ),
       ),
     );
-  }
-
-  Widget _buildWebView() {
-    if (Platform.isWindows &&
-        _isWebviewInitialized &&
-        _winWebviewController != null) {
-      return Webview(_winWebviewController!);
-    } else if (Platform.isAndroid && _androidWebController != null) {
-      return WebViewWidget(controller: _androidWebController!);
-    } else {
-      return Center(
-        child: Text(
-          '🎨 Canva 스마트 PPT 슬라이드 뷰어 로딩 중…',
-          style: GoogleFonts.notoSansKr(color: Colors.white38),
-        ),
-      );
-    }
   }
 }

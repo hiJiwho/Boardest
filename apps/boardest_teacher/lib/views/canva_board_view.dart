@@ -374,14 +374,16 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
           _dhashEngine.onDhashMessage(message);
           final data = jsonDecode(message);
           if (data['type'] == 'downloadRequest') {
-            TbpDownloadInterceptor.instance.handleDownload(
-              context: context,
-              tbpFolderPath: _tbpFolderPath,
-              currentDhash: _currentDhash,
-              downloadUrl: data['url'],
-              filename: data['filename'],
-              scaleFactor: widget.scaleFactor,
-            );
+            if (mounted) {
+              TbpDownloadInterceptor.instance.handleDownload(
+                context: context,
+                tbpFolderPath: _tbpFolderPath,
+                currentDhash: _currentDhash,
+                downloadUrl: data['url'],
+                filename: data['filename'],
+                scaleFactor: widget.scaleFactor,
+              );
+            }
           }
         } catch (_) {}
       });
@@ -895,12 +897,12 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                                       child: Container(
                                         padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF16161A).withOpacity(0.75),
+                                          color: const Color(0xFF16161A).withValues(alpha: 0.75),
                                           borderRadius: BorderRadius.circular(24 * s),
-                                          border: Border.all(color: Colors.white.withOpacity(0.22)),
+                                          border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black.withOpacity(0.35),
+                                              color: Colors.black.withValues(alpha: 0.35),
                                               blurRadius: 10,
                                             ),
                                           ],
@@ -941,12 +943,12 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                                       child: Container(
                                         padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF16161A).withOpacity(0.75),
+                                          color: const Color(0xFF16161A).withValues(alpha: 0.75),
                                           borderRadius: BorderRadius.circular(24 * s),
-                                          border: Border.all(color: Colors.white.withOpacity(0.22)),
+                                          border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black.withOpacity(0.35),
+                                              color: Colors.black.withValues(alpha: 0.35),
                                               blurRadius: 10,
                                             ),
                                           ],
@@ -985,7 +987,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                     child: Container(
                       padding: EdgeInsets.symmetric(horizontal: 22 * s, vertical: 10 * s),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF16161A).withOpacity(0.95),
+                        color: const Color(0xFF16161A).withValues(alpha: 0.95),
                         borderRadius: BorderRadius.circular(36 * s),
                         border: Border.all(color: const Color(0xFF00F5D4), width: 2),
                       ),
@@ -1031,7 +1033,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                       child: Container(
                         padding: EdgeInsets.symmetric(horizontal: 14 * s, vertical: 8 * s),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF16161A).withOpacity(0.92),
+                          color: const Color(0xFF16161A).withValues(alpha: 0.92),
                           borderRadius: BorderRadius.circular(24 * s),
                           border: Border.all(color: Colors.white24),
                         ),
@@ -1070,9 +1072,9 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                       child: Container(
                         padding: EdgeInsets.all(4 * s),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF16161A).withOpacity(0.92),
+                          color: const Color(0xFF16161A).withValues(alpha: 0.92),
                           borderRadius: BorderRadius.circular(20 * s),
-                          border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.4)),
+                          border: Border.all(color: const Color(0xFF00F5D4).withValues(alpha: 0.4)),
                         ),
                         child: Row(
                           children: [
@@ -1089,7 +1091,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                       child: Container(
                         padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 6 * s),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF16161A).withOpacity(0.92),
+                          color: const Color(0xFF16161A).withValues(alpha: 0.92),
                           borderRadius: BorderRadius.circular(30 * s),
                           border: Border.all(color: Colors.white24),
                         ),
@@ -1166,6 +1168,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                                     _annotationController.strokes,
                                   );
                                 }
+                                if (!context.mounted) return;
                                 final result = await SaveDestinationDialog.show(
                                   context: context,
                                   scaleFactor: widget.scaleFactor,
@@ -1191,7 +1194,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                                       'createdAt': DateTime.now().toIso8601String(),
                                     }));
                                   }
-                                  if (mounted) {
+                                  if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Text('✅ [$fileName] 파일이 저장되었습니다!'),

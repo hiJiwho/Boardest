@@ -55,7 +55,7 @@ class _UsbExplorerPanelState extends State<UsbExplorerPanel> {
           final settings = await StorageService().getSettings();
           final classNickname = settings.classNickname;
           String resolvedPath = widget.drivePath;
-          if (classNickname != null && classNickname.isNotEmpty) {
+          if (classNickname.isNotEmpty) {
             final liteSettings =
                 config['lite_settings'] as Map<String, dynamic>? ?? {};
             final relativePath = liteSettings[classNickname] as String?;

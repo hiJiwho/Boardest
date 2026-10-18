@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:async';
 import 'package:universal_io/io.dart';
 import 'dart:typed_data';
@@ -71,7 +71,6 @@ class _PdfBoardViewState extends State<PdfBoardView>
   double _strokeWidth = 4.0;
   ToolMode _tool = ToolMode.pen;
   ShapeType _activeShape = ShapeType.line;
-  bool _isPenDetailsOpen = false;
   bool _eraseEntireStroke = false;
   double _eraserSize = 30.0;
   String? _loadError;
@@ -79,8 +78,6 @@ class _PdfBoardViewState extends State<PdfBoardView>
   final Color _backgroundColor = const Color(0xFF161920);
   Timer? _autoSaveTimer;
 
-  // 화면 크기 피팅 스타일 (true = 화면 세로 맞춤(한눈에 보기), false = 가로 맞춤(스크롤 가능))
-  bool _fitToHeight = true;
   final ScrollController _scrollController = ScrollController();
   final TransformationController _transformationController =
       TransformationController();
@@ -130,7 +127,6 @@ class _PdfBoardViewState extends State<PdfBoardView>
   void _setTool(ToolMode mode) {
     setState(() {
       _tool = mode;
-      _isPenDetailsOpen = false;
     });
     _syncAllControllers();
   }

@@ -1,7 +1,60 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v3.10.2 (Boardest 3.10.2)** (App: v3.10.2 / Teacher: v3.10.2 / Lite: v3.10.2 / Web: v3.10.2)  
+> **현재 시스템 버전**: **v4.1.1 (Boardest 4.1.1)** (App: v4.1.1 / Teacher: v4.1.1 / Lite: v4.1.1 / Web: v4.1.1)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 v4.1.1 (2026-10-18) — 🛡️ 와치독(Watchdog) 완전 제거, 칠판 130% 고정 배율 규격화, TBP/Canva Dhash 판서 안정화 & Teacher 빌드 파이프라인 복원
+
+### 1. 🧹 와치독(Watchdog) 완전 제거 및 프로세스 라이프사이클 안정화
+- **레거시 백그라운드 와치독(`watchdog.exe`) 전면 폐지**:
+  - 앱 시작 시 백그라운드로 실행되어 프로세스 간섭 및 예기치 않은 앱 셧다운을 유발하던 `watchdog.exe` 및 소스(`watchdog.cs`)를 프로젝트 전체에서 완전 제거.
+  - CMake 및 빌드 스크립트(`build_all.ps1`, `build_release.ps1`, `run.bat`)에서 와치독 컴파일 및 파일 복사 명령 정리.
+- **인앱 업데이트 무단 강제 종료(`exit(0)`) 차단**:
+  - `UpdateService`의 `_executeInstallAndExit`에서 디버그 및 런타임 중 의도치 않은 자동 프로세스 종료를 방지하는 안전 가드 적용.
+
+### 2. 🖥️ 전자칠판 기본 배율 130% 고정 규격화
+- **기본 배율 130% (`scaleFactor = 1.30`) 확정 및 수동 변경 방지**:
+  - 대형 전자칠판 시인성 최적화를 위해 기본 배율을 130%로 고정하고 설정 화면의 배율 슬라이더를 잠금 처리하여 UI 왜곡 원천 방지.
+
+### 3. 🎨 TBP & Canva (HtmlPresent) 프레젠테이션 엔진 강화
+- **Dhash 시각적 페이지 추적 & 스마트 판서 연동 검증**:
+  - TBP 교과서 및 Canva HTML 프레젠테이션 뷰어에서 Dhash 기반 페이지 판서 상태 관리 로직 안정화.
+  - 안전한 비동기 컨텍스트 가드(`context.mounted`) 보강.
+
+### 4. 👨‍🏫 Teacher 앱 빌드 파이프라인 복원
+- **C++ 래퍼(`cpp_client_wrapper`) 누락 복구**:
+  - `apps/boardest_teacher` 빌드 시 발생하던 `C1083: core_implementations.cc` 에러 완벽 해결.
+
+---
+
+## 📌 v4.1.0 (2026-10-17) — ⚡ Worker 의존성 제거, 순정 Firebase RTDB 직결, 시원한설레임 폰트 글로벌 탑재 & 모노레포 코드 안정화
+
+### 1. 🌐 Zero-Worker Direct Cloud 아키텍처 완성
+- **Cloudflare Worker 인증 프록시 의존성 완전 제거**:
+  - 교사용 앱과 전자칠판 간의 클라우드 토큰 및 페어링 세션을 Firebase RTDB에 안전하게 직결.
+  - 네트워크 지연(Latency) 대폭 감소 및 오프라인-친화적 캐시 정책 수립.
+- **QR Passkey 토큰 캐싱 및 세션 복원 최적화**:
+  - 유효한 단기 토큰을 로컬 캐시에 안전하게 보관하여 중복 재인증 요청 차단 및 1초 미만 즉각 잠금해제 달성.
+
+### 2. 🎨 시각 UX & 타이포그래피 통일
+- **글로벌 '시원한설레임' (SiwonhanSeolreim / SEOLEIMcool.ttf) 폰트 적용**:
+  - `packages/common/google_fonts` 패키지를 로컬 오버라이드하여 전 시스템 텍스트를 고시인성 한글 폰트로 일관되게 렌더링.
+- **일과 시간표 스트립 클린 뷰 & 전용교실 가독성 향상**:
+  - 수업 진행 중 시야 분산을 막기 위해 시간표 스트립 레이아웃 정돈 및 깔끔한 간소화 모드 지원.
+
+### 3. 🛡️ 모노레포 패키지 의존성 & 코드베이스 전면 경량화
+- **공통 패키지 의존성 결함 해결 (`packages/common/bst_core`)**:
+  - `PanserPluginService`에 필요한 `http`, `path`, `universal_io` 패키지 명시적 추가.
+  - `AppSettings` 과목 연관 그룹 내 중복 원소 제거.
+- **패키지 배포 속성 표준화**:
+  - `bst_timetable`, `bst_native` 등 사내 모노레포 전용 패키지에 `publish_to: none` 적용하여 path dependency 경고 제거.
+- **교사용 라이트 (`apps/boardest_teacher_lite`) 개편 및 레거시 제거**:
+  - 7대 개편 이전의 약 400줄 미사용 레거시 탭 메서드 및 dead code 제거.
+  - 급식 지도 탭에 **'전체 급식 호출 취소'** 액션 및 실시간 호출 상태 피드백 배너 신규 탑재.
+- **정적 분석 및 코드 위생 강화**:
+  - `apps/boardest`, `apps/boardest_teacher` 내 불필요한 null 체크, dead code, 미사용 import 및 메서드 일괄 정리.
 
 ---
 

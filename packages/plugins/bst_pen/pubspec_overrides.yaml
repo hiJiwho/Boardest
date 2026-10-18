@@ -1,0 +1,4 @@
+# melos_managed_dependency_overrides: google_fonts
+dependency_overrides:
+  google_fonts:
+    path: ..\\..\\common\\google_fonts

@@ -1,6 +1,8 @@
 {
-  "region": "",
-  "schoolName": "",
-  "grade": 1,
-  "classNum": 1
+  "region": "중앙제어",
+  "schoolName": "양동중학교",
+  "schoolId": "ydm",
+  "grade": 2,
+  "classNum": 1,
+  "isSetupComplete": true
 }

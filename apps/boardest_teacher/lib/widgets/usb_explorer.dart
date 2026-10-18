@@ -226,11 +226,7 @@ class _UsbExplorerState extends State<UsbExplorer> {
 
     if (confirmed == true) {
       try {
-        if (isDir) {
-          await (entity as Directory).delete(recursive: true);
-        } else {
-          await entity.delete();
-        }
+        await entity.delete(recursive: isDir);
         await _loadDirectoryContents();
       } catch (e) {
         if (!mounted) return;
@@ -335,7 +331,6 @@ class _UsbExplorerState extends State<UsbExplorer> {
     final textColor = isDark ? Colors.white : Colors.black87;
     final textColor70 = isDark ? Colors.white70 : Colors.black54;
     final textColor60 = isDark ? Colors.white60 : Colors.black54;
-    final textColor38 = isDark ? Colors.white38 : Colors.black38;
     final textColor24 = isDark ? Colors.white24 : Colors.black26;
     final cardColor = isDark ? Colors.white.withValues(alpha: 0.02) : Colors.black.withOpacity(0.015);
     final borderColor = isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withOpacity(0.08);
@@ -479,6 +474,10 @@ class _UsbExplorerState extends State<UsbExplorer> {
                                               widget.onSyncNow!(item.path);
                                             } else if (val == 'register' && widget.onRegisterSync != null) {
                                               widget.onRegisterSync!(item.path);
+                                            } else if (val == 'move_up') {
+                                              _reorderFile(index, true);
+                                            } else if (val == 'move_down') {
+                                              _reorderFile(index, false);
                                             }
                                           },
                                           itemBuilder: (context) => [
@@ -533,6 +532,30 @@ class _UsbExplorerState extends State<UsbExplorer> {
                                                   ],
                                                 ),
                                               ),
+                                            ],
+                                            if (!isDir && _isEligibleForReorder(item)) ...[
+                                              if (index > 0 && _isEligibleForReorder(_items[index - 1]))
+                                                PopupMenuItem(
+                                                  value: 'move_up',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.arrow_upward_rounded, size: 16, color: textColor70),
+                                                      const SizedBox(width: 8),
+                                                      Text('위로 이동', style: GoogleFonts.notoSansKr(color: textColor, fontSize: 11)),
+                                                    ],
+                                                  ),
+                                                ),
+                                              if (index < _items.length - 1 && _isEligibleForReorder(_items[index + 1]))
+                                                PopupMenuItem(
+                                                  value: 'move_down',
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.arrow_downward_rounded, size: 16, color: textColor70),
+                                                      const SizedBox(width: 8),
+                                                      Text('아래로 이동', style: GoogleFonts.notoSansKr(color: textColor, fontSize: 11)),
+                                                    ],
+                                                  ),
+                                                ),
                                             ],
                                             const PopupMenuDivider(),
                                             PopupMenuItem(

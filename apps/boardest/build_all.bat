@@ -65,13 +65,6 @@ echo [3/4] Compiling C# helpers...
 set "CSC=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 
 if exist "%CSC%" (
-
-    "%CSC%" /target:exe /out:watchdog.exe watchdog.cs
-
-    if exist watchdog.exe copy /Y watchdog.exe "%WIN_SRC%\watchdog.exe"
-
-
-
     set "FRAME=C:\Windows\Microsoft.NET\Framework64\v4.0.30319"
     set "WPF=%FRAME%\WPF"
     "%CSC%" /target:winexe /out:boardest_ppt_overlay.exe /r:System.dll,System.Core.dll,"%WPF%\WindowsBase.dll","%WPF%\PresentationCore.dll","%WPF%\PresentationFramework.dll","%FRAME%\System.Xaml.dll" boardest_ppt_overlay.cs

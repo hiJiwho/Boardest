@@ -1,8 +1,8 @@
 # 🤖 Boardest Platform — Core Agent Memory & Complete System Knowledge Base
 
-> **Current Platform Version**: `3.10.2` (App: `3.10.2`, Web: `3.10.2`)  
+> **Current Platform Version**: `4.1.1` (App: `4.1.1`, Web: `4.1.1`, Teacher: `4.1.1`, Lite: `4.1.1`)  
 > **버전 관리 규격**: 버전 변경 이력 및 상세 수정 내역은 [Ver.md](file:///c:/Users/jiwho/Documents/boardest/Ver.md) 파일에 매 작업 완료 시마다 반드시 기록하여 유지합니다.
-> 🚀 **[정식 릴리즈] Boardest v3.10.2**: 2026-10-10 부로 **Boardest v3.10.2** (전고 롱-사이즈 수업도구 독, 전용교실 교과/반 표기 최적화, 3원화 통합 인증 [Web QR + 6자리 Stegano OTP + Passkey], 교사용 차세대 Cloud Drive Viewer 탑재, RTDB 보안 강화 & OAuth 시크릿 환경변수화)가 전면 적용되었습니다.
+> 🚀 **[정식 릴리즈] Boardest v4.1.1**: 2026-10-18 부로 **Boardest v4.1.1** (와치독(Watchdog) 완전 제거, 칠판 130% 고정 배율 규격화, TBP/Canva Dhash 판서 안정화, Teacher 빌드 파이프라인 C++ 래퍼 복구)가 전면 적용되었습니다.
 
 ---
 

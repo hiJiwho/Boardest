@@ -67,7 +67,7 @@ class TbpHotspotOverlay extends StatelessWidget {
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 dropdownColor: const Color(0xFF242629),
-                value: type,
+                initialValue: type,
                 style: const TextStyle(color: Colors.white),
                 items: const [
                   DropdownMenuItem(value: 'url', child: Text('🌐 외부 웹사이트 URL')),
@@ -83,16 +83,17 @@ class TbpHotspotOverlay extends StatelessWidget {
                   if (v != null) {
                     setModalState(() {
                       type = v;
-                      if (v == 'url')
+                      if (v == 'url') {
                         iconEmoji = '🔗';
-                      else if (v == 'pdf')
+                      } else if (v == 'pdf') {
                         iconEmoji = '📄';
-                      else if (v == 'hwp')
+                      } else if (v == 'hwp') {
                         iconEmoji = '📝';
-                      else if (v == 'ppt')
+                      } else if (v == 'ppt') {
                         iconEmoji = '📊';
-                      else if (v == 'vid')
+                      } else if (v == 'vid') {
                         iconEmoji = '🎬';
+                      }
                     });
                   }
                 },
@@ -256,7 +257,7 @@ class TbpHotspotOverlay extends StatelessWidget {
                             width: 44 * s,
                             height: 44 * s,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2EC4B6).withOpacity(0.95),
+                              color: const Color(0xFF2EC4B6).withValues(alpha: 0.95),
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: Colors.white,

@@ -185,7 +185,6 @@ Write-Step "Stopping any running instances of Boardest to prevent file locks..."
 try {
     Stop-Process -Name boardest -Force -ErrorAction SilentlyContinue
     Stop-Process -Name boardest_ppt_overlay -Force -ErrorAction SilentlyContinue
-    Stop-Process -Name watchdog -Force -ErrorAction SilentlyContinue
 } catch {}
 Write-Step "Running flutter build windows --release..."
 try {
@@ -199,18 +198,10 @@ try {
     }
 
     # Compile and inject the native binaries
-    Write-Step "Compiling C# Watchdog and PowerPoint Overlay..."
+    Write-Step "Compiling C# PowerPoint Overlay..."
     try {
         $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
         if (Test-Path $csc) {
-            # Compile watchdog
-            & $csc /target:exe /out:watchdog.exe watchdog.cs | Out-Null
-            if ($LASTEXITCODE -eq 0) {
-                Copy-Item "watchdog.exe" "$winSrc\watchdog.exe" -Force
-                Write-OK "Watchdog compiled and copied to build source"
-            } else {
-                Write-Warning "Watchdog compilation failed. Proceeding with existing binary."
-            }
             
             # Compile PPT overlay
             Write-Step "Compiling C# PowerPoint Overlay..."
@@ -254,10 +245,7 @@ try {
     New-Item -Path $winOutDir -ItemType Directory -Force | Out-Null
     Copy-Item "$winSrc\*" $winOutDir -Recurse -Force
 
-    # Double check watchdog.exe, boardest_ppt_overlay.exe, boardest_hwp_overlay.exe in output folder
-    if (Test-Path "watchdog.exe") {
-        Copy-Item "watchdog.exe" "$winOutDir\watchdog.exe" -Force
-    }
+    # Double check boardest_ppt_overlay.exe, boardest_hwp_overlay.exe in output folder
     if (Test-Path "boardest_ppt_overlay.exe") {
         Copy-Item "boardest_ppt_overlay.exe" "$winOutDir\boardest_ppt_overlay.exe" -Force
     }

@@ -212,7 +212,7 @@ class AppSettings {
     this.isSetupComplete = false,
     List<DDayEvent>? ddayEvents,
     this.pinnedDday,
-    this.scaleFactor = 1.5,
+    this.scaleFactor = 1.30,
     List<SystemApp>? selectedSystemApps,
     List<LauncherSlot>? launcherSlots,
     this.autoSleepEnabled = false,
@@ -283,7 +283,7 @@ class AppSettings {
 
     // 3. Loop to trim trailing digits, Roman numerals, or single characters A-Z if they act as qualifiers.
     // We preserve at least 2 characters so we don't end up stripping the entire name if it is very short.
-    while (cleaned.length > 1) {
+    while (cleaned.length > 2) {
       // Check for trailing digits (e.g. 국어1 -> 국어)
       if (RegExp(r'\d$').hasMatch(cleaned)) {
         cleaned = cleaned.substring(0, cleaned.length - 1);
@@ -294,8 +294,8 @@ class AppSettings {
         cleaned = cleaned.substring(0, cleaned.length - 1);
         continue;
       }
-      // Check for trailing single English letters A-Z (e.g. 수학A -> 수학)
-      if (RegExp(r'[A-Z]$').hasMatch(cleaned)) {
+      // Check for trailing single English letters A-Z only if acting as qualifier after Korean (e.g. 수학A -> 수학)
+      if (RegExp(r'[가-힣]').hasMatch(cleaned) && RegExp(r'[A-Z]$').hasMatch(cleaned)) {
         cleaned = cleaned.substring(0, cleaned.length - 1);
         continue;
       }
@@ -503,7 +503,7 @@ class AppSettings {
       pinnedDday: json['pinnedDday'] != null
           ? DDayEvent.fromJson(json['pinnedDday'] as Map<String, dynamic>)
           : null,
-      scaleFactor: (json['scaleFactor'] as num?)?.toDouble() ?? 1.5,
+      scaleFactor: 1.30,
       selectedSystemApps: sysApps,
       launcherSlots: loadedSlots,
       autoSleepEnabled: json['autoSleepEnabled'] as bool? ?? false,

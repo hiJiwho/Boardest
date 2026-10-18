@@ -8,9 +8,7 @@ import 'package:video_player/video_player.dart';
 import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
 
-import '../services/youtube_embed_service.dart';
 import '../widgets/save_destination_dialog.dart';
-import 'package:http/http.dart' as http;
 import '../services/universal_media_service.dart';
 
 class VideoTextOverlay {
@@ -338,13 +336,11 @@ class _VideoBoardViewState extends State<VideoBoardView> {
       final encoder = ZipEncoder();
       final zipData = encoder.encode(archive);
 
-      if (zipData != null) {
-        final savePath = p.join(
-          target.targetDirectory.path,
-          '${projectMeta['title']}.vid',
-        );
-        await File(savePath).writeAsBytes(zipData, flush: true);
-      }
+      final savePath = p.join(
+        target.targetDirectory.path,
+        '${projectMeta['title']}.vid',
+      );
+      await File(savePath).writeAsBytes(zipData, flush: true);
     } catch (e) {
       debugPrint('[VideoBoardView] Export error: $e');
     } finally {

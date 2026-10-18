@@ -65,7 +65,6 @@ Write-Status "[2/2] Building Windows release..."
 try {
     Stop-Process -Name boardest -Force -ErrorAction SilentlyContinue
     Stop-Process -Name boardest_ppt_overlay -Force -ErrorAction SilentlyContinue
-    Stop-Process -Name watchdog -Force -ErrorAction SilentlyContinue
 } catch {}
 try {
     & flutter build windows --release
@@ -84,19 +83,11 @@ try {
         $winSrc = "build\windows\runner\Release"
     }
 
-    # Compile and inject the native C# binaries (Watchdog & PowerPoint Overlay)
-    Write-Status "Compiling C# Watchdog and PowerPoint Overlay..."
+    # Compile and inject native C# PowerPoint Overlay
+    Write-Status "Compiling C# PowerPoint Overlay..."
     try {
         $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
         if (Test-Path $csc) {
-            # Compile watchdog
-            & $csc /target:exe /out:watchdog.exe watchdog.cs | Out-Null
-            if ($LASTEXITCODE -eq 0) {
-                Copy-Item "watchdog.exe" "$winSrc\watchdog.exe" -Force
-                Write-Status "Watchdog compiled and copied to build source"
-            } else {
-                Write-Error-Custom "Watchdog compilation failed. Proceeding with existing binary."
-            }
             
             # Compile PPT overlay
             & $csc /target:winexe /out:boardest_ppt_overlay.exe /lib:C:\Windows\Microsoft.NET\Framework64\v4.0.30319,C:\Windows\Microsoft.NET\Framework64\v4.0.30319\WPF /r:System.dll,System.Core.dll,WindowsBase.dll,PresentationCore.dll,PresentationFramework.dll,System.Xaml.dll boardest_ppt_overlay.cs | Out-Null

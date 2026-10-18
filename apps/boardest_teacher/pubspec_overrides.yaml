@@ -1,4 +1,4 @@
-# melos_managed_dependency_overrides: bst_auth,bst_canva,bst_cast,bst_core,bst_native,bst_pdf,bst_pen,bst_tbp,bst_timetable,bst_ui,bst_video
+# melos_managed_dependency_overrides: bst_auth,bst_canva,bst_cast,bst_core,bst_native,bst_pdf,bst_pen,bst_tbp,bst_timetable,bst_ui,bst_video,bst_cloud
 dependency_overrides:
   bst_auth:
     path: ..\\..\\packages\\common\\bst_auth
@@ -6,6 +6,8 @@ dependency_overrides:
     path: ..\\..\\packages\\plugins\\bst_canva
   bst_cast:
     path: ..\\..\\packages\\common\\bst_cast
+  bst_cloud:
+    path: ..\\..\\packages\\common\\bst_cloud
   bst_core:
     path: ..\\..\\packages\\common\\bst_core
   bst_native:

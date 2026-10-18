@@ -126,15 +126,14 @@ class _AuthViewState extends State<AuthView>
     }
 
     // 성공 → 다음 화면 결정
-    final settings = await _storageService.getSettings();
+    var settings = await _storageService.getSettings();
     if (!mounted) return;
 
-    // 임시/교실 계정으로 로그인한 경우, 설정을 자동 세팅하여 SetupWizard를 건너뛰고 Dashboard로 바로 진입하도록 보강
+    // 계정으로 로그인한 경우, 설정을 자동 세팅하여 SetupWizard를 건너뛰고 Dashboard로 바로 진입하도록 보강
     final currentUser = await _authService.getCurrentUser();
-    if (currentUser != null &&
-        currentUser.email.toLowerCase().contains('.nopw.bst')) {
-      int schoolCode = 44134; // 기본 fallback
-      int schoolId = 44134;
+    if (currentUser != null) {
+      int schoolCode = settings.selectedSchool?.code ?? 44134;
+      int schoolId = settings.selectedSchool?.id ?? 44134;
       try {
         final schools = await ComciganService().searchSchool(
           currentUser.school,
@@ -148,17 +147,17 @@ class _AuthViewState extends State<AuthView>
       final updatedSchool = School(
         id: schoolId,
         code: schoolCode,
-        name: currentUser.school,
-        region: currentUser.region,
+        name: currentUser.school.isNotEmpty ? currentUser.school : (settings.selectedSchool?.name ?? '학교'),
+        region: currentUser.region.isNotEmpty ? currentUser.region : (settings.selectedSchool?.region ?? '서울'),
       );
 
-      final updatedSettings = settings.copyWith(
+      settings = settings.copyWith(
         isSetupComplete: true,
         selectedSchool: updatedSchool,
-        selectedGrade: currentUser.grade,
-        selectedClass: currentUser.classNum,
+        selectedGrade: currentUser.grade > 0 ? currentUser.grade : settings.selectedGrade,
+        selectedClass: currentUser.classNum > 0 ? currentUser.classNum : settings.selectedClass,
       );
-      await _storageService.saveSettings(updatedSettings);
+      await _storageService.saveSettings(settings);
     }
 
     if (settings.isSetupComplete &&

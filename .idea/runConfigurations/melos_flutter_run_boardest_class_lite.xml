@@ -1,0 +1,6 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Flutter Run -&gt; 'boardest_class_lite'" type="FlutterRunConfigurationType" factoryName="Flutter">
+    <option name="filePath" value="$PROJECT_DIR$/apps\\boardest_class_lite\lib\main.dart" />
+    <method v="2" />
+  </configuration>
+</component>

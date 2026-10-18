@@ -24,8 +24,8 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
   final TextEditingController _targetDirController = TextEditingController();
 
   int _grade = 3;
-  int _classNum = 1;
-  bool _isSpecialRoom = false;
+  final int _classNum = 1;
+  final bool _isSpecialRoom = false;
   bool _isCreating = false;
   String? _errorMessage;
 
@@ -147,10 +147,10 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
         decoration: BoxDecoration(
           color: const Color(0xFF16161A),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withOpacity(0.08), width: 1.5),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1.5),
           boxShadow: [
             BoxShadow(
-              color: accentColor.withOpacity(0.15),
+              color: accentColor.withValues(alpha: 0.15),
               blurRadius: 40,
               spreadRadius: 4,
             ),
@@ -168,7 +168,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: accentColor.withOpacity(0.15),
+                        color: accentColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
@@ -194,7 +194,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEF4565).withOpacity(0.1),
+                      color: const Color(0xFFEF4565).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -245,7 +245,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
                 _buildLabel('대상 학년'),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<int>(
-                  value: _grade,
+                  initialValue: _grade,
                   dropdownColor: const Color(0xFF1E1E24),
                   style: GoogleFonts.notoSansKr(
                     color: Colors.white,
@@ -355,16 +355,16 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
     return InputDecoration(
       hintText: hint,
       hintStyle: GoogleFonts.notoSansKr(color: Colors.white24, fontSize: 12),
-      fillColor: Colors.white.withOpacity(0.04),
+      fillColor: Colors.white.withValues(alpha: 0.04),
       filled: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
       ),
     );
   }

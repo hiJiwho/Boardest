@@ -49,12 +49,12 @@ class BoardDockToolbar extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 8 * s),
       decoration: BoxDecoration(
-        color: const Color(0xFF16161A).withOpacity(0.95),
+        color: const Color(0xFF16161A).withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(30 * s),
-        border: Border.all(color: Colors.white.withOpacity(0.12), width: 1.5),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
+            color: Colors.black.withValues(alpha: 0.4),
             blurRadius: 20 * s,
             offset: Offset(0, 8 * s),
           ),

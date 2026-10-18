@@ -44,17 +44,14 @@ if %errorlevel% neq 0 (
     echo.
     echo [SUCCESS] Windows build completed! (build\windows\x64\runner\Release)
     if exist "build\windows\x64\runner\Release" (
-        copy /Y watchdog.exe "build\windows\x64\runner\Release\watchdog.exe" >nul 2>&1
         copy /Y boardest_ppt_overlay.exe "build\windows\x64\runner\Release\boardest_ppt_overlay.exe" >nul 2>&1
         copy /Y boardest_ppt_helper.exe "build\windows\x64\runner\Release\boardest_ppt_helper.exe" >nul 2>&1
     )
     if exist "build\windows\runner\Release" (
-        copy /Y watchdog.exe "build\windows\runner\Release\watchdog.exe" >nul 2>&1
         copy /Y boardest_ppt_overlay.exe "build\windows\runner\Release\boardest_ppt_overlay.exe" >nul 2>&1
         copy /Y boardest_ppt_helper.exe "build\windows\runner\Release\boardest_ppt_helper.exe" >nul 2>&1
     )
     if not exist "build\outputs\windows\Release" mkdir "build\outputs\windows\Release"
-    copy /Y watchdog.exe "build\outputs\windows\Release\watchdog.exe" >nul 2>&1
     copy /Y boardest_ppt_overlay.exe "build\outputs\windows\Release\boardest_ppt_overlay.exe" >nul 2>&1
     copy /Y boardest_ppt_helper.exe "build\outputs\windows\Release\boardest_ppt_helper.exe" >nul 2>&1
 )
@@ -148,7 +145,6 @@ echo ==================================================
 :: Create debug directories beforehand if possible, so helpers can be copied
 if not exist "build\windows\x64\runner\Debug" mkdir "build\windows\x64\runner\Debug" 2>nul
 if exist "build\windows\x64\runner\Debug" (
-    copy /Y watchdog.exe "build\windows\x64\runner\Debug\watchdog.exe" >nul 2>&1
     copy /Y boardest_ppt_overlay.exe "build\windows\x64\runner\Debug\boardest_ppt_overlay.exe" >nul 2>&1
     copy /Y boardest_ppt_helper.exe "build\windows\x64\runner\Debug\boardest_ppt_helper.exe" >nul 2>&1
 )
@@ -210,9 +206,6 @@ goto run_apk_on_emu
 :compile_helpers
 set "CSC=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 if exist "%CSC%" (
-    echo Compiling watchdog.cs...
-    "%CSC%" /target:exe /out:watchdog.exe watchdog.cs >nul 2>&1
-    
     echo Compiling boardest_ppt_overlay.cs...
     set "FRAME=C:\Windows\Microsoft.NET\Framework64\v4.0.30319"
     set "WPF=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\WPF"

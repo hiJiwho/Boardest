@@ -5134,7 +5134,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         final secret = await BstCloudService.instance.getTrustedSecret(teacher.ownerEmail);
         if (secret == null || secret.isEmpty) continue;
 
-        debugPrint('[AutoLessonFlow] 🔔 Period ${active.period} (${currentLesson.subject}) started! Checking PPT for teacher ${teacher.teacherName}');
+        debugPrint('[AutoLessonFlow] 🔔 Period ${active.period} (${currentLesson.subject}) started! Teacher: ${teacher.teacherName}');
 
         final authRes = await BstCloudService.instance.autoAuthenticateWithTrustedSecret(
           teacher: teacher,
@@ -5142,47 +5142,17 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         );
 
         if (authRes.success && authRes.accessToken != null) {
-          final classroomStr = '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
-          // 1. 직전 수업 종료 시점의 상태(페이지 번호, 파일 등) 복원 시도
-          final lastState = await BstCloudService.instance.getLatestLessonSessionState(
-            teacherEmail: teacher.ownerEmail,
-            classroomName: classroomStr,
-          );
-
-          if (lastState != null && lastState['fileName'] != null && (lastState['fileName'] as String).isNotEmpty) {
-            final restoreFile = BstCloudFile(
-              id: lastState['fileId'] ?? '',
-              name: lastState['fileName'] ?? '',
-              mimeType: 'application/octet-stream',
-            );
-            final pageIdx = lastState['pageIndex'] as int? ?? 1;
-            debugPrint('[AutoLessonFlow] 🔄 Restoring exact prior lesson state: ${restoreFile.name} at page $pageIdx');
-            _openCloudPresentation(restoreFile, teacher, initialPage: pageIdx);
-            break;
+          // 보안상 학생 앞 자동 파일 열기 제거 -> 최신 본 폴더(수업 자료 탭)가 화면에 뜨도록만 처리
+          BstCloudService.instance.activeToken = authRes.accessToken;
+          if (mounted) {
+            setState(() {
+              _hideCloudPanel = false;
+              _cloudCategoryFilter = 'lesson'; // 최신 수업 자료 폴더 표시
+            });
+            _refreshCloudFiles();
           }
-
-          // 2. 직전 상태가 없는 경우 과목/교시 매칭
-          final files = await BstCloudService.instance.fetchBstCloudFiles(teacher);
-          final stem = AppSettings.getSubjectStem(currentLesson.subject);
-          final matches = files.where((f) {
-            final lower = f.name.toLowerCase();
-            final matchesSubject = lower.contains(currentLesson.subject.toLowerCase()) ||
-                                   (stem.isNotEmpty && lower.contains(stem.toLowerCase())) ||
-                                   lower.contains('${active.period}교시') ||
-                                   lower.contains('${_settings.selectedGrade}-${_settings.selectedClass}');
-            final isSupportedExt = lower.endsWith('.pptx') || lower.endsWith('.ppt') ||
-                                   lower.endsWith('.tbp') || lower.endsWith('.bsttbp') ||
-                                   lower.endsWith('.canva') || lower.endsWith('.bstcanva') ||
-                                   lower.endsWith('.pdf') || lower.endsWith('.hwp') || lower.endsWith('.hwpx');
-            return matchesSubject && isSupportedExt;
-          }).toList();
-
-          if (matches.isNotEmpty) {
-            final targetFile = matches.first;
-            debugPrint('[AutoLessonFlow] 🎬 Auto-launching lesson presentation: ${targetFile.name}');
-            _openCloudPresentation(targetFile, teacher);
-            break;
-          }
+          debugPrint('[AutoLessonFlow] 📂 수업 시작: 자동 파일 실행 대신 최신 수업 자료 폴더를 열었습니다.');
+          break;
         }
       }
     } catch (e) {
@@ -7396,6 +7366,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             _isVerifyingOtp = false;
             _otpErrorMsg = null;
             _refreshCloudFiles();
+            _startCloudSessionTimer();
           });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -7442,6 +7413,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             _isVerifyingOtp = false;
             _otpErrorMsg = null;
             _refreshCloudFiles();
+            _startCloudSessionTimer();
           });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -7992,6 +7964,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         if (mounted) {
           setState(() {
             _hideCloudPanel = false;
+            _cloudCategoryFilter = 'lesson';
           });
           _refreshCloudFiles();
         }
@@ -10404,8 +10377,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (ctx) => CanvaOverlayView(
-                canvaId: canvaId,
+              builder: (ctx) => HtmlPresentView(
+                embedUrl: canvaId,
                 title: title,
                 scaleFactor: _settings.scaleFactor,
               ),
@@ -16524,18 +16497,22 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   }
 
   void _openCanvaBoard({String? url, String? filePath}) {
+    if (filePath != null && filePath.isNotEmpty) {
+      _pushBoardRoute(HtmlPresentView(filePath: filePath, scaleFactor: _settings.scaleFactor));
+      return;
+    }
     final controller = TextEditingController(text: url ?? '');
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF16161A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('웹/교안 URL 입력 (.BSTcanva)', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text('프레젠테이션/웹 URL 입력 (.HTMLP)', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
         content: TextField(
           controller: controller,
           style: GoogleFonts.notoSansKr(color: Colors.white),
           decoration: InputDecoration(
-            hintText: 'https://...',
+            hintText: 'Canva, Google Slides, 미리캔버스, YouTube, URL...',
             hintStyle: GoogleFonts.notoSansKr(color: Colors.white38),
             enabledBorder: OutlineInputBorder(borderSide: const BorderSide(color: Color(0xFF7F5AF0)), borderRadius: BorderRadius.circular(10)),
             focusedBorder: OutlineInputBorder(borderSide: const BorderSide(color: Color(0xFF00F5D4), width: 2), borderRadius: BorderRadius.circular(10)),
@@ -16549,7 +16526,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               final targetUrl = controller.text.trim();
               Navigator.pop(ctx);
               if (targetUrl.isNotEmpty) {
-                _pushBoardRoute(WebsiteBoardView(initialUrl: targetUrl, scaleFactor: _settings.scaleFactor));
+                _pushBoardRoute(HtmlPresentView(initialUrl: targetUrl, scaleFactor: _settings.scaleFactor));
               }
             },
             child: Text('열기', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),

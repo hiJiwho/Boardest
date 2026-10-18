@@ -83,7 +83,6 @@ class _SaveDestinationDialogState extends State<SaveDestinationDialog> {
   Widget build(BuildContext context) {
     final s = widget.scaleFactor;
     final primaryColor = Theme.of(context).primaryColor;
-    final isSignedIn = true;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -149,7 +148,7 @@ class _SaveDestinationDialogState extends State<SaveDestinationDialog> {
                 icon: Icons.cloud_done_rounded,
                 color: const Color(0xFFFF8906),
                 title: '☁️ BST-Cloud (구글 드라이브 클라우드)',
-                subtitle: isSignedIn ? 'Google Cloud 연동 완료' : '구글 로그인 완료 상태 (자동 동기화)',
+                subtitle: 'Google Cloud 연동 완료 (자동 동기화)',
                 onTap: () {
                   if (_localDir != null) {
                     Navigator.pop(context, SaveTargetResult(type: SaveTargetType.cloud, targetDirectory: _localDir!));

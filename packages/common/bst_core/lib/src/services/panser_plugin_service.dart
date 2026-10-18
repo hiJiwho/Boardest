@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -108,11 +107,11 @@ class PanserPluginService {
       client.close();
       debugPrint('[PanserPlugin] Download complete. Installing package: $appxPath');
 
-      // Install using Add-AppxPackage
+      // Install using Add-AppxPackage (do not use -ForceApplicationShutdown to prevent killing active app)
       final installRes = await Process.run('powershell.exe', [
         '-NoProfile',
         '-Command',
-        'Add-AppxPackage -Path "$appxPath" -ForceApplicationShutdown'
+        'Add-AppxPackage -Path "$appxPath"'
       ]);
 
       if (installRes.exitCode == 0) {
@@ -147,7 +146,7 @@ class PanserPluginService {
 
   /// Check if the addon is installed on app startup; if not, automatically download and install it.
   static Future<void> checkAndAutoInstallOnStartup({void Function(String message)? onStatus}) async {
-    if (kIsWeb || !Platform.isWindows) return;
+    if (kDebugMode || kIsWeb || !Platform.isWindows) return;
     if (_autoInstallStarted) return;
     _autoInstallStarted = true;
 

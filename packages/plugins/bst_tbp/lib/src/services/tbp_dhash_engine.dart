@@ -179,7 +179,9 @@ class TbpDhashEngine {
   /// boadbook 동일 지수 버스트 캡처
   void _triggerBurstCapture() {
     // 기존 버스트 타이머 취소
-    for (final t in _burstTimers) t.cancel();
+    for (final t in _burstTimers) {
+      t.cancel();
+    }
     _burstTimers.clear();
 
     for (final ms in _burstDelaysMs) {
@@ -235,7 +237,9 @@ class TbpDhashEngine {
     _disposed = true;
     _focusPollingTimer?.cancel();
     _fallbackPollingTimer?.cancel();
-    for (final t in _burstTimers) t.cancel();
+    for (final t in _burstTimers) {
+      t.cancel();
+    }
     _burstTimers.clear();
   }
 

@@ -33,22 +33,6 @@ class _YoutubeBoardViewState extends State<YoutubeBoardView> {
   bool _isWebviewInitialized = false;
   String _currentVideoUrl = 'https://www.youtube.com';
   String _playlistTitle = '수업 영상 시청';
-  bool _useEmbedPlayer = true;
-
-  void _toggleCleanViewMode() {
-    setState(() {
-      _useEmbedPlayer = !_useEmbedPlayer;
-    });
-    if (_useEmbedPlayer) {
-      _loadUrl(YouTubeEmbedService.convertToEmbedUrl(_currentVideoUrl));
-    } else {
-      final videoId = YouTubeEmbedService.extractVideoId(_currentVideoUrl);
-      final cleanWatchUrl = videoId != null
-          ? 'https://www.youtube.com/watch?v=$videoId'
-          : _currentVideoUrl;
-      _loadUrl(cleanWatchUrl);
-    }
-  }
 
   static const String _cleanYoutubeCss = '''
     /* 검색창, 사이드바, 알고리즘, 헤더/푸터 및 광고 완전 제거 */

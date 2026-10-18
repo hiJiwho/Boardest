@@ -45,7 +45,6 @@ add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/../../boardest_hwp_overlay.exe" "$<TARGET_FILE_DIR:${BINARY_NAME}>"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/../../boardest_ppt_overlay.exe" "$<TARGET_FILE_DIR:${BINARY_NAME}>"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/../../boardest_ppt_helper.exe" "$<TARGET_FILE_DIR:${BINARY_NAME}>"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/../../watchdog.exe" "$<TARGET_FILE_DIR:${BINARY_NAME}>"
   COMMENT "Copying Boardest WPF overlays to target directory..."
 )
 

@@ -87,7 +87,7 @@ class _SettingsFullscreenViewState extends State<SettingsFullscreenView> {
     _currentSettings = widget.settings;
     _schoolIdController = TextEditingController(text: _currentSettings.schoolId);
     _specialIdController = TextEditingController(text: _currentSettings.classNickname);
-    _currentScaleFactor = _currentSettings.scaleFactor.clamp(1.0, 2.0);
+    _currentScaleFactor = 1.30;
     _selectedGrade = _currentSettings.selectedGrade;
     _selectedClass = _currentSettings.selectedClass;
     _specialClassMode = _currentSettings.specialClassroomMode;
@@ -836,7 +836,24 @@ class _SettingsFullscreenViewState extends State<SettingsFullscreenView> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('화면 배율 (DPI 조정)', style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      Text('화면 배율 (DPI 조정)', style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF8906).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFFF8906).withValues(alpha: 0.5)),
+                        ),
+                        child: Text(
+                          '🔒 고정 배율',
+                          style: GoogleFonts.notoSansKr(color: const Color(0xFFFF8906), fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
@@ -844,27 +861,27 @@ class _SettingsFullscreenViewState extends State<SettingsFullscreenView> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      '${(_currentScaleFactor * 100).round()}%',
+                      '130%',
                       style: GoogleFonts.outfit(color: const Color(0xFF00F5D4), fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              Slider(
-                value: _currentScaleFactor.clamp(1.0, 2.0),
+              const Slider(
+                value: 1.30,
                 min: 1.0,
                 max: 2.0,
                 divisions: 10,
-                activeColor: const Color(0xFF00F5D4),
+                activeColor: Color(0xFF00F5D4),
                 inactiveColor: Colors.white12,
-                onChanged: (val) => setState(() => _currentScaleFactor = (val * 10).roundToDouble() / 10),
+                onChanged: null,
               ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('100% (기본 모니터)', style: GoogleFonts.notoSansKr(color: const Color(0xFF72757E), fontSize: 11)),
-                  Text('150% (기본 권장)', style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontSize: 11, fontWeight: FontWeight.bold)),
+                  Text('🔒 130% (표준 고정 - 수동 변경 불가)', style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontSize: 11, fontWeight: FontWeight.bold)),
                   Text('200% (초대형 전자칠판)', style: GoogleFonts.notoSansKr(color: const Color(0xFF72757E), fontSize: 11)),
                 ],
               ),

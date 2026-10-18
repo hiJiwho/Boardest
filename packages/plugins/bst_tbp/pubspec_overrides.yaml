@@ -1,0 +1,10 @@
+# melos_managed_dependency_overrides: bst_cloud,bst_core,bst_pen,google_fonts
+dependency_overrides:
+  bst_cloud:
+    path: ..\\..\\common\\bst_cloud
+  bst_core:
+    path: ..\\..\\common\\bst_core
+  bst_pen:
+    path: ..\\bst_pen
+  google_fonts:
+    path: ..\\..\\common\\google_fonts

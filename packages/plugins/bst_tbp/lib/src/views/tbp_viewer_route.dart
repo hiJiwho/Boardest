@@ -132,14 +132,16 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
           if (data['type'] == 'dhashUpdated') {
             _onDhashDetected(data['dhash']);
           } else if (data['type'] == 'downloadRequest') {
-            TbpDownloadInterceptor.instance.handleDownload(
-              context: context,
-              tbpFolderPath: _tbpFolderPath,
-              currentDhash: _currentDhash,
-              downloadUrl: data['url'],
-              filename: data['filename'],
-              scaleFactor: widget.scaleFactor,
-            );
+            if (mounted) {
+              TbpDownloadInterceptor.instance.handleDownload(
+                context: context,
+                tbpFolderPath: _tbpFolderPath,
+                currentDhash: _currentDhash,
+                downloadUrl: data['url'],
+                filename: data['filename'],
+                scaleFactor: widget.scaleFactor,
+              );
+            }
           }
         } catch (_) {}
       });
@@ -421,10 +423,10 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                       vertical: 8 * s,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF16161A).withOpacity(0.9),
+                      color: const Color(0xFF16161A).withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(12 * s),
                       border: Border.all(
-                        color: const Color(0xFF2EC4B6).withOpacity(0.5),
+                        color: const Color(0xFF2EC4B6).withValues(alpha: 0.5),
                       ),
                     ),
                     child: Row(
@@ -454,10 +456,10 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                   Container(
                     padding: EdgeInsets.all(4 * s),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF16161A).withOpacity(0.9),
+                      color: const Color(0xFF16161A).withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(20 * s),
                       border: Border.all(
-                        color: const Color(0xFF7F5AF0).withOpacity(0.5),
+                        color: const Color(0xFF7F5AF0).withValues(alpha: 0.5),
                       ),
                     ),
                     child: Row(
@@ -475,7 +477,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                       vertical: 6 * s,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF16161A).withOpacity(0.9),
+                      color: const Color(0xFF16161A).withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(30 * s),
                       border: Border.all(color: Colors.white24),
                     ),
@@ -533,6 +535,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                               );
                             }
 
+                            if (!context.mounted) return;
                             final result = await SaveDestinationDialog.show(
                               context: context,
                               scaleFactor: widget.scaleFactor,
@@ -540,6 +543,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                               subTitle: 'TBP 교과서 폴더를 어디에 저장하시겠습니까?',
                             );
 
+                            if (!context.mounted) return;
                             if (result != null) {
                               final safeTitle =
                                   (_metadata?.title ?? 'textbook').replaceAll(
@@ -611,7 +615,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                                 }
                               }
 
-                              if (mounted) {
+                              if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(

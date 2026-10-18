@@ -9,6 +9,16 @@ include(${EPHEMERAL_DIR}/generated_config.cmake)
 # TODO: Move the rest of this into files in ephemeral. See
 # https://github.com/flutter/flutter/issues/57146.
 set(WRAPPER_ROOT "${EPHEMERAL_DIR}/cpp_client_wrapper")
+if (NOT EXISTS "${WRAPPER_ROOT}/core_implementations.cc")
+  find_path(FLUTTER_SDK_WRAPPER core_implementations.cc
+    PATHS
+      "$ENV{USERPROFILE}/flutter/bin/cache/artifacts/engine/windows-x64/cpp_client_wrapper"
+      "${FLUTTER_ROOT}/bin/cache/artifacts/engine/windows-x64/cpp_client_wrapper"
+  )
+  if (FLUTTER_SDK_WRAPPER)
+    set(WRAPPER_ROOT "${FLUTTER_SDK_WRAPPER}")
+  endif()
+endif()
 
 # Set fallback configurations for older versions of the flutter tool.
 if (NOT DEFINED FLUTTER_TARGET_PLATFORM)

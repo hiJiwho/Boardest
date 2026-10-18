@@ -64,10 +64,7 @@ include(flutter/generated_plugins.cmake)
 # so that building and running from within Visual Studio will work.
 set(BUILD_BUNDLE_DIR "$<TARGET_FILE_DIR:${BINARY_NAME}>")
 # Make the "install" step default, as it's required to run.
-set(CMAKE_VS_INCLUDE_INSTALL_TO_DEFAULT_BUILD 1)
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-  set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
-endif()
+set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "Installation directory" FORCE)
 
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
@@ -107,13 +104,12 @@ install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
 
-# Copy Boardest WPF tools (hwp_overlay, ppt_overlay, ppt_helper, watchdog)
+# Copy Boardest WPF tools (hwp_overlay, ppt_overlay, ppt_helper)
 set(BOARDEST_WPF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../Boardest-board")
 install(FILES 
   "${BOARDEST_WPF_DIR}/boardest_hwp_overlay.exe"
   "${BOARDEST_WPF_DIR}/boardest_ppt_overlay.exe"
   "${BOARDEST_WPF_DIR}/boardest_ppt_helper.exe"
-  "${BOARDEST_WPF_DIR}/watchdog.exe"
   DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime
   OPTIONAL

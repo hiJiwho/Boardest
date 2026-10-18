@@ -89,16 +89,6 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
   String _currentOtp = '------';
   int _remainingSeconds = 60;
 
-  // Lesson Tools State: 1) Timer
-  int _toolTimerSeconds = 0;
-  bool _toolTimerRunning = false;
-  Timer? _toolTimerInstance;
-
-  // Lesson Tools State: 2) Student Random Picker
-  int _pickerMax = 30;
-  int? _pickedNumber;
-  final List<int> _pickedHistory = [];
-
   // Note/Messaging State (Online Target)
   final TextEditingController _noteMsgController = TextEditingController();
   bool _isSendingNote = false;
@@ -111,11 +101,9 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
   String? _mealCallStatus;
   List<String> _mealMenu = [];
   String _mealDateLabel = '오늘의 급식';
-  int _mealTargetGrade = 2;
 
   // Online Classrooms in Same Cafeteria
   List<Map<String, dynamic>> _onlineClassrooms = [];
-  Map<int, int> _cafeteriaOnlineCounts = {for (int i = 1; i <= 9; i++) i: 0};
   bool _isLoadingOnlineClassrooms = false;
   Timer? _onlineRefreshTimer;
 
@@ -151,7 +139,6 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
   @override
   void dispose() {
     _clockTimer?.cancel();
-    _toolTimerInstance?.cancel();
     _onlineRefreshTimer?.cancel();
     _noteMsgController.dispose();
     _guestSchoolController.dispose();
@@ -890,7 +877,6 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
         if (mounted) {
           setState(() {
             _onlineClassrooms = deduplicatedList;
-            _cafeteriaOnlineCounts = counts;
           });
         }
       }
@@ -1035,6 +1021,29 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
 
     setState(() {
       _mealCallStatus = '🎉 ${onlineList.length}개 온라인 학급 전체 호출 완료!';
+      _isCallingMeal = false;
+    });
+  }
+
+  Future<void> _cancelAllOnlineClassrooms() async {
+    final onlineList = _onlineClassrooms.where((c) => c['isOnline'] == true).toList();
+    if (onlineList.isEmpty) return;
+
+    setState(() {
+      _isCallingMeal = true;
+      _mealCallStatus = '온라인 학급 전체 호출 취소 중...';
+    });
+
+    for (final c in onlineList) {
+      await _cancelClassMeal(
+        c['grade'] as int,
+        c['classNum'] as int,
+        targetDocId: c['docId']?.toString(),
+      );
+    }
+
+    setState(() {
+      _mealCallStatus = '온라인 학급 전체 호출 취소 완료';
       _isCallingMeal = false;
     });
   }
@@ -1853,406 +1862,6 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
 
 
 
-  // ═════════════════════════════════════════════════════════
-  // (기존 통합 급식/쪽지 뷰는 7대 개편으로 _buildLiteMealOnlyTab, _buildLiteCafeteriaGuidanceTab, _buildLiteNoteSendTab으로 분리됨)
-  Widget _buildMealAndNotesTab_legacy() {
-    // If configuring guest cafeteria, show the guest setup view
-    if (_isConfiguringCafeteria) {
-      return _buildGuestCafeteriaSetupView();
-    }
-
-    final targetCaf = _cafeteriaNum.replaceAll(RegExp(r'[^0-9]'), '');
-    final onlineCafList = _onlineClassrooms.where((c) => c['isOnline'] == true).toList();
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 1. 1~9 급식실 빠른 전환 버튼 바
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF16161A),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF242629)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.room_service_rounded, color: Color(0xFFFF8906), size: 18),
-                        const SizedBox(width: 8),
-                        Text('급식실 선택 (1~9급식실)', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5)),
-                        const Spacer(),
-                        TextButton.icon(
-                          onPressed: () => setState(() => _isConfiguringCafeteria = true),
-                          icon: const Icon(Icons.tune_rounded, size: 13, color: Color(0xFFFF8906)),
-                          label: const Text('위치/교사 재설정', style: TextStyle(color: Color(0xFFFF8906), fontSize: 11)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: List.generate(9, (idx) {
-                        final cafNumInt = idx + 1;
-                        final cafNumStr = '$cafNumInt';
-                        final isSelected = (targetCaf.isEmpty ? '1' : targetCaf) == cafNumStr;
-                        final onlineCount = _cafeteriaOnlineCounts[cafNumInt] ?? 0;
-
-                        return InkWell(
-                          onTap: () async {
-                            setState(() {
-                              _cafeteriaNum = cafNumStr;
-                            });
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setString('bst_cafeteria_num', cafNumStr);
-                            _fetchOnlineClassrooms();
-                          },
-                          borderRadius: BorderRadius.circular(10),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? const Color(0xFFFF8906)
-                                  : (onlineCount > 0 ? const Color(0xFF2CB67D).withOpacity(0.12) : const Color(0xFF0F0E17)),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: isSelected
-                                    ? const Color(0xFFFF8906)
-                                    : (onlineCount > 0 ? const Color(0xFF2CB67D).withOpacity(0.6) : const Color(0xFF242629)),
-                                width: isSelected || onlineCount > 0 ? 1.2 : 0.8,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (onlineCount > 0 && !isSelected) ...[
-                                  Container(
-                                    width: 6,
-                                    height: 6,
-                                    margin: const EdgeInsets.only(right: 4),
-                                    decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF2CB67D)),
-                                  ),
-                                ],
-                                Text(
-                                  '$cafNumInt급식실',
-                                  style: GoogleFonts.notoSansKr(
-                                    color: isSelected ? Colors.black : (onlineCount > 0 ? const Color(0xFF2CB67D) : Colors.white70),
-                                    fontSize: 11.5,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                  ),
-                                ),
-                                if (onlineCount > 0) ...[
-                                  const SizedBox(width: 4),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                    decoration: BoxDecoration(
-                                      color: isSelected ? Colors.black.withOpacity(0.15) : const Color(0xFF2CB67D),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      '$onlineCount',
-                                      style: GoogleFonts.notoSansKr(
-                                        color: isSelected ? Colors.black : Colors.black,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text(
-                          '현재 접속: $_schoolName · ${targetCaf.isEmpty ? "1" : targetCaf}급식실',
-                          style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 11.5, fontWeight: FontWeight.w600),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '당번: $_teacherName 선생님',
-                          style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // 2. 🟢 실시간 온라인 학급 현황 (선택된 급식실만 필터링)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF16161A),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: onlineCafList.isNotEmpty ? const Color(0xFF2CB67D).withOpacity(0.4) : const Color(0xFF242629),
-                    width: onlineCafList.isNotEmpty ? 1.2 : 1.0,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: onlineCafList.isNotEmpty ? const Color(0xFF2CB67D) : const Color(0xFF72757E),
-                            boxShadow: onlineCafList.isNotEmpty
-                                ? [BoxShadow(color: const Color(0xFF2CB67D).withOpacity(0.6), blurRadius: 6, spreadRadius: 1)]
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '실시간 접속 학급 (${targetCaf.isEmpty ? "1" : targetCaf}급식실 전용)',
-                          style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
-                        ),
-                        const Spacer(),
-                        InkWell(
-                          onTap: _fetchOnlineClassrooms,
-                          borderRadius: BorderRadius.circular(8),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.refresh_rounded,
-                                  size: 14,
-                                  color: _isLoadingOnlineClassrooms ? const Color(0xFF7F5AF0) : const Color(0xFF94A1B2),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '새로고침',
-                                  style: TextStyle(
-                                    color: _isLoadingOnlineClassrooms ? const Color(0xFF7F5AF0) : const Color(0xFF94A1B2),
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    if (onlineCafList.isEmpty) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F0E17),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFF242629)),
-                        ),
-                        child: Column(
-                          children: [
-                            const Icon(Icons.tv_off_rounded, color: Color(0xFF72757E), size: 24),
-                            const SizedBox(height: 8),
-                            Text(
-                              '현재 ${targetCaf.isEmpty ? "1" : targetCaf}급식실로 설정된 온라인 접속 전자칠판이 없습니다.',
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 12, fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '상단 급식실 번호 버튼을 눌러 다른 급식실의 접속 현황을 확인해보세요.',
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.notoSansKr(color: const Color(0xFF72757E), fontSize: 11),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ] else ...[
-                      Column(
-                        children: onlineCafList.map((c) {
-                          final grade = c['grade'] as int;
-                          final cls = c['classNum'] as int;
-                          final nickname = c['classNickname'] as String;
-                          final isCalled = c['isCalled'] as bool;
-                          final docId = c['docId']?.toString();
-                          final schoolCode = c['schoolCode']?.toString();
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0F0E17),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isCalled ? const Color(0xFFFF8906).withOpacity(0.6) : const Color(0xFF2CB67D).withOpacity(0.3),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Color(0xFF2CB67D),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        nickname,
-                                        style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                      ),
-                                      Text(
-                                        isCalled ? '🔔 급식실 이동 호출 중' : '🟢 온라인 대기 중',
-                                        style: GoogleFonts.notoSansKr(
-                                          color: isCalled ? const Color(0xFFFF8906) : const Color(0xFF2CB67D),
-                                          fontSize: 10.5,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (isCalled)
-                                  ElevatedButton.icon(
-                                    onPressed: _isCallingMeal ? null : () => _cancelClassMeal(grade, cls, targetDocId: docId),
-                                    icon: const Icon(Icons.close_rounded, size: 13),
-                                    label: const Text('호출 취소', style: TextStyle(fontSize: 11)),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFFFF8906).withOpacity(0.2),
-                                      foregroundColor: const Color(0xFFFF8906),
-                                      side: const BorderSide(color: Color(0xFFFF8906), width: 0.8),
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                      elevation: 0,
-                                    ),
-                                  )
-                                else
-                                  ElevatedButton.icon(
-                                    onPressed: _isCallingMeal ? null : () => _callClassMeal(grade, cls, '급식실 이동', targetDocId: docId, targetSchoolCode: schoolCode),
-                                    icon: const Icon(Icons.notifications_active_rounded, size: 13),
-                                    label: const Text('급식 호출', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFFFF8906),
-                                      foregroundColor: Colors.black,
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      elevation: 0,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 40,
-                        child: ElevatedButton.icon(
-                          onPressed: _isCallingMeal ? null : _callAllOnlineClassrooms,
-                          icon: const Icon(Icons.campaign_rounded, size: 16),
-                          label: Text(
-                            '같은 급식실 온라인 학급 전체 호출 (${onlineCafList.length}개 학급)',
-                            style: GoogleFonts.notoSansKr(fontSize: 12.5, fontWeight: FontWeight.bold),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF7F5AF0),
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (_mealCallStatus != null) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2CB67D).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFF2CB67D).withOpacity(0.3)),
-                        ),
-                        child: Text(
-                          _mealCallStatus!,
-                          style: GoogleFonts.notoSansKr(color: const Color(0xFF2CB67D), fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // 3. Meal Menu Card
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [const Color(0xFFFF8906).withOpacity(0.15), const Color(0xFF16161A)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFFF8906).withOpacity(0.3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.restaurant_menu_rounded, color: Color(0xFFFF8906), size: 20),
-                        const SizedBox(width: 8),
-                        Text('$_mealDateLabel ($_schoolName)', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    if (_mealMenu.isEmpty)
-                      const Text('급식 메뉴를 불러오는 중입니다...', style: TextStyle(color: Color(0xFF94A1B2), fontSize: 12))
-                    else
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: _mealMenu.map((m) {
-                          return Chip(
-                            backgroundColor: const Color(0xFF0F0E17),
-                            label: Text(m, style: const TextStyle(color: Colors.white, fontSize: 11.5)),
-                          );
-                        }).toList(),
-                      ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // 4. Notes / Messaging Section
-              _buildNoteSection(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   // ─── Guest Cafeteria Setup View ───
   Widget _buildGuestCafeteriaSetupView() {
     return Center(
@@ -2703,7 +2312,6 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
 
   // ─── 7대 개편 탭: 2. 급식 (식단표 전용) ───
   Widget _buildLiteMealOnlyTab() {
-    if (false) _buildMealAndNotesTab_legacy();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Center(
@@ -2859,6 +2467,36 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF8906), foregroundColor: Colors.black),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 38,
+                      child: OutlinedButton.icon(
+                        onPressed: _isCallingMeal ? null : _cancelAllOnlineClassrooms,
+                        icon: const Icon(Icons.cancel_rounded, size: 16, color: Color(0xFFFF8906)),
+                        label: const Text('전체 급식 호출 취소', style: TextStyle(color: Color(0xFFFF8906), fontSize: 12, fontWeight: FontWeight.bold)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFFF8906), width: 1.2),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                    if (_mealCallStatus != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF8906).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFFF8906).withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          _mealCallStatus!,
+                          style: const TextStyle(color: Color(0xFFFF8906), fontSize: 12, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

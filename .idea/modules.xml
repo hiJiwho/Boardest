@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/apps/boardest/melos_boardest.iml" filepath="$PROJECT_DIR$/apps/boardest/melos_boardest.iml" />
+      <module fileurl="file://$PROJECT_DIR$/apps/boardest_class_lite/melos_boardest_class_lite.iml" filepath="$PROJECT_DIR$/apps/boardest_class_lite/melos_boardest_class_lite.iml" />
       <module fileurl="file://$PROJECT_DIR$/apps/boardest_teacher/melos_boardest_teacher.iml" filepath="$PROJECT_DIR$/apps/boardest_teacher/melos_boardest_teacher.iml" />
       <module fileurl="file://$PROJECT_DIR$/apps/boardest_teacher_lite/melos_boardest_teacher_lite.iml" filepath="$PROJECT_DIR$/apps/boardest_teacher_lite/melos_boardest_teacher_lite.iml" />
       <module fileurl="file://$PROJECT_DIR$/packages/common/bst_ad/melos_bst_ad.iml" filepath="$PROJECT_DIR$/packages/common/bst_ad/melos_bst_ad.iml" />
@@ -20,6 +21,7 @@
       <module fileurl="file://$PROJECT_DIR$/packages/common/bst_timetable/melos_bst_timetable.iml" filepath="$PROJECT_DIR$/packages/common/bst_timetable/melos_bst_timetable.iml" />
       <module fileurl="file://$PROJECT_DIR$/packages/common/bst_ui/melos_bst_ui.iml" filepath="$PROJECT_DIR$/packages/common/bst_ui/melos_bst_ui.iml" />
       <module fileurl="file://$PROJECT_DIR$/packages/plugins/bst_video/melos_bst_video.iml" filepath="$PROJECT_DIR$/packages/plugins/bst_video/melos_bst_video.iml" />
+      <module fileurl="file://$PROJECT_DIR$/packages/common/google_fonts/melos_google_fonts.iml" filepath="$PROJECT_DIR$/packages/common/google_fonts/melos_google_fonts.iml" />
       <module fileurl="file://$PROJECT_DIR$/melos_boardest.iml" filepath="$PROJECT_DIR$/melos_boardest.iml" />
     </modules>
   </component>
