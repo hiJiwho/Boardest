@@ -377,8 +377,8 @@ class MyApp extends StatelessWidget {
           surface: Color(0xFF16161A),
           error: Color(0xFFEF4565),
         ),
-        textTheme: GoogleFonts.notoSansKrTextTheme(
-          ThemeData.dark().textTheme,
+        textTheme: ThemeData.dark().textTheme.apply(
+          fontFamily: 'SiwonhanSeolreim',
         ),
       ),
       home: home,

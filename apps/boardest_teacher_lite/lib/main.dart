@@ -1147,7 +1147,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
   void _navigateToOAuth() {
     final baseUri = Uri.base;
     final currentReturn = '${baseUri.origin}${baseUri.path}';
-    final targetUrl = 'https://boardest-teacher-oauth.web.app?web-lite&return_url=${Uri.encodeComponent(currentReturn.isNotEmpty ? currentReturn : 'https://boardest-teacher.web.app/lite/')}';
+    final targetUrl = 'https://boardest-cloud-connect.web.app?web-lite&return_url=${Uri.encodeComponent(currentReturn.isNotEmpty ? currentReturn : 'https://boardest-teacher.web.app/lite/')}';
     launchUrl(
       Uri.parse(targetUrl),
       mode: LaunchMode.platformDefault,
@@ -2267,7 +2267,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
                       onPressed: () {
-                        launchUrl(Uri.parse('https://boardest-teacher-oauth.web.app?re-login&web-lite&return_url=https://boardest-teacher.web.app/lite/'), webOnlyWindowName: '_self');
+                        launchUrl(Uri.parse('https://boardest-cloud-connect.web.app?re-login&web-lite&return_url=https://boardest-teacher.web.app/lite/'), webOnlyWindowName: '_self');
                       },
                       icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.black),
                       label: const Text('⚡ Google 토큰 최신화 / 재인증', style: TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -2279,7 +2279,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
-                      onPressed: () => launchUrl(Uri.parse('https://boardest-teacher-oauth.web.app/edit?web-lite&return_url=https://boardest-teacher.web.app/lite/'), webOnlyWindowName: '_self'),
+                      onPressed: () => launchUrl(Uri.parse('https://boardest-cloud-connect.web.app/edit?web-lite&return_url=https://boardest-teacher.web.app/lite/'), webOnlyWindowName: '_self'),
                       icon: const Icon(Icons.edit_note_rounded, size: 16, color: Color(0xFF2EC4B6)),
                       label: const Text('✏️ 계정 설정 변경 (포털)', style: TextStyle(color: Color(0xFF2EC4B6), fontSize: 12)),
                       style: OutlinedButton.styleFrom(

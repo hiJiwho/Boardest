@@ -1,5 +1,5 @@
 param(
-  [string]$Version = '4.1.2'
+  [string]$Version = '4.2.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -45,7 +45,6 @@ $HostingUrls = @(
   'https://boardest-teacher.web.app',
   'https://jiwhosboardest.web.app',
   'https://boardest-control.web.app',
-  'https://boardest-teacher-oauth.web.app',
   'https://boardest-eat.web.app',
   'https://boardest-downloads.web.app',
   'https://bst-installer.web.app',

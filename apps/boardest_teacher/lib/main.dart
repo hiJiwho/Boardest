@@ -557,8 +557,8 @@ class _TeacherAppState extends State<TeacherApp> with WindowListener {
         background: const Color(0xFF0F0E17),
         error: const Color(0xFFEF4565),
       ),
-      textTheme: GoogleFonts.notoSansKrTextTheme(
-        ThemeData.dark().textTheme,
+      textTheme: ThemeData.dark().textTheme.apply(
+        fontFamily: 'SiwonhanSeolreim',
       ),
     );
 
@@ -575,8 +575,8 @@ class _TeacherAppState extends State<TeacherApp> with WindowListener {
         background: const Color(0xFFF3F3F5),
         error: const Color(0xFFEF4565),
       ),
-      textTheme: GoogleFonts.notoSansKrTextTheme(
-        ThemeData.light().textTheme,
+      textTheme: ThemeData.light().textTheme.apply(
+        fontFamily: 'SiwonhanSeolreim',
       ),
     );
 

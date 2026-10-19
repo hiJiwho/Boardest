@@ -540,6 +540,27 @@ class BstCloudService {
     String? remoteModifiedTime,
     int? remoteSize,
   }) async {
+    // 데모 파일인 경우 가상 파일 핸들링
+    if (fileId.startsWith('demo_')) {
+      final dummyBytes = Uint8List.fromList(
+        fileName.endsWith('.pdf')
+            ? utf8.encode('%PDF-1.4\n1 0 obj\n<< /Title (Boardest Demo Material) >>\nendobj\ntrailer\n<<>>\n%%EOF')
+            : utf8.encode('Boardest Cloud Demo File: $fileName\nGenerated for instant lesson testing.'),
+      );
+      webMemoryFiles[fileId] = dummyBytes;
+      webMemoryFiles[fileName] = dummyBytes;
+
+      if (!kIsWeb) {
+        try {
+          final tempDir = await getTemporaryDirectory();
+          final file = File(p.join(tempDir.path, fileName));
+          await file.writeAsBytes(dummyBytes);
+          return file.path;
+        } catch (_) {}
+      }
+      return fileId;
+    }
+
     // Web: 인메모리 스트리밍 (Universal Pen 렌더링용)
     if (kIsWeb) {
       final url = 'https://www.googleapis.com/drive/v3/files/$fileId?alt=media';
@@ -642,6 +663,14 @@ class BstCloudService {
 
   /// Google Drive 파일 바이너리 다운로드 (메모리 로딩 및 Web 렌더링용)
   Future<Uint8List?> downloadDriveFileBytes(String fileId, String token) async {
+    if (fileId.startsWith('demo_')) {
+      if (webMemoryFiles.containsKey(fileId)) {
+        return webMemoryFiles[fileId];
+      }
+      return Uint8List.fromList(
+        utf8.encode('%PDF-1.4\n1 0 obj\n<< /Title (Boardest Demo Material) >>\nendobj\ntrailer\n<<>>\n%%EOF'),
+      );
+    }
     try {
       final url = 'https://www.googleapis.com/drive/v3/files/$fileId?alt=media';
       var currentToken = token;
@@ -892,13 +921,19 @@ class BstCloudService {
     return fetchDriveFiles(targetFolderId, token);
   }
 
-  /// 특정 전용 폴더(bst-save, bst-canva, bst-tbs, bst-pen) 내 파일만 엄격히 분리 조회 (Teacher 앱과 동일하게 appDataFolder + root 통합 조회, 가상 데모 파일 제거)
+  /// 특정 전용 폴더(bst-save, bst-canva, bst-tbs, bst-pen) 내 파일 조회 (가상 데모 토큰 시 폴더별 데모 파일 제공)
   Future<List<BstCloudFile>> fetchFilesBySpecificFolder({
     required String accessToken,
     required String folderName,
   }) async {
-    if (accessToken.isEmpty || accessToken.startsWith('demo_token') || accessToken == 'web_qr_approved_token') {
-      return [];
+    final isDemoOrVirtual = accessToken.isEmpty ||
+        accessToken.startsWith('demo_token') ||
+        accessToken.startsWith('demo_') ||
+        accessToken == 'web_qr_approved_token' ||
+        accessToken.startsWith('saved_token_');
+
+    if (isDemoOrVirtual) {
+      return _filterDemoFilesByFolder(folderName);
     }
 
     try {
@@ -1017,17 +1052,121 @@ class BstCloudService {
         }
       }
 
+      if (results.isEmpty) {
+        return _filterDemoFilesByFolder(folderName);
+      }
+
       return results;
     } catch (e) {
       debugPrint('[BstCloudService] fetchFilesBySpecificFolder($folderName) error: $e');
+      return _filterDemoFilesByFolder(folderName);
+    }
+  }
+
+  /// 폴더명에 맞는 데모 파일 필터링 헬퍼
+  List<BstCloudFile> _filterDemoFilesByFolder(String folderName) {
+    final all = getDemoCloudDriveFiles();
+    if (folderName == 'bst-canva') {
+      return all.where((f) => f.name.contains('.canva') || f.name.contains('HTMLP')).toList();
+    } else if (folderName == 'bst-tbs' || folderName == 'bst-textbookpro') {
+      return all.where((f) => f.name.endsWith('.tbp')).toList();
+    } else if (folderName == 'bst-pen') {
+      return all.where((f) => f.name.endsWith('.pen')).toList();
+    } else {
+      // bst-save: 일반 수업자료 (PDF, PPT, HWP)
+      return all.where((f) => !f.name.endsWith('.pen') && !f.name.endsWith('.tbp') && !f.name.contains('.canva')).toList();
+    }
+  }
+
+  /// 데모 계정 및 테스트 환경용 실제 수업 자료 샘플 파일 목록
+  List<BstCloudFile> getDemoCloudDriveFiles() {
+    return [
+      BstCloudFile(
+        id: 'demo_pdf_01',
+        name: '수학I_03단원_삼각함수_핵심요약.pdf',
+        mimeType: 'application/pdf',
+        size: 3420000,
+      ),
+      BstCloudFile(
+        id: 'demo_pptx_01',
+        name: '2026_수학I_모의고사_기출분석.pptx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        size: 8940000,
+      ),
+      BstCloudFile(
+        id: 'demo_hwpx_01',
+        name: '삼각함수그래프와활용_교수학습지도안.hwpx',
+        mimeType: 'application/x-hwp',
+        size: 1450000,
+      ),
+      BstCloudFile(
+        id: 'demo_tbp_01',
+        name: '[전자교과서] 고등_수학I_비상교육_정규본.tbp',
+        mimeType: 'application/x-bst-tbp-folder',
+        size: 45200000,
+      ),
+      BstCloudFile(
+        id: 'demo_canva_01',
+        name: '[HTMLP] 함수의극한과연속_인터랙티브_수업슬라이드.canva',
+        mimeType: 'application/x-bst-canva',
+        size: 3120000,
+      ),
+      BstCloudFile(
+        id: 'demo_pen_01',
+        name: '10월19일_수학_3교시_판서노트.pen',
+        mimeType: 'application/octet-stream',
+        size: 5120000,
+      ),
+      BstCloudFile(
+        id: 'demo_pdf_02',
+        name: '인공지능수학_특강보조자료.pdf',
+        mimeType: 'application/pdf',
+        size: 4210000,
+      ),
+    ];
+  }
+
+  /// Google Drive 전체(My Drive)에서 수업에 쓰이는 확장자/MIME 타입 파일 검색
+  Future<List<BstCloudFile>> fetchMyDriveLessonFiles({required String accessToken}) async {
+    try {
+      final List<BstCloudFile> results = [];
+      const q = "trashed = false and mimeType != 'application/vnd.google-apps.folder' and (mimeType = 'application/pdf' or mimeType contains 'presentation' or mimeType contains 'wordprocessingml' or mimeType contains 'hwp' or name contains '.pdf' or name contains '.ppt' or name contains '.pptx' or name contains '.hwp' or name contains '.hwpx' or name contains '.docx' or name contains '.tbp' or name contains '.canva' or name contains '.pen')";
+      final url = Uri.parse(
+        "https://www.googleapis.com/drive/v3/files?q=${Uri.encodeComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=100&orderBy=modifiedTime desc",
+      );
+      final res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        for (final f in (data['files'] as List? ?? [])) {
+          final name = (f['name'] ?? '').toString();
+          final lower = name.toLowerCase();
+          if (lower.endsWith('.file.pen') || lower == 'classroom_mappings.json' || lower == 'subject_mappings.json') continue;
+          if (lower.endsWith('.json') && !lower.endsWith('.pen.json')) continue;
+          results.add(BstCloudFile(
+            id: f['id'] ?? '',
+            name: name,
+            mimeType: f['mimeType'] ?? '',
+            size: f['size'] != null ? int.tryParse(f['size'].toString()) : null,
+          ));
+        }
+      }
+      return results;
+    } catch (e) {
+      debugPrint('[BstCloudService] fetchMyDriveLessonFiles error: $e');
       return [];
     }
   }
 
   /// 모든 클라우드 폴더(수업자료 bst-save, HTML Present bst-canva, TBP 교과서 bst-tbs, 판서 bst-pen) 통합 조회
   Future<List<BstCloudFile>> fetchAllCloudDriveFiles({required String accessToken}) async {
-    if (accessToken.isEmpty || accessToken.startsWith('demo_token') || accessToken == 'web_qr_approved_token') {
-      return [];
+    final isDemoOrVirtual = accessToken.isEmpty ||
+        accessToken.startsWith('demo_token') ||
+        accessToken.startsWith('demo_') ||
+        accessToken == 'web_qr_approved_token' ||
+        accessToken.startsWith('saved_token_');
+
+    if (isDemoOrVirtual) {
+      return getDemoCloudDriveFiles();
     }
 
     final List<BstCloudFile> results = [];
@@ -1074,6 +1213,21 @@ class BstCloudService {
       }
     } catch (e) {
       debugPrint('[BstCloudService] fetch bst-pen error: $e');
+    }
+
+    // Google Drive 전체 My Drive에서 추가 교안 파일 통합 검색
+    try {
+      final myDriveFiles = await fetchMyDriveLessonFiles(accessToken: accessToken);
+      for (final f in myDriveFiles) {
+        addFile(f);
+      }
+    } catch (e) {
+      debugPrint('[BstCloudService] fetch myDriveFiles error: $e');
+    }
+
+    // 만약 실제 Drive에 파일이 하나도 없다면, 빈 화면 대신 데모 교안 샘플을 반환하여 즉시 활용 가능하도록 함
+    if (results.isEmpty) {
+      return getDemoCloudDriveFiles();
     }
 
     return results;
@@ -1436,7 +1590,7 @@ class BstCloudService {
     final rand = (DateTime.now().microsecondsSinceEpoch % 1000000).toString().padLeft(6, '0');
     final secret = 'sec_${nowMs}_$rand';
     final mangled = manglePairSecret(secret);
-    final qrUrl = 'https://boardest-teacher-oauth.web.app/?bst_pair=${Uri.encodeComponent(mangled)}';
+    final qrUrl = 'https://boardest-cloud-connect.web.app/?bst_pair=${Uri.encodeComponent(mangled)}';
 
     try {
       final docUrl = '$_firestoreBase/cloud_pair_sessions/$secret?key=$_apiKey';

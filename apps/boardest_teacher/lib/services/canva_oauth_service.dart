@@ -67,7 +67,7 @@ class CanvaOAuthService {
   Future<bool> startOAuthFlow() async {
     try {
       if (kIsWeb) {
-        const webAuthUrl = 'https://boardest-teacher-oauth.web.app/?canva=true';
+        const webAuthUrl = 'https://boardest-cloud-connect.web.app/?canva=true';
         await launchUrl(Uri.parse(webAuthUrl), mode: LaunchMode.platformDefault);
         return true;
       }

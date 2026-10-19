@@ -452,7 +452,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
     if (kIsWeb) {
       // Web: OAuth 포털 리다이렉션 (target=web&return_url=...)
       final returnUrl = Uri.encodeComponent(Uri.base.toString());
-      final portalUrl = 'https://boardest-teacher-oauth.web.app/?target=web&return_url=$returnUrl$demoParam';
+      final portalUrl = 'https://boardest-cloud-connect.web.app/?target=web&return_url=$returnUrl$demoParam';
       try {
         await launchUrl(Uri.parse(portalUrl), webOnlyWindowName: '_self');
       } catch (e) {
@@ -464,7 +464,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
     } else {
       // Windows / Desktop: 외부 브라우저(Chrome)로 OAuth 포털 실행 (target=win&port=...) -> 127.0.0.1 루프백 수신
       final port = CloudDriveService.instance.activePort;
-      final url = 'https://boardest-teacher-oauth.web.app/?target=win&port=$port$demoParam';
+      final url = 'https://boardest-cloud-connect.web.app/?target=win&port=$port$demoParam';
       try {
         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       } catch (e) {
@@ -812,7 +812,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                         ],
                         const SizedBox(height: 12),
                         OutlinedButton.icon(
-                          onPressed: () => launchUrl(Uri.parse(kIsWeb ? 'https://boardest-teacher-oauth.web.app?web' : 'https://boardest-teacher-oauth.web.app?win')),
+                          onPressed: () => launchUrl(Uri.parse(kIsWeb ? 'https://boardest-cloud-connect.web.app?web' : 'https://boardest-cloud-connect.web.app?win')),
                           icon: const Icon(Icons.open_in_new_rounded, color: Color(0xFF2EC4B6), size: 16),
                           label: Text(
                             '교사 OAuth 등록 포털 바로가기',

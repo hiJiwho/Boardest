@@ -52,669 +52,654 @@ class BstTeacherMainLayout extends StatelessWidget {
     this.onLogoutPressed,
   });
 
-  Widget _buildLeftNavButton({
-    required String icon,
-    required String label,
-    required String tabId,
-    bool isSettings = false,
+  static const _nav = <(IconData, String, String)>[
+    (Icons.dashboard_rounded, '대시보드', 'timetable'),
+    (Icons.calendar_month_rounded, '주간 시간표 (전체)', 'weekly_timetable'),
+    (Icons.folder_rounded, '내 수업 자료', 'canva'),
+    (Icons.auto_stories_rounded, '전자교과서 TBP', 'tbp'),
+    (Icons.draw_rounded, '판서 노트', 'archive'),
+    (Icons.restaurant_rounded, '급식 & 급식지도', 'meal'),
+    (Icons.settings_rounded, '설정', 'settings'),
+  ];
+
+  static const _mockFiles = <(String, String, String, Color, IconData)>[
+    ('수학I_03단원_삼각함수의그래프.pdf', 'PDF', '3.4 MB', Color(0xFFFF6B6B), Icons.picture_as_pdf_rounded),
+    ('2026_전국연합학력평가_기출해설.pptx', 'PPT', '8.9 MB', Color(0xFFFF8906), Icons.slideshow_rounded),
+    ('[전자교과서] 고등 수학I 비상', 'TBP', '45.2 MB', Color(0xFF7F5AF0), Icons.auto_stories_rounded),
+    ('함수의극한과연속_개념정리.hwpx', 'HWP', '1.8 MB', Color(0xFF4D96FF), Icons.description_rounded),
+    ('미적분_인터랙티브시뮬레이션.htmlp', 'HTMLP', '3.1 MB', Color(0xFF00C4CC), Icons.co_present_rounded),
+    ('10월19일_3교시_수업판서.pen', 'PEN', '5.1 MB', Color(0xFF00C896), Icons.draw_rounded),
+  ];
+
+  static const _mockTodaySchedule = [
+    ('1교시', '09:00', '2-1반', '수학 II', Color(0xFF4D96FF), false),
+    ('2교시', '10:00', '연구실', '수업 준비 (공강)', Colors.white24, false),
+    ('3교시', '11:00', '2-3반', '수학 II', Color(0xFF4D96FF), false),
+    ('4교시', '12:00', '3-2반', '수학 I (현재 진행)', Color(0xFF00F5D4), true),
+    ('5교시', '13:40', '3-4반', '기하와 벡터', Color(0xFF7F5AF0), false),
+    ('6교시', '14:40', '1-2반', '수학 동아리', Color(0xFFFF8906), false),
+  ];
+
+  TextStyle _ts(double size, {FontWeight w = FontWeight.w700, Color c = Colors.white, double? h, double? ls}) {
+    return TextStyle(
+      fontFamily: 'SiwonhanSeolreim',
+      fontSize: size,
+      fontWeight: w,
+      color: c,
+      height: h,
+      letterSpacing: ls,
+    );
+  }
+
+  Widget _surface({
+    required Widget child,
+    EdgeInsetsGeometry padding = const EdgeInsets.all(16),
+    double radius = 16,
+    bool glow = false,
   }) {
-    final isSelected = currentTab == tabId;
-    return InkWell(
-      onTap: () => onTabSelected?.call(tabId),
-      borderRadius: BorderRadius.circular(10),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFF00F5D4)
-              : Colors.white.withOpacity(0.035),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isSelected
-                ? const Color(0xFF00F5D4)
-                : Colors.white.withOpacity(0.08),
-          ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF00F5D4).withOpacity(0.35),
-                    blurRadius: 12,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
-              : null,
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: const Color(0xFF141721).withOpacity(0.88),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: glow ? const Color(0xFF00F5D4).withOpacity(0.45) : Colors.white.withOpacity(0.1),
         ),
-        child: Row(
-          children: [
-            Text(
-              icon,
-              style: TextStyle(
-                fontSize: 16,
-                color: isSelected ? Colors.black : Colors.white,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-                  color: isSelected ? Colors.black : const Color(0xFFE2E8F0),
+        boxShadow: glow
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF00F5D4).withOpacity(0.15),
+                  blurRadius: 18,
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (isSelected)
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: Colors.black,
-                size: 16,
-              ),
-          ],
+              ]
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _tile({
+    required Widget child,
+    EdgeInsetsGeometry padding = const EdgeInsets.all(12),
+    double radius = 12,
+    bool selected = false,
+  }) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: selected ? const Color(0xFF00F5D4).withOpacity(0.14) : Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: selected ? const Color(0xFF00F5D4).withOpacity(0.4) : Colors.white.withOpacity(0.08),
         ),
       ),
+      child: child,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF080C14),
+      backgroundColor: const Color(0xFF0A0E17),
       body: SafeArea(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 1. 좌측 도구 독 (240px 고정)
-            Container(
-              width: 240,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0B101C).withOpacity(0.98),
-                border: Border(
-                  right: BorderSide(color: Colors.white.withOpacity(0.08)),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. 슬림 사이드바 내비게이션 (너비 210px)
+              SizedBox(
+                width: 210,
+                child: _sidebar(),
+              ),
+              const SizedBox(width: 16),
+              // 2. 메인 컨텐츠 영역
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: currentTab == 'timetable'
+                      ? _dashboardHomeK()
+                      : (currentTab == 'weekly_timetable'
+                          ? _weeklyTimetableSubPage()
+                          : (activeContent ?? const SizedBox())),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 상단 브랜딩 (클릭 시 홈 시간표로 이동)
-                  InkWell(
-                    onTap: () => onTabSelected?.call('timetable'),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-                      child: Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.asset(
-                              'assets/icons/logo.png',
-                              width: 32,
-                              height: 32,
-                              fit: BoxFit.contain,
-                              errorBuilder: (context, error, stackTrace) => Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF00F5D4),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Center(child: Text('⚡')),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'BOARDEST Teacher',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                Text(
-                                  '$schoolName $homeroomClass',
-                                  style: const TextStyle(
-                                    color: Color(0xFF00F5D4),
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const Text(
-                                  'by jiwho',
-                                  style: TextStyle(
-                                    color: Color(0xFF94A3B8),
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 14),
-                  const Divider(color: Colors.white10, height: 1),
-                  const SizedBox(height: 12),
-
-                  // 빠른 수업 액션 2개 (바로 수업하기, 바로 자료 만들기)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: onStartQuickLesson,
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF00F5D4).withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.4)),
-                            ),
-                            child: const Column(
-                              children: [
-                                Text('⚡', style: TextStyle(fontSize: 14)),
-                                SizedBox(height: 2),
-                                Text(
-                                  '바로 수업하기',
-                                  style: TextStyle(color: Color(0xFF00F5D4), fontSize: 10.5, fontWeight: FontWeight.w800),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: InkWell(
-                          onTap: onCreateQuickMaterial,
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF7F5AF0).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF7F5AF0).withOpacity(0.4)),
-                            ),
-                            child: const Column(
-                              children: [
-                                Text('✨', style: TextStyle(fontSize: 14)),
-                                SizedBox(height: 2),
-                                Text(
-                                  '자료 만들기',
-                                  style: TextStyle(color: Color(0xFF7F5AF0), fontSize: 10.5, fontWeight: FontWeight.w800),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-                  const Divider(color: Colors.white10, height: 1),
-                  const SizedBox(height: 12),
-
-                  // 도구 목록 (원격제어 없음, 쪽지 발송 / 판서 관리 포함)
-                  _buildLeftNavButton(
-                    icon: '📅',
-                    label: '시간표 대시보드',
-                    tabId: 'timetable',
-                  ),
-                  const SizedBox(height: 5),
-                  _buildLeftNavButton(
-                    icon: '🚀',
-                    label: '노트북 판서',
-                    tabId: 'lesson',
-                  ),
-                  const SizedBox(height: 5),
-                  _buildLeftNavButton(
-                    icon: '📂',
-                    label: 'Cloud 파일 열기',
-                    tabId: 'cloud_open',
-                  ),
-                  const SizedBox(height: 5),
-                  _buildLeftNavButton(
-                    icon: '✨',
-                    label: 'Cloud 교안 생성 (TBP)',
-                    tabId: 'cloud_create',
-                  ),
-                  const SizedBox(height: 5),
-                  _buildLeftNavButton(
-                    icon: '💌',
-                    label: '쪽지 발송',
-                    tabId: 'memo',
-                  ),
-                  const SizedBox(height: 5),
-                  _buildLeftNavButton(
-                    icon: '🎨',
-                    label: '판서 관리 (보관함)',
-                    tabId: 'archive',
-                  ),
-                  const SizedBox(height: 5),
-                  _buildLeftNavButton(
-                    icon: '🍱',
-                    label: '급식 & 급식지도',
-                    tabId: 'meal',
-                  ),
-                  const SizedBox(height: 5),
-                  _buildLeftNavButton(
-                    icon: '☁️',
-                    label: 'Cloud 보안 설정',
-                    tabId: 'cloud_settings',
-                  ),
-
-                  const Spacer(),
-
-                  // Google 계정 로그인 / 프로필 뱃지
-                  if (isLoggedIn)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00F5D4).withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 26,
-                            height: 26,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Color(0xFF00F5D4),
-                            ),
-                            child: const Center(
-                              child: Text('G', style: TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.w900)),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  teacherName.isNotEmpty ? teacherName : '선생님',
-                                  style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Text(
-                                  userEmail ?? '연동됨',
-                                  style: const TextStyle(color: Color(0xFF00F5D4), fontSize: 9.5),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert_rounded, size: 16, color: Colors.white70),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            color: const Color(0xFF16161A),
-                            onSelected: (val) {
-                              if (val == 'relogin') onLoginPressed?.call();
-                              if (val == 'logout') onLogoutPressed?.call();
-                            },
-                            itemBuilder: (ctx) => [
-                              const PopupMenuItem(
-                                value: 'relogin',
-                                child: Text('🔄 계정 전환 / 재로그인', style: TextStyle(fontSize: 12, color: Colors.white)),
-                              ),
-                              const PopupMenuItem(
-                                value: 'logout',
-                                child: Text('🚪 로그아웃', style: TextStyle(fontSize: 12, color: Color(0xFFFF595E))),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00F5D4),
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        onPressed: onLoginPressed,
-                        icon: const Icon(Icons.login_rounded, size: 16, color: Colors.black),
-                        label: const Text('Google 로그인', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
-                      ),
-                    ),
-
-                  _buildLeftNavButton(
-                    icon: '⚙️',
-                    label: '교사 환경 설정',
-                    tabId: 'settings',
-                    isSettings: true,
-                  ),
-                ],
-              ),
-            ),
-
-            // 2. 메인 컨텐츠 영역 (선택된 탭에 따라 가운데 전환)
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: currentTab == 'timetable'
-                    ? _buildTimetableHome()
-                    : _buildSubTabContent(),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// 탭: 주간 시간표 홈 (패스키 배너 + 2열 시간표)
-  Widget _buildTimetableHome() {
-    return KeyedSubtree(
-      key: const ValueKey('tab_timetable'),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // 상단 대시보드 퀵바 (이어서 하기, 소형 OTP, 팝업 열기, QR 패스키)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00F5D4).withOpacity(0.06),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFF00F5D4).withOpacity(0.25),
+  // ───────── 사이드바 ─────────
+  Widget _sidebar() {
+    return _surface(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00F5D4),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.dashboard_customize_rounded, color: Colors.black, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('BOARDEST', style: _ts(14, w: FontWeight.w900, h: 1.1)),
+                  Text('Teacher PRO', style: _ts(12, w: FontWeight.w700, c: const Color(0xFF00F5D4))),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          for (final nav in _nav)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: InkWell(
+                onTap: () => onTabSelected?.call(nav.$3),
+                borderRadius: BorderRadius.circular(10),
+                child: _tile(
+                  selected: currentTab == nav.$3,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      Icon(nav.$1, size: 18, color: currentTab == nav.$3 ? const Color(0xFF00F5D4) : Colors.white60),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          nav.$2,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _ts(13.5,
+                              w: currentTab == nav.$3 ? FontWeight.w800 : FontWeight.w500,
+                              c: currentTab == nav.$3 ? Colors.white : Colors.white70),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              child: Row(
-                children: [
-                  // 교사 정보 및 안내
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+            ),
+          const Spacer(),
+          // 교사 계정 정보 카드
+          _tile(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: const Color(0xFF00F5D4),
+                  child: Text(
+                    teacherName.isNotEmpty ? teacherName[0] : '선',
+                    style: _ts(14, w: FontWeight.w900, c: Colors.black),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('$teacherName 선생님', style: _ts(12.5, w: FontWeight.w800)),
+                      Text(schoolName, style: _ts(10.5, c: Colors.white54)),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(color: Color(0xFF34D399), shape: BoxShape.circle),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ───────── Teacher K안 대시보드 홈 ─────────
+  // [좌측: 교사 세로 시간표 타임라인] + [우측 상단: OTP & Drive용량] + [우측 하단: 세로 리스트형 Cloud 파일함]
+  Widget _dashboardHomeK() {
+    return KeyedSubtree(
+      key: const ValueKey('teacher_k_dashboard'),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. 좌측: 교사 세로 시간표 타임라인 (너비 310px)
+          SizedBox(
+            width: 310,
+            child: _teacherVerticalTimelineCard(),
+          ),
+          const SizedBox(width: 16),
+          // 2. 우측: 상단(OTP + Drive) + 하단(세로 리스트형 Cloud 파일함)
+          Expanded(
+            child: Column(
+              children: [
+                _topHeader('내 수업 자료 & 클라우드'),
+                const SizedBox(height: 12),
+                // 우측 상단: [OTP 와이드 카드] + [Drive 사용 용량 카드] 2개 나란히
+                SizedBox(
+                  height: 155,
+                  child: Row(
+                    children: [
+                      Expanded(flex: 5, child: _otpCardWideK()),
+                      const SizedBox(width: 14),
+                      Expanded(flex: 4, child: _driveStorageCardCompact()),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                // 카테고리 필터 칩 & 검색
+                _chipsAndSearchRow(),
+                const SizedBox(height: 12),
+                // 우측 하단: Cloud 파일함 (세로 리스트형!)
+                Expanded(child: _fileListView()),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _topHeader(String title) {
+    return Row(
+      children: [
+        Text(title, style: _ts(22, w: FontWeight.w900)),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.sync_rounded, color: Color(0xFF00F5D4), size: 16),
+              const SizedBox(width: 6),
+              Text('Google Drive 실시간 연동됨',
+                  style: _ts(12, c: const Color(0xFF00F5D4), w: FontWeight.w700)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        if (onResumeLesson != null)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Color(0xFF00F5D4)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: onResumeLesson,
+            icon: const Icon(Icons.play_circle_outline_rounded, size: 16, color: Color(0xFF00F5D4)),
+            label: Text('이어서 하기', style: _ts(12, w: FontWeight.w800)),
+          ),
+      ],
+    );
+  }
+
+  /// [K안 좌측: 교사 세로 타임라인 시간표 카드]
+  Widget _teacherVerticalTimelineCard() {
+    return _surface(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.schedule_rounded, size: 18, color: Color(0xFF00F5D4)),
+              const SizedBox(width: 8),
+              Text('교사 오늘 시간표', style: _ts(16, w: FontWeight.w900)),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00F5D4).withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('오늘 일과', style: _ts(11, w: FontWeight.w800, c: const Color(0xFF00F5D4))),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ListView.separated(
+              itemCount: _mockTodaySchedule.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (c, i) {
+                final sc = _mockTodaySchedule[i];
+                return _tile(
+                  selected: sc.$6,
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(sc.$1,
+                              style: _ts(15,
+                                  w: FontWeight.w900,
+                                  c: sc.$6 ? const Color(0xFF00F5D4) : Colors.white60)),
+                          Text(sc.$2, style: _ts(11.5, c: Colors.white38)),
+                        ],
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              isHomeroom ? '$teacherName 선생님 ($homeroomClass)' : '$teacherName 선생님 (비담임)',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF00F5D4).withOpacity(0.18),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                '온라인 연동 중',
-                                style: TextStyle(
-                                  color: Color(0xFF00F5D4),
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
+                            Text(sc.$3, style: _ts(14, w: FontWeight.w800)),
+                            Text(sc.$4,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _ts(12, c: sc.$6 ? const Color(0xFF00F5D4) : Colors.white60)),
                           ],
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          isHomeroom
-                              ? '교사 시간표 · 담임반 시간표 듀얼 뷰 | 칠판 연결 및 수업 관리'
-                              : '교사 개인 시간표 | 칠판 연결 및 수업 관리',
-                          style: const TextStyle(
-                            color: Color(0xFF94A3B8),
-                            fontSize: 11.5,
+                      ),
+                      if (sc.$6)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00F5D4),
+                            borderRadius: BorderRadius.circular(6),
                           ),
+                          child: Text('수업 중',
+                              style: _ts(10.5, w: FontWeight.w900, c: Colors.black)),
                         ),
-                      ],
-                    ),
+                    ],
                   ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
+          InkWell(
+            onTap: () => onTabSelected?.call('weekly_timetable'),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.calendar_month_rounded, size: 15, color: Colors.white70),
+                  const SizedBox(width: 6),
+                  Text('주간 전체 시간표 열기', style: _ts(13, w: FontWeight.w700, c: Colors.white70)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-                  // 1. 소형 OTP 코드 뱃지 (남은 시간 초 표시)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+  /// [K안 우측 상단 OTP 와이드 카드]
+  Widget _otpCardWideK() {
+    final progress = (remainingOtpSeconds / 60.0).clamp(0.0, 1.0);
+
+    return _surface(
+      glow: true,
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 76,
+            height: 76,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox.expand(
+                  child: CircularProgressIndicator(
+                    value: progress,
+                    strokeWidth: 6,
+                    color: const Color(0xFF00F5D4),
+                    backgroundColor: Colors.white.withOpacity(0.1),
+                  ),
+                ),
+                const Icon(Icons.key_rounded, color: Color(0xFF00F5D4), size: 28),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    Text('전자칠판 OTP: ', style: _ts(13, c: Colors.white70)),
+                    Text(currentOtp,
+                        style: _ts(22, w: FontWeight.w900, c: Colors.white, ls: 2.0)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text('유효시간 ${remainingOtpSeconds}초 남음 · 칠판에 입력 시 잠금 해제',
+                    style: _ts(11, c: Colors.white54)),
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: onRegisterPasskey,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white.withOpacity(0.12)),
+                      color: const Color(0xFF00F5D4),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('🔑 OTP ', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.w700)),
-                        Text(
-                          currentOtp,
-                          style: const TextStyle(
-                            color: Color(0xFF00F5D4),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF00F5D4).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            '${remainingOtpSeconds}초',
-                            style: const TextStyle(
-                              color: Color(0xFF00F5D4),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
+                        const Icon(Icons.qr_code_2_rounded, size: 14, color: Colors.black),
+                        const SizedBox(width: 4),
+                        Text('스마트폰 QR로 칠판 로그인',
+                            style: _ts(11, w: FontWeight.w900, c: Colors.black)),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-                  // 2. 이어서 하기 버튼
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Color(0xFF00F5D4)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: onResumeLesson,
-                    icon: const Icon(Icons.play_circle_outline_rounded, size: 16, color: Color(0xFF00F5D4)),
-                    label: const Text('이어서 하기', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
-                  ),
-                  const SizedBox(width: 8),
+  /// [K안 우측 상단 Drive 용량 카드] (연결된 교실 대신 Drive 양 표시)
+  Widget _driveStorageCardCompact() {
+    return _surface(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.cloud_done_rounded, size: 16, color: Color(0xFF00F5D4)),
+              const SizedBox(width: 6),
+              Text('Google Drive 용량', style: _ts(13.5, w: FontWeight.w800)),
+              const Spacer(),
+              Text('42%', style: _ts(13, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('6.3 GB 사용 / 15 GB', style: _ts(15, w: FontWeight.w900, c: Colors.white)),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: const LinearProgressIndicator(
+                  value: 0.42,
+                  minHeight: 6,
+                  color: Color(0xFF00F5D4),
+                  backgroundColor: Colors.white12,
+                ),
+              ),
+            ],
+          ),
+          Text('여유 공간 8.7 GB 남음 (동기화 완료)', style: _ts(11, c: Colors.white54)),
+        ],
+      ),
+    );
+  }
 
-                  // 3. 팝업 열기 버튼 (타이머/계산기 등)
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: BorderSide(color: Colors.white.withOpacity(0.2)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: onOpenPopups,
-                    icon: const Icon(Icons.picture_in_picture_alt_rounded, size: 16, color: Colors.white70),
-                    label: const Text('팝업 열기', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // 4. QR 패스키 관리 버튼
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: hasPasskey ? const Color(0xFF00F5D4) : const Color(0xFF7F5AF0),
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0,
-                    ),
-                    onPressed: onRegisterPasskey,
-                    icon: Icon(hasPasskey ? Icons.qr_code_scanner_rounded : Icons.qr_code_rounded, size: 16),
-                    label: Text(
-                      hasPasskey ? 'QR 패스키' : '패스키 등록',
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11.5),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // 5. Google 로그인 / 계정 상태 버튼
-                  if (isLoggedIn)
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF00F5D4),
-                        side: BorderSide(color: const Color(0xFF00F5D4).withOpacity(0.5)),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: onLoginPressed,
-                      icon: const Icon(Icons.account_circle_rounded, size: 16, color: Color(0xFF00F5D4)),
-                      label: Text(
-                        userEmail != null && userEmail!.isNotEmpty
-                            ? (userEmail!.length > 18 ? '${userEmail!.substring(0, 15)}...' : userEmail!)
-                            : 'Google 연동됨',
-                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
-                      ),
-                    )
-                  else
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00F5D4),
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        elevation: 0,
-                      ),
-                      onPressed: onLoginPressed,
-                      icon: const Icon(Icons.login_rounded, size: 16, color: Colors.black),
-                      label: const Text(
-                        'Google 로그인',
-                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11.5),
-                      ),
-                    ),
-                ],
+  Widget _chipsAndSearchRow() {
+    return Row(
+      children: [
+        for (final t in ['전체', 'PDF', 'PPT', 'HWP', 'TBP 교과서', 'HTMLP', '판서'])
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: t == '전체' ? const Color(0xFF00F5D4) : Colors.white.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                t,
+                style: _ts(12,
+                    w: t == '전체' ? FontWeight.w900 : FontWeight.w600,
+                    c: t == '전체' ? Colors.black : Colors.white70),
               ),
             ),
+          ),
+        const Spacer(),
+        Container(
+          width: 220,
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withOpacity(0.1)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.search_rounded, size: 16, color: Colors.white38),
+              const SizedBox(width: 6),
+              Text('자료 검색...', style: _ts(12, c: Colors.white38)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
-            const SizedBox(height: 14),
+  /// [우측 하단: 세로 리스트형 Cloud 파일함]
+  Widget _fileListView() {
+    return _surface(
+      padding: const EdgeInsets.all(16),
+      child: ListView.separated(
+        itemCount: _mockFiles.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (c, i) {
+          final f = _mockFiles[i];
+          return _tile(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: f.$4.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(f.$5, color: f.$4, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(f.$1,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _ts(15, w: FontWeight.w800)),
+                      const SizedBox(height: 3),
+                      Text('${f.$2} · ${f.$3}', style: _ts(12, c: Colors.white54)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00F5D4).withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text('열기',
+                      style: _ts(12, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
 
-            // 2열 시간표 영역
+  /// 서브 페이지: 주간 시간표 전체 뷰
+  Widget _weeklyTimetableSubPage() {
+    return KeyedSubtree(
+      key: const ValueKey('tab_weekly_timetable'),
+      child: _surface(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.calendar_month_rounded, color: Color(0xFF00F5D4), size: 20),
+                const SizedBox(width: 8),
+                Text('주간 전체 시간표', style: _ts(18, w: FontWeight.w900)),
+                const Spacer(),
+                OutlinedButton(
+                  onPressed: () => onTabSelected?.call('timetable'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF00F5D4),
+                    side: const BorderSide(color: Color(0xFF00F5D4)),
+                  ),
+                  child: const Text('대시보드로 복귀'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             Expanded(
               child: Row(
                 children: [
-                  // 1. 내 담당 수업 시간표
                   Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.03),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(0.08)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                '👩‍🏫 내 담당 수업 시간표 ($teacherName)',
-                                style: const TextStyle(
-                                  color: Color(0xFF00F5D4),
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const Text(
-                                '주간 시간표',
-                                style: TextStyle(
-                                  color: Color(0xFF94A3B8),
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Divider(color: Colors.white12, height: 16),
-                          Expanded(
-                            child: teacherTimetableWidget ??
-                                Center(
-                                  child: Text(
-                                    '시간표를 로드 중입니다...',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.4),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    child: teacherTimetableWidget ??
+                        Center(
+                          child: Text('시간표 로드 중...', style: _ts(14, c: Colors.white38)),
+                        ),
                   ),
-
                   if (isHomeroom && homeroomTimetableWidget != null) ...[
                     const SizedBox(width: 14),
-
-                    // 2. 우리 반 (담임 학급) 시간표
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.03),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withOpacity(0.08)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  '🏫 우리 반 시간표 ($homeroomClass)',
-                                  style: const TextStyle(
-                                    color: Color(0xFF8B5CF6),
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                const Text(
-                                  '담임 학급 일과',
-                                  style: TextStyle(
-                                    color: Color(0xFF94A3B8),
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const Divider(color: Colors.white12, height: 16),
-                            Expanded(
-                              child: homeroomTimetableWidget!,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    Expanded(child: homeroomTimetableWidget!),
                   ],
                 ],
               ),
@@ -723,90 +708,5 @@ class BstTeacherMainLayout extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  /// 서브 탭 컨텐츠 영역 (수업 판서, Canva, 급식 지도, 쪽지, 보관함 등)
-  Widget _buildSubTabContent() {
-    return KeyedSubtree(
-      key: ValueKey('tab_$currentTab'),
-      child: Column(
-        children: [
-          // 상단 네비게이션 헤더 바 (홈으로 복귀 버튼 및 타이틀)
-          Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0B101C),
-              border: Border(
-                bottom: BorderSide(color: Colors.white.withOpacity(0.08)),
-              ),
-            ),
-            child: Row(
-              children: [
-                InkWell(
-                  onTap: () => onTabSelected?.call('timetable'),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white.withOpacity(0.1)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.arrow_back_rounded, color: Colors.white70, size: 16),
-                        SizedBox(width: 6),
-                        Text(
-                          '주간 시간표로 돌아가기',
-                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Text(
-                  _getTabTitle(currentTab),
-                  style: const TextStyle(
-                    color: Color(0xFF00F5D4),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // 본문 위젯
-          Expanded(
-            child: activeContent ?? const SizedBox.shrink(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _getTabTitle(String tab) {
-    switch (tab) {
-      case 'lesson':
-        return '🚀 노트북 판서 워크스페이스';
-      case 'cloud_open':
-        return '📂 Cloud 에서 열기 (드라이브 & 판서 파일)';
-      case 'cloud_create':
-        return '✨ Cloud 에서 생성 (TBP, HTML Present, 파일 업로드 등)';
-      case 'cloud_settings':
-        return '☁️ Cloud 설정 (국제 규격 패스키 & 인증 기기)';
-      case 'meal':
-        return '🍱 실시간 급식지도 & 반별 급식 호출';
-      case 'memo':
-        return '💌 전자칠판 쪽지 발송 (긴급 공지)';
-      case 'archive':
-        return '🎨 판서 보관함 (.pen & Cloud 저장소)';
-      case 'settings':
-        return '⚙️ 교사 환경 설정';
-      default:
-        return '워크스페이스';
-    }
   }
 }

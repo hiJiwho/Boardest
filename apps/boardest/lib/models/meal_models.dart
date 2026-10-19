@@ -17,6 +17,26 @@ class MealDishItem {
   String get allergyInfo => allergies.join(', ');
   int get votes => totalVotes;
 
+  bool matchesAllergy(dynamic filter) {
+    if (filter == null) return false;
+    final filterStr = filter.toString().trim();
+    final code = int.tryParse(filterStr);
+    final keyword = code != null ? MealDayInfo.allergyCodeMap[code] : filterStr;
+
+    for (final a in allergies) {
+      if (code != null && a == '$code') return true;
+      if (keyword != null && keyword.isNotEmpty) {
+        if (a == keyword || a.contains(keyword) || keyword.contains(a)) return true;
+        if ((keyword == '닭' || keyword == '닭고기') && (a == '닭' || a == '닭고기')) return true;
+        if ((keyword == '소' || keyword == '소고기') && (a == '소' || a == '소고기')) return true;
+        if ((keyword == '돼지' || keyword == '돼지고기') && (a == '돼지' || a == '돼지고기')) return true;
+        if ((keyword == '새우' || keyword == '게' || keyword == '갑각') &&
+            (a == '새우' || a == '게' || a == '갑각')) return true;
+      }
+    }
+    return false;
+  }
+
   Map<String, dynamic> toJson() => {
         'name': name,
         'allergies': allergies,
@@ -48,12 +68,19 @@ class MealDayInfo {
     this.calories = '',
   });
 
+  bool hasAllergy(dynamic filter) {
+    if (filter == null) return false;
+    return dishes.any((d) => d.matchesAllergy(filter));
+  }
+
   Set<int> get allAllergyIndexes {
     final res = <int>{};
     for (final dish in dishes) {
       for (final a in dish.allergies) {
-        for (final entry in _allergyCodeMap.entries) {
-          if (entry.value == a) res.add(entry.key);
+        for (final entry in allergyCodeMap.entries) {
+          if (entry.value == a || entry.value.contains(a) || a.contains(entry.value)) {
+            res.add(entry.key);
+          }
         }
       }
     }
@@ -75,7 +102,7 @@ class MealDayInfo {
     return '$dateStr (${weekdays[date.weekday - 1]}) 급식';
   }
 
-  static const Map<int, String> _allergyCodeMap = {
+  static const Map<int, String> allergyCodeMap = {
     1: '난류',
     2: '우유',
     3: '메밀',
@@ -147,7 +174,7 @@ class MealDayInfo {
         final nums = RegExp(r'\d+').allMatches(rawNumbers).map((m) => int.tryParse(m.group(0) ?? '')).whereType<int>();
 
         for (final num in nums) {
-          final label = _allergyCodeMap[num];
+          final label = allergyCodeMap[num];
           if (label != null && !itemAllergies.contains(label)) {
             itemAllergies.add(label);
             detectedAllergies.add(label);
