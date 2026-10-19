@@ -326,6 +326,14 @@
             { "key": "Cache-Control", "value": "no-cache, max-age=0" },
             { "key": "Access-Control-Allow-Origin", "value": "*" }
           ]
+        },
+        {
+          "source": "**/*.msi",
+          "headers": [
+            { "key": "Content-Type", "value": "application/x-msi" },
+            { "key": "Cache-Control", "value": "no-cache, max-age=0" },
+            { "key": "Access-Control-Allow-Origin", "value": "*" }
+          ]
         }
       ],
       "redirects": [
@@ -380,8 +388,18 @@
           "type": 302
         },
         {
+          "source": "/bst-teacher.msi",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi",
+          "type": 302
+        },
+        {
+          "source": "/teacher.msi",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi",
+          "type": 302
+        },
+        {
           "source": "/bst-teacher.appx",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi",
           "type": 302
         },
         {

@@ -34,13 +34,14 @@ if ($UseCertificateStore) {
     throw 'Set BOARDEST_CERT_PASSWORD or install the matching Boardest signing certificate with its private key.'
   }
 }
-foreach ($name in @('boardest', 'bst-teacher', 'bst-overlay-panser', 'boardest-class-lite')) {
+foreach ($name in @('boardest', 'bst-overlay-panser', 'boardest-class-lite')) {
   $template = Join-Path $TemplateDir $name
   if (-not (Test-Path (Join-Path $template 'AppxManifest.xml'))) { throw "AppX template not found: $template" }
   $package = Join-Path $PackageDir $name
   New-Item -ItemType Directory -Force -Path $package | Out-Null
   Copy-Item (Join-Path $template '*') $package -Recurse -Force
 }
+New-Item -ItemType Directory -Force -Path (Join-Path $PackageDir 'bst-teacher') | Out-Null
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
 function Set-PackageVersion([string]$Manifest) {
@@ -74,6 +75,74 @@ function Pack-Signed([string]$Name) {
     & $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $target
   }
   if ($LASTEXITCODE -ne 0) { throw "AppX signing failed: $Name" }
+}
+
+function Pack-TeacherMsi([string]$Version) {
+  Write-Host "Packaging Boardest Teacher as MSI installer (v$Version)..." -ForegroundColor Cyan
+  $WixDir = Join-Path $RootDir 'tools\wix'
+  if (-not (Test-Path "$WixDir\candle.exe")) {
+    Write-Host "WiX binaries not found in $WixDir. Downloading WiX v3.11 binaries..." -ForegroundColor Yellow
+    New-Item -ItemType Directory -Force -Path $WixDir | Out-Null
+    $ZipPath = Join-Path $DistDir 'wix311-binaries.zip'
+    Invoke-WebRequest -Uri 'https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip' -OutFile $ZipPath
+    Expand-Archive -Path $ZipPath -DestinationPath $WixDir -Force
+    Remove-Item $ZipPath -Force -ErrorAction SilentlyContinue
+  }
+  $TeacherSource = Join-Path $PackageDir 'bst-teacher'
+  $Template = Join-Path $RootDir 'scripts\wix_templates\bst-teacher'
+  $ProductWxs = Join-Path $Template 'Product.wxs'
+  $LicenseRtf = Join-Path $Template 'license.rtf'
+  $IconPath = Join-Path $Template 'app_icon.ico'
+  $MsiOut = Join-Path $OutDir 'bst-teacher.msi'
+  $WorkDir = Join-Path $DistDir 'wix_work'
+  New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
+
+  # Clean unneeded compiler artifacts to reduce package size
+  Get-ChildItem -Path $TeacherSource -Filter "*.lib" -Recurse | Remove-Item -Force -ErrorAction SilentlyContinue
+  Get-ChildItem -Path $TeacherSource -Filter "*.exp" -Recurse | Remove-Item -Force -ErrorAction SilentlyContinue
+
+  # 1. Sign all executables in bst-teacher package before creating MSI
+  $Exes = Get-ChildItem -Path $TeacherSource -Filter "*.exe" -Recurse
+  foreach ($exe in $Exes) {
+    if ($UseCertificateStore) {
+      & $SignTool sign /fd SHA256 /s My /sha1 $CertificateThumbprint $exe.FullName
+    } else {
+      & $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $exe.FullName
+    }
+  }
+
+  # 2. Harvest files
+  $FilesWxs = Join-Path $WorkDir 'files.wxs'
+  & "$WixDir\heat.exe" dir $TeacherSource -cg AppFiles -dr INSTALLFOLDER -srd -ag -sreg -scom -var var.SourceDir -out $FilesWxs
+  if ($LASTEXITCODE -ne 0) { throw "WiX heat failed for bst-teacher" }
+
+  # 3. Compile
+  $WixExt = Join-Path $WixDir 'WixUIExtension.dll'
+  & "$WixDir\candle.exe" -nologo -arch x64 `
+    "-dVersion=$Version" `
+    "-dSourceDir=$TeacherSource" `
+    "-dIconPath=$IconPath" `
+    "-dLicenseRtf=$LicenseRtf" `
+    -ext $WixExt `
+    -out "$WorkDir\" `
+    $ProductWxs $FilesWxs
+  if ($LASTEXITCODE -ne 0) { throw "WiX candle failed for bst-teacher" }
+
+  # 4. Link
+  & "$WixDir\light.exe" -nologo -ext $WixExt -sice:ICE38 -sice:ICE43 -sice:ICE57 -sice:ICE60 -sice:ICE61 -sice:ICE91 `
+    -out $MsiOut `
+    (Join-Path $WorkDir 'Product.wixobj') (Join-Path $WorkDir 'files.wixobj')
+  if ($LASTEXITCODE -ne 0) { throw "WiX light failed for bst-teacher" }
+
+  # 5. Digitally sign the resulting MSI
+  if ($UseCertificateStore) {
+    & $SignTool sign /fd SHA256 /s My /sha1 $CertificateThumbprint $MsiOut
+  } else {
+    & $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $MsiOut
+  }
+  if ($LASTEXITCODE -ne 0) { throw "MSI signing failed: $MsiOut" }
+
+  Write-Host "Successfully built and signed $MsiOut" -ForegroundColor Green
 }
 
 Write-Host "Building Boardest official v$AppVersion AppX and APK files..." -ForegroundColor Cyan
@@ -131,13 +200,14 @@ foreach ($overlay in @('boardest_ppt_overlay', 'boardest_hwp_overlay')) {
   (Join-Path $OverlaySource 'boardest_ppt_helper.cs')
 if ($LASTEXITCODE -ne 0) { throw 'PowerPoint helper compilation failed.' }
 
-foreach ($name in @('boardest', 'bst-teacher', 'bst-overlay-panser', 'boardest-class-lite')) { Pack-Signed $name }
+foreach ($name in @('boardest', 'bst-overlay-panser', 'boardest-class-lite')) { Pack-Signed $name }
+Pack-TeacherMsi $AppVersion
 Copy-Item $CerFile (Join-Path $OutDir 'BoardestCert.cer') -Force
 
 $DownloadDir = Join-Path $RootDir 'infra\download_web'
 New-Item -ItemType Directory -Force -Path $DownloadDir | Out-Null
-foreach ($file in @('boardest.appx', 'bst-teacher.appx', 'bst-overlay-panser.appx', 'boardest-class-lite.appx', 'boardest.apk', 'bst-teacher.apk', 'bst-teacher-lite.apk', 'bst-class-lite.apk', 'boardest-class-lite.apk', 'BoardestCert.cer')) {
+foreach ($file in @('boardest.appx', 'bst-teacher.msi', 'bst-overlay-panser.appx', 'boardest-class-lite.appx', 'boardest.apk', 'bst-teacher.apk', 'bst-teacher-lite.apk', 'bst-class-lite.apk', 'boardest-class-lite.apk', 'BoardestCert.cer')) {
   $source = Join-Path $OutDir $file
   if (Test-Path $source) { Copy-Item $source (Join-Path $DownloadDir $file) -Force }
 }
-Write-Host 'Official AppX/APK artifacts are ready in dist\appx.' -ForegroundColor Green
+Write-Host 'Official AppX/MSI/APK artifacts are ready in dist\appx.' -ForegroundColor Green

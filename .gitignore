@@ -34,7 +34,12 @@ infra/*
 # Release binaries are published as GitHub release assets, not source files.
 infra/download_web/*.appx
 infra/download_web/*.apk
+infra/download_web/*.msi
 infra/downloads_hub_web/*.appx
 infra/downloads_hub_web/*.apk
+infra/downloads_hub_web/*.msi
 infra/download_web/*.cer
 infra/download_web/*.zip
+
+# Third-party tools
+tools/

@@ -28,16 +28,18 @@ class UpdateInfo {
   });
 }
 
-/// 교사용 앱 자체 인앱 업데이트 서비스 (Windows AppX & Android APK)
-/// 1. 앱 로딩 시 최신 버전 검사
-/// 2. 업데이트 감지 시 나중에 받기/취소 완전 차단 (강제 전면 모달 납치)
-/// 3. OS 임시 폴더로 패키지 자동 다운로드 (실시간 진행률 표시)
-/// 4. 다운로드 완료 즉시 OS 설치 프로그램 실행 트리거 후 앱 자동 종료(exit(0))
+/// 교사용 앱 인앱 업데이트 안내 및 다운로드 서비스
+/// 1. 최신 버전 확인
+/// 2. 독촉 없는 친절한 선택형 안내 대화상자 (닫기/나중에 가능)
+/// 3. 다운로드 시 AhnLab V3 등 보안 앱 오탐 방지:
+///    - PowerShell Start-Process 드로퍼 패턴 완전 배제
+///    - Windows 표준 Installer인 msiexec.exe /i 직접 실행
+///    - 앱 강제 종료(exit(0))를 독촉하지 않고 사용자에게 친절히 안내
 class UpdateService {
   UpdateService._internal();
   static final instance = UpdateService._internal();
 
-  static const String defaultVersion = '4.1.1';
+  static const String defaultVersion = '4.1.2';
   static const String _api =
       'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String downloadPage = 'https://boardest-downloads.web.app';
@@ -94,6 +96,7 @@ class UpdateService {
       final isAndroid = !kIsWeb && Platform.isAndroid;
 
       final assets = (data['assets'] as List<dynamic>? ?? []);
+      String? msiUrl;
       String? appxUrl;
       String? apkUrl;
 
@@ -102,7 +105,9 @@ class UpdateService {
         final url = a['browser_download_url'] as String?;
         if (url == null || url.isEmpty) continue;
 
-        if (name.contains('teacher') &&
+        if (name.contains('teacher') && name.endsWith('.msi')) {
+          msiUrl ??= url;
+        } else if (name.contains('teacher') &&
             (name.endsWith('.appx') || name.endsWith('.msix'))) {
           appxUrl ??= url;
         } else if (name.contains('teacher') && name.endsWith('.apk')) {
@@ -110,12 +115,12 @@ class UpdateService {
         }
       }
 
-      appxUrl ??=
-          'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx';
+      msiUrl ??=
+          'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi';
       apkUrl ??=
           'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.apk';
 
-      final targetUrl = isWindows ? appxUrl : apkUrl;
+      final targetUrl = isWindows ? msiUrl : apkUrl;
 
       return UpdateInfo(
         latestVersion: latest,
@@ -149,33 +154,34 @@ class UpdateService {
     if (!context.mounted) return;
     showDialog<void>(
       context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.black.withValues(alpha: 0.85),
+      barrierDismissible: true,
+      barrierColor: Colors.black.withValues(alpha: 0.65),
       builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: _TeacherMandatoryUpdateDialog(info: info),
+        canPop: true,
+        child: _TeacherOptionalUpdateDialog(info: info),
       ),
     );
   }
 }
 
-class _TeacherMandatoryUpdateDialog extends StatefulWidget {
+class _TeacherOptionalUpdateDialog extends StatefulWidget {
   final UpdateInfo info;
 
-  const _TeacherMandatoryUpdateDialog({required this.info});
+  const _TeacherOptionalUpdateDialog({required this.info});
 
   @override
-  State<_TeacherMandatoryUpdateDialog> createState() =>
-      _TeacherMandatoryUpdateDialogState();
+  State<_TeacherOptionalUpdateDialog> createState() =>
+      _TeacherOptionalUpdateDialogState();
 }
 
-class _TeacherMandatoryUpdateDialogState
-    extends State<_TeacherMandatoryUpdateDialog> {
+class _TeacherOptionalUpdateDialogState
+    extends State<_TeacherOptionalUpdateDialog> {
   double _progress = 0.0;
   int _downloadedBytes = 0;
   int _totalBytes = 0;
   bool _isDownloading = false;
   bool _isDone = false;
+  bool _installerLaunched = false;
   String? _downloadedFilePath;
   String? _errorMessage;
   String _statusText = '최신 업데이트 패키지 다운로드를 준비하는 중입니다...';
@@ -193,18 +199,19 @@ class _TeacherMandatoryUpdateDialogState
     setState(() {
       _isDownloading = true;
       _isDone = false;
+      _installerLaunched = false;
       _errorMessage = null;
       _progress = 0.0;
       _downloadedBytes = 0;
       _totalBytes = 0;
-      _statusText = '업데이트 파일을 임시 폴더에 다운로드하는 중...';
+      _statusText = '업데이트 파일을 다운로드하는 중...';
     });
 
     try {
       final tempDir = await getTemporaryDirectory();
-      final ext = widget.info.isWindows ? 'appx' : 'apk';
+      final ext = widget.info.isWindows ? 'msi' : 'apk';
       final fileName =
-          'boardest_teacher_update_${widget.info.latestVersion}.$ext';
+          'boardest_teacher_setup_${widget.info.latestVersion}.$ext';
       final savePath = p.join(tempDir.path, fileName);
 
       final client = http.Client();
@@ -253,20 +260,22 @@ class _TeacherMandatoryUpdateDialogState
         _isDownloading = false;
         _isDone = true;
         _progress = 1.0;
-        _statusText = '다운로드 완료! 준비가 되셨을 때 아래 [지금 설치 및 적용]을 눌러주세요.\n'
-            '인스톨러가 실행되며 교사용 앱이 안전하게 종료됩니다.';
+        _statusText = widget.info.isWindows
+            ? '다운로드 완료! 준비가 되셨을 때 아래 [설치 프로그램(MSI) 실행]을 눌러주세요.\n'
+                'Windows Installer가 실행되며, 원하실 때 현재 앱을 종료하시면 됩니다.'
+            : '다운로드 완료! 아래 버튼을 눌러 업데이트를 설치해 주세요.';
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isDownloading = false;
-        _errorMessage = '다운로드 또는 설치 트리거 중 오류 발생:\n$e';
+        _errorMessage = '다운로드 중 오류가 발생했습니다:\n$e';
         _statusText = '업데이트 파일을 다운로드하지 못했습니다.';
       });
     }
   }
 
-  Future<void> _executeInstallAndExit() async {
+  Future<void> _executeInstall() async {
     final savePath = _downloadedFilePath;
     if (savePath == null || !File(savePath).existsSync()) {
       return;
@@ -274,29 +283,27 @@ class _TeacherMandatoryUpdateDialogState
 
     if (widget.info.isWindows) {
       try {
-        await Process.start('powershell.exe', [
-          '-NoProfile',
-          '-Command',
-          'Start-Process',
-          '"$savePath"',
-        ]);
-      } catch (_) {
-        await Process.start('cmd.exe', ['/c', 'start', '', savePath]);
+        // msiexec.exe /i 직접 실행 (PowerShell 미사용으로 AhnLab V3 및 백신 오탐 원천 차단)
+        await Process.start('msiexec.exe', ['/i', savePath]);
+      } catch (e) {
+        debugPrint('[UpdateService] msiexec launch failed: $e');
+        try {
+          await Process.start('cmd.exe', ['/c', 'start', '', savePath]);
+        } catch (_) {}
       }
+    } else if (widget.info.isAndroid) {
+      try {
+        await launchUrl(Uri.file(savePath));
+      } catch (_) {}
     }
 
-    if (kDebugMode) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('디버그 모드에서는 앱 자동 종료(exit)가 차단됩니다.')),
-        );
-      }
-      return;
-    }
-
-    await Future.delayed(const Duration(milliseconds: 1000));
-    exit(0);
+    if (!mounted) return;
+    setState(() {
+      _installerLaunched = true;
+      _statusText = '설치 관리자(MSI)가 실행되었습니다.\n'
+          '화면에 나타난 설치 마법사의 안내에 따라 설치를 완료해 주세요.\n'
+          '(새 버전을 적용하려면 설치 진행 중 교사용 앱을 종료해 주시면 됩니다.)';
+    });
   }
 
   @override
@@ -336,7 +343,7 @@ class _TeacherMandatoryUpdateDialogState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '교사용 앱 필수 업데이트',
+                  '교사용 앱 업데이트 안내',
                   style: GoogleFonts.notoSansKr(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -362,8 +369,8 @@ class _TeacherMandatoryUpdateDialogState
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              '교사용 앱 최신 기능 및 동기화 보안 패치가 적용된 새 버전이 감지되었습니다.\n'
-              '안정적인 수업 관리를 위해 필수 업데이트를 즉시 진행합니다. (나중에 받기 불가)',
+              '교사용 앱의 최신 버전이 준비되었습니다.\n'
+              '수업과 업무에 방해되지 않도록 원하시는 시간에 편리하게 업데이트하실 수 있습니다.',
               style: GoogleFonts.notoSansKr(
                 color: Colors.white70,
                 fontSize: 13,
@@ -385,13 +392,15 @@ class _TeacherMandatoryUpdateDialogState
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        _isDone
-                            ? '✅ 완료'
-                            : _isDownloading
-                                ? '다운로드 진행 중'
-                                : '대기 중',
+                        _installerLaunched
+                            ? '🚀 설치 관리자 실행됨'
+                            : _isDone
+                                ? '✅ 준비 완료'
+                                : _isDownloading
+                                    ? '다운로드 진행 중'
+                                    : '대기 중',
                         style: GoogleFonts.notoSansKr(
-                          color: _isDone
+                          color: (_installerLaunched || _isDone)
                               ? const Color(0xFF00F5D4)
                               : Colors.white70,
                           fontSize: 12,
@@ -431,7 +440,7 @@ class _TeacherMandatoryUpdateDialogState
                   Text(
                     _statusText,
                     style: GoogleFonts.notoSansKr(
-                      color: _isDone
+                      color: (_installerLaunched || _isDone)
                           ? const Color(0xFF00F5D4)
                           : Colors.white60,
                       fontSize: 12,
@@ -463,11 +472,29 @@ class _TeacherMandatoryUpdateDialogState
         ),
       ),
       actions: [
-        if (_isDone) ...[
+        if (_installerLaunched) ...[
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF00F5D4),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.check_rounded, size: 18),
+            label: const Text('확인 (교사용 앱 계속 사용)'),
+          ),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white70,
+              side: const BorderSide(color: Colors.white24),
+            ),
+            onPressed: () => exit(0),
+            child: const Text('앱 종료'),
+          ),
+        ] else if (_isDone) ...[
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: Text(
-              '나중에 적용',
+              '나중에 설치',
               style: GoogleFonts.notoSansKr(
                 color: Colors.white54,
                 fontSize: 13,
@@ -480,11 +507,11 @@ class _TeacherMandatoryUpdateDialogState
               foregroundColor: Colors.black,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
-            onPressed: _executeInstallAndExit,
+            onPressed: _executeInstall,
             icon: const Icon(Icons.install_desktop_rounded, size: 18),
-            label: const Text(
-              '지금 설치 및 앱 재시작',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            label: Text(
+              widget.info.isWindows ? '설치 프로그램(MSI) 실행' : '설치 실행',
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
         ] else if (_errorMessage != null) ...[
@@ -521,6 +548,17 @@ class _TeacherMandatoryUpdateDialogState
             onPressed: _startDownloadAndInstall,
             icon: const Icon(Icons.refresh_rounded, size: 16),
             label: const Text('다시 시도'),
+          ),
+        ] else ...[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              '닫기 (백그라운드 유지)',
+              style: GoogleFonts.notoSansKr(
+                color: Colors.white54,
+                fontSize: 13,
+              ),
+            ),
           ),
         ],
       ],

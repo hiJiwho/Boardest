@@ -40,26 +40,30 @@ Import-Certificate -FilePath $tempCer -CertStoreLocation "Cert:\CurrentUser\Trus
 Write-Host "  -> 인증서 등록 완료" -ForegroundColor Green
 
 # 3. 패키지 다운로드
-Write-Host "[2/3] Boardest Teacher 최신 패키지 다운로드 중..." -ForegroundColor Yellow
-$tempAppx = Join-Path $env:TEMP "bst-teacher.appx"
-$downloadUrl = "https://bst-installer.web.app/bst-teacher.appx"
+Write-Host "[2/3] Boardest Teacher 최신 MSI 패키지 다운로드 중..." -ForegroundColor Yellow
+$tempMsi = Join-Path $env:TEMP "bst-teacher.msi"
+$downloadUrl = "https://bst-installer.web.app/bst-teacher.msi"
 try {
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $tempAppx -UseBasicParsing -ErrorAction Stop
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $tempMsi -UseBasicParsing -ErrorAction Stop
     Write-Host "  -> 패키지 다운로드 완료" -ForegroundColor Green
 } catch {
     Write-Host "  -> 1차 다운로드 실패, 대체 서버에서 다운로드합니다..." -ForegroundColor Yellow
-    Invoke-WebRequest -Uri "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.appx" -OutFile $tempAppx -UseBasicParsing
+    Invoke-WebRequest -Uri "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi" -OutFile $tempMsi -UseBasicParsing
 }
 
 # 4. 앱 설치
-Write-Host "[3/3] Boardest Teacher 패키지 설치 등록 중..." -ForegroundColor Yellow
+Write-Host "[3/3] Boardest Teacher MSI 패키지 설치 진행 중..." -ForegroundColor Yellow
 try {
-    Add-AppxPackage -Path $tempAppx -ErrorAction Stop
-    Write-Host ""
-    Write-Host "======================================================================" -ForegroundColor Green
-    Write-Host " 🎉 [성공] Boardest Teacher PRO (교사용 앱) 설치가 완료되었습니다!" -ForegroundColor Green
-    Write-Host "    시작 메뉴 또는 검색창에서 'Boardest Teacher'를 찾아 실행하세요." -ForegroundColor White
-    Write-Host "======================================================================" -ForegroundColor Green
+    $proc = Start-Process msiexec.exe -ArgumentList "/i `"$tempMsi`" /qb" -Wait -PassThru
+    if ($proc.ExitCode -eq 0 -or $proc.ExitCode -eq 3010) {
+        Write-Host ""
+        Write-Host "======================================================================" -ForegroundColor Green
+        Write-Host " 🎉 [성공] Boardest Teacher PRO (교사용 앱) 설치가 완료되었습니다!" -ForegroundColor Green
+        Write-Host "    시작 메뉴 또는 바탕화면에서 'Boardest Teacher'를 찾아 실행하세요." -ForegroundColor White
+        Write-Host "======================================================================" -ForegroundColor Green
+    } else {
+        throw "msiexec 종료 코드: $($proc.ExitCode)"
+    }
 } catch {
     Write-Host "  [!] 설치 실패: $_" -ForegroundColor Red
 }

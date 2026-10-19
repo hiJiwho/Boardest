@@ -1392,7 +1392,10 @@ class _TeacherViewState extends State<TeacherView> {
         channel: _settings.updateChannel,
       );
       if (updateInfo != null && updateInfo.hasUpdate && mounted) {
-        UpdateService.instance.showUpdateDialog(context, updateInfo);
+        // 교사용 앱은 업데이트 독촉 차단: 사용자가 직접 '버전 & 업데이트'를 눌렀을 때만 모달 안내
+        if (!silent) {
+          UpdateService.instance.showUpdateDialog(context, updateInfo);
+        }
       } else if (!silent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -8,7 +8,7 @@ $ExpectedAssets = @(
   'boardest-windows.zip',
   'bst-teacher-windows.zip',
   'boardest.appx',
-  'bst-teacher.appx',
+  'bst-teacher.msi',
   'bst-overlay-panser.appx',
   'boardest-class-lite.appx',
   'boardest.apk',
@@ -19,7 +19,7 @@ $ExpectedAssets = @(
 )
 $DownloadArtifacts = @(
   'boardest.appx',
-  'bst-teacher.appx',
+  'bst-teacher.msi',
   'bst-overlay-panser.appx',
   'boardest-class-lite.appx',
   'boardest.apk',
