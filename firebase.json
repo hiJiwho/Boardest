@@ -23,6 +23,43 @@
           ]
         }
       ],
+      "redirects": [
+        {
+          "source": "/bst-teacher.msi",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi",
+          "type": 302
+        },
+        {
+          "source": "/teacher.msi",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi",
+          "type": 302
+        },
+        {
+          "source": "/boardest.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk",
+          "type": 302
+        },
+        {
+          "source": "/bst.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk",
+          "type": 302
+        },
+        {
+          "source": "/bst-teacher.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.apk",
+          "type": 302
+        },
+        {
+          "source": "/boardest.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "type": 302
+        },
+        {
+          "source": "/bst.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "type": 302
+        }
+      ],
       "rewrites": [
         { "source": "/student", "destination": "/student/index.html" },
         { "source": "/student/**", "destination": "/student/index.html" },
@@ -45,6 +82,43 @@
           "headers": [
             { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
           ]
+        }
+      ],
+      "redirects": [
+        {
+          "source": "/bst-teacher.msi",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi",
+          "type": 302
+        },
+        {
+          "source": "/teacher.msi",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi",
+          "type": 302
+        },
+        {
+          "source": "/boardest.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk",
+          "type": 302
+        },
+        {
+          "source": "/bst.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk",
+          "type": 302
+        },
+        {
+          "source": "/bst-teacher.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.apk",
+          "type": 302
+        },
+        {
+          "source": "/boardest.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "type": 302
+        },
+        {
+          "source": "/bst.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "type": 302
         }
       ],
       "rewrites": [
