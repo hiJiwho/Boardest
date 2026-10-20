@@ -5340,6 +5340,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   /// [신규] 급식 메뉴 투표 가능 시간: 점심시간 시작 ~ 점심시간 종료 10분 전
   bool _isMealVoteTimeNow() {
     final now = _debugTimeOverride ?? DateTime.now();
+    if (_currentPeriod != null && !_currentPeriod!.isClass && _currentPeriod!.label.contains('점심')) {
+      return true;
+    }
     final minutes = now.hour * 60 + now.minute;
     final start = _getLunchStartMinutes();
     final end = _getLunchEndMinutes();

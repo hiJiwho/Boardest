@@ -8,6 +8,7 @@ import '../../models/app_settings.dart' show LauncherSlot;
 import '../../services/system_app_scanner.dart';
 import '../../services/update_service.dart';
 import '../modals/app_drawer_dialog.dart';
+import '../../services/meal_vote_service.dart';
 import 'bst_today_timetable_strip.dart' show TimetablePeriodItem;
 import 'bst_tools_dock.dart' show BstToolType, BstToolsDock;
 
@@ -322,29 +323,46 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     );
   }
 
+  Timer? _tickerTimer;
+
   @override
   void initState() {
     super.initState();
     _initCurrentPeriod();
     _loadSystemApps();
+    _tickerTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tickerTimer?.cancel();
+    super.dispose();
   }
 
   @override
   void didUpdateWidget(covariant BstClassMainLayout oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentPeriodStatus != widget.currentPeriodStatus ||
-        oldWidget.currentSubject != widget.currentSubject) {
+        oldWidget.currentSubject != widget.currentSubject ||
+        oldWidget.activeSpecialPeriod != widget.activeSpecialPeriod) {
       _initCurrentPeriod();
     }
   }
 
   void _initCurrentPeriod() {
+    final hasSpecial = widget.activeSpecialPeriod != null && widget.activeSpecialPeriod!.isNotEmpty;
+    if (hasSpecial) {
+      _curIndex = -1;
+      return;
+    }
     final ep = _effectivePeriods;
     final idx = ep.indexWhere((p) => p.isCurrent);
     if (idx != -1) {
       _curIndex = idx;
     } else {
-      _curIndex = 0;
+      _curIndex = -1;
     }
   }
 
@@ -430,9 +448,6 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
       children: [
         _brandBadge(),
         const SizedBox(height: 10),
-        // 조/종례/점심시간 특수 시간대일 때만 나타나는 큰 글씨 배너!
-        if (widget.activeSpecialPeriod != null && widget.activeSpecialPeriod!.isNotEmpty)
-          _specialPeriodBanner(),
         Expanded(
           child: LayoutBuilder(
             builder: (ctx, bc) => _buildWheel(bc),
@@ -442,94 +457,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     );
   }
 
-  /// [아침/조회/점심/종례시간 큰 글씨 배너] - 해당 시간일 때만 첫/마지막/점심 교시 상단에 강조 노출
-  Widget _specialPeriodBanner() {
-    final title = widget.activeSpecialPeriod;
-    if (title == null || title.isEmpty) return const SizedBox.shrink();
-    final remain = widget.specialPeriodRemainingText ?? '';
 
-    Color badgeColor = const Color(0xFF00F5D4);
-    IconData icon = Icons.wb_sunny_rounded;
-    if (title.contains('조회')) {
-      badgeColor = const Color(0xFFFFC857);
-      icon = Icons.campaign_rounded;
-    } else if (title.contains('점심')) {
-      badgeColor = const Color(0xFF00C896);
-      icon = Icons.restaurant_rounded;
-    } else if (title.contains('종례')) {
-      badgeColor = const Color(0xFFFF6B6B);
-      icon = Icons.school_rounded;
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-      decoration: BoxDecoration(
-        color: badgeColor.withOpacity(0.16),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: badgeColor.withOpacity(0.55), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: badgeColor.withOpacity(0.18),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: badgeColor.withOpacity(0.25),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(icon, color: badgeColor, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            title,
-            style: _ts(24, w: FontWeight.w900, c: Colors.white),
-          ),
-          const SizedBox(width: 12),
-          if (remain.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.4),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white.withOpacity(0.12)),
-              ),
-              child: Text(
-                remain,
-                style: _ts(14, w: FontWeight.w800, c: badgeColor),
-              ),
-            ),
-          const Spacer(),
-          if (title.contains('점심'))
-            InkWell(
-              onTap: () => setState(() => _showClassMeal = true),
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-                decoration: BoxDecoration(
-                  color: badgeColor,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.how_to_vote_rounded, size: 15, color: Colors.black),
-                    const SizedBox(width: 5),
-                    Text('급식 식단표/투표', style: _ts(12, w: FontWeight.w900, c: Colors.black)),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 
   Widget _brandBadge() {
     final title = widget.isSpecialRoom
@@ -575,29 +503,200 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     );
   }
 
+  Widget _buildLargeSpecialPeriodCard(String title, double h, double w) {
+    Color accentColor = const Color(0xFF00F5D4);
+    IconData icon = Icons.wb_sunny_rounded;
+    String subtitle = '상쾌하고 활기찬 아침 시간!';
+    if (title.contains('조회')) {
+      accentColor = const Color(0xFFFFC857);
+      icon = Icons.campaign_rounded;
+      subtitle = '오늘 하루 일정과 공지사항을 확인하세요';
+    } else if (title.contains('점심')) {
+      accentColor = const Color(0xFF00C896);
+      icon = Icons.restaurant_rounded;
+      subtitle = '맛있는 점심 시간! 친구들과 즐겁게 식사하세요';
+    } else if (title.contains('종례')) {
+      accentColor = const Color(0xFFFF6B6B);
+      icon = Icons.school_rounded;
+      subtitle = '오늘 하루도 정말 수고 많았습니다!';
+    }
+
+    final remainingText = widget.specialPeriodRemainingText ?? '';
+
+    return Container(
+      width: w,
+      height: h,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accentColor.withOpacity(0.25),
+            const Color(0xFF141923).withOpacity(0.92),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accentColor.withOpacity(0.85), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withOpacity(0.28),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Row(
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: accentColor.withOpacity(0.22),
+              shape: BoxShape.circle,
+              border: Border.all(color: accentColor.withOpacity(0.6), width: 1.5),
+            ),
+            child: Icon(icon, color: accentColor, size: 32),
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: _ts(34, w: FontWeight.w900, c: Colors.white, ls: -1),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: _ts(13.5, w: FontWeight.w600, c: Colors.white70),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          if (remainingText.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: accentColor, width: 1.5),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.timer_outlined, color: accentColor, size: 18),
+                  const SizedBox(width: 6),
+                  Text(
+                    remainingText,
+                    style: _ts(16, w: FontWeight.w800, c: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildWheel(BoxConstraints bc) {
     final H = bc.maxHeight;
     final W = bc.maxWidth;
     final ep = _effectivePeriods;
     final n = ep.length.clamp(1, 10);
     const g = 8.0;
+
+    final special = widget.activeSpecialPeriod;
+    final hasSpecial = special != null && special.isNotEmpty;
+
+    if (hasSpecial) {
+      // 아침/조회는 1교시 위에, 점심은 4-5교시 사이에, 종례는 마지막 교시 뒤에 크게 삽입!
+      int specialInsertIndex = 0;
+      if (special.contains('아침') || special.contains('조회')) {
+        specialInsertIndex = 0;
+      } else if (special.contains('점심')) {
+        specialInsertIndex = 4.clamp(0, n);
+      } else if (special.contains('종례')) {
+        specialInsertIndex = n;
+      }
+
+      final hc = ((H - 200.0 - n * g) / n).clamp(50.0, 68.0);
+      final hSpecial = (H - n * (hc + g)).clamp(180.0, 260.0);
+
+      double topOfItem(int visualIdx) {
+        double currentTop = 0;
+        for (int v = 0; v < visualIdx; v++) {
+          final isSpec = (v == specialInsertIndex);
+          currentTop += (isSpec ? hSpecial : hc) + g;
+        }
+        return currentTop;
+      }
+
+      final items = <Widget>[];
+
+      // 대형 특수 카드
+      final specialTop = topOfItem(specialInsertIndex);
+      items.add(
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeOutCubic,
+          left: 0,
+          top: specialTop,
+          width: W,
+          height: hSpecial,
+          child: _buildLargeSpecialPeriodCard(special, hSpecial, W),
+        ),
+      );
+
+      // 일반 교시 카드 (모두 컴팩트 크기로 노출되어 1교시가 확대되지 않음)
+      for (int i = 0; i < n; i++) {
+        final visualIdx = (i < specialInsertIndex) ? i : i + 1;
+        final top = topOfItem(visualIdx);
+        items.add(
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeOutCubic,
+            left: 0,
+            top: top,
+            width: W,
+            height: hc,
+            child: GestureDetector(
+              onTap: () {
+                widget.onPeriodTap?.call(i);
+              },
+              child: _thumbnailBlockCard(ep[i], false, i),
+            ),
+          ),
+        );
+      }
+
+      return Stack(children: items);
+    }
+
     const hc = 68.0;
+    final activeIdx = _curIndex >= 0 && _curIndex < n ? _curIndex : -1;
     final hcur = (H - (n - 1) * (hc + g)).clamp(210.0, H);
 
     double topOf(int i) {
-      if (i < _curIndex) return i * (hc + g);
-      if (i == _curIndex) return _curIndex * (hc + g);
-      return _curIndex * (hc + g) + hcur + g + (i - _curIndex - 1) * (hc + g);
+      if (activeIdx == -1) {
+        return i * (hc + g);
+      }
+      if (i < activeIdx) return i * (hc + g);
+      if (i == activeIdx) return activeIdx * (hc + g);
+      return activeIdx * (hc + g) + hcur + g + (i - activeIdx - 1) * (hc + g);
     }
 
     final items = <Widget>[];
     for (int i = 0; i < n; i++) {
-      final h = i == _curIndex ? hcur : hc;
+      final isCurrent = i == activeIdx;
+      final h = isCurrent ? hcur : hc;
       final top = topOf(i);
-      final isCurrent = i == _curIndex;
-      final isPast = i < _curIndex;
-      final dist = (i - _curIndex).abs();
-      // 현재 수업과 멀어질수록 과목 폭을 점진적으로 줄이는 원통형 물레방아 효과 (32px씩 축소)
+      final isPast = activeIdx != -1 && i < activeIdx;
+      final dist = activeIdx != -1 ? (i - activeIdx).abs() : 0;
       final itemWidth = isCurrent ? W : (W - (dist * 32.0)).clamp(540.0, W);
 
       items.add(
@@ -1010,17 +1109,15 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
             ),
             Expanded(
               child: Center(
-                child: StreamBuilder<DateTime>(
-                  stream: Stream.periodic(const Duration(seconds: 1), (_) => DateTime.now()),
-                  initialData: DateTime.now(),
-                  builder: (c, snap) {
-                    final t = snap.data ?? DateTime.now();
+                child: Builder(
+                  builder: (c) {
+                    final t = widget.currentTime ?? DateTime.now();
                     String two(int v) => v.toString().padLeft(2, '0');
                     return FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
-                        '${two(t.hour)}:${two(t.minute)}',
-                        style: _ts(220, w: FontWeight.w900, h: 0.88, ls: -4, c: Colors.white),
+                        '${two(t.hour)}:${two(t.minute)}:${two(t.second)}',
+                        style: _ts(200, w: FontWeight.w900, h: 0.88, ls: -4, c: Colors.white),
                       ),
                     );
                   },
@@ -1066,11 +1163,9 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
             ),
             Expanded(
               child: Center(
-                child: StreamBuilder<DateTime>(
-                  stream: Stream.periodic(const Duration(seconds: 1), (_) => DateTime.now()),
-                  initialData: DateTime.now(),
-                  builder: (c, snap) {
-                    final t = snap.data ?? DateTime.now();
+                child: Builder(
+                  builder: (c) {
+                    final t = widget.currentTime ?? DateTime.now();
                     String two(int v) => v.toString().padLeft(2, '0');
                     return FittedBox(
                       fit: BoxFit.scaleDown,
@@ -2289,15 +2384,27 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                             final allergyStr = _formatDishAllergies(d);
 
                             return InkWell(
-                              onTap: () => _showAllergyPopup(context, d),
+                              onTap: () async {
+                                if (today && (isLunch || widget.onMealVote != null)) {
+                                  // 점심시간에 메뉴를 누르면 바로 1표 투표 & 수가 즉각 오름
+                                  await widget.onMealVote?.call(d.name);
+                                  if (context.mounted) setState(() {});
+                                } else {
+                                  _showAllergyPopup(context, d);
+                                }
+                              },
                               onLongPress: () {
-                                setState(() {
-                                  if (_highlightedMealNames.contains(d.name)) {
-                                    _highlightedMealNames.remove(d.name);
-                                  } else {
-                                    _highlightedMealNames.add(d.name);
-                                  }
-                                });
+                                if (today && isLunch) {
+                                  _showAllergyPopup(context, d);
+                                } else {
+                                  setState(() {
+                                    if (_highlightedMealNames.contains(d.name)) {
+                                      _highlightedMealNames.remove(d.name);
+                                    } else {
+                                      _highlightedMealNames.add(d.name);
+                                    }
+                                  });
+                                }
                               },
                               borderRadius: BorderRadius.circular(8),
                               child: Container(
@@ -2357,26 +2464,48 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                                         ],
                                       ),
                                     ),
-                                    // 점심시간 투표 기능 (하트/투표 버튼)
-                                    if (today && (isLunch || widget.onMealVote != null))
-                                      IconButton(
-                                        icon: const Icon(Icons.favorite_rounded, color: Color(0xFFFF6B6B), size: 18),
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(),
-                                        tooltip: '오늘의 급식 투표',
-                                        onPressed: () async {
-                                          await widget.onMealVote?.call(d.name);
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text('❤️ [${d.name}] 메뉴에 투표했습니다!'),
-                                                duration: const Duration(seconds: 1),
-                                                behavior: SnackBarBehavior.floating,
+                                    // 점심시간 투표 기능 및 실시간 득표수 (한 번 눌러도 수가 오름)
+                                    ValueListenableBuilder<Map<String, Map<String, int>>>(
+                                      valueListenable: MealVoteService.instance.votesNotifier,
+                                      builder: (ctx, _, __) {
+                                        final votes = MealVoteService.instance.getTotalVotes(d.name);
+                                        return Container(
+                                          margin: const EdgeInsets.only(left: 6),
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: votes > 0
+                                                ? const Color(0xFFFF6B6B).withOpacity(0.22)
+                                                : Colors.white.withOpacity(0.06),
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(
+                                              color: votes > 0
+                                                  ? const Color(0xFFFF6B6B).withOpacity(0.65)
+                                                  : Colors.white24,
+                                              width: 1,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                votes > 0 ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                                color: votes > 0 ? const Color(0xFFFF6B6B) : Colors.white60,
+                                                size: 14,
                                               ),
-                                            );
-                                          }
-                                        },
-                                      ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                '$votes표',
+                                                style: _ts(
+                                                  11.5,
+                                                  w: FontWeight.w800,
+                                                  c: votes > 0 ? const Color(0xFFFF6B6B) : Colors.white70,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
                                   ],
                                 ),
                               ),

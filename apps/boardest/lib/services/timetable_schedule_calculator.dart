@@ -306,7 +306,8 @@ class TimetableScheduleCalculator {
       }
 
       if (p == ts.lunchAfterPeriod) {
-        final pureLunchMinutes = (ts.lunchDuration - ts.breakDuration).clamp(1, 180);
+        // 점심시간 10분 전부터는 다음 교시(5교시) 준비 쉬는시간으로 취급
+        final pureLunchMinutes = (ts.lunchDuration - 10).clamp(1, 180);
         final lunchStart = classEnd;
         final pureLunchEnd = lunchStart.add(Duration(minutes: pureLunchMinutes));
         final totalLunchEnd = lunchStart.add(Duration(minutes: ts.lunchDuration));
@@ -321,17 +322,15 @@ class TimetableScheduleCalculator {
           ),
         );
 
-        if (ts.lunchDuration > pureLunchMinutes) {
-          ranges.add(
-            PeriodTimeRange(
-              period: 0,
-              label: '쉬는 시간',
-              start: pureLunchEnd,
-              end: totalLunchEnd,
-              isClass: false,
-            ),
-          );
-        }
+        ranges.add(
+          PeriodTimeRange(
+            period: 0,
+            label: '쉬는 시간',
+            start: pureLunchEnd,
+            end: totalLunchEnd,
+            isClass: false,
+          ),
+        );
 
         currentMinutes += ts.lunchDuration;
       } else if (p < maxPeriod) {
