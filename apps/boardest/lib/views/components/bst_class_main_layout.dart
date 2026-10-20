@@ -6,6 +6,7 @@ import 'package:universal_io/io.dart';
 import '../../models/meal_models.dart';
 import '../../models/app_settings.dart' show LauncherSlot;
 import '../../services/system_app_scanner.dart';
+import '../../services/update_service.dart';
 import '../modals/app_drawer_dialog.dart';
 import 'bst_today_timetable_strip.dart' show TimetablePeriodItem;
 import 'bst_tools_dock.dart' show BstToolType, BstToolsDock;
@@ -81,6 +82,10 @@ class BstClassMainLayout extends StatefulWidget {
   final VoidCallback? onAddAppTap;
   final VoidCallback? onMinimizeTap;
   final VoidCallback? onCloseTap;
+  // 조/종례/점심시간 헤더 및 카운트다운 (해당 시간일 때만 노출)
+  final String? activeSpecialPeriod; // '아침시간', '조회시간', '점심시간', '종례시간'
+  final String? specialPeriodRemainingText;
+
   final List<LauncherSlot>? customSlots;
   final ValueChanged<LauncherSlot>? onLaunchApp;
   final ValueChanged<int>? onRemoveApp;
@@ -135,6 +140,8 @@ class BstClassMainLayout extends StatefulWidget {
     this.onAddAppTap,
     this.onMinimizeTap,
     this.onCloseTap,
+    this.activeSpecialPeriod,
+    this.specialPeriodRemainingText,
     this.customSlots,
     this.onLaunchApp,
     this.onRemoveApp,
@@ -150,6 +157,17 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
   bool _showClassMeal = false;
   int _recessTab = 0; // 0: USB/Cloud, 1: 급식
   List<ScannedApp> _systemApps = [];
+  final Set<String> _highlightedMealNames = {}; // 메뉴 꾹 누르면 형광펜 토글
+
+  (String, String) _getTimesForPeriod(TimetablePeriodItem p) {
+    if (p.startTime != null && p.endTime != null && p.startTime!.isNotEmpty) {
+      return (p.startTime!, p.endTime!);
+    }
+    if (p.period >= 1 && p.period <= _defaultPeriodTimes.length) {
+      return _defaultPeriodTimes[p.period - 1];
+    }
+    return ('09:00', '09:50');
+  }
 
   static final _defaultDemoSystemApps = [
     ScannedApp(name: '웹 브라우저', appId: 'browser'),
@@ -335,23 +353,71 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     return Scaffold(
       backgroundColor: const Color(0xFF080C14),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 18, 14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1. 좌측 물레방아 시간표 (너비 780px, 좌측 밀착)
-              SizedBox(
-                width: 780,
-                child: _leftWheelArea(),
+        child: Column(
+          children: [
+            // 상단: 백그라운드 업데이트 다운로드 진행 바 (승인 없이 무인 다운로드 시 표시)
+            ValueListenableBuilder<UpdateState>(
+              valueListenable: UpdateService.stateNotifier,
+              builder: (ctx, state, _) {
+                if (state != UpdateState.downloading) return const SizedBox.shrink();
+                return ValueListenableBuilder<double>(
+                  valueListenable: UpdateService.downloadProgressNotifier,
+                  builder: (c, progress, _) {
+                    final pct = (progress * 100).toInt();
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF00F5D4), Color(0xFF7F5AF0)],
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            '🚀 새 버전(${UpdateService.latestVersion ?? '4.2.3'}) 백그라운드 다운로드 중... ($pct%)',
+                            style: _ts(12, w: FontWeight.w900, c: Colors.black),
+                          ),
+                          const Spacer(),
+                          const Text(
+                            '수업 종료 후 쉬는 시간에 자동으로 교체할 수 있습니다.',
+                            style: TextStyle(color: Colors.black87, fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 14, 18, 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 1. 좌측 오늘 수업 영역 (화면 50% = 1:1)
+                    Expanded(
+                      flex: 1,
+                      child: _leftWheelArea(),
+                    ),
+                    const SizedBox(width: 18),
+                    // 2. 우측 시계 + 도구함 / 파일함 / 급식 식단표 (화면 50% = 1:1)
+                    Expanded(
+                      flex: 1,
+                      child: _rightContentArea(),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(width: 18),
-              // 2. 우측 시계 + 도구함 / 파일함 / 급식 식단표
-              Expanded(
-                child: _rightContentArea(),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -364,12 +430,104 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
       children: [
         _brandBadge(),
         const SizedBox(height: 10),
+        // 조/종례/점심시간 특수 시간대일 때만 나타나는 큰 글씨 배너!
+        if (widget.activeSpecialPeriod != null && widget.activeSpecialPeriod!.isNotEmpty)
+          _specialPeriodBanner(),
         Expanded(
           child: LayoutBuilder(
             builder: (ctx, bc) => _buildWheel(bc),
           ),
         ),
       ],
+    );
+  }
+
+  /// [아침/조회/점심/종례시간 큰 글씨 배너] - 해당 시간일 때만 첫/마지막/점심 교시 상단에 강조 노출
+  Widget _specialPeriodBanner() {
+    final title = widget.activeSpecialPeriod;
+    if (title == null || title.isEmpty) return const SizedBox.shrink();
+    final remain = widget.specialPeriodRemainingText ?? '';
+
+    Color badgeColor = const Color(0xFF00F5D4);
+    IconData icon = Icons.wb_sunny_rounded;
+    if (title.contains('조회')) {
+      badgeColor = const Color(0xFFFFC857);
+      icon = Icons.campaign_rounded;
+    } else if (title.contains('점심')) {
+      badgeColor = const Color(0xFF00C896);
+      icon = Icons.restaurant_rounded;
+    } else if (title.contains('종례')) {
+      badgeColor = const Color(0xFFFF6B6B);
+      icon = Icons.school_rounded;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      decoration: BoxDecoration(
+        color: badgeColor.withOpacity(0.16),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: badgeColor.withOpacity(0.55), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: badgeColor.withOpacity(0.18),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: badgeColor.withOpacity(0.25),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, color: badgeColor, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: _ts(24, w: FontWeight.w900, c: Colors.white),
+          ),
+          const SizedBox(width: 12),
+          if (remain.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white.withOpacity(0.12)),
+              ),
+              child: Text(
+                remain,
+                style: _ts(14, w: FontWeight.w800, c: badgeColor),
+              ),
+            ),
+          const Spacer(),
+          if (title.contains('점심'))
+            InkWell(
+              onTap: () => setState(() => _showClassMeal = true),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                decoration: BoxDecoration(
+                  color: badgeColor,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.how_to_vote_rounded, size: 15, color: Colors.black),
+                    const SizedBox(width: 5),
+                    Text('급식 식단표/투표', style: _ts(12, w: FontWeight.w900, c: Colors.black)),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -384,28 +542,29 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 30,
-            height: 30,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFF00F5D4),
-              borderRadius: BorderRadius.circular(8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              'assets/icons/logo.png',
+              width: 30,
+              height: 30,
+              fit: BoxFit.contain,
             ),
-            child: Text('bt', style: _ts(16, w: FontWeight.w900, c: Colors.black)),
           ),
           const SizedBox(width: 8),
           Text('BOARDEST Class', style: _ts(16, w: FontWeight.w800)),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00F5D4).withOpacity(0.16),
-              borderRadius: BorderRadius.circular(5),
-              border: Border.all(color: const Color(0xFF00F5D4), width: 1),
+          if (!kIsWeb) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00F5D4).withOpacity(0.16),
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(color: const Color(0xFF00F5D4), width: 1),
+              ),
+              child: Text('PRO', style: _ts(10.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
             ),
-            child: Text('PRO', style: _ts(10.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
-          ),
+          ],
           const SizedBox(width: 14),
           Text(
             title,
@@ -464,9 +623,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
 
   /// [현재 선택된 과목 카드]: DPI 조절(과목명 크기 78~84px), 수업 중일 때만 진행도 노출
   Widget _currentPeriodCard(TimetablePeriodItem p) {
-    final times = (p.period >= 1 && p.period <= _defaultPeriodTimes.length)
-        ? _defaultPeriodTimes[p.period - 1]
-        : ('09:00', '09:50');
+    final times = _getTimesForPeriod(p);
     final start = times.$1;
     final end = times.$2;
     final inClass = _isClassTime && p.isCurrent;
@@ -474,14 +631,9 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     return _glassSurface(
       glow: true,
       padding: const EdgeInsets.all(18),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 1. 상단: 교과서 커버 + 우측 수업 정보
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
                 // 단정한 교과서 커버 (폭 250px)
                 SizedBox(
                   width: 250,
@@ -563,63 +715,12 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 ),
               ],
             ),
-          ),
-          // 2. 하단 전폭 진행도 바는 오직 수업 중일 때만 노출! (쉬는 시간 안내는 시계 아래에만!)
-          if (inClass) ...[
-            const SizedBox(height: 12),
-            _bottomProgressArea(),
-          ],
-        ],
-      ),
-    );
-  }
-
-  /// 수업 중일 때만 나타나는 진행도 바
-  Widget _bottomProgressArea() {
-    final progress = widget.clockRemainingProgress ?? 0.64;
-    final remainText = widget.clockRemainingDetailText ?? widget.remainingTimeText ?? '수업 종료까지 남은 시간';
-    final percentStr = '${(progress * 100).toInt()}%';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.35),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.timelapse_rounded, color: Color(0xFF00F5D4), size: 18),
-              const SizedBox(width: 6),
-              Text(remainText, style: _ts(15, w: FontWeight.w800, c: Colors.white)),
-              const Spacer(),
-              Text(percentStr, style: _ts(18, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
-              const SizedBox(width: 6),
-              Text('(진행 중)', style: _ts(12, w: FontWeight.w600, c: Colors.white60)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: progress.clamp(0.0, 1.0),
-              minHeight: 10,
-              color: const Color(0xFF00F5D4),
-              backgroundColor: Colors.white.withOpacity(0.12),
-            ),
-          ),
-        ],
-      ),
-    );
+          );
   }
 
   /// [비선택 과목 카드] M3 서페이스 + 교과서 썸네일 블록형
   Widget _thumbnailBlockCard(TimetablePeriodItem p, bool isPast, int idx) {
-    final times = (p.period >= 1 && p.period <= _defaultPeriodTimes.length)
-        ? _defaultPeriodTimes[p.period - 1]
-        : ('09:00', '09:50');
+    final times = _getTimesForPeriod(p);
     final start = times.$1;
     final end = times.$2;
 
@@ -846,11 +947,11 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
 
     return Column(
       children: [
-        // 시계: 수업 중(높이 210px) vs 쉬는 시간(높이 290px), GestureDetector로 꾹 눌러 디버깅 가능!
+        // 시계: 수업 중(높이 260px) vs 쉬는 시간(높이 310px), GestureDetector로 꾹 눌러 디버깅 가능!
         AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
-          height: inClass ? 210 : 290,
+          height: inClass ? 260 : 310,
           child: inClass ? _classTimeCompactClock() : _recessTimeLargeClock(),
         ),
         const SizedBox(height: 14),
@@ -919,7 +1020,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                       fit: BoxFit.scaleDown,
                       child: Text(
                         '${two(t.hour)}:${two(t.minute)}',
-                        style: _ts(180, w: FontWeight.w900, h: 0.9, ls: -3, c: Colors.white),
+                        style: _ts(220, w: FontWeight.w900, h: 0.88, ls: -4, c: Colors.white),
                       ),
                     );
                   },
@@ -975,7 +1076,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                       fit: BoxFit.scaleDown,
                       child: Text(
                         '${two(t.hour)}:${two(t.minute)}:${two(t.second)}',
-                        style: _ts(220, w: FontWeight.w900, h: 0.95, ls: -3, c: Colors.white),
+                        style: _ts(250, w: FontWeight.w900, h: 0.9, ls: -4, c: Colors.white),
                       ),
                     );
                   },
@@ -1018,12 +1119,23 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
       }
     } else {
       if (!widget.isCloudActive) {
-        // [쉬는 시간 미연결] 급식 식단표 + 우측 세로 독 (급식 버튼 제외, 설정 포함)
+        // [쉬는 시간 미연결] 급식 식단표 + 우측 세로 독
+        // 최신 버전 다운로드 완료 시 수업시간에는 보류하고, 쉬는시간에 급식 대신 [업데이트 필요함!!] 카드 노출!
         return Row(
           key: const ValueKey('recess_meal_dock'),
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(child: _mealTableFull()),
+            Expanded(
+              child: ValueListenableBuilder<UpdateState>(
+                valueListenable: UpdateService.stateNotifier,
+                builder: (ctx, updateState, _) {
+                  if (updateState == UpdateState.downloaded) {
+                    return _updateRequiredCard();
+                  }
+                  return _mealTableFull();
+                },
+              ),
+            ),
             const SizedBox(width: 14),
             SizedBox(width: 88, child: _verticalToolbarDock(inClass: false)),
           ],
@@ -1126,6 +1238,84 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     );
   }
 
+  /// [쉬는 시간용] 급식 대신 노출되는 대형 업데이트 필요 알림 카드
+  Widget _updateRequiredCard() {
+    final isWin = !kIsWeb && Platform.isWindows;
+    final ver = UpdateService.latestVersion ?? '4.2.3';
+
+    return _glassSurface(
+      padding: const EdgeInsets.all(28),
+      glow: true,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6B6B).withOpacity(0.18),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFFF6B6B), width: 2),
+              ),
+              child: const Icon(
+                Icons.system_update_rounded,
+                color: Color(0xFFFF6B6B),
+                size: 56,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              '⚠️ 업데이트 필요함!!',
+              style: _ts(32, w: FontWeight.w900, c: const Color(0xFFFF6B6B)),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Boardest 최신 버전(v$ver) 패키지가 백그라운드에서 다운로드되었습니다.',
+              textAlign: TextAlign.center,
+              style: _ts(17, w: FontWeight.w800, c: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isWin
+                  ? '설치 버튼을 누르면 즉시 교체 설치가 진행되고 앱이 자동으로 다시 시작됩니다.'
+                  : '설치 버튼을 누른 후 시스템 화면에서 수동 설치를 완료해 주세요.',
+              textAlign: TextAlign.center,
+              style: _ts(13, c: Colors.white60, w: FontWeight.w600),
+            ),
+            const SizedBox(height: 28),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () => UpdateService.executeInstall(context),
+                  icon: const Icon(Icons.download_done_rounded, size: 22, color: Colors.black),
+                  label: Text('지금 즉시 설치 및 적용', style: _ts(16, w: FontWeight.w900, c: Colors.black)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00F5D4),
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 8,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                OutlinedButton(
+                  onPressed: () => UpdateService.stateNotifier.value = UpdateState.idle,
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: Text('급식표 보기', style: _ts(14, w: FontWeight.w700, c: Colors.white60)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// [수업 도구 중앙 정렬]: 사용자의 요청에 따라 수업 도구들을 정가운데로 대칭 정렬!
   Widget _classToolsGrid({Key? key}) {
     final row1 = _classTools.sublist(0, 4); // 판서, 타이머, 추첨, 계산기
@@ -1133,9 +1323,8 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     final showSystemApps = !kIsWeb && (widget.isPro || _systemApps.isNotEmpty || Platform.isWindows || Platform.isAndroid);
     final cardHeight = showSystemApps ? 96.0 : 110.0;
 
-    Widget buildToolCard((IconData, String, String, Color, BstToolType) tool, {double width = 175, double? height}) {
+    Widget buildToolCard((IconData, String, String, Color, BstToolType) tool, {double? height}) {
       return SizedBox(
-        width: width,
         height: height ?? cardHeight,
         child: InkWell(
           onTap: () {
@@ -1241,21 +1430,19 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         for (int i = 0; i < row1.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 14),
-                          buildToolCard(row1[i]),
+                          if (i > 0) const SizedBox(width: 12),
+                          Expanded(child: buildToolCard(row1[i])),
                         ],
                       ],
                     ),
                     const SizedBox(height: 14),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         for (int i = 0; i < row2.length; i++) ...[
-                          if (i > 0) const SizedBox(width: 14),
-                          buildToolCard(row2[i]),
+                          if (i > 0) const SizedBox(width: 12),
+                          Expanded(child: buildToolCard(row2[i])),
                         ],
                       ],
                     ),
@@ -1274,121 +1461,125 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     );
   }
 
-  /// [PRO 에디션] 수업 시간 도구 아래 설치된 시스템 앱 (Windows / Android) 바로가기 바
+  /// [PRO 에디션] 수업 시간 도구 아래 설치된 시스템 앱 바로가기 (도구 카드처럼 큼직하고 시원하게 확대!)
   Widget _buildSystemAppsRow() {
     if (kIsWeb) return const SizedBox.shrink();
     final hasNativeApps = _systemApps.isNotEmpty;
-    final displayApps = hasNativeApps ? _systemApps.take(10).toList() : _defaultDemoSystemApps;
+    final displayApps = hasNativeApps ? _systemApps.take(5).toList() : _defaultDemoSystemApps.take(5).toList();
 
     return Container(
-      constraints: const BoxConstraints(maxWidth: 780),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00F5D4).withOpacity(0.15),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  kIsWeb
-                      ? Icons.apps_rounded
-                      : (Platform.isWindows ? Icons.desktop_windows_rounded : Icons.android_rounded),
-                  size: 14,
-                  color: const Color(0xFF00F5D4),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00F5D4).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(6),
                 ),
-                const SizedBox(width: 4),
-                Text('시스템 앱', style: _ts(12, w: FontWeight.w800, c: const Color(0xFF00F5D4))),
-              ],
-            ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Platform.isWindows ? Icons.desktop_windows_rounded : Icons.android_rounded,
+                      size: 14,
+                      color: const Color(0xFF00F5D4),
+                    ),
+                    const SizedBox(width: 5),
+                    Text('시스템 앱 바로가기', style: _ts(12, w: FontWeight.w800, c: const Color(0xFF00F5D4))),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              InkWell(
+                onTap: () {
+                  if (!kIsWeb) {
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => const AppDrawerDialog(scale: 1.0),
+                    );
+                  }
+                },
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.grid_view_rounded, size: 13, color: Colors.white70),
+                      const SizedBox(width: 4),
+                      Text('전체 앱 보기', style: _ts(11, c: Colors.white70)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final app in displayApps) ...[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 3),
-                      child: InkWell(
-                        onTap: () {
-                          if (!kIsWeb) {
-                            SystemAppScanner.launchApp(app.appId);
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('${app.name} 앱은 Windows / Android PRO 환경에서 바로 실행됩니다.'),
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                          }
-                        },
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.06),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.white.withOpacity(0.09)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              for (int i = 0; i < displayApps.length; i++) ...[
+                if (i > 0) const SizedBox(width: 10),
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      if (!kIsWeb) {
+                        SystemAppScanner.launchApp(displayApps[i].appId);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('${displayApps[i].name} 앱은 Windows / Android PRO 환경에서 바로 실행됩니다.'),
+                            duration: const Duration(seconds: 2),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (app.iconPath != null &&
-                                  app.iconPath!.isNotEmpty &&
-                                  File(app.iconPath!).existsSync())
-                                Image.file(File(app.iconPath!), width: 16, height: 16)
-                              else
-                                const Icon(Icons.open_in_new_rounded, size: 14, color: Color(0xFF00F5D4)),
-                              const SizedBox(width: 5),
-                              Text(app.name, style: _ts(12.5, w: FontWeight.w700, c: Colors.white)),
-                            ],
+                        );
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      height: 52,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white.withOpacity(0.1)),
+                      ),
+                      child: Row(
+                        children: [
+                          if (displayApps[i].iconPath != null &&
+                              displayApps[i].iconPath!.isNotEmpty &&
+                              File(displayApps[i].iconPath!).existsSync())
+                            Image.file(File(displayApps[i].iconPath!), width: 26, height: 26)
+                          else
+                            const Icon(Icons.apps_rounded, size: 24, color: Color(0xFF00F5D4)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              displayApps[i].name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _ts(13.5, w: FontWeight.w800, c: Colors.white),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          InkWell(
-            onTap: () {
-              if (!kIsWeb) {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => const AppDrawerDialog(scale: 1.0),
-                );
-              }
-            },
-            borderRadius: BorderRadius.circular(6),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.grid_view_rounded, size: 13, color: Colors.white70),
-                  const SizedBox(width: 4),
-                  Text('전체 앱', style: _ts(11, w: FontWeight.w700, c: Colors.white70)),
-                ],
-              ),
-            ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),
@@ -2026,14 +2217,14 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
             child: Row(
               children: [
                 Expanded(
-                  flex: 3,
+                  flex: 1,
                   child: _mealColumn('오늘 점심', widget.todayCalories, widget.todayDishes, true),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Expanded(
-                  flex: 2,
+                  flex: 1,
                   child: _mealColumn(
-                    widget.tomorrowDateLabel.isNotEmpty ? widget.tomorrowDateLabel : '내일 점심',
+                    widget.tomorrowDateLabel.isNotEmpty ? widget.tomorrowDateLabel : '다음 급식',
                     widget.tomorrowCalories,
                     widget.tomorrowDishes,
                     false,
@@ -2047,8 +2238,23 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     );
   }
 
-  /// [급식 메뉴 열]: 알레르기 칩 제외 (메뉴 텍스트 깔끔하고 큼직하게 유지) + 꾹 누르면 팝업!
+  /// 알레르기 코드/번호를 한국어 식재료명으로 변환
+  String _formatDishAllergies(MealDishItem d) {
+    if (d.allergies.isEmpty) return '';
+    final names = d.allergies.map((a) {
+      final code = int.tryParse(a);
+      if (code != null && MealDayInfo.allergyCodeMap.containsKey(code)) {
+        return MealDayInfo.allergyCodeMap[code]!;
+      }
+      return a;
+    }).toSet().toList();
+    return names.join(', ');
+  }
+
+  /// [급식 메뉴 열]: 오늘과 내일 1:1 분할, 메뉴명 바로 아래 알레르기 정보 표시, 꾹 누르면 형광펜 토글!
   Widget _mealColumn(String title, String kcal, List<MealDishItem> dishes, bool today) {
+    final isLunch = widget.activeSpecialPeriod?.contains('점심') ?? false;
+
     return _glassTile(
       selected: today,
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
@@ -2056,8 +2262,10 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
         children: [
           Row(
             children: [
-              Text(title,
-                  style: _ts(17, w: FontWeight.w800, c: today ? const Color(0xFF00F5D4) : Colors.white)),
+              Text(
+                title,
+                style: _ts(17, w: FontWeight.w800, c: today ? const Color(0xFF00F5D4) : Colors.white),
+              ),
               const Spacer(),
               if (kcal.isNotEmpty)
                 Text(kcal, style: _ts(13, c: Colors.white54, w: FontWeight.w600)),
@@ -2074,29 +2282,108 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 : Column(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      for (final d in dishes)
-                        InkWell(
-                          onTap: () => _showAllergyPopup(context, d),
-                          onLongPress: () => _showAllergyPopup(context, d),
-                          borderRadius: BorderRadius.circular(6),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.circle, size: 5, color: Color(0xFF00F5D4)),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    d.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: _ts(17, w: FontWeight.w800, c: Colors.white),
-                                  ),
+                      for (final d in dishes) ...[
+                        Builder(
+                          builder: (context) {
+                            final isHighlighted = _highlightedMealNames.contains(d.name);
+                            final allergyStr = _formatDishAllergies(d);
+
+                            return InkWell(
+                              onTap: () => _showAllergyPopup(context, d),
+                              onLongPress: () {
+                                setState(() {
+                                  if (_highlightedMealNames.contains(d.name)) {
+                                    _highlightedMealNames.remove(d.name);
+                                  } else {
+                                    _highlightedMealNames.add(d.name);
+                                  }
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                                decoration: BoxDecoration(
+                                  color: isHighlighted
+                                      ? const Color(0xFFFFEE55).withOpacity(0.35)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: isHighlighted
+                                      ? Border.all(color: const Color(0xFFFFD166), width: 1.5)
+                                      : null,
                                 ),
-                              ],
-                            ),
-                          ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.circle,
+                                      size: 6,
+                                      color: isHighlighted
+                                          ? const Color(0xFFFFD166)
+                                          : const Color(0xFF00F5D4),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            d.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: _ts(
+                                              16,
+                                              w: FontWeight.w800,
+                                              c: isHighlighted
+                                                  ? const Color(0xFFFFEE55)
+                                                  : Colors.white,
+                                            ),
+                                          ),
+                                          if (allergyStr.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 1),
+                                              child: Text(
+                                                '알레르기: $allergyStr',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: _ts(
+                                                  11,
+                                                  c: isHighlighted
+                                                      ? const Color(0xFFFFEE55).withOpacity(0.9)
+                                                      : Colors.white54,
+                                                  w: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    // 점심시간 투표 기능 (하트/투표 버튼)
+                                    if (today && (isLunch || widget.onMealVote != null))
+                                      IconButton(
+                                        icon: const Icon(Icons.favorite_rounded, color: Color(0xFFFF6B6B), size: 18),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        tooltip: '오늘의 급식 투표',
+                                        onPressed: () async {
+                                          await widget.onMealVote?.call(d.name);
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('❤️ [${d.name}] 메뉴에 투표했습니다!'),
+                                                duration: const Duration(seconds: 1),
+                                                behavior: SnackBarBehavior.floating,
+                                              ),
+                                            );
+                                          }
+                                        },
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
+                      ],
                     ],
                   ),
           ),

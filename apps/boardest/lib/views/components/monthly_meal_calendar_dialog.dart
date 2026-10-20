@@ -39,13 +39,23 @@ class _MonthlyMealCalendarDialogState extends State<MonthlyMealCalendarDialog> {
   static const Map<int, String> _allergyLabels = {
     1: '1.난류',
     2: '2.우유',
+    3: '3.메밀',
+    4: '4.땅콩',
     5: '5.대두',
     6: '6.밀',
-    9: '9.새우/갑각',
+    7: '7.고등어',
+    8: '8.게',
+    9: '9.새우',
     10: '10.돼지',
+    11: '11.복숭아',
     12: '12.토마토',
+    13: '13.아황산',
+    14: '14.호두',
     15: '15.닭',
     16: '16.소',
+    17: '17.오징어',
+    18: '18.조개',
+    19: '19.잣',
   };
 
   @override
@@ -491,8 +501,8 @@ class _MonthlyMealCalendarDialogState extends State<MonthlyMealCalendarDialog> {
                                           final d = dishes[dIdx];
                                           final match = _selectedAllergyFilter != null &&
                                               d.matchesAllergy(_selectedAllergyFilter);
-                                          return Text(
-                                            match ? '⚠️ ${d.name}' : d.name,
+                                          final dishText = Text(
+                                            d.name,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
@@ -500,10 +510,29 @@ class _MonthlyMealCalendarDialogState extends State<MonthlyMealCalendarDialog> {
                                               height: 1.25,
                                               fontWeight: match ? FontWeight.w900 : FontWeight.w500,
                                               color: match
-                                                  ? const Color(0xFFFFD166)
+                                                  ? const Color(0xFF1E1B18)
                                                   : (isToday ? Colors.white : const Color(0xFFCBD5E1)),
                                             ),
                                           );
+                                          if (match) {
+                                            return Container(
+                                              margin: const EdgeInsets.symmetric(vertical: 0.5),
+                                              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 0.5),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFFEE55),
+                                                borderRadius: BorderRadius.circular(3),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: const Color(0xFFFFEE55).withOpacity(0.5),
+                                                    blurRadius: 4,
+                                                    spreadRadius: 1,
+                                                  ),
+                                                ],
+                                              ),
+                                              child: dishText,
+                                            );
+                                          }
+                                          return dishText;
                                         },
                                       )
                                     : (isWeekend

@@ -1339,6 +1339,15 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     return '';
   }
 
+  (String, String) _getPeriodStartAndEndTime(int period) {
+    final str = _getPeriodTimeString(period);
+    final parts = str.split('~');
+    if (parts.length == 2) {
+      return (parts[0].trim(), parts[1].trim());
+    }
+    return ('09:00', '09:50');
+  }
+
   Future<bool> _fetchTimetableWithRetry(
     int schoolCode,
     DateTime targetDate,
@@ -2401,15 +2410,13 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   }
 
   void _updateLiveSchedule() {
-    if (_timetableResult == null) return;
-
     final now = _debugTimeOverride ?? DateTime.now();
     final weekday = now.weekday;
 
     // Weekend displays Monday schedule as preview
     final isWeekend = weekday == 6 || weekday == 7;
     final displayWeekday = isWeekend ? 1 : weekday;
-    final lessons = _getLessonsForDay(displayWeekday);
+    final lessons = _timetableResult != null ? _getLessonsForDay(displayWeekday) : <Lesson>[];
 
     final ts = _settings.timeSettings;
     final ranges = _generatePeriodRanges(ts, now);
@@ -4711,14 +4718,19 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                             specialSubjectName: _settings.selectedSubject.isNotEmpty ? _settings.selectedSubject : null,
                             showCloudFiles: !_hideCloudPanel,
                             cloudFilesWidget: _buildInlineCloudDockPanel(1.0),
-                periods: todayLessons.map((l) => TimetablePeriodItem(
-                  period: l.classTime,
-                  subject: l.subject,
-                  isCurrent: _currentLesson?.classTime == l.classTime,
-                  targetClass: (_settings.specialClassroomMode && l.grade > 0 && l.classNum > 0)
-                      ? '${l.grade}-${l.classNum}반'
-                      : (l.subject.isNotEmpty ? l.subject : null),
-                )).toList(),
+                periods: todayLessons.map((l) {
+                  final times = _getPeriodStartAndEndTime(l.classTime);
+                  return TimetablePeriodItem(
+                    period: l.classTime,
+                    subject: l.subject,
+                    isCurrent: _currentLesson?.classTime == l.classTime,
+                    targetClass: (_settings.specialClassroomMode && l.grade > 0 && l.classNum > 0)
+                        ? '${l.grade}-${l.classNum}반'
+                        : (l.subject.isNotEmpty ? l.subject : null),
+                    startTime: times.$1,
+                    endTime: times.$2,
+                  );
+                }).toList(),
                 onPeriodTap: (p) => _openWeeklyTimetable(),
                 getTextbookPath: (subject) => _settings.getTextbookPath(subject, grade: _settings.selectedGrade),
                 getTextbookBytes: _getTextbookBytesForSubject,
@@ -4731,6 +4743,24 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 onClockLongPress: _openDebugDatePicker,
                 clockRemainingDetailText: clockRemainingDetailText,
                 clockRemainingProgress: clockRemainingProgress,
+                currentTime: _now,
+                activeSpecialPeriod: () {
+                  if (_currentPeriod == null) return null;
+                  if (_currentPeriod!.period == -3) return '아침시간';
+                  if (_currentPeriod!.period == -1) return '조회시간';
+                  if (_currentPeriod!.label.contains('점심')) return '점심시간';
+                  if (_currentPeriod!.period == -2) return '종례시간';
+                  return null;
+                }(),
+                specialPeriodRemainingText: () {
+                  if (_currentPeriod == null) return null;
+                  final diff = _currentPeriod!.end.difference(_now);
+                  final mins = diff.inMinutes;
+                  if (mins >= 0) {
+                    return '종료까지 ${mins + 1}분 남음';
+                  }
+                  return null;
+                }(),
                 currentSubject: () {
                   if (_currentPeriod != null) {
                     if (_currentPeriod!.period == -3) return '아침시간';
@@ -4791,7 +4821,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                     ? _tomorrowMeal!.calories
                     : '682 kcal',
                 tomorrowDateLabel: '다음 급식',
-                currentTime: _debugTimeOverride ?? DateTime.now(),
                 lunchStartTime: TimeOfDay(
                   hour: _getLunchStartMinutes() ~/ 60,
                   minute: _getLunchStartMinutes() % 60,
@@ -4936,6 +4965,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
       for (final teacher in teachers) {
         if (!teacher.autoLessonFlowEnabled) continue;
+        if (teacher.ownerEmail.contains('demo') || teacher.teacherName == '이수학') {
+          if (!AppConfig.isDemoMode && _settings.schoolId.toLowerCase() != 'demo') {
+            continue;
+          }
+        }
         final secret = await BstCloudService.instance.getTrustedSecret(teacher.ownerEmail);
         if (secret == null || secret.isEmpty) continue;
 
@@ -11618,6 +11652,10 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           _debugTimeOverride = _debugTimeOverride!.add(
             const Duration(seconds: 1),
           );
+        });
+      } else {
+        setState(() {
+          _now = DateTime.now();
         });
       }
       _updateLiveSchedule();

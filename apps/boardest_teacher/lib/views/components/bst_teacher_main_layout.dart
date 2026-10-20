@@ -53,13 +53,13 @@ class BstTeacherMainLayout extends StatelessWidget {
   });
 
   static const _nav = <(IconData, String, String)>[
-    (Icons.dashboard_rounded, '대시보드', 'timetable'),
-    (Icons.calendar_month_rounded, '주간 시간표 (전체)', 'weekly_timetable'),
-    (Icons.folder_rounded, '내 수업 자료', 'canva'),
-    (Icons.auto_stories_rounded, '전자교과서 TBP', 'tbp'),
-    (Icons.draw_rounded, '판서 노트', 'archive'),
-    (Icons.restaurant_rounded, '급식 & 급식지도', 'meal'),
-    (Icons.settings_rounded, '설정', 'settings'),
+    (Icons.dashboard_rounded, '대시보드', 'dashboard'),
+    (Icons.calendar_month_rounded, '시간표', 'timetable'),
+    (Icons.add_circle_outline_rounded, '새로 만들기', 'create'),
+    (Icons.folder_open_rounded, '파일 관리', 'files'),
+    (Icons.restaurant_rounded, '급식', 'meal'),
+    (Icons.mark_email_unread_rounded, '쪽지', 'memo'),
+    (Icons.draw_rounded, '판서 관리함', 'archive'),
   ];
 
   static const _mockFiles = <(String, String, String, Color, IconData)>[
@@ -163,9 +163,9 @@ class BstTeacherMainLayout extends StatelessWidget {
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 250),
-                  child: currentTab == 'timetable'
+                  child: (currentTab == 'dashboard' || currentTab == 'home')
                       ? _dashboardHomeK()
-                      : (currentTab == 'weekly_timetable'
+                      : (currentTab == 'timetable' || currentTab == 'weekly_timetable'
                           ? _weeklyTimetableSubPage()
                           : (activeContent ?? const SizedBox())),
                 ),
@@ -186,21 +186,21 @@ class BstTeacherMainLayout extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00F5D4),
-                  borderRadius: BorderRadius.circular(10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.asset(
+                  'assets/icons/logo.png',
+                  width: 36,
+                  height: 36,
+                  fit: BoxFit.contain,
                 ),
-                child: const Icon(Icons.dashboard_customize_rounded, color: Colors.black, size: 20),
               ),
               const SizedBox(width: 10),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('BOARDEST', style: _ts(14, w: FontWeight.w900, h: 1.1)),
-                  Text('Teacher PRO', style: _ts(12, w: FontWeight.w700, c: const Color(0xFF00F5D4))),
+                  Text(kIsWeb ? 'Teacher' : 'Teacher PRO', style: _ts(12, w: FontWeight.w700, c: const Color(0xFF00F5D4))),
                 ],
               ),
             ],
@@ -235,6 +235,22 @@ class BstTeacherMainLayout extends StatelessWidget {
               ),
             ),
           const Spacer(),
+          // 설정 바로가기 버튼
+          InkWell(
+            onTap: () => onTabSelected?.call('settings'),
+            borderRadius: BorderRadius.circular(10),
+            child: _tile(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              child: Row(
+                children: [
+                  const Icon(Icons.settings_rounded, size: 16, color: Colors.white70),
+                  const SizedBox(width: 8),
+                  Text('설정', style: _ts(13, w: FontWeight.w700, c: Colors.white70)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           // 교사 계정 정보 카드
           _tile(
             padding: const EdgeInsets.all(10),
@@ -526,7 +542,7 @@ class BstTeacherMainLayout extends StatelessWidget {
     );
   }
 
-  /// [K안 우측 상단 Drive 용량 카드] (연결된 교실 대신 Drive 양 표시)
+  /// [K안 우측 상단 앱 보관자료 용량 카드] (앱 차지 용량만 표기)
   Widget _driveStorageCardCompact() {
     return _surface(
       padding: const EdgeInsets.all(14),
@@ -536,22 +552,29 @@ class BstTeacherMainLayout extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.cloud_done_rounded, size: 16, color: Color(0xFF00F5D4)),
+              const Icon(Icons.inventory_2_rounded, size: 16, color: Color(0xFF00F5D4)),
               const SizedBox(width: 6),
-              Text('Google Drive 용량', style: _ts(13.5, w: FontWeight.w800)),
+              Text('Boardest 보관함 용량', style: _ts(13.5, w: FontWeight.w800)),
               const Spacer(),
-              Text('42%', style: _ts(13, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00F5D4).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text('동기화 완료', style: _ts(10.5, w: FontWeight.w800, c: const Color(0xFF00F5D4))),
+              ),
             ],
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('6.3 GB 사용 / 15 GB', style: _ts(15, w: FontWeight.w900, c: Colors.white)),
+              Text('앱 보관자료 142.8 MB 사용 중', style: _ts(14.5, w: FontWeight.w900, c: Colors.white)),
               const SizedBox(height: 6),
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: const LinearProgressIndicator(
-                  value: 0.42,
+                  value: 0.18,
                   minHeight: 6,
                   color: Color(0xFF00F5D4),
                   backgroundColor: Colors.white12,
@@ -559,7 +582,7 @@ class BstTeacherMainLayout extends StatelessWidget {
               ),
             ],
           ),
-          Text('여유 공간 8.7 GB 남음 (동기화 완료)', style: _ts(11, c: Colors.white54)),
+          Text('내 교안, 판서, 교과서만 안전하게 백업 중', style: _ts(11, c: Colors.white54)),
         ],
       ),
     );

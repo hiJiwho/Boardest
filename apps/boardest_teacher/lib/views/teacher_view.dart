@@ -166,7 +166,7 @@ class _TeacherViewState extends State<TeacherView> {
   bool _showWeeklyGrid = false;
   bool _isViewingHomeroomWeekly = false; // 담임 학급 주간 시간표 보기 중 여부
   int _mobileTabIndex = 0; // 0: 시간표, 1: Cloud, 2: 수업도구, 3: 급식/쪽지, 4: 설정
-  String _currentTeacherTab = 'timetable'; // 'timetable', 'lesson', 'canva', 'meal', 'memo', 'archive', 'settings'
+  String _currentTeacherTab = 'dashboard'; // 'dashboard', 'timetable', 'create', 'files', 'meal', 'memo', 'archive'
   bool _guestBypassLogin = false; // 게스트 모드 둘러보기 허용
 
   // 플로팅 타이머 상태
@@ -1948,7 +1948,7 @@ class _TeacherViewState extends State<TeacherView> {
 
   Widget _buildTeacherActiveContent(double scale) {
     final onBack = () {
-      if (mounted) setState(() => _currentTeacherTab = 'timetable');
+      if (mounted) setState(() => _currentTeacherTab = 'dashboard');
     };
     switch (_currentTeacherTab) {
       case 'lesson':
@@ -1960,8 +1960,10 @@ class _TeacherViewState extends State<TeacherView> {
           teacher: _settings.selectedTeacher,
           onBack: onBack,
         );
+      case 'files':
       case 'cloud_open':
         return _buildCloudOpenWorkspace(scale);
+      case 'create':
       case 'cloud_create':
         return _buildCloudCreateWorkspace(scale);
       case 'cloud_settings':
@@ -4298,7 +4300,7 @@ class _TeacherViewState extends State<TeacherView> {
                       child: Text(
                         title,
                         style: GoogleFonts.notoSansKr(
-                          color: _textColor,
+                          color: Colors.white,
                           fontSize: 11.5 * s,
                           fontWeight: FontWeight.bold,
                         ),
@@ -4362,9 +4364,7 @@ class _TeacherViewState extends State<TeacherView> {
                                     child: Text(
                                       day,
                                       style: GoogleFonts.notoSansKr(
-                                        color: isToday
-                                            ? accentColor
-                                            : Colors.white,
+                                        color: Colors.white,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 10.5 * s,
                                       ),
@@ -4392,7 +4392,7 @@ class _TeacherViewState extends State<TeacherView> {
                                     child: Text(
                                       '$period',
                                       style: GoogleFonts.outfit(
-                                        color: accentColor,
+                                        color: Colors.white,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 11 * s,
                                       ),
@@ -4472,11 +4472,7 @@ class _TeacherViewState extends State<TeacherView> {
                                                   overflow: TextOverflow.ellipsis,
                                                   textAlign: TextAlign.center,
                                                   style: GoogleFonts.notoSansKr(
-                                                    color: lesson.isChanged
-                                                        ? const Color(0xFFEF4565)
-                                                        : (isTodayAndCurrentPeriod
-                                                            ? accentColor
-                                                            : Colors.white),
+                                                    color: Colors.white,
                                                     fontWeight: FontWeight.w900,
                                                     fontSize: 12.5 * s,
                                                   ),
@@ -4487,9 +4483,7 @@ class _TeacherViewState extends State<TeacherView> {
                                                     maxLines: 1,
                                                     overflow: TextOverflow.ellipsis,
                                                     style: GoogleFonts.notoSansKr(
-                                                      color: isTodayAndCurrentPeriod
-                                                          ? accentColor.withOpacity(0.85)
-                                                          : (isHomeroom ? const Color(0xFF00F5D4) : Colors.white70),
+                                                      color: Colors.white.withOpacity(0.9),
                                                       fontSize: 8 * s,
                                                       fontWeight: isTodayAndCurrentPeriod ? FontWeight.w600 : FontWeight.normal,
                                                     ),

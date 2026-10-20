@@ -152,8 +152,30 @@ void main(List<String> args) async {
   // ─── 데모 및 일반 세션 동기화 (Web & Windows 공통) ───
   final prefs = await SharedPreferences.getInstance();
   final currentEmailCheck = prefs.getString('bst_google_user_email') ?? prefs.getString('bst_user_email') ?? '';
-  if (currentEmailCheck.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) {
+  final hasExplicitDemoArg = args.any((a) => a.toLowerCase().contains('demo=yes') || a.toLowerCase() == '--demo');
+  if (kIsWeb) {
+    final uri = Uri.base;
+    final q = uri.queryParameters['Demo'] ?? uri.queryParameters['demo'];
+    if (q?.toLowerCase() == 'yes') {
+      AppConfig.isDemoMode = true;
+    }
+  } else if (hasExplicitDemoArg) {
     AppConfig.isDemoMode = true;
+  } else {
+    AppConfig.isDemoMode = false;
+  }
+
+  // 실사용 환경에서 과거 잔류 데모 세션(이수학 등) 완전 소각
+  if (!AppConfig.isDemoMode && currentEmailCheck.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) {
+    debugPrint('[main.dart] 🧹 Wiping legacy demo teacher session (이수학) from disk & prefs...');
+    await prefs.remove('bst_google_user_email');
+    await prefs.remove('bst_user_email');
+    await prefs.remove('bst_google_user_name');
+    await prefs.remove('bst_user_name');
+    await prefs.remove('bst_cld_access_token');
+    await prefs.remove('bst_google_access_token');
+    await prefs.remove('bst_token');
+    await CloudDriveService.instance.logout();
   }
 
   if (AppConfig.isDemoMode) {

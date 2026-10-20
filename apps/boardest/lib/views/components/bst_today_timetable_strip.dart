@@ -7,12 +7,16 @@ class TimetablePeriodItem {
   final String subject;
   final bool isCurrent;
   final String? targetClass;
+  final String? startTime;
+  final String? endTime;
 
   const TimetablePeriodItem({
     required this.period,
     required this.subject,
     this.isCurrent = false,
     this.targetClass,
+    this.startTime,
+    this.endTime,
   });
 }
 
