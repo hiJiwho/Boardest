@@ -15,7 +15,7 @@ import 'package:url_launcher/url_launcher.dart';
 /// 3. OS 임시 폴더로 패키지 자동 다운로드 (실시간 진행률 표시)
 /// 4. 다운로드 완료 즉시 OS 설치 프로그램 실행 트리거 후 앱 자동 종료(exit(0))
 class UpdateService {
-  static const String defaultVersion = '4.1.1';
+  static const String defaultVersion = '4.2.2';
   static const String _releaseApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String downloadPage = 'https://boardest-downloads.web.app';
