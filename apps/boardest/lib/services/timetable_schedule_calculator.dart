@@ -44,14 +44,33 @@ class TimetableScheduleCalculator {
   }) {
     if (timetableResult == null) return [];
 
-    final isDemo = AppConfig.isDemoMode || settings.schoolId.toLowerCase() == 'demo';
+    final isDemo = AppConfig.isDemoMode ||
+        settings.schoolId.toLowerCase() == 'demo' ||
+        (settings.selectedSchool?.name.contains('데모') == true);
     if (isDemo) {
-      final targetClassNum = DemoTimetableService.parseClassNumber(
+      final parsed = DemoTimetableService.parseGradeAndClass(
         settings.classNickname.isNotEmpty ? settings.classNickname : 'Demo-class1',
       );
-      return timetableResult.lessons
+      final targetGrade = settings.selectedGrade > 0 ? settings.selectedGrade : parsed.grade;
+      final targetClassNum = settings.selectedClass > 0 ? settings.selectedClass : parsed.classNum;
+
+      final matched = timetableResult.lessons
+          .where((lesson) =>
+              lesson.grade == targetGrade &&
+              lesson.classNum == targetClassNum &&
+              lesson.weekday == day)
+          .toList();
+      if (matched.isNotEmpty) return matched;
+
+      // Fallback: match by classNum and day
+      final classOnlyMatched = timetableResult.lessons
           .where((lesson) => lesson.classNum == targetClassNum && lesson.weekday == day)
           .toList();
+      if (classOnlyMatched.isNotEmpty) return classOnlyMatched;
+
+      // Fallback: match any lessons for that day
+      final dayMatched = timetableResult.lessons.where((lesson) => lesson.weekday == day).toList();
+      if (dayMatched.isNotEmpty) return dayMatched;
     }
 
     if (settings.isLearningLab) {

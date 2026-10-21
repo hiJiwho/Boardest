@@ -1352,7 +1352,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     int schoolCode,
     DateTime targetDate,
   ) async {
-    final isDemo = AppConfig.isDemoMode || _settings.schoolId.toLowerCase() == 'demo';
+    final isDemo = AppConfig.isDemoMode ||
+        _settings.schoolId.toLowerCase() == 'demo' ||
+        (_settings.selectedSchool?.name.contains('데모') == true);
     if (isDemo) {
       final classKey = _settings.classNickname.isNotEmpty ? _settings.classNickname : 'Demo-class1';
       final lessons = DemoTimetableService.getAllDemoLessons(classKey);
