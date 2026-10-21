@@ -142,6 +142,24 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                 scaleFactor: widget.scaleFactor,
               );
             }
+          } else if (data['type'] == 'contextMenuRightClick' && widget.isTeacherApp) {
+            if (mounted) {
+              final rx = (data['rx'] as num?)?.toDouble() ?? 0.5;
+              final ry = (data['ry'] as num?)?.toDouble() ?? 0.5;
+              TbpHotspotOverlay.showAddHotspotModal(
+                context,
+                rx,
+                ry,
+                _tbpFolderPath,
+                _currentDhash,
+                _currentHotspots,
+                (updated) {
+                  setState(() {
+                    _currentHotspots = updated;
+                  });
+                },
+              );
+            }
           }
         } catch (_) {}
       });
@@ -175,6 +193,22 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                 downloadUrl: data['url'],
                 filename: data['filename'],
                 scaleFactor: widget.scaleFactor,
+              );
+            } else if (data['type'] == 'contextMenuRightClick' && widget.isTeacherApp) {
+              final rx = (data['rx'] as num?)?.toDouble() ?? 0.5;
+              final ry = (data['ry'] as num?)?.toDouble() ?? 0.5;
+              TbpHotspotOverlay.showAddHotspotModal(
+                context,
+                rx,
+                ry,
+                _tbpFolderPath,
+                _currentDhash,
+                _currentHotspots,
+                (updated) {
+                  setState(() {
+                    _currentHotspots = updated;
+                  });
+                },
               );
             }
           } catch (_) {}
@@ -403,6 +437,32 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                           },
                         ),
                       ),
+
+                      // 4. 교사용 화면 전역 우클릭 핫스팟 트리거 레이어
+                      if (widget.isTeacherApp)
+                        Positioned.fill(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.translucent,
+                            onSecondaryTapUp: (details) {
+                              final size = MediaQuery.of(context).size;
+                              final rx = details.localPosition.dx / size.width;
+                              final ry = details.localPosition.dy / size.height;
+                              TbpHotspotOverlay.showAddHotspotModal(
+                                context,
+                                rx,
+                                ry,
+                                _tbpFolderPath,
+                                _currentDhash,
+                                _currentHotspots,
+                                (updated) {
+                                  setState(() {
+                                    _currentHotspots = updated;
+                                  });
+                                },
+                              );
+                            },
+                          ),
+                        ),
                     ],
                   ),
                 ),

@@ -7,6 +7,7 @@ import 'package:archive/archive_io.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:bst_core/bst_core.dart';
 import 'package:bst_pen/bst_pen.dart';
+import 'tbp_dhash_engine.dart';
 
 /// TBP (TextBook Plus) 전용 스토리지 및 I/O 전담 서비스
 ///
@@ -188,9 +189,45 @@ class TbpStorageService {
     return key;
   }
 
+  /// BoardBook 알고리즘 기반 perceptual dHash 유사성 매칭 (Hamming distance <= threshold)
+  Future<String> resolveSimilarHash(
+    String tbpFolderPath,
+    String subFolder,
+    String targetDhash, {
+    int threshold = 64,
+  }) async {
+    if (targetDhash.isEmpty) return targetDhash;
+    try {
+      final dir = Directory(p.join(tbpFolderPath, subFolder));
+      if (!dir.existsSync()) return targetDhash;
+
+      final entities = dir.listSync();
+      String? bestMatchKey;
+      int minDistance = threshold + 1;
+
+      for (final entity in entities) {
+        final rawName = p.basenameWithoutExtension(entity.path);
+        if (rawName == targetDhash) return targetDhash;
+
+        // 256비트 해시 간의 해밍 거리 비교
+        if (rawName.length == 256 && targetDhash.length == 256) {
+          final dist = TbpDhashEngine.hammingDistance(targetDhash, rawName);
+          if (dist <= threshold && dist < minDistance) {
+            minDistance = dist;
+            bestMatchKey = rawName;
+          }
+        }
+      }
+      return bestMatchKey ?? targetDhash;
+    } catch (_) {
+      return targetDhash;
+    }
+  }
+
   Future<List<Map<String, dynamic>>> loadHotspots(String tbpFolderPath, String dHash) async {
     try {
-      final key = sanitizeKey(dHash);
+      final resolvedDhash = await resolveSimilarHash(tbpFolderPath, 'HOTspot', dHash);
+      final key = sanitizeKey(resolvedDhash);
       // 새 형식: hotspot.bstsave
       final newFile = File(p.join(tbpFolderPath, 'HOTspot', key, 'hotspot.bstsave'));
       if (newFile.existsSync()) {
@@ -198,7 +235,7 @@ class TbpStorageService {
         return list.cast<Map<String, dynamic>>();
       }
       // 레거시: raw dHash
-      final legacyRawFile = File(p.join(tbpFolderPath, 'HOTspot', dHash, 'hotspot.bstsave'));
+      final legacyRawFile = File(p.join(tbpFolderPath, 'HOTspot', resolvedDhash, 'hotspot.bstsave'));
       if (legacyRawFile.existsSync()) {
         final List list = jsonDecode(await legacyRawFile.readAsString());
         return list.cast<Map<String, dynamic>>();
@@ -217,7 +254,8 @@ class TbpStorageService {
 
   Future<void> saveHotspots(String tbpFolderPath, String dHash, List<Map<String, dynamic>> hotspots) async {
     try {
-      final key = sanitizeKey(dHash);
+      final resolvedDhash = await resolveSimilarHash(tbpFolderPath, 'HOTspot', dHash);
+      final key = sanitizeKey(resolvedDhash);
       final pageDir = Directory(p.join(tbpFolderPath, 'HOTspot', key));
       if (!await pageDir.exists()) await pageDir.create(recursive: true);
       final hotspotFile = File(p.join(pageDir.path, 'hotspot.bstsave'));
@@ -279,7 +317,8 @@ class TbpStorageService {
   }
 
   Future<List<AnnotationStroke>> loadPenStrokes(String tbpFolderPath, String dHash) async {
-    final raw = await loadStrokeData(tbpFolderPath: tbpFolderPath, subFolder: 'PEN', scopeKey: dHash);
+    final resolvedDhash = await resolveSimilarHash(tbpFolderPath, 'PEN', dHash);
+    final raw = await loadStrokeData(tbpFolderPath: tbpFolderPath, subFolder: 'PEN', scopeKey: resolvedDhash);
     if (raw == null || raw.isEmpty) return [];
     try {
       final list = jsonDecode(raw) as List;
@@ -290,11 +329,12 @@ class TbpStorageService {
   }
 
   Future<void> savePenStrokes(String tbpFolderPath, String dHash, List<AnnotationStroke> strokes) async {
+    final resolvedDhash = await resolveSimilarHash(tbpFolderPath, 'PEN', dHash);
     final jsonList = strokes.map((s) => s.toJson()).toList();
     await saveStrokeData(
       tbpFolderPath: tbpFolderPath,
       subFolder: 'PEN',
-      scopeKey: dHash,
+      scopeKey: resolvedDhash,
       strokeContent: jsonEncode(jsonList),
     );
   }

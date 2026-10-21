@@ -135,6 +135,10 @@ class BstCloudService {
 
   static final Map<String, Uint8List> webMemoryFiles = {};
 
+  bool _hasAuthError = false;
+  bool get hasAuthError => _hasAuthError;
+  set hasAuthError(bool value) => _hasAuthError = value;
+
   String? activeToken;
   String? activeRefreshToken;
   String? activeFolderId;
@@ -148,6 +152,7 @@ class BstCloudService {
     String ownerEmail = '',
     String? folderId,
   }) {
+    _hasAuthError = false;
     activeToken = token;
     activeTeacherName = teacherName;
     activeOwnerEmail = ownerEmail;
@@ -155,6 +160,7 @@ class BstCloudService {
   }
 
   void disconnect() {
+    _hasAuthError = false;
     activeToken = null;
     activeRefreshToken = null;
     activeFolderId = null;
@@ -689,16 +695,26 @@ class BstCloudService {
         headers: {'Authorization': 'Bearer $currentToken'},
       ).timeout(const Duration(seconds: 60));
 
-      if (res.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
-        debugPrint('[BstCloudService] downloadDriveFileBytes 401 Unauthorized. Auto-refreshing access token...');
-        final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
-        if (newToken != null && newToken.isNotEmpty) {
-          activeToken = newToken;
-          currentToken = newToken;
-          res = await http.get(
-            Uri.parse(url),
-            headers: {'Authorization': 'Bearer $currentToken'},
-          ).timeout(const Duration(seconds: 60));
+      if (res.statusCode == 401) {
+        if (!kIsWeb && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+          debugPrint('[BstCloudService] downloadDriveFileBytes 401 Unauthorized. Auto-refreshing access token...');
+          final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+          if (newToken != null && newToken.isNotEmpty) {
+            activeToken = newToken;
+            currentToken = newToken;
+            res = await http.get(
+              Uri.parse(url),
+              headers: {'Authorization': 'Bearer $currentToken'},
+            ).timeout(const Duration(seconds: 60));
+          } else {
+            _hasAuthError = true;
+            activeToken = null;
+            return null;
+          }
+        } else {
+          _hasAuthError = true;
+          activeToken = null;
+          return null;
         }
       }
 
@@ -714,6 +730,9 @@ class BstCloudService {
 
   /// 6.5 Google Drive 이름 기반 폴더 검색 (중복 생성 방지, ADF 지원)
   Future<String?> findDriveFolderByName(String folderName, String parentFolderId, String token) async {
+    if (_hasAuthError) return null;
+    if (AppConfig.isDemoMode || token.isEmpty || token.startsWith('demo')) return 'demo_${folderName}_folder';
+
     final isAdf = parentFolderId == 'appDataFolder';
     final query = (parentFolderId == 'root' || parentFolderId.isEmpty)
         ? "name = '$folderName' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
@@ -731,9 +750,26 @@ class BstCloudService {
       ).timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 401) {
-        if (activeRefreshToken == null || activeRefreshToken!.isEmpty) {
-          activeToken = null;
+        if (!kIsWeb && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+          final refreshed = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+          if (refreshed != null && refreshed.isNotEmpty) {
+            activeToken = refreshed;
+            final retryRes = await http.get(
+              Uri.parse(url),
+              headers: {'Authorization': 'Bearer $refreshed'},
+            ).timeout(const Duration(seconds: 8));
+            if (retryRes.statusCode == 200) {
+              final data = json.decode(retryRes.body) as Map<String, dynamic>;
+              final filesJson = data['files'] as List<dynamic>? ?? [];
+              if (filesJson.isNotEmpty) {
+                return filesJson.first['id'] as String?;
+              }
+              return null;
+            }
+          }
         }
+        _hasAuthError = true;
+        activeToken = null;
         return null;
       }
 
@@ -943,13 +979,14 @@ class BstCloudService {
     required String accessToken,
     required String folderName,
   }) async {
-    final isDemoOrVirtual = accessToken.isEmpty ||
+    final isDemoOrVirtual = AppConfig.isDemoMode ||
+        accessToken.isEmpty ||
         accessToken.startsWith('demo_token') ||
         accessToken.startsWith('demo_') ||
         accessToken == 'web_qr_approved_token' ||
         accessToken.startsWith('saved_token_');
 
-    if (isDemoOrVirtual) {
+    if (isDemoOrVirtual || _hasAuthError) {
       return _filterDemoFilesByFolder(folderName);
     }
 
@@ -965,17 +1002,25 @@ class BstCloudService {
       String currentToken = accessToken;
       final List<({String id, String? space})> folderTargets = [];
       for (final fn in targetFolderNames) {
+        if (_hasAuthError) break;
         final adfId = await findDriveFolderByName(fn, 'appDataFolder', currentToken);
+        if (_hasAuthError) break;
         if (adfId != null && adfId.isNotEmpty && !folderTargets.any((t) => t.id == adfId && t.space == 'appDataFolder')) {
           folderTargets.add((id: adfId, space: 'appDataFolder'));
         }
         final rootId = await findDriveFolderByName(fn, 'root', currentToken);
+        if (_hasAuthError) break;
         if (rootId != null && rootId.isNotEmpty && !folderTargets.any((t) => t.id == rootId && t.space == null)) {
           folderTargets.add((id: rootId, space: null));
         }
       }
 
+      if (_hasAuthError) {
+        return _filterDemoFilesByFolder(folderName);
+      }
+
       Future<void> queryFilesInFolder(String fid, String? space) async {
+        if (_hasAuthError) return;
         final q = (folderName == 'bst-tbs' || folderName == 'bst-textbookpro')
             ? "'$fid' in parents and trashed = false"
             : "'$fid' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'";
@@ -984,12 +1029,22 @@ class BstCloudService {
           "https://www.googleapis.com/drive/v3/files?${spaceParam}q=${Uri.encodeComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=100&orderBy=modifiedTime desc",
         );
         var res = await http.get(url, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
-        if (res.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
-          final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
-          if (newToken != null && newToken.isNotEmpty) {
-            activeToken = newToken;
-            currentToken = newToken;
-            res = await http.get(url, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
+        if (res.statusCode == 401) {
+          if (!kIsWeb && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+            final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+            if (newToken != null && newToken.isNotEmpty) {
+              activeToken = newToken;
+              currentToken = newToken;
+              res = await http.get(url, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
+            } else {
+              _hasAuthError = true;
+              activeToken = null;
+              return;
+            }
+          } else {
+            _hasAuthError = true;
+            activeToken = null;
+            return;
           }
         }
         if (res.statusCode == 200) {
@@ -1016,11 +1071,16 @@ class BstCloudService {
       }
 
       for (final target in folderTargets) {
+        if (_hasAuthError) break;
         await queryFilesInFolder(target.id, target.space);
       }
 
+      if (_hasAuthError) {
+        return _filterDemoFilesByFolder(folderName);
+      }
+
       // 만약 폴더가 아직 생성 전이거나 폴더 ID로 못 찾은 경우, 파일 확장자 필터 fallback (appDataFolder + root 모두 검색)
-      if (results.isEmpty && folderTargets.isEmpty) {
+      if (results.isEmpty && folderTargets.isEmpty && !_hasAuthError) {
         String extQuery = '';
         if (folderName == 'bst-canva') {
           extQuery = "and (name contains '.htmlp' or name contains '.HTMLP' or name contains '.bstcanva' or name contains '.canva')";
@@ -1033,17 +1093,28 @@ class BstCloudService {
         }
 
         for (final space in ['appDataFolder', null]) {
+          if (_hasAuthError) break;
           final spaceParam = space != null ? 'spaces=$space&' : '';
           final fallbackUrl = Uri.parse(
             "https://www.googleapis.com/drive/v3/files?${spaceParam}q=${Uri.encodeComponent('trashed=false $extQuery')}&fields=files(id,name,mimeType,size)&pageSize=100&orderBy=modifiedTime desc",
           );
           var fbRes = await http.get(fallbackUrl, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
-          if (fbRes.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
-            final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
-            if (newToken != null && newToken.isNotEmpty) {
-              activeToken = newToken;
-              currentToken = newToken;
-              fbRes = await http.get(fallbackUrl, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
+          if (fbRes.statusCode == 401) {
+            if (!kIsWeb && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+              final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+              if (newToken != null && newToken.isNotEmpty) {
+                activeToken = newToken;
+                currentToken = newToken;
+                fbRes = await http.get(fallbackUrl, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
+              } else {
+                _hasAuthError = true;
+                activeToken = null;
+                break;
+              }
+            } else {
+              _hasAuthError = true;
+              activeToken = null;
+              break;
             }
           }
           if (fbRes.statusCode == 200) {
@@ -1069,7 +1140,7 @@ class BstCloudService {
         }
       }
 
-      if (results.isEmpty) {
+      if (results.isEmpty || _hasAuthError) {
         return _filterDemoFilesByFolder(folderName);
       }
 
@@ -1145,6 +1216,9 @@ class BstCloudService {
 
   /// Google Drive 전체(My Drive)에서 수업에 쓰이는 확장자/MIME 타입 파일 검색
   Future<List<BstCloudFile>> fetchMyDriveLessonFiles({required String accessToken}) async {
+    if (_hasAuthError || AppConfig.isDemoMode || accessToken.isEmpty || accessToken.startsWith('demo')) {
+      return [];
+    }
     try {
       final List<BstCloudFile> results = [];
       const q = "trashed = false and mimeType != 'application/vnd.google-apps.folder' and (mimeType = 'application/pdf' or mimeType contains 'presentation' or mimeType contains 'wordprocessingml' or mimeType contains 'hwp' or name contains '.pdf' or name contains '.ppt' or name contains '.pptx' or name contains '.hwp' or name contains '.hwpx' or name contains '.docx' or name contains '.tbp' or name contains '.canva' or name contains '.pen')";
@@ -1152,6 +1226,11 @@ class BstCloudService {
         "https://www.googleapis.com/drive/v3/files?q=${Uri.encodeComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=100&orderBy=modifiedTime desc",
       );
       final res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 401) {
+        _hasAuthError = true;
+        activeToken = null;
+        return [];
+      }
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         for (final f in (data['files'] as List? ?? [])) {
@@ -1176,13 +1255,14 @@ class BstCloudService {
 
   /// 모든 클라우드 폴더(수업자료 bst-save, HTML Present bst-canva, TBP 교과서 bst-tbs, 판서 bst-pen) 통합 조회
   Future<List<BstCloudFile>> fetchAllCloudDriveFiles({required String accessToken}) async {
-    final isDemoOrVirtual = accessToken.isEmpty ||
+    final isDemoOrVirtual = AppConfig.isDemoMode ||
+        accessToken.isEmpty ||
         accessToken.startsWith('demo_token') ||
         accessToken.startsWith('demo_') ||
         accessToken == 'web_qr_approved_token' ||
         accessToken.startsWith('saved_token_');
 
-    if (isDemoOrVirtual) {
+    if (isDemoOrVirtual || _hasAuthError) {
       return getDemoCloudDriveFiles();
     }
 
@@ -1205,6 +1285,10 @@ class BstCloudService {
       debugPrint('[BstCloudService] fetch bst-save error: $e');
     }
 
+    if (_hasAuthError) {
+      return results.isNotEmpty ? results : getDemoCloudDriveFiles();
+    }
+
     try {
       final canvaFiles = await fetchFilesBySpecificFolder(accessToken: accessToken, folderName: 'bst-canva');
       for (final f in canvaFiles) {
@@ -1212,6 +1296,10 @@ class BstCloudService {
       }
     } catch (e) {
       debugPrint('[BstCloudService] fetch bst-canva error: $e');
+    }
+
+    if (_hasAuthError) {
+      return results.isNotEmpty ? results : getDemoCloudDriveFiles();
     }
 
     try {
@@ -1223,6 +1311,10 @@ class BstCloudService {
       debugPrint('[BstCloudService] fetch bst-tbs error: $e');
     }
 
+    if (_hasAuthError) {
+      return results.isNotEmpty ? results : getDemoCloudDriveFiles();
+    }
+
     try {
       final penFiles = await fetchBstFreeFiles(accessToken: accessToken);
       for (final f in penFiles) {
@@ -1230,6 +1322,10 @@ class BstCloudService {
       }
     } catch (e) {
       debugPrint('[BstCloudService] fetch bst-pen error: $e');
+    }
+
+    if (_hasAuthError) {
+      return results.isNotEmpty ? results : getDemoCloudDriveFiles();
     }
 
     // Google Drive 전체 My Drive에서 추가 교안 파일 통합 검색
@@ -1243,7 +1339,7 @@ class BstCloudService {
     }
 
     // 만약 실제 Drive에 파일이 하나도 없다면, 빈 화면 대신 데모 교안 샘플을 반환하여 즉시 활용 가능하도록 함
-    if (results.isEmpty) {
+    if (results.isEmpty || _hasAuthError) {
       return getDemoCloudDriveFiles();
     }
 
@@ -1265,19 +1361,25 @@ class BstCloudService {
 
   /// 10-3. 3번 탭: 화이트보드 판서보드 (Free) 파일 목록 조회 ('bst-Free' 및 'bst-pen' 폴더 내 .Free.pen / .pen)
   Future<List<BstCloudFile>> fetchBstFreeFiles({required String accessToken}) async {
-    if (accessToken.isEmpty || accessToken.startsWith('demo_token') || accessToken == 'web_qr_approved_token') {
+    if (_hasAuthError || AppConfig.isDemoMode || accessToken.isEmpty || accessToken.startsWith('demo') || accessToken == 'web_qr_approved_token') {
       return [];
     }
     try {
       final List<BstCloudFile> results = [];
 
       for (final space in ['appDataFolder', null]) {
+        if (_hasAuthError) break;
         final spaceParam = space != null ? 'spaces=$space&' : '';
         final q = "trashed=false and (name contains '.Free.pen' or name contains '.pen')";
         final url = Uri.parse(
           "https://www.googleapis.com/drive/v3/files?${spaceParam}q=${Uri.encodeComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=100&orderBy=modifiedTime desc",
         );
         final res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 8));
+        if (res.statusCode == 401) {
+          _hasAuthError = true;
+          activeToken = null;
+          return [];
+        }
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
           for (final f in (data['files'] as List? ?? [])) {

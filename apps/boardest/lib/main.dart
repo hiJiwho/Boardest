@@ -24,6 +24,7 @@ import 'views/dashboard_view.dart';
 import 'views/boardest_tools_view.dart';
 import 'services/demo_class_allocator_service.dart';
 import 'helpers/startup_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 
@@ -61,6 +62,22 @@ void main(List<String> args) async {
 
   WidgetsFlutterBinding.ensureInitialized();
   AppConfig.initDemoMode(args);
+  if (kIsWeb) {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final uri = Uri.base;
+      final qDemo = uri.queryParameters['demo'] ?? uri.queryParameters['Demo'];
+      if (qDemo == '1' || qDemo == 'true') {
+        AppConfig.isDemoMode = true;
+        await prefs.setBool('bst_persisted_demo', true);
+      } else if (qDemo == '0' || qDemo == 'false') {
+        AppConfig.isDemoMode = false;
+        await prefs.remove('bst_persisted_demo');
+      } else if (prefs.getBool('bst_persisted_demo') == true) {
+        AppConfig.isDemoMode = true;
+      }
+    } catch (_) {}
+  }
   AppConfig.initLiteMode(args);
   AppConfig.initToolsMode(args);
   try {

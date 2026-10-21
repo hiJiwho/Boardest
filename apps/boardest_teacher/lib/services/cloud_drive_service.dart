@@ -227,6 +227,10 @@ class CloudDriveService with ChangeNotifier {
   HttpServer? _localServer;
   bool _isAuthenticating = false;
 
+  bool _hasAuthError = false;
+  bool get hasAuthError => _hasAuthError;
+  set hasAuthError(bool val) => _hasAuthError = val;
+
   bool get isLoggedIn =>
       (_userName != null && _userName!.isNotEmpty) ||
       (_userEmail != null && _userEmail!.isNotEmpty) ||
@@ -234,7 +238,8 @@ class CloudDriveService with ChangeNotifier {
   bool get isGoogleDriveConnected =>
       _accessToken != null &&
       _accessToken!.isNotEmpty &&
-      !_accessToken!.startsWith('demo_token');
+      !_accessToken!.startsWith('demo') &&
+      !_hasAuthError;
   String? get userEmail => _userEmail;
   String? get userName => _userName;
   String? get schoolName => _schoolName;
@@ -247,6 +252,7 @@ class CloudDriveService with ChangeNotifier {
   void _startAutoRefreshTimer() {
     _autoRefreshTimer?.cancel();
     _autoRefreshTimer = Timer.periodic(const Duration(minutes: 40), (_) async {
+      if (_hasAuthError || _refreshToken == null || _refreshToken!.isEmpty) return;
       debugPrint('[CloudDriveService] 🕒 40분 주기 백그라운드 자동 구글 토큰 갱신 실행');
       await refreshAccessToken();
     });
@@ -824,6 +830,7 @@ class CloudDriveService with ChangeNotifier {
 
   /// 세션 완전 초기화 및 로그아웃
   Future<void> clearSession() async {
+    _hasAuthError = false;
     _accessToken = null;
     _refreshToken = null;
     _userEmail = null;
@@ -953,16 +960,22 @@ class CloudDriveService with ChangeNotifier {
           final newAccess = data['access_token'] as String?;
           if (newAccess != null && newAccess.isNotEmpty) {
             _accessToken = newAccess;
+            _hasAuthError = false;
             await prefs.setString(_tokenKey, newAccess);
             debugPrint('[CloudDriveService] 🔑 Google access token refreshed via direct refreshToken!');
             await syncTeacherCloudTokenToFirestore();
             return true;
           }
+        } else {
+          _hasAuthError = true;
+          debugPrint('[CloudDriveService] ⚠️ Google token refresh failed (${response.statusCode})');
         }
       }
 
+      _hasAuthError = true;
       debugPrint('[CloudDriveService] ⚠️ Could not refresh token automatically. Retaining session.');
     } catch (e) {
+      _hasAuthError = true;
       debugPrint('[CloudDriveService] Token refresh error: $e');
     }
     return false;
@@ -1062,13 +1075,18 @@ class CloudDriveService with ChangeNotifier {
   static bool isProjectSizeExceeded(int totalBytes) => totalBytes > maxProjectSizeBytes;
 
   Future<void> _ensureBoardestFolders() async {
-    if (_accessToken == null || _accessToken!.isEmpty) return;
+    if (_accessToken == null || _accessToken!.isEmpty || _hasAuthError) return;
+    if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) return;
     try {
       _boardestFolderId = await _getOrCreateFolder('bst-save', 'appDataFolder');
+      if (_hasAuthError) return;
       _bstSaveFolderId = _boardestFolderId;
       _bstPenFolderId = await _getOrCreateFolder('bst-pen', 'appDataFolder');
+      if (_hasAuthError) return;
       _bstCanvaFolderId = await _getOrCreateFolder('bst-canva', 'appDataFolder');
+      if (_hasAuthError) return;
       _bstTextbookProFolderId = await _getOrCreateFolder('bst-textbookpro', 'appDataFolder');
+      if (_hasAuthError) return;
       _bstSyncFolderId = await _getOrCreateFolder('bst-sync', 'appDataFolder');
     } catch (e) {
       debugPrint('[CloudDriveService] _ensureBoardestFolders error: $e');
@@ -1076,6 +1094,8 @@ class CloudDriveService with ChangeNotifier {
   }
 
   Future<String?> _getOrCreateFolder(String folderName, String parentId) async {
+    if (_hasAuthError) return null;
+    if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) return 'demo_${folderName}_folder';
     try {
       final isAdf = parentId == 'appDataFolder';
       final parentQuery = isAdf ? "'appDataFolder' in parents" : "'$parentId' in parents";
@@ -1095,6 +1115,9 @@ class CloudDriveService with ChangeNotifier {
             searchUrl,
             headers: {'Authorization': 'Bearer $_accessToken', 'Accept': 'application/json'},
           );
+        } else {
+          _hasAuthError = true;
+          return null;
         }
       }
       if (searchRes.statusCode == 200) {
@@ -1104,6 +1127,8 @@ class CloudDriveService with ChangeNotifier {
           return files.first['id'] as String?;
         }
       }
+
+      if (_hasAuthError) return null;
 
       final createUrl = Uri.parse('https://www.googleapis.com/drive/v3/files');
       final bodyMap = <String, dynamic>{
@@ -1132,6 +1157,9 @@ class CloudDriveService with ChangeNotifier {
             },
             body: jsonEncode(bodyMap),
           );
+        } else {
+          _hasAuthError = true;
+          return null;
         }
       }
       if (createRes.statusCode == 200 || createRes.statusCode == 201) {
@@ -1349,6 +1377,7 @@ class CloudDriveService with ChangeNotifier {
     String? totpSecret,
     String? shortId,
   }) async {
+    _hasAuthError = false;
     _userEmail = email;
     _userName = name;
     _schoolName = school;
@@ -1527,7 +1556,8 @@ class CloudDriveService with ChangeNotifier {
 
   /// Google Drive에서 이름 기반 폴더 검색 (중복 생성 방지)
   Future<String?> findFolderByName(String folderName, {String? parentFolderId, bool isAppData = false}) async {
-    if (!isLoggedIn) return null;
+    if (!isLoggedIn || _hasAuthError) return null;
+    if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) return 'demo_${folderName}_folder';
     for (int attempt = 0; attempt < 2; attempt++) {
       try {
         String q = "name = '$folderName' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
@@ -1563,6 +1593,8 @@ class CloudDriveService with ChangeNotifier {
           debugPrint('[CloudDriveService] Drive API token notice: 401, attempting auto refresh...');
           final refreshed = await refreshAccessToken();
           if (refreshed) continue;
+          _hasAuthError = true;
+          return null;
         }
       } catch (e) {
         debugPrint('[CloudDriveService] findFolderByName error: $e');
@@ -1690,7 +1722,36 @@ class CloudDriveService with ChangeNotifier {
   /// TBP => bst-tbs (또는 bst-textbookpro)
   /// 판서 => bst-pen
   Future<List<Map<String, dynamic>>> fetchMaterialsByCategory(String category, {String? targetFolderId}) async {
-    if (!isLoggedIn) return [];
+    if (!isLoggedIn || _hasAuthError) return [];
+    if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) {
+      final demoFiles = getDemoDriveFiles();
+      return demoFiles.map((f) {
+        String src = 'cloud';
+        String label = '☁️ 수업자료';
+        if (f.name.endsWith('.htmlp') || f.name.endsWith('.canva')) {
+          src = 'canva';
+          label = '🌐 HTML Present';
+        } else if (f.name.endsWith('.tbp') || f.name.endsWith('.bsttbp') || f.isFolder) {
+          src = 'tbp';
+          label = '📐 TBP';
+        } else if (f.name.endsWith('.pen')) {
+          src = 'pen';
+          label = '📝 판서';
+        }
+        return {
+          'file': f,
+          'source': src,
+          'sourceLabel': label,
+          'folderId': 'demo_folder',
+        };
+      }).where((m) {
+        if (category == 'all' || category.isEmpty) return true;
+        if (category == 'Canva' || category == 'HTML Present') return m['source'] == 'canva';
+        if (category == 'TBP') return m['source'] == 'tbp';
+        if (category == '판서') return m['source'] == 'pen';
+        return m['source'] == 'cloud';
+      }).toList();
+    }
     final List<Map<String, dynamic>> merged = [];
     final Set<String> seenIds = {};
 
@@ -1720,7 +1781,7 @@ class CloudDriveService with ChangeNotifier {
         }
       }
 
-      if (folderIdToQuery != null) {
+      if (folderIdToQuery != null && !_hasAuthError) {
         final files = await fetchDriveFiles(folderId: folderIdToQuery, includeFolders: true);
         for (final f in files) {
           if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json') continue;
@@ -1743,7 +1804,27 @@ class CloudDriveService with ChangeNotifier {
 
   /// bst-save, bst-canva, bst-textbookpro 에 저장된 모든 수업 자료 리스트 조회 (하위 호환용)
   Future<List<Map<String, dynamic>>> fetchMergedMaterials({String? targetFolderId}) async {
-    if (!isLoggedIn) return [];
+    if (!isLoggedIn || _hasAuthError) return [];
+    if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) {
+      final demoFiles = getDemoDriveFiles();
+      return demoFiles.map((f) {
+        String src = 'cloud';
+        String label = '☁️ 교안';
+        if (f.name.endsWith('.htmlp') || f.name.endsWith('.canva')) {
+          src = 'canva';
+          label = '🌐 HTML Present';
+        } else if (f.name.endsWith('.tbp') || f.name.endsWith('.bsttbp') || f.isFolder) {
+          src = 'tbp';
+          label = '📐 TBP';
+        }
+        return {
+          'file': f,
+          'source': src,
+          'sourceLabel': label,
+          'folderId': 'demo_folder',
+        };
+      }).toList();
+    }
     final List<Map<String, dynamic>> merged = [];
     final Set<String> seenIds = {};
 
@@ -2141,9 +2222,53 @@ class CloudDriveService with ChangeNotifier {
     return null;
   }
 
+  /// 데모 계정 및 가상 테스트용 샘플 파일 목록
+  List<CloudDriveFile> getDemoDriveFiles() {
+    return [
+      CloudDriveFile(
+        id: 'demo_pdf_01',
+        name: '수학I_03단원_삼각함수_핵심요약.pdf',
+        mimeType: 'application/pdf',
+        size: 3420000,
+        modifiedTime: DateTime.now().subtract(const Duration(hours: 2)),
+      ),
+      CloudDriveFile(
+        id: 'demo_pptx_01',
+        name: '2026_수학I_모의고사_기출분석.pptx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        size: 8940000,
+        modifiedTime: DateTime.now().subtract(const Duration(days: 1)),
+      ),
+      CloudDriveFile(
+        id: 'demo_canva_01',
+        name: '[HTMLP] 함수의극한과연속_인터랙티브_수업슬라이드.htmlp',
+        mimeType: 'application/x-bst-canva',
+        size: 3120000,
+        modifiedTime: DateTime.now().subtract(const Duration(hours: 5)),
+      ),
+      CloudDriveFile(
+        id: 'demo_tbp_01',
+        name: '[전자교과서] 고등_수학I_비상교육_정규본.tbp',
+        mimeType: 'application/vnd.google-apps.folder',
+        size: 45200000,
+        modifiedTime: DateTime.now().subtract(const Duration(days: 3)),
+      ),
+      CloudDriveFile(
+        id: 'demo_pen_01',
+        name: '10월19일_수학_3교시_판서노트.pen',
+        mimeType: 'application/octet-stream',
+        size: 5120000,
+        modifiedTime: DateTime.now().subtract(const Duration(hours: 8)),
+      ),
+    ];
+  }
+
   /// Google Drive REST API — 지정 폴더 또는 bst-save 내 파일 및 폴더 목록 가져오기
   Future<List<CloudDriveFile>> fetchDriveFiles({String? folderId, bool includeFolders = true}) async {
-    if (!isLoggedIn) return [];
+    if (!isLoggedIn || _hasAuthError) return [];
+    if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) {
+      return getDemoDriveFiles();
+    }
 
     try {
       final List<CloudDriveFile> allFiles = [];
@@ -2156,6 +2281,7 @@ class CloudDriveService with ChangeNotifier {
       final folderFilter = includeFolders ? "" : " and mimeType!='application/vnd.google-apps.folder'";
 
       Future<void> querySpace(String? space) async {
+        if (_hasAuthError) return;
         final spaceParam = space != null ? 'spaces=$space&' : '';
         final url = Uri.parse(
           "https://www.googleapis.com/drive/v3/files?${spaceParam}q=trashed=false and $parentQuery$folderFilter&fields=files(id,name,mimeType,size,webViewLink,webContentLink,modifiedTime)&pageSize=100&orderBy=folder,modifiedTime desc",
@@ -2165,6 +2291,9 @@ class CloudDriveService with ChangeNotifier {
           final refreshed = await refreshAccessToken();
           if (refreshed) {
             res = await http.get(url, headers: {'Authorization': 'Bearer $_accessToken', 'Accept': 'application/json'});
+          } else {
+            _hasAuthError = true;
+            return;
           }
         }
         if (res.statusCode == 200) {
@@ -2182,7 +2311,9 @@ class CloudDriveService with ChangeNotifier {
       }
 
       await querySpace('appDataFolder');
-      await querySpace(null);
+      if (!_hasAuthError) {
+        await querySpace(null);
+      }
 
       return allFiles;
     } catch (e) {
@@ -2193,7 +2324,10 @@ class CloudDriveService with ChangeNotifier {
 
   /// 3번 탭: 'bst-Free' 폴더 내 화이트보드 판서 파일 (.Free.pen) 목록 조회
   Future<List<CloudDriveFile>> fetchFreePenFiles() async {
-    if (!isLoggedIn) return [];
+    if (!isLoggedIn || _hasAuthError) return [];
+    if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) {
+      return getDemoDriveFiles().where((f) => f.name.endsWith('.pen')).toList();
+    }
     try {
       final List<CloudDriveFile> results = [];
       final driveUrl = Uri.parse(
@@ -2207,6 +2341,14 @@ class CloudDriveService with ChangeNotifier {
           'Accept': 'application/json',
         },
       );
+
+      if (res.statusCode == 401) {
+        final refreshed = await refreshAccessToken();
+        if (!refreshed) {
+          _hasAuthError = true;
+          return [];
+        }
+      }
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;

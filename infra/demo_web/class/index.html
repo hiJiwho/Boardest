@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta name="application-version" content="5.0.1">
+  <meta name="application-version" content="4.3.0">
   <!--
     If you are serving your web app in a path other than the root, change the
     href value below to reflect the base path you are serving from.
@@ -35,6 +35,15 @@
   <!-- Hot-Swap Service Worker & Version Auto-Updater -->
   <script>
     (async function() {
+      try {
+        var params = new URLSearchParams(window.location.search);
+        var d = params.get('demo') || params.get('Demo');
+        if (d === '1' || d === 'true') {
+          localStorage.setItem('flutter.bst_persisted_demo', 'true');
+        } else if (d === '0' || d === 'false') {
+          localStorage.removeItem('flutter.bst_persisted_demo');
+        }
+      } catch (_) {}
       async function purgeAllCachesAndSW() {
         try {
           if ('caches' in window) {

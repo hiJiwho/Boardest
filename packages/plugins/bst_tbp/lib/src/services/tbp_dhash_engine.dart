@@ -32,6 +32,21 @@ class TbpDhashEngine {
   /// JS 해시 추출 스크립트
   static const String _hashJsScript = '''
     (function() {
+      if (!window.__bstContextMenuHooked) {
+        window.__bstContextMenuHooked = true;
+        window.addEventListener('contextmenu', function(e) {
+          var rx = e.clientX / window.innerWidth;
+          var ry = e.clientY / window.innerHeight;
+          var msg = JSON.stringify({type: 'contextMenuRightClick', rx: rx, ry: ry});
+          if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.postMessage(msg);
+          }
+          if (window.TbpChannel && window.TbpChannel.postMessage) {
+            window.TbpChannel.postMessage(msg);
+          }
+        });
+      }
+
       function sendHash(hashStr) {
         var msg = JSON.stringify({type: 'dhashResult', hash: hashStr});
         if (window.chrome && window.chrome.webview) {
@@ -209,7 +224,7 @@ class TbpDhashEngine {
       return;
     }
 
-    final dist = _hammingDistance(_currentDhash, newHash);
+    final dist = hammingDistance(_currentDhash, newHash);
 
     // 노이즈 및 동일 페이지 매칭 범위 (<= 64비트): 같은 페이지로 간주하여 불필요한 재로드 차단
     if (dist <= _matchThreshold) {
@@ -244,7 +259,7 @@ class TbpDhashEngine {
   }
 
   /// Hamming distance (서로 다른 비트 수 계산)
-  int _hammingDistance(String a, String b) {
+  static int hammingDistance(String a, String b) {
     if (a.length != b.length) return 256;
     int dist = 0;
     for (int i = 0; i < a.length; i++) {

@@ -130,6 +130,10 @@
     },
     {
       "target": "boardest-class",
+      "redirects": [
+        { "source": "/class", "destination": "/", "type": 302 },
+        { "source": "/class/:path*", "destination": "/:path*", "type": 302 }
+      ],
       "public": "apps/boardest/build/web",
       "ignore": [
         "firebase.json",
@@ -255,6 +259,10 @@
     },
     {
       "target": "boardest-teacher",
+      "redirects": [
+        { "source": "/teacher", "destination": "/", "type": 302 },
+        { "source": "/teacher/:path*", "destination": "/:path*", "type": 302 }
+      ],
       "public": "apps/boardest_teacher/build/web",
       "ignore": [
         "firebase.json",
