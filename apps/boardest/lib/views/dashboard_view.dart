@@ -2503,7 +2503,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           _checkAutoLessonFlow(active, _currentLesson);
         } else {
           _currentLesson = null;
-          if (active.label == '점심 시간') {
+          final isLunchTime = active.label.contains('점심');
+          final lunchRemainingSec = isLunchTime ? active.end.difference(now).inSeconds : 9999;
+          final isLunchLast10Min = isLunchTime && lunchRemainingSec <= 10 * 60;
+
+          if (isLunchTime && !isLunchLast10Min) {
             _nextLesson = null;
           } else {
             final nextClassRanges = ranges.where(
@@ -4748,7 +4752,14 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                   if (_currentPeriod == null) return null;
                   if (_currentPeriod!.period == -3) return '아침시간';
                   if (_currentPeriod!.period == -1) return '조회시간';
-                  if (_currentPeriod!.label.contains('점심')) return '점심시간';
+                  if (_currentPeriod!.label.contains('점심')) {
+                    final diff = _currentPeriod!.end.difference(_now);
+                    if (diff.inSeconds <= 10 * 60) {
+                      // 점심시간 종료 10분전은 그 다음교시 쉬는시간 취급
+                      return null;
+                    }
+                    return '점심시간';
+                  }
                   if (_currentPeriod!.period == -2) return '종례시간';
                   return null;
                 }(),
@@ -5337,22 +5348,32 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     return minutes >= start && minutes <= end;
   }
 
-  /// [신규] 급식 메뉴 투표 가능 시간: 점심시간 시작 ~ 점심시간 종료 10분 전
+  /// [신규] 급식 메뉴 투표 가능 시간: 점심시간 시작 ~ 점심시간 종료 5분 전까지
+  /// - 종료 5분 전까지: 우리 반 투표 (버튼 활성화)
+  /// - 종료 5분 전 ~ 4분 전: 1분간 서버 1회 PUT 전송 중 (투표 버튼 비활성화)
+  /// - 종료 4분 전 이후: 전교 득표 공개 및 투표 마감
   bool _isMealVoteTimeNow() {
     final now = _debugTimeOverride ?? DateTime.now();
     if (_currentPeriod != null && !_currentPeriod!.isClass && _currentPeriod!.label.contains('점심')) {
-      return true;
+      final diff = _currentPeriod!.end.difference(now);
+      return diff.inSeconds >= 5 * 60; // 종료 5분 전까지만 투표 가능 (이후 비활성화)
     }
     final minutes = now.hour * 60 + now.minute;
     final start = _getLunchStartMinutes();
     final end = _getLunchEndMinutes();
-    return minutes >= start && minutes < (end - 10);
+    return minutes >= start && minutes < (end - 5);
   }
 
+  /// [신규] 다른 반 표수 및 전교 득표수 공개 시점:
+  /// - 종료 5분 전~4분 전 1분간 서버 동기화 후, 종료 4분 전부터 타 반 표수 포함 전교 표수 공개!
   bool _isMealVoteResultTimeNow() {
     final now = _debugTimeOverride ?? DateTime.now();
+    if (_currentPeriod != null && !_currentPeriod!.isClass && _currentPeriod!.label.contains('점심')) {
+      final diff = _currentPeriod!.end.difference(now);
+      return diff.inSeconds < 4 * 60; // 종료 4분 전부터 결과 노출
+    }
     final minutes = now.hour * 60 + now.minute;
-    return minutes >= (_getLunchEndMinutes() - 9);
+    return minutes >= (_getLunchEndMinutes() - 4);
   }
 
   /// [신규] 점심시간 끝나고 20분 뒤인지 판별 (20분 뒤면 다음날 급식으로 자동 전환)
@@ -5525,11 +5546,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
-  Future<void> _handleDishVote(String dishName) async {
+  Future<void> _handleDishVote(String dishName, {int amount = 1}) async {
     if (!_isMealVoteTimeNow()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('🍽️ 메뉴 투표는 점심시간 시작부터 종료 10분 전까지만 가능합니다! (메뉴를 꾹 누르면 알레르기 정보 확인)'),
+          content: Text('🍽️ 메뉴 투표는 점심시간 종료 5분 전까지만 가능합니다! (메뉴를 꾹 누르면 투표 내역/알레르기 확인)'),
           backgroundColor: Color(0xFFE53935),
           duration: Duration(seconds: 3),
         ),
@@ -5551,13 +5572,14 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       date: voteDate,
       dishName: dishName,
       classKey: classKey,
+      amount: amount,
     );
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('✨ "$dishName"에 투표했습니다!'),
+        content: Text(amount > 1 ? '🔥 "$dishName"에 $amount표를 투표했습니다!' : '✨ "$dishName"에 투표했습니다!'),
         backgroundColor: const Color(0xFF00F5D4),
-        duration: const Duration(milliseconds: 1200),
+        duration: const Duration(milliseconds: 1000),
       ),
     );
   }
@@ -11676,22 +11698,16 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             ? _settings.classNickname
             : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
 
-        if (nowMinutes == endMin - 10) {
-          // 종료 10분 전: 교실 투표 1회 서버 전송
+        if (nowMinutes == endMin - 5) {
+          // 종료 5분 전: 교실 투표 1회 서버 전송 및 보관
           MealVoteService.instance.syncClassVotesToServer(
             schoolId: currentSchoolId,
             date: voteDate,
             classKey: classKey,
           );
-        } else if (nowMinutes == endMin - 9) {
-          // 종료 9분 전 (1분 뒤): 전교 투표 1회 취합 및 전자칠판 로컬 영구 저장
+        } else if (nowMinutes == endMin - 4) {
+          // 종료 4분 전 (1분 뒤): 전교 투표 1회 취합 및 전자칠판 로컬/서버 동기화
           MealVoteService.instance.fetchAndPersistFinalResults(
-            schoolId: currentSchoolId,
-            date: voteDate,
-          );
-        } else if (nowMinutes == endMin - 8) {
-          // 종료 8분 전 (2분 뒤): 서버 임시 노드 완전 삭제 (용량 0KB)
-          MealVoteService.instance.purgeServerVotes(
             schoolId: currentSchoolId,
             date: voteDate,
           );

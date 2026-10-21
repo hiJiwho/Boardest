@@ -67,16 +67,35 @@ class MealVoteService {
     // 타이머 없음 - 상시 폴링 0
   }
 
-  /// 만료된 임시 로컬 캐시 정리
+  /// 30일이 지난 과거 캐시 및 서버 데이터 자동 삭제 (30일 보관 정책)
   Future<void> _purgeExpiredTempCaches() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final todayKey = _activeDate != null ? getDateKey(_activeDate!) : getDateKey(DateTime.now());
+      final now = DateTime.now();
+      final cutoffDate = now.subtract(const Duration(days: 30));
       final allKeys = prefs.getKeys();
       for (final k in allKeys) {
-        if (k.startsWith('bst_meal_votes_local_')) {
-          if (!k.endsWith(todayKey)) {
-            await prefs.remove(k);
+        if (k.startsWith('bst_meal_votes_local_') || k.startsWith('bst_meal_vote_history_')) {
+          final parts = k.split('_');
+          if (parts.isNotEmpty) {
+            final dateStr = parts.last;
+            if (dateStr.length == 8) {
+              final y = int.tryParse(dateStr.substring(0, 4));
+              final m = int.tryParse(dateStr.substring(4, 6));
+              final d = int.tryParse(dateStr.substring(6, 8));
+              if (y != null && m != null && d != null) {
+                final date = DateTime(y, m, d);
+                if (date.isBefore(cutoffDate)) {
+                  await prefs.remove(k);
+                  // 서버에서도 30일 지난 데이터 1회 삭제
+                  try {
+                    final sId = _currentSchoolId.isNotEmpty ? _currentSchoolId : 'default';
+                    final url = Uri.parse('$_rtdbBase/meal_votes/$sId/$dateStr.json');
+                    http.delete(url);
+                  } catch (_) {}
+                }
+              }
+            }
           }
         }
       }
@@ -134,11 +153,13 @@ class MealVoteService {
   }
 
   /// 투표 기록 (로컬 SharedPreferences에만 기록, 네트워크 요청 0회!)
+  /// [amount] 기본 1표, 10표 올리기 버튼 지원 (+10)
   Future<void> recordLocalVote({
     required String schoolId,
     required DateTime date,
     required String dishName,
     required String classKey,
+    int amount = 1,
   }) async {
     final sId = schoolId.trim().isEmpty ? 'default' : schoolId.trim();
     final dateKey = getDateKey(date);
@@ -147,7 +168,7 @@ class MealVoteService {
 
     final currentClassMap = Map<String, int>.from(_voteData[dishKey] ?? {});
     final currentCount = currentClassMap[sanitizedClass] ?? 0;
-    final nextCount = currentCount + 1;
+    final nextCount = currentCount + amount;
     currentClassMap[sanitizedClass] = nextCount;
     _voteData[dishKey] = currentClassMap;
     votesNotifier.value = Map.from(_voteData);
@@ -168,12 +189,14 @@ class MealVoteService {
     required DateTime date,
     required String dishName,
     required String classKey,
+    int amount = 1,
   }) async {
     await recordLocalVote(
       schoolId: schoolId,
       date: date,
       dishName: dishName,
       classKey: classKey,
+      amount: amount,
     );
   }
 
@@ -258,25 +281,12 @@ class MealVoteService {
     }
   }
 
-  /// 점심시간 종료 8분 전 (2분 뒤): RTDB에서 해당 날짜 데이터 완전 삭제 (DELETE) -> 서버 점유 0KB
+  /// 서버 투표 보관 정책 (30일간 보관하여 월간 급식표 등에서 열람 가능, 30일 초과 시에만 자동 삭제)
   Future<void> purgeServerVotes({
     required String schoolId,
     required DateTime date,
   }) async {
-    final sId = schoolId.trim().isEmpty ? 'default' : schoolId.trim();
-    final dateKey = getDateKey(date);
-
-    if (_purgedServerDates.contains(dateKey)) return;
-    _purgedServerDates.add(dateKey);
-
-    debugPrint('[MealVoteService] 🧹 Purging server votes for $dateKey (Firebase 0KB)...');
-    try {
-      final url = Uri.parse('$_rtdbBase/meal_votes/$sId/$dateKey.json');
-      final res = await http.delete(url);
-      debugPrint('[MealVoteService] 🗑️ Server votes purged (Status: ${res.statusCode})');
-    } catch (e) {
-      debugPrint('[MealVoteService] ⚠️ Purge server error: $e');
-    }
+    // 30일간 서버에 보존하므로 즉시 삭제하지 않음
   }
 
   /// 메뉴의 총 득표수 가져오기
@@ -295,7 +305,7 @@ class MealVoteService {
     return _voteData[key] ?? {};
   }
 
-  /// 과거 날짜의 최종 투표 결과 조회 (월간 급식표용, 로컬 캐시 우선)
+  /// 과거 날짜의 최종 투표 결과 조회 (월간 급식표용, 로컬 캐시 우선, 서버 조회 지원)
   Future<Map<String, int>> getHistoricalVotes(String schoolId, DateTime date) async {
     final sId = schoolId.trim().isEmpty ? 'default' : schoolId.trim();
     final dateKey = getDateKey(date);
@@ -340,6 +350,29 @@ class MealVoteService {
     } catch (e) {
       debugPrint('[MealVoteService] Error reading historical votes: $e');
     }
+
+    // 4. 로컬에 없는 경우 서버(RTDB)에서 직접 조회
+    try {
+      final url = Uri.parse('$_rtdbBase/meal_votes/$sId/$dateKey.json');
+      final res = await http.get(url).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200 && res.body.isNotEmpty && res.body != 'null') {
+        final decoded = json.decode(res.body);
+        if (decoded is Map<String, dynamic>) {
+          final Map<String, int> totals = {};
+          decoded.forEach((dishKey, val) {
+            if (val is Map) {
+              int sum = 0;
+              val.forEach((_, c) => sum += ((c as num?)?.toInt() ?? 0));
+              totals[dishKey] = sum;
+            } else if (val is num) {
+              totals[dishKey] = val.toInt();
+            }
+          });
+          _historyCache[dateKey] = totals;
+          return totals;
+        }
+      }
+    } catch (_) {}
 
     return {};
   }

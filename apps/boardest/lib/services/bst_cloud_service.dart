@@ -432,7 +432,9 @@ class BstCloudService {
       targetFolderIds.add(folderId);
     } else {
       for (final space in ['appDataFolder', 'root']) {
+        if (activeToken == null && (activeRefreshToken == null || activeRefreshToken!.isEmpty)) break;
         for (final name in ['bst-save', 'bst-cld', 'boardest-cloud-connect']) {
+          if (activeToken == null && (activeRefreshToken == null || activeRefreshToken!.isEmpty)) break;
           final fid = await findDriveFolderByName(name, space, token);
           if (fid != null && fid.isNotEmpty && !targetFolderIds.contains(fid)) {
             targetFolderIds.add(fid);
@@ -459,15 +461,23 @@ class BstCloudService {
           headers: {'Authorization': 'Bearer $currentToken'},
         ).timeout(const Duration(seconds: 8));
 
-        if (res.statusCode == 401 && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
-          final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
-          if (newToken != null && newToken.isNotEmpty) {
-            activeToken = newToken;
-            currentToken = newToken;
-            res = await http.get(
-              Uri.parse(url),
-              headers: {'Authorization': 'Bearer $currentToken'},
-            ).timeout(const Duration(seconds: 8));
+        if (res.statusCode == 401) {
+          if (activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+            final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+            if (newToken != null && newToken.isNotEmpty) {
+              activeToken = newToken;
+              currentToken = newToken;
+              res = await http.get(
+                Uri.parse(url),
+                headers: {'Authorization': 'Bearer $currentToken'},
+              ).timeout(const Duration(seconds: 8));
+            } else {
+              activeToken = null;
+              return;
+            }
+          } else {
+            activeToken = null;
+            return;
           }
         }
 
@@ -719,6 +729,13 @@ class BstCloudService {
         Uri.parse(url),
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 401) {
+        if (activeRefreshToken == null || activeRefreshToken!.isEmpty) {
+          activeToken = null;
+        }
+        return null;
+      }
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body) as Map<String, dynamic>;
