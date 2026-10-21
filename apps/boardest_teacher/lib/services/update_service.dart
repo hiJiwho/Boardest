@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -39,14 +40,16 @@ class UpdateService {
   UpdateService._internal();
   static final instance = UpdateService._internal();
 
-  static const String defaultVersion = '4.2.2';
+  static const String defaultVersion = '5.0.2';
   static const String _api =
       'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String downloadPage = 'https://boardest-downloads.web.app';
   static bool _checking = false;
   static DateTime? _lastSilentCheckTime;
+  static String? _resolvedVersion;
 
   static String get currentVersion {
+    if (_resolvedVersion != null) return _resolvedVersion!;
     if (!kIsWeb && Platform.isWindows) {
       final match = RegExp(
         r'jiwho\.boardest\.(?:teacher|bst|class-lite|overlay-panser)_([0-9.]+)_',
@@ -56,12 +59,25 @@ class UpdateService {
         final v = match!.group(1)!;
         final parts = v.split('.');
         if (parts.length == 4 && parts[3] == '0') {
-          return '${parts[0]}.${parts[1]}.${parts[2]}';
+          _resolvedVersion = '${parts[0]}.${parts[1]}.${parts[2]}';
+          return _resolvedVersion!;
         }
-        return v;
+        _resolvedVersion = v;
+        return _resolvedVersion!;
       }
     }
     return defaultVersion;
+  }
+
+  static Future<void> initVersion() async {
+    try {
+      final jsonStr = await rootBundle.loadString('version.json');
+      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final v = data['version'] as String?;
+      if (v != null && v.isNotEmpty) {
+        _resolvedVersion = v.trim();
+      }
+    } catch (_) {}
   }
 
   Future<UpdateInfo?> checkForUpdate({
@@ -75,6 +91,8 @@ class UpdateService {
             const Duration(minutes: 5)) {
       return null;
     }
+
+    await initVersion();
 
     _checking = true;
     _lastSilentCheckTime = DateTime.now();

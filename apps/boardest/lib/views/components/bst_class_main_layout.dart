@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:universal_io/io.dart';
 import '../../models/meal_models.dart';
 import '../../models/app_settings.dart' show LauncherSlot;
+import '../../config/app_config.dart';
 import '../../services/system_app_scanner.dart';
 import '../../services/update_service.dart';
 import '../modals/app_drawer_dialog.dart';
@@ -399,7 +400,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                           ),
                           const SizedBox(width: 10),
                           Text(
-                            '🚀 새 버전(${UpdateService.latestVersion ?? '4.2.3'}) 백그라운드 다운로드 중... ($pct%)',
+                            '🚀 새 버전(${UpdateService.latestVersion ?? '5.0.2'}) 백그라운드 다운로드 중... ($pct%)',
                             style: _ts(12, w: FontWeight.w900, c: Colors.black),
                           ),
                           const Spacer(),
@@ -774,7 +775,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(color: const Color(0xFF00F5D4), width: 0.8),
                       ),
-                      child: Text('V.4.3.0', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
+                      child: Text('V.5.0.2', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
                     ),
                     if (!kIsWeb) ...[
                       const SizedBox(width: 3),
@@ -1479,24 +1480,217 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     );
   }
 
+  /// [수업 시간용 상단 시계 카드]: 절반 상단 전체 차지
+  Widget _inClassClockCard() {
+    final now = widget.currentTime ?? DateTime.now();
+    final date = '${now.year}년 ${now.month}월 ${now.day}일 (${_wd[now.weekday - 1]})';
+    String two(int v) => v.toString().padLeft(2, '0');
+
+    return GestureDetector(
+      onLongPress: widget.onClockLongPress,
+      child: _glassSurface(
+        glow: true,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 상단: 날짜 + 수업 진행 중 뱃지 + D-day
+            Row(
+              children: [
+                const Icon(Icons.calendar_today_rounded, color: Color(0xFF00F5D4), size: 16),
+                const SizedBox(width: 8),
+                Text(date, style: _ts(16, w: FontWeight.w700, c: Colors.white)),
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00F5D4).withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF00F5D4), width: 1.2),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.play_circle_fill_rounded, size: 13, color: Color(0xFF00F5D4)),
+                      const SizedBox(width: 4),
+                      Text('수업 진행 중', style: _ts(12, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                if (widget.ddayLabel != null && widget.ddayLabel!.isNotEmpty)
+                  GestureDetector(
+                    onLongPress: widget.onDdayLongPress,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(widget.ddayLabel!, style: _ts(12.5, w: FontWeight.w700, c: const Color(0xFF00F5D4))),
+                    ),
+                  ),
+              ],
+            ),
+            // 중앙: 대형 디지털 시계 (HH:mm:ss)
+            Expanded(
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.contain,
+                  child: Text(
+                    '${two(now.hour)}:${two(now.minute)}:${two(now.second)}',
+                    style: _ts(160, w: FontWeight.w900, h: 0.9, ls: -3, c: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+            // 하단: 수업 잔여 시간 / 알림 안내
+            Row(
+              children: [
+                const Icon(Icons.timer_outlined, color: Color(0xFF00F5D4), size: 17),
+                const SizedBox(width: 7),
+                Text(
+                  widget.clockRemainingDetailText ?? '수업 진행 중',
+                  style: _ts(14.5, c: Colors.white70, w: FontWeight.w700),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// [수업 시간용 하단 교과서 & 과목명 카드]: 절반 하단 전체 차지
+  Widget _inClassSubjectCard(TimetablePeriodItem p) {
+    final times = _getTimesForPeriod(p);
+    final start = times.$1;
+    final end = times.$2;
+    final special = widget.activeSpecialPeriod;
+    final hasSpecial = special != null && special.isNotEmpty;
+    final displayTitle = hasSpecial ? special : p.subject;
+    final badgeLabel = hasSpecial ? '$special' : '${p.period}교시';
+
+    return _glassSurface(
+      glow: true,
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 1. 교과서 표지 (aspectRatio 0.72)
+          AspectRatio(
+            aspectRatio: 0.72,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.4),
+                    blurRadius: 10,
+                    offset: const Offset(2, 4),
+                  ),
+                ],
+              ),
+              child: hasSpecial
+                  ? _buildSpecialPeriodCover(special)
+                  : _buildBookCoverWidget(p.subject, radius: 12),
+            ),
+          ),
+          const SizedBox(width: 18),
+          // 2. 과목명 + 교시/시간 정보 + 학급
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00F5D4),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(badgeLabel, style: _ts(13, w: FontWeight.w900, c: Colors.black)),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text('$start ~ $end', style: _ts(12.5, w: FontWeight.w700, c: Colors.white70)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    displayTitle,
+                    style: _ts(56, w: FontWeight.w900, h: 1.05),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.school_rounded, color: Color(0xFF00F5D4), size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      widget.gradeClass.isNotEmpty ? widget.gradeClass : '우리반',
+                      style: _ts(14.5, w: FontWeight.w800, c: Colors.white),
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        hasSpecial ? '·  특수 일과 진행 중' : '·  [전자교과서] ${p.subject}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _ts(13, w: FontWeight.w600, c: Colors.white60),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ───────── 2. 우측 콘텐츠 영역 ─────────
   Widget _rightContentArea() {
     final inClass = _isClassTime;
     final activePeriod = _currentOrSelectedPeriod();
 
     if (inClass) {
-      // ─── [수업 중 모드: 상하 전체 100% 꽉 채움] ───
-      // 상단의 큰 시계 바를 숨기고, 좌측(지금 시간표 + 내장 시계)과 우측(수업 도구 모음)이 50:50으로 전체 높이를 꽉 채움!
+      // ─── [수업 중 모드: 좌측 절반(상단 시계, 하단 교과서+과목명) + 우측 통째로 도구함] ───
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 좌측: 지금 시간표 (아담한 교과서 + 그 옆 시계 + 과목명)
+          // 좌측 절반: 상단 시계 + 하단 교과서와 과목명
           Expanded(
             flex: 1,
-            child: _currentPeriodCard(activePeriod),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: _inClassClockCard(),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  flex: 5,
+                  child: _inClassSubjectCard(activePeriod),
+                ),
+              ],
+            ),
           ),
           const SizedBox(width: 14),
-          // 우측: 수업 도구 모음 (급식/Cloud 누르면 해당 패널로 오버레이 전환)
+          // 우측: 통째로 도구 패널 (급식/Cloud 누르면 해당 패널로 오버레이 전환)
           Expanded(
             flex: 1,
             child: _buildInClassRightPanel(),
@@ -2051,7 +2245,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
   /// [쉬는 시간용] 급식 대신 노출되는 대형 업데이트 필요 알림 카드
   Widget _updateRequiredCard() {
     final isWin = !kIsWeb && Platform.isWindows;
-    final ver = UpdateService.latestVersion ?? '4.2.3';
+    final ver = UpdateService.latestVersion ?? '5.0.2';
 
     return _glassSurface(
       padding: const EdgeInsets.all(28),
@@ -2855,7 +3049,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
             final classVotes = MealVoteService.instance.getClassVotes(dish.name);
             final total = MealVoteService.instance.getTotalVotes(dish.name);
             final isHighlighted = _highlightedMealNames.contains(dish.name);
-            final canVote = isToday && _isMealVoteTimeNow();
+            final canVote = AppConfig.isDemoMode || (isToday && _isMealVoteTimeNow());
 
             return AlertDialog(
               backgroundColor: const Color(0xFF141721),
@@ -3025,6 +3219,16 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                           );
                           setDialogState(() {});
                           setState(() {});
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('🔥 ${dish.name}에 10표를 투표했습니다! (현재 총 ${MealVoteService.instance.getTotalVotes(dish.name)}표)'),
+                                backgroundColor: const Color(0xFF00C896),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          }
                         },
                         icon: const Icon(Icons.local_fire_department_rounded, color: Colors.black, size: 18),
                         label: Text('🔥 한 번에 10표 올리기 (+10표)', style: _ts(13.5, w: FontWeight.w900, c: Colors.black)),
@@ -3449,11 +3653,13 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
   }
 
   bool _isMealVoteTimeNow() {
+    if (AppConfig.isDemoMode) return true;
     final now = widget.currentTime ?? DateTime.now();
     final special = widget.activeSpecialPeriod ?? '';
     if (special.contains('점심')) return true;
     final mins = now.hour * 60 + now.minute;
-    return mins >= (11 * 60 + 30) && mins < (13 * 60 + 20);
+    // 당일 아침부터 점심 종료 5분 전(13:20)까지 언제든 투표 가능!
+    return mins < (13 * 60 + 20);
   }
 
   bool _isMealVoteResultTimeNow() {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
@@ -22,7 +23,7 @@ enum UpdateState {
 /// 3. 다운로드 완료 후 수업시간이면 보류, 쉬는시간에 급식 대신 [업데이트 필요함!!] 카드 노출
 /// 4. 안드로이드는 수동 설치 안내 후 패키지 인스톨러 열기, 윈도우는 Add-AppxPackage 실행 후 재실행
 class UpdateService {
-  static const String defaultVersion = '4.2.3';
+  static const String defaultVersion = '5.0.2';
   static const String _releaseApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String downloadPage = 'https://boardest-downloads.web.app';
@@ -38,8 +39,10 @@ class UpdateService {
   static String? downloadedPackagePath;
   static bool _isChecking = false;
   static DateTime? _lastSilentCheckTime;
+  static String? _resolvedVersion;
 
   static String get currentVersion {
+    if (_resolvedVersion != null) return _resolvedVersion!;
     if (!kIsWeb && Platform.isWindows) {
       final match = RegExp(
         r'jiwho\.boardest\.(?:bst|teacher|class-lite|overlay-panser)_([0-9.]+)_',
@@ -49,12 +52,25 @@ class UpdateService {
         final v = match!.group(1)!;
         final parts = v.split('.');
         if (parts.length == 4 && parts[3] == '0') {
-          return '${parts[0]}.${parts[1]}.${parts[2]}';
+          _resolvedVersion = '${parts[0]}.${parts[1]}.${parts[2]}';
+          return _resolvedVersion!;
         }
-        return v;
+        _resolvedVersion = v;
+        return _resolvedVersion!;
       }
     }
     return defaultVersion;
+  }
+
+  static Future<void> initVersion() async {
+    try {
+      final jsonStr = await rootBundle.loadString('version.json');
+      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final v = data['version'] as String?;
+      if (v != null && v.isNotEmpty) {
+        _resolvedVersion = v.trim();
+      }
+    } catch (_) {}
   }
 
   /// 백그라운드 업데이트 확인 및 다운로드 시작
@@ -78,6 +94,8 @@ class UpdateService {
             const Duration(minutes: 5)) {
       return;
     }
+
+    await initVersion();
 
     _isChecking = true;
     _lastSilentCheckTime = DateTime.now();

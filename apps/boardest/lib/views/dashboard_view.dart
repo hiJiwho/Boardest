@@ -5355,15 +5355,16 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   /// - 종료 5분 전 ~ 4분 전: 1분간 서버 1회 PUT 전송 중 (투표 버튼 비활성화)
   /// - 종료 4분 전 이후: 전교 득표 공개 및 투표 마감
   bool _isMealVoteTimeNow() {
+    if (AppConfig.isDemoMode) return true;
     final now = _debugTimeOverride ?? DateTime.now();
     if (_currentPeriod != null && !_currentPeriod!.isClass && _currentPeriod!.label.contains('점심')) {
       final diff = _currentPeriod!.end.difference(now);
       return diff.inSeconds >= 5 * 60; // 종료 5분 전까지만 투표 가능 (이후 비활성화)
     }
     final minutes = now.hour * 60 + now.minute;
-    final start = _getLunchStartMinutes();
     final end = _getLunchEndMinutes();
-    return minutes >= start && minutes < (end - 5);
+    // 당일 아침부터 점심시간 종료 5분 전까지 언제든지 투표 가능!
+    return minutes < (end - 5);
   }
 
   /// [신규] 다른 반 표수 및 전교 득표수 공개 시점:

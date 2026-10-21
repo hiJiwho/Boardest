@@ -1,7 +1,7 @@
 name: boardest_class_lite
 description: "Boardest Class Lite (Android Home Launcher & Windows BoardCast WebView)"
 publish_to: 'none'
-version: 4.3.0+4300
+version: 5.0.2+5020
 
 environment:
   sdk: ^3.11.5

@@ -107,7 +107,9 @@ class MealVoteService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final dateKey = getDateKey(date);
-      final sId = schoolId.trim().isEmpty ? 'default' : schoolId.trim();
+      final sId = schoolId.trim().isNotEmpty && schoolId != 'default' && schoolId != 'Demo'
+        ? schoolId.trim()
+        : (_currentSchoolId.isNotEmpty ? _currentSchoolId : (schoolId.trim().isNotEmpty ? schoolId.trim() : 'default'));
 
       // 우선 최종 합산 기록(전교 집계 영구 저장본)이 있는지 확인
       final historyRaw = prefs.getString(_getHistoryPrefKey(sId, dateKey));
@@ -161,7 +163,9 @@ class MealVoteService {
     required String classKey,
     int amount = 1,
   }) async {
-    final sId = schoolId.trim().isEmpty ? 'default' : schoolId.trim();
+    final sId = schoolId.trim().isNotEmpty && schoolId != 'default' && schoolId != 'Demo'
+        ? schoolId.trim()
+        : (_currentSchoolId.isNotEmpty ? _currentSchoolId : (schoolId.trim().isNotEmpty ? schoolId.trim() : 'default'));
     final dateKey = getDateKey(date);
     final dishKey = sanitizeKey(dishName);
     final sanitizedClass = sanitizeKey(classKey.isEmpty ? '우리반' : classKey);
@@ -206,7 +210,9 @@ class MealVoteService {
     required DateTime date,
     required String classKey,
   }) async {
-    final sId = schoolId.trim().isEmpty ? 'default' : schoolId.trim();
+    final sId = schoolId.trim().isNotEmpty && schoolId != 'default' && schoolId != 'Demo'
+        ? schoolId.trim()
+        : (_currentSchoolId.isNotEmpty ? _currentSchoolId : (schoolId.trim().isNotEmpty ? schoolId.trim() : 'default'));
     final dateKey = getDateKey(date);
     final sanitizedClass = sanitizeKey(classKey.isEmpty ? '우리반' : classKey);
 
@@ -234,7 +240,9 @@ class MealVoteService {
     required String schoolId,
     required DateTime date,
   }) async {
-    final sId = schoolId.trim().isEmpty ? 'default' : schoolId.trim();
+    final sId = schoolId.trim().isNotEmpty && schoolId != 'default' && schoolId != 'Demo'
+        ? schoolId.trim()
+        : (_currentSchoolId.isNotEmpty ? _currentSchoolId : (schoolId.trim().isNotEmpty ? schoolId.trim() : 'default'));
     final dateKey = getDateKey(date);
 
     if (_fetchedFinalDates.contains(dateKey)) return;
@@ -307,7 +315,9 @@ class MealVoteService {
 
   /// 과거 날짜의 최종 투표 결과 조회 (월간 급식표용, 로컬 캐시 우선, 서버 조회 지원)
   Future<Map<String, int>> getHistoricalVotes(String schoolId, DateTime date) async {
-    final sId = schoolId.trim().isEmpty ? 'default' : schoolId.trim();
+    final sId = schoolId.trim().isNotEmpty && schoolId != 'default' && schoolId != 'Demo'
+        ? schoolId.trim()
+        : (_currentSchoolId.isNotEmpty ? _currentSchoolId : (schoolId.trim().isNotEmpty ? schoolId.trim() : 'default'));
     final dateKey = getDateKey(date);
 
     // 1. 메모리 캐시 확인
