@@ -294,6 +294,26 @@
       50% { transform: scale(1.08); opacity: 1; }
     }
   </style>
+<script>
+    // F key demo fullscreen listener
+    window.addEventListener('keydown', function(e) {
+      if ((e.key === 'f' || e.key === 'F') && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+        var isDemo = false;
+        try {
+          var params = new URLSearchParams(window.location.search);
+          var d = params.get('demo') || params.get('Demo');
+          isDemo = (d === '1' || d === 'true' || localStorage.getItem('flutter.bst_persisted_demo') === 'true');
+        } catch (_) {}
+        if (isDemo) {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(function() {});
+          } else {
+            document.exitFullscreen().catch(function() {});
+          }
+        }
+      }
+    });
+  </script>
 </head>
 <body>
   <div id="app-splash-screen">

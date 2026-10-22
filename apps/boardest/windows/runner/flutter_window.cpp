@@ -4,6 +4,7 @@
 #include <fstream>
 #include <string>
 #include <winbase.h>
+#include <windowsx.h>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -387,8 +388,10 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
   if (message == WM_NCHITTEST) {
-    if (!IsZoomed(hwnd)) {
-      POINT pt = { LOWORD(lparam), HIWORD(lparam) };
+    LONG style = GetWindowLong(hwnd, GWL_STYLE);
+    bool isBorderlessOrSpecial = (special_classroom_type_ != 0) || ((style & WS_CAPTION) == 0);
+    if (!isBorderlessOrSpecial && !IsZoomed(hwnd)) {
+      POINT pt = { GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
       ScreenToClient(hwnd, &pt);
       RECT rc;
       GetClientRect(hwnd, &rc);

@@ -282,6 +282,39 @@ class BstCloudService {
         }
       }
     } catch (_) {}
+
+    // 데모 교사 9명 내장 등록 (Firestore 미동기화 및 데모 모드 접속 100% 보장)
+    final demoPresets = [
+      (name: '김국어', subject: '국어', grade: 1, classNum: 1, shortId: '11', cloudId: '11', email: '01@boardest-teacher-demo.753210.xyz'),
+      (name: '이수학', subject: '수학', grade: 1, classNum: 2, shortId: '12', cloudId: '12', email: '02@boardest-teacher-demo.753210.xyz'),
+      (name: '박영어', subject: '영어', grade: 1, classNum: 3, shortId: '13', cloudId: '13', email: '13@boardest-teacher-demo.753210.xyz'),
+      (name: '최과학', subject: '과학', grade: 2, classNum: 1, shortId: '14', cloudId: '14', email: '14@boardest-teacher-demo.753210.xyz'),
+      (name: '정사회', subject: '사회', grade: 2, classNum: 2, shortId: '15', cloudId: '15', email: '15@boardest-teacher-demo.753210.xyz'),
+      (name: '강역사', subject: '역사', grade: 2, classNum: 3, shortId: '16', cloudId: '16', email: '16@boardest-teacher-demo.753210.xyz'),
+      (name: '송음악', subject: '음악', grade: 3, classNum: 1, shortId: '17', cloudId: '17', email: '17@boardest-teacher-demo.753210.xyz'),
+      (name: '윤체육', subject: '체육', grade: 3, classNum: 2, shortId: '18', cloudId: '18', email: '18@boardest-teacher-demo.753210.xyz'),
+      (name: '조미술', subject: '미술', grade: 3, classNum: 3, shortId: '19', cloudId: '19', email: '19@boardest-teacher-demo.753210.xyz'),
+    ];
+    for (final dp in demoPresets) {
+      if (!teachers.any((t) => t.ownerEmail.toLowerCase() == dp.email.toLowerCase())) {
+        final sec = TotpService.generateDeterministicSecret(dp.email);
+        teachers.add(BstCloudTeacher(
+          ownerEmail: dp.email,
+          name: dp.name,
+          school: '데모중학교',
+          schoolId: 'Demo',
+          subject: dp.subject,
+          grade: dp.grade,
+          classNum: dp.classNum,
+          shortId: dp.shortId,
+          cloudId: dp.cloudId,
+          totpSecret: sec,
+          directAccessToken: 'demo_token_teacher_${dp.shortId}',
+          driveConnected: true,
+        ));
+      }
+    }
+
     return teachers;
   }
 
@@ -558,11 +591,24 @@ class BstCloudService {
   }) async {
     // 데모 파일인 경우 가상 파일 핸들링
     if (fileId.startsWith('demo_')) {
-      final dummyBytes = Uint8List.fromList(
-        fileName.endsWith('.pdf')
-            ? utf8.encode('%PDF-1.4\n1 0 obj\n<< /Title (Boardest Demo Material) >>\nendobj\ntrailer\n<<>>\n%%EOF')
-            : utf8.encode('Boardest Cloud Demo File: $fileName\nGenerated for instant lesson testing.'),
-      );
+      final isPdf = fileName.toLowerCase().endsWith('.pdf');
+      final isPen = fileName.toLowerCase().endsWith('.pen');
+      final dummyBytes = isPdf
+          ? Uint8List.fromList(utf8.encode(
+              '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n'
+              '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n'
+              '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n'
+              '4 0 obj\n<< /Length 73 >>\nstream\nBT\n/F1 24 Tf\n100 700 Td\n(Boardest Demo Lesson Material) Tj\nET\nendstream\nendobj\n'
+              '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n'
+              'xref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000234 00000 n \n0000000356 00000 n \n'
+              'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n434\n%%EOF\n'))
+          : (isPen
+              ? Uint8List.fromList(utf8.encode(jsonEncode({
+                  'title': fileName,
+                  'totalPages': 1,
+                  'pages': {'1': [{'points': [{'dx': 100.0, 'dy': 200.0}], 'color': 4278255060, 'strokeWidth': 4.0, 'type': 0}]}
+                })))
+              : Uint8List.fromList(utf8.encode('Boardest Cloud Demo File: $fileName\nGenerated for instant lesson testing.')));
       webMemoryFiles[fileId] = dummyBytes;
       webMemoryFiles[fileName] = dummyBytes;
 

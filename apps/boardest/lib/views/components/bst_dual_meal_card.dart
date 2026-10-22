@@ -78,13 +78,13 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
   bool _isVotingActive() {
     final now = _now;
     final start = DateTime(now.year, now.month, now.day, widget.lunchStartTime.hour, widget.lunchStartTime.minute);
-    final endMinus10 = DateTime(now.year, now.month, now.day, widget.lunchEndTime.hour, widget.lunchEndTime.minute - 10);
-    return !now.isBefore(start) && now.isBefore(endMinus10);
+    final endMinus5 = DateTime(now.year, now.month, now.day, widget.lunchEndTime.hour, widget.lunchEndTime.minute - 5);
+    return !now.isBefore(start) && now.isBefore(endMinus5);
   }
 
   bool _isResultRevealed() {
     final now = _now;
-    final revealTime = DateTime(now.year, now.month, now.day, widget.lunchEndTime.hour, widget.lunchEndTime.minute - 9);
+    final revealTime = DateTime(now.year, now.month, now.day, widget.lunchEndTime.hour, widget.lunchEndTime.minute - 5);
     final end = DateTime(now.year, now.month, now.day, widget.lunchEndTime.hour, widget.lunchEndTime.minute);
     return !now.isBefore(revealTime) && now.isBefore(end);
   }
@@ -255,7 +255,7 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '점심시간 ~ 종료 10분 전까지 자유 투표\n종료 9분 전 집계 결과입니다.',
+                '점심시간 ~ 종료 5분 전까지 자유 투표\n종료 5분 전 집계 결과입니다.',
                 style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12),
               ),
               const SizedBox(height: 12),

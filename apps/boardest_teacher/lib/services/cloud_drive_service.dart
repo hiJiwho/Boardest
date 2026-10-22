@@ -2395,9 +2395,57 @@ class CloudDriveService with ChangeNotifier {
     }
   }
 
+  static final Uint8List _validDemoPdfBytes = Uint8List.fromList(utf8.encode(
+    '%PDF-1.4\n'
+    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n'
+    '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n'
+    '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n'
+    '4 0 obj\n<< /Length 73 >>\nstream\n'
+    'BT\n/F1 24 Tf\n100 700 Td\n(Boardest Demo Lesson Material) Tj\nET\nendstream\nendobj\n'
+    '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n'
+    'xref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000234 00000 n \n0000000356 00000 n \n'
+    'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n434\n%%EOF\n'
+  ));
+
+  static final Uint8List _validDemoPenBytes = Uint8List.fromList(utf8.encode(
+    jsonEncode({
+      'title': '10월19일_수학_3교시_판서노트',
+      'totalPages': 1,
+      'pages': {
+        '1': [
+          {
+            'points': [{'dx': 100.0, 'dy': 200.0}, {'dx': 250.0, 'dy': 200.0}, {'dx': 400.0, 'dy': 350.0}],
+            'color': 4278255060,
+            'strokeWidth': 4.0,
+            'type': 0,
+          }
+        ]
+      }
+    })
+  ));
+
   /// Google Drive 파일 다운로드 (Web: 인메모리 스트리밍 / Native: 100% 로컬 다운로드 및 차분 동기화)
   Future<File?> downloadDriveFileToTemp(CloudDriveFile driveFile) async {
     if (!isLoggedIn) return null;
+
+    // 데모 모드 또는 데모 파일 가상 처리 (404 방지 및 즉시 정상 실행)
+    if (driveFile.id.startsWith('demo_') || (_accessToken != null && _accessToken!.startsWith('demo')) || AppConfig.isDemoMode) {
+      final isPdf = driveFile.name.toLowerCase().endsWith('.pdf');
+      final isPen = driveFile.name.toLowerCase().endsWith('.pen');
+      final bytes = isPdf ? _validDemoPdfBytes : (isPen ? _validDemoPenBytes : Uint8List.fromList(utf8.encode('Boardest Demo Content: ${driveFile.name}')));
+      webMemoryFiles[driveFile.id] = bytes;
+      webMemoryFiles[driveFile.name] = bytes;
+
+      if (!kIsWeb) {
+        try {
+          final tempDir = await getTemporaryDirectory();
+          final f = File(p.join(tempDir.path, driveFile.name));
+          await f.writeAsBytes(bytes);
+          return f;
+        } catch (_) {}
+      }
+      return File(driveFile.name);
+    }
 
     // Web: 인메모리 스트리밍 (Universal Pen)
     if (kIsWeb) {

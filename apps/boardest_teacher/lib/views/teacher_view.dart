@@ -2805,20 +2805,26 @@ class _TeacherViewState extends State<TeacherView> {
   bool _isTeacherMatch(String lessonTeacher) {
     final lt = lessonTeacher.replaceAll('*', '').replaceAll('선생님', '').trim().toUpperCase();
     if (lt.isEmpty) return false;
-    final targetId = (_settings.selectedTeacherId.isNotEmpty 
-        ? _settings.selectedTeacherId 
-        : _settings.selectedTeacher).replaceAll('*', '').replaceAll('선생님', '').trim().toUpperCase();
-    if (targetId.isEmpty) return false;
 
-    // 1. 완전 일치 (예: '임채' == '임채')
-    if (lt == targetId) return true;
+    final candidates = [
+      _settings.selectedTeacherName,
+      _settings.selectedTeacher,
+      _settings.selectedTeacherId,
+      CloudDriveService.instance.userName,
+    ].map((s) => (s ?? '').replaceAll('*', '').replaceAll('선생님', '').trim().toUpperCase())
+     .where((s) => s.isNotEmpty && s != '1' && s != '선생님')
+     .toList();
 
-    // 2. 부분 일치 (예: '임채' 포함 여부)
-    if (lt.contains(targetId) || targetId.contains(lt)) return true;
-
-    // 3. 2글자 이상 접두사 일치
-    if (lt.length >= 2 && targetId.length >= 2 && lt.substring(0, 2) == targetId.substring(0, 2)) {
+    if (candidates.isEmpty) {
       return true;
+    }
+
+    for (final targetId in candidates) {
+      if (lt == targetId) return true;
+      if (lt.contains(targetId) || targetId.contains(lt)) return true;
+      if (lt.length >= 2 && targetId.length >= 2 && lt.substring(0, 2) == targetId.substring(0, 2)) {
+        return true;
+      }
     }
     return false;
   }

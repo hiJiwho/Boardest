@@ -329,6 +329,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
     _isHomeroom = prefs.getBool('bst_is_homeroom') ?? true;
 
     _googleEmail = prefs.getString('bst_google_email') ?? '';
+    _cloudId = prefs.getString('bst_teacher_short_id') ?? prefs.getString('bst_cloud_id') ?? (_googleEmail.startsWith('01') ? '11' : (_googleEmail.startsWith('02') ? '12' : '11'));
     _googleToken = prefs.getString('bst_google_token') ?? '';
     _totpSecret = prefs.getString('bst_totp_secret') ?? prefs.getString('bst_totp_secret_key');
 

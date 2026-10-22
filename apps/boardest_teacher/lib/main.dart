@@ -128,7 +128,10 @@ void main(List<String> args) async {
       final email = params['email'] ?? '';
       final token = params['token'] ?? params['access_token'] ?? '';
       String teacherName = params['teacherName'] ?? '';
-      String schoolName = params['schoolName'] ?? '양동중학교';
+      String schoolName = params['schoolName'] ?? (AppConfig.isDemoMode ? '데모중학교' : '양동중학교');
+      if (AppConfig.isDemoMode && schoolName == '양동중학교') {
+        schoolName = '데모중학교';
+      }
 
       if (token.isNotEmpty || email.isNotEmpty) {
         String? totpSecret = params['totpSecret'];
@@ -256,7 +259,7 @@ void main(List<String> args) async {
     final demoTotpSecret = TotpService.generateDeterministicSecret(demoEmail);
     final demoToken = 'demo_token_teacher_${assigned.shortId}';
     const demoSchoolId = 'Demo';
-    const demoSchoolName = '데모 중학교';
+    const demoSchoolName = '데모중학교';
     const demoIsHomeroom = true;
     const demoCafeteria = '1';
 

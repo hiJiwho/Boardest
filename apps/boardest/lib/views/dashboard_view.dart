@@ -245,6 +245,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   @override
   void initState() {
     super.initState();
+    HardwareKeyboard.instance.addHandler(_handleDemoFullscreenKey);
     _refreshCloudFiles();
 
     // Auto OTP 등록 완료 FCM 리스너
@@ -381,6 +382,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     _sleepWarningTimer?.cancel();
     _sleepScheduler.dispose();
     _appDrawerSearchController.dispose();
+    HardwareKeyboard.instance.removeHandler(_handleDemoFullscreenKey);
     super.dispose();
   }
 
@@ -4568,6 +4570,23 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   }
 
   @override
+  bool _handleDemoFullscreenKey(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+    if (event.logicalKey != LogicalKeyboardKey.keyF) return false;
+    if (!AppConfig.isDemoMode) return false;
+
+    final primaryFocus = FocusManager.instance.primaryFocus;
+    if (primaryFocus != null && primaryFocus.context?.widget is EditableText) {
+      return false;
+    }
+
+    if (!kIsWeb && Platform.isWindows) {
+      windowManager.isFullScreen().then((fs) => windowManager.setFullScreen(!fs));
+      return true;
+    }
+    return false;
+  }
+
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
@@ -4990,7 +5009,14 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       );
     }
 
-    return dashboardScaffold;
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+        debugPrint('[DashboardView] Root route pop prevented to ensure desktop stability.');
+      },
+      child: dashboardScaffold,
+    );
   }
 
   int? _lastTriggeredAutoLessonPeriod;
@@ -5387,28 +5413,22 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   /// - 종료 5분 전 ~ 4분 전: 1분간 서버 1회 PUT 전송 중 (투표 버튼 비활성화)
   /// - 종료 4분 전 이후: 전교 득표 공개 및 투표 마감
   bool _isMealVoteTimeNow() {
-    if (AppConfig.isDemoMode) return true;
     final now = _debugTimeOverride ?? DateTime.now();
-    if (_currentPeriod != null && !_currentPeriod!.isClass && _currentPeriod!.label.contains('점심')) {
-      final diff = _currentPeriod!.end.difference(now);
-      return diff.inSeconds >= 5 * 60; // 종료 5분 전까지만 투표 가능 (이후 비활성화)
-    }
     final minutes = now.hour * 60 + now.minute;
+    final start = _getLunchStartMinutes();
     final end = _getLunchEndMinutes();
-    // 당일 아침부터 점심시간 종료 5분 전까지 언제든지 투표 가능!
-    return minutes < (end - 5);
+    // 데모모드든 일반이든 급식 투표는 점심시간 시작 ~ 5분전까지
+    return minutes >= start && minutes < (end - 5);
   }
 
   /// [신규] 다른 반 표수 및 전교 득표수 공개 시점:
   /// - 종료 5분 전~4분 전 1분간 서버 동기화 후, 종료 4분 전부터 타 반 표수 포함 전교 표수 공개!
   bool _isMealVoteResultTimeNow() {
     final now = _debugTimeOverride ?? DateTime.now();
-    if (_currentPeriod != null && !_currentPeriod!.isClass && _currentPeriod!.label.contains('점심')) {
-      final diff = _currentPeriod!.end.difference(now);
-      return diff.inSeconds < 4 * 60; // 종료 4분 전부터 결과 노출
-    }
     final minutes = now.hour * 60 + now.minute;
-    return minutes >= (_getLunchEndMinutes() - 4);
+    final end = _getLunchEndMinutes();
+    // 점심시간 종료 5분 전부터 결과 노출
+    return minutes >= (end - 5) && minutes < end;
   }
 
   /// [신규] 점심시간 끝나고 20분 뒤인지 판별 (20분 뒤면 다음날 급식으로 자동 전환)
@@ -11487,12 +11507,12 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                           );
                           try {
                             final downloaded = await BstCloudService.instance.downloadDriveFile(file.id, file.name, token);
-                            if (mounted) Navigator.of(context).pop();
+                            if (mounted && Navigator.canPop(context)) Navigator.of(context).pop();
                             if (downloaded != null && downloaded.isNotEmpty) {
                               targetPath = downloaded;
                             }
                           } catch (e) {
-                            if (mounted) Navigator.of(context).pop();
+                            if (mounted && Navigator.canPop(context)) Navigator.of(context).pop();
                             debugPrint('[TextbookDownload] error: $e');
                           }
                         }
