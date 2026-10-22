@@ -362,9 +362,12 @@ class _TeacherViewState extends State<TeacherView> {
           _settings = s;
         });
         _refreshDriveFiles();
-        final curTeacher = _settings.selectedTeacherName.isNotEmpty
+        final email = CloudDriveService.instance.userEmail?.toLowerCase() ?? '';
+        final is02 = email.startsWith('02') || _settings.selectedTeacher.contains('이도형') || _settings.selectedTeacherName.contains('이도형') || _settings.selectedTeacher.contains('수학');
+        final defaultDemoTeacher = is02 ? '이도형' : '김윤리';
+        final curTeacher = _settings.selectedTeacherName.isNotEmpty && _settings.selectedTeacherName != '김국어' && _settings.selectedTeacherName != '데모교사'
             ? _settings.selectedTeacherName
-            : (_settings.selectedTeacher.isNotEmpty ? _settings.selectedTeacher : '김국어');
+            : (_settings.selectedTeacher.isNotEmpty && _settings.selectedTeacher != '김국어' && _settings.selectedTeacher != '데모교사' ? _settings.selectedTeacher : defaultDemoTeacher);
         final isDemo = AppConfig.isDemoMode ||
             _settings.schoolId.toLowerCase() == 'demo' ||
             _settings.selectedTeacher.contains('데모') ||
@@ -434,9 +437,12 @@ class _TeacherViewState extends State<TeacherView> {
         await _storageService.saveSettings(_settings);
       }
 
-      final curTeacher = _settings.selectedTeacherName.isNotEmpty
+      final email = CloudDriveService.instance.userEmail?.toLowerCase() ?? '';
+      final is02 = email.startsWith('02') || _settings.selectedTeacher.contains('이도형') || _settings.selectedTeacherName.contains('이도형') || _settings.selectedTeacher.contains('수학');
+      final defaultDemoTeacher = is02 ? '이도형' : '김윤리';
+      final curTeacher = _settings.selectedTeacherName.isNotEmpty && _settings.selectedTeacherName != '김국어' && _settings.selectedTeacherName != '데모교사'
           ? _settings.selectedTeacherName
-          : (_settings.selectedTeacher.isNotEmpty ? _settings.selectedTeacher : '김국어');
+          : (_settings.selectedTeacher.isNotEmpty && _settings.selectedTeacher != '김국어' && _settings.selectedTeacher != '데모교사' ? _settings.selectedTeacher : defaultDemoTeacher);
       final isDemo = AppConfig.isDemoMode ||
           _settings.schoolId.toLowerCase() == 'demo' ||
           _settings.selectedTeacher.contains('데모') ||

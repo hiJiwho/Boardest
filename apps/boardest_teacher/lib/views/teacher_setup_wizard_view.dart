@@ -14,6 +14,7 @@ import '../config/app_config.dart';
 import '../services/storage_service.dart';
 import '../services/comcigan_service.dart';
 import '../services/cloud_drive_service.dart';
+import '../services/totp_service.dart';
 import 'teacher_view.dart';
 
 /// Boardest Teacher 전용 교사 로그인 & 프로필 연동 OOBE
@@ -392,38 +393,66 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
     }
   }
 
-  /// 데모 교사 계정 원클릭 로그인
-  Future<void> _loginAsDemoTeacher() async {
+  /// 데모 교사 계정 원클릭 로그인 (01 김윤리 / 02 이도형 선택 지원)
+  Future<void> _loginAsDemoTeacher([String code = '01']) async {
+    final is02 = code == '02';
+    final name = is02 ? '이도형' : '김윤리';
+    final subject = is02 ? '수학' : '도덕';
+    final email = '$code@boardest-teacher-demo.753210.xyz';
+    final shortId = is02 ? '12' : '11';
+    final grade = 1;
+    final classNum = is02 ? 2 : 1;
+
     setState(() {
       _isLoading = true;
-      _loadingStatus = '데모 교사 계정으로 로그인하고 있습니다...';
+      _loadingStatus = '$code $name 선생님($subject) 계정으로 로그인하고 있습니다...';
       _errorMessage = null;
     });
 
+    final prefs = await SharedPreferences.getInstance();
+    final demoToken = 'demo_token_teacher_$shortId';
+    final demoTotpSecret = TotpService.generateDeterministicSecret(email);
+
+    await prefs.setString('bst_google_user_email', email);
+    await prefs.setString('bst_user_email', email);
+    await prefs.setString('bst_google_user_name', name);
+    await prefs.setString('bst_user_name', name);
+    await prefs.setString('bst_cld_access_token', demoToken);
+    await prefs.setString('bst_google_access_token', demoToken);
+    await prefs.setString('bst_school_name', '데모중학교');
+    await prefs.setString('bst_school_id', 'Demo');
+    await prefs.setString('bst_totp_secret_key', demoTotpSecret);
+    await prefs.setString('bst_totp_secret', demoTotpSecret);
+    await prefs.setString('bst_teacher_short_id', shortId);
+
     await CloudDriveService.instance.setSession(
-      accessToken: 'demo_token_${DateTime.now().millisecondsSinceEpoch}',
-      bstCldToken: 'demo_bst_token',
-      email: 'demo@boardest.org',
-      name: '데모교사',
-      school: 'Boardest 데모 중학교',
+      accessToken: demoToken,
+      bstCldToken: demoToken,
+      refreshToken: '',
+      email: email,
+      name: name,
+      school: '데모중학교',
+      totpSecret: demoTotpSecret,
+      shortId: shortId,
     );
 
     final school = School(
       id: 11111,
       code: 11111,
-      name: 'Boardest 데모 중학교',
+      name: '데모중학교',
       region: '서울',
     );
 
     final settings = AppSettings(
       selectedSchool: school,
       schoolId: 'Demo',
-      selectedGrade: 1,
-      selectedClass: 1,
-      selectedTeacher: '데모교사',
-      selectedTeacherId: '데모',
-      selectedTeacherName: '데모교사',
+      selectedGrade: grade,
+      selectedClass: classNum,
+      selectedTeacher: name,
+      selectedTeacherId: name,
+      selectedTeacherName: name,
       cafeteriaNum: '1',
+      isHomeroom: true,
       isSetupComplete: true,
     );
 
@@ -795,19 +824,42 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                         ),
                         if (AppConfig.isDemoMode) ...[
                           const SizedBox(height: 10),
-                          ElevatedButton.icon(
-                            onPressed: _loginAsDemoTeacher,
-                            icon: const Icon(Icons.play_arrow_rounded, color: Colors.black87),
-                            label: Text(
-                              '데모 교사 계정으로 즉시 체험',
-                              style: GoogleFonts.notoSansKr(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00F5D4),
-                              foregroundColor: Colors.black87,
-                              minimumSize: const Size(double.infinity, 48),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () => _loginAsDemoTeacher('01'),
+                                  icon: const Icon(Icons.school_rounded, color: Colors.black87, size: 18),
+                                  label: Text(
+                                    '01 김윤리 (도덕 1-1)',
+                                    style: GoogleFonts.notoSansKr(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF00F5D4),
+                                    foregroundColor: Colors.black87,
+                                    minimumSize: const Size(0, 48),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () => _loginAsDemoTeacher('02'),
+                                  icon: const Icon(Icons.calculate_rounded, color: Colors.white, size: 18),
+                                  label: Text(
+                                    '02 이도형 (수학 1-2)',
+                                    style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF3B82F6),
+                                    foregroundColor: Colors.white,
+                                    minimumSize: const Size(0, 48),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                         const SizedBox(height: 12),

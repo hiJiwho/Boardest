@@ -1,8 +1,8 @@
 @echo off
 setlocal
 cd /d "%~dp0.."
-set "VERSION=5.0.7"
-set "APPX_VERSION=5.0.7.0"
+set "VERSION=5.0.8"
+set "APPX_VERSION=5.0.8.0"
 set "PROJECT=jiwhosboardest"
 
 echo [1/7] Building Boardest and Teacher web releases...
@@ -34,7 +34,7 @@ call flutter pub get || goto :fail
 popd
 
 echo [4/7] Building Windows packages and all Android APKs...
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\build_all_appx.ps1 -AppVersion %APPX_VERSION% -SkipApk || goto :fail
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\build_all_appx.ps1 -AppVersion %APPX_VERSION% || goto :fail
 goto :native_build_done
 
 :native_build_skipped
@@ -61,6 +61,7 @@ if errorlevel 1 (
 echo [7/7] Verifying GitHub release assets and every published website...
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\verify_release.ps1 -Version %VERSION% || goto :fail
 echo Completed: v%VERSION% source, Windows, Android, web, hosting, and GitHub uploads verified.
+shutdown /s /t 60 /c "Boardest v%VERSION% complete"
 exit /b 0
 
 :fail

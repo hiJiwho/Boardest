@@ -169,7 +169,14 @@ void main(List<String> args) async {
   final prefs = await SharedPreferences.getInstance();
   final currentEmailCheck = prefs.getString('bst_google_user_email') ?? prefs.getString('bst_user_email') ?? '';
   final hasExplicitDemoArg = args.any((a) => a.toLowerCase().contains('demo=yes') || a.toLowerCase() == '--demo');
-  if (kIsWeb) {
+  final isRealUserEmail = currentEmailCheck.isNotEmpty &&
+      !currentEmailCheck.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz') &&
+      !currentEmailCheck.toLowerCase().startsWith('demo_');
+
+  if (isRealUserEmail && !hasExplicitDemoArg) {
+    AppConfig.isDemoMode = false;
+    await prefs.remove('bst_persisted_demo');
+  } else if (kIsWeb) {
     final uri = Uri.base;
     final q = uri.queryParameters['Demo'] ?? uri.queryParameters['demo'];
     if (q?.toLowerCase() == 'yes' || q == '1' || q?.toLowerCase() == 'true') {
@@ -178,10 +185,13 @@ void main(List<String> args) async {
     } else if (q == '0' || q?.toLowerCase() == 'false' || q?.toLowerCase() == 'no') {
       AppConfig.isDemoMode = false;
       await prefs.remove('bst_persisted_demo');
-    } else if (prefs.getBool('bst_persisted_demo') == true || currentEmailCheck.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) {
+    } else if (currentEmailCheck.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz') ||
+               (prefs.getBool('bst_persisted_demo') == true && !isRealUserEmail)) {
       AppConfig.isDemoMode = true;
     }
-  } else if (hasExplicitDemoArg || prefs.getBool('bst_persisted_demo') == true || currentEmailCheck.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) {
+  } else if (hasExplicitDemoArg ||
+             currentEmailCheck.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz') ||
+             (prefs.getBool('bst_persisted_demo') == true && !isRealUserEmail)) {
     AppConfig.isDemoMode = true;
   } else {
     AppConfig.isDemoMode = false;

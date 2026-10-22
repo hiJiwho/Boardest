@@ -261,7 +261,6 @@ class BstCloudService {
           }
         }
       }
-      if (teachers.isNotEmpty) return teachers;
     } catch (e) {
       debugPrint('[BstCloudService] getCloudTeachers (teacher_cloud_tokens) error: $e');
     }
@@ -969,27 +968,24 @@ class BstCloudService {
   }
 
   Future<String?> _executeTokenExchange(String refreshToken) async {
-    // 1. Direct Google OAuth (Windows/Native)
-    if (!kIsWeb) {
-      try {
-        final res = await http.post(
-          Uri.parse('https://oauth2.googleapis.com/token'),
-          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-          body: {
-            'client_id': AppConfig.googleClientId,
-            'client_secret': AppConfig.googleClientSecret,
-            'refresh_token': refreshToken,
-            'grant_type': 'refresh_token',
-          },
-        ).timeout(const Duration(seconds: 8));
+    try {
+      final res = await http.post(
+        Uri.parse('https://oauth2.googleapis.com/token'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'client_id': AppConfig.googleClientId,
+          'client_secret': AppConfig.googleClientSecret,
+          'refresh_token': refreshToken,
+          'grant_type': 'refresh_token',
+        },
+      ).timeout(const Duration(seconds: 8));
 
-        if (res.statusCode == 200) {
-          final data = json.decode(res.body) as Map<String, dynamic>;
-          return data['access_token'] as String?;
-        }
-      } catch (e) {
-        debugPrint('[BstCloudService] Direct token exchange failed: $e');
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body) as Map<String, dynamic>;
+        return data['access_token'] as String?;
       }
+    } catch (e) {
+      debugPrint('[BstCloudService] Direct token exchange failed: $e');
     }
 
     return null;
@@ -1012,7 +1008,7 @@ class BstCloudService {
     required String accessToken,
     required String folderName,
   }) async {
-    final isDemoOrVirtual = AppConfig.isDemoMode ||
+    final isDemoOrVirtual =
         accessToken.isEmpty ||
         accessToken.startsWith('demo_token') ||
         accessToken.startsWith('demo_') ||
@@ -1063,7 +1059,7 @@ class BstCloudService {
         );
         var res = await http.get(url, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
         if (res.statusCode == 401) {
-          if (!kIsWeb && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+          if (activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
             final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
             if (newToken != null && newToken.isNotEmpty) {
               activeToken = newToken;
@@ -1133,7 +1129,7 @@ class BstCloudService {
           );
           var fbRes = await http.get(fallbackUrl, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
           if (fbRes.statusCode == 401) {
-            if (!kIsWeb && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+            if (activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
               final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
               if (newToken != null && newToken.isNotEmpty) {
                 activeToken = newToken;
@@ -1199,33 +1195,14 @@ class BstCloudService {
     }
   }
 
-  /// 데모 계정 및 테스트 환경용 실제 수업 자료 샘플 파일 목록
+  /// 데모 계정 및 테스트 환경용 실제 수업 자료 샘플 파일 목록 (실시간 조회 우선에 따라 기본 빈 리스트 반환)
   List<BstCloudFile> getDemoCloudDriveFiles() {
-    return [
-      BstCloudFile(
-        id: 'demo_math_trigonometry_summary.pdf',
-        name: '수학I_삼각함수_핵심요약.pdf',
-        mimeType: 'application/pdf',
-        size: 2067,
-      ),
-      BstCloudFile(
-        id: 'demo_english_unit3_reading.pdf',
-        name: '영어_Unit3_본문학습지.pdf',
-        mimeType: 'application/pdf',
-        size: 1375,
-      ),
-      BstCloudFile(
-        id: 'demo_science_matter_properties.pdf',
-        name: '과학_물질의특성_정리.pdf',
-        mimeType: 'application/pdf',
-        size: 1377,
-      ),
-    ];
+    return [];
   }
 
   /// Google Drive 전체(My Drive)에서 수업에 쓰이는 확장자/MIME 타입 파일 검색
   Future<List<BstCloudFile>> fetchMyDriveLessonFiles({required String accessToken}) async {
-    if (_hasAuthError || AppConfig.isDemoMode || accessToken.isEmpty || accessToken.startsWith('demo')) {
+    if (_hasAuthError || accessToken.isEmpty || accessToken.startsWith('demo')) {
       return [];
     }
     try {
@@ -1264,7 +1241,7 @@ class BstCloudService {
 
   /// 모든 클라우드 폴더(수업자료 bst-save, HTML Present bst-canva, TBP 교과서 bst-tbs, 판서 bst-pen) 통합 조회
   Future<List<BstCloudFile>> fetchAllCloudDriveFiles({required String accessToken}) async {
-    final isDemoOrVirtual = AppConfig.isDemoMode ||
+    final isDemoOrVirtual =
         accessToken.isEmpty ||
         accessToken.startsWith('demo_token') ||
         accessToken.startsWith('demo_') ||
@@ -1272,7 +1249,7 @@ class BstCloudService {
         accessToken.startsWith('saved_token_');
 
     if (isDemoOrVirtual || _hasAuthError) {
-      return getDemoCloudDriveFiles();
+      return [];
     }
 
     final List<BstCloudFile> results = [];
@@ -1295,7 +1272,7 @@ class BstCloudService {
     }
 
     if (_hasAuthError) {
-      return results.isNotEmpty ? results : getDemoCloudDriveFiles();
+      return results;
     }
 
     try {
@@ -1308,7 +1285,7 @@ class BstCloudService {
     }
 
     if (_hasAuthError) {
-      return results.isNotEmpty ? results : getDemoCloudDriveFiles();
+      return results;
     }
 
     try {
@@ -1321,7 +1298,7 @@ class BstCloudService {
     }
 
     if (_hasAuthError) {
-      return results.isNotEmpty ? results : getDemoCloudDriveFiles();
+      return results;
     }
 
     try {
@@ -1334,7 +1311,7 @@ class BstCloudService {
     }
 
     if (_hasAuthError) {
-      return results.isNotEmpty ? results : getDemoCloudDriveFiles();
+      return results;
     }
 
     // Google Drive 전체 My Drive에서 추가 교안 파일 통합 검색
@@ -1345,11 +1322,6 @@ class BstCloudService {
       }
     } catch (e) {
       debugPrint('[BstCloudService] fetch myDriveFiles error: $e');
-    }
-
-    // 만약 실제 Drive에 파일이 하나도 없다면 실제 파일 목록(빈 리스트)을 반환 (더미 파일 누출 방지)
-    if (_hasAuthError) {
-      return isDemoOrVirtual ? getDemoCloudDriveFiles() : [];
     }
 
     return results;

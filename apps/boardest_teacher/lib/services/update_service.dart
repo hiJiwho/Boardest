@@ -41,7 +41,7 @@ class UpdateService {
   UpdateService._internal();
   static final instance = UpdateService._internal();
 
-  static const String defaultVersion = '5.0.7';
+  static const String defaultVersion = '5.0.8';
   static const String _api =
       'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String downloadPage = 'https://boardest-downloads.web.app';

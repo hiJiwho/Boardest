@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '5.0.7.0',
+  [string]$AppVersion = '5.0.8.0',
   [switch]$SkipApk,
   [switch]$SkipWindowsBuild
 )
@@ -167,8 +167,6 @@ Copy-Item (Join-Path $RootDir 'infra\class_lite_web\index.html') (Join-Path $Pac
 
 if (-not $SkipApk) {
   Build-Apk (Join-Path $RootDir 'apps\boardest') 'boardest.apk'
-  Build-Apk (Join-Path $RootDir 'apps\boardest_teacher') 'bst-teacher.apk'
-  Build-Apk (Join-Path $RootDir 'apps\boardest_teacher_lite') 'bst-teacher-lite.apk'
   Build-Apk (Join-Path $RootDir 'apps\boardest_class_lite') 'bst-class-lite.apk'
   Copy-Item (Join-Path $OutDir 'bst-class-lite.apk') (Join-Path $OutDir 'boardest-class-lite.apk') -Force
 }

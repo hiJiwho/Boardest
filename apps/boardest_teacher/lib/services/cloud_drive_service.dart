@@ -106,6 +106,16 @@ class CloudDriveFile {
           : null,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'mimeType': mimeType,
+    'size': size,
+    'webViewLink': webViewLink,
+    'webContentLink': webContentLink,
+    'modifiedTime': modifiedTime?.toIso8601String(),
+  };
 }
 
 /// Boardest Cloud Service — Direct Google OAuth2 & Drive API v3
@@ -227,6 +237,45 @@ class CloudDriveService with ChangeNotifier {
   HttpServer? _localServer;
   bool _isAuthenticating = false;
 
+  final List<CloudDriveFile> _localUploadedFiles = [];
+  final Map<String, Uint8List> _localUploadedBytesCache = {};
+  final Map<String, String> _tbpMemoryCache = {};
+
+  Future<void> _saveLocalUploadedFilesMeta() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = jsonEncode(_localUploadedFiles.map((f) => f.toJson()).toList());
+      await prefs.setString('bst_local_uploaded_files_json', jsonStr);
+    } catch (_) {}
+  }
+
+  Future<void> _loadLocalUploadedFilesMeta() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString('bst_local_uploaded_files_json');
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        final list = (jsonDecode(jsonStr) as List)
+            .map((e) => CloudDriveFile.fromJson(e as Map<String, dynamic>))
+            .toList();
+        _localUploadedFiles.clear();
+        _localUploadedFiles.addAll(list);
+      }
+    } catch (_) {}
+  }
+
+  String _guessMimeType(String name) {
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.pdf')) return 'application/pdf';
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.ppt') || lower.endsWith('.pptx')) return 'application/vnd.ms-powerpoint';
+    if (lower.endsWith('.hwp') || lower.endsWith('.hwpx')) return 'application/x-hwp';
+    if (lower.endsWith('.canva') || lower.endsWith('.htmlp')) return 'text/html';
+    if (lower.endsWith('.tbp') || lower.endsWith('.bsttbp')) return 'application/vnd.google-apps.folder';
+    if (lower.endsWith('.pen')) return 'application/json';
+    return 'application/octet-stream';
+  }
+
   bool _hasAuthError = false;
   bool get hasAuthError => _hasAuthError;
   set hasAuthError(bool val) => _hasAuthError = val;
@@ -311,6 +360,7 @@ class CloudDriveService with ChangeNotifier {
       if (_userEmail != null && _userEmail!.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) {
         AppConfig.isDemoMode = true;
       }
+      await _loadLocalUploadedFilesMeta();
 
       // Disk session recovery if SharedPreferences is empty
       if (!kIsWeb && (_accessToken == null || _accessToken!.isEmpty) && (_userEmail == null || _userEmail!.isEmpty)) {
@@ -1110,7 +1160,7 @@ class CloudDriveService with ChangeNotifier {
 
   Future<void> _ensureBoardestFolders() async {
     if (_accessToken == null || _accessToken!.isEmpty || _hasAuthError) return;
-    if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) return;
+    if (!isGoogleDriveConnected) return;
     try {
       _boardestFolderId = await _getOrCreateFolder('bst-save', 'appDataFolder');
       if (_hasAuthError) return;
@@ -1129,7 +1179,7 @@ class CloudDriveService with ChangeNotifier {
 
   Future<String?> _getOrCreateFolder(String folderName, String parentId) async {
     if (_hasAuthError) return null;
-    if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) return 'demo_${folderName}_folder';
+    if (!isGoogleDriveConnected) return 'demo_${folderName}_folder';
     try {
       final isAdf = parentId == 'appDataFolder';
       final parentQuery = isAdf ? "'appDataFolder' in parents" : "'$parentId' in parents";
@@ -1613,7 +1663,7 @@ class CloudDriveService with ChangeNotifier {
   /// Google Drive에서 이름 기반 폴더 검색 (중복 생성 방지)
   Future<String?> findFolderByName(String folderName, {String? parentFolderId, bool isAppData = false}) async {
     if (!isLoggedIn || _hasAuthError) return null;
-    if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) return 'demo_${folderName}_folder';
+    if (!isGoogleDriveConnected) return 'demo_${folderName}_folder';
     for (int attempt = 0; attempt < 2; attempt++) {
       try {
         String q = "name = '$folderName' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
@@ -1779,7 +1829,7 @@ class CloudDriveService with ChangeNotifier {
   /// 판서 => bst-pen
   Future<List<Map<String, dynamic>>> fetchMaterialsByCategory(String category, {String? targetFolderId}) async {
     if (!isLoggedIn || _hasAuthError) return [];
-    if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) {
+    if (!isGoogleDriveConnected) {
       final demoFiles = await getDemoDriveFiles();
       return demoFiles.map((f) {
         String src = 'cloud';
@@ -1851,6 +1901,18 @@ class CloudDriveService with ChangeNotifier {
           }
         }
       }
+
+      // 로컬 업로드된 최신 파일도 실시간 병합
+      for (final f in _localUploadedFiles) {
+        if (seenIds.add(f.id)) {
+          merged.add({
+            'file': f,
+            'source': source,
+            'sourceLabel': sourceLabel,
+            'folderId': folderIdToQuery ?? 'local_folder',
+          });
+        }
+      }
     } catch (e) {
       debugPrint('[CloudDriveService] fetchMaterialsByCategory error: $e');
     }
@@ -1861,7 +1923,7 @@ class CloudDriveService with ChangeNotifier {
   /// bst-save, bst-canva, bst-textbookpro 에 저장된 모든 수업 자료 리스트 조회 (하위 호환용)
   Future<List<Map<String, dynamic>>> fetchMergedMaterials({String? targetFolderId}) async {
     if (!isLoggedIn || _hasAuthError) return [];
-    if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) {
+    if (!isGoogleDriveConnected) {
       final demoFiles = await getDemoDriveFiles();
       return demoFiles.map((f) {
         String src = 'cloud';
@@ -2278,44 +2340,15 @@ class CloudDriveService with ChangeNotifier {
     return null;
   }
 
-  static const String _demoFilesBase = 'https://boardest-teacher.web.app/demo_files';
-  List<CloudDriveFile>? _demoFilesCache;
-
-  /// 데모 계정: 실제로 호스팅에 올라가 있는 파일(manifest.json)만 조회
+  /// 데모/오프라인 계정: 실제로 업로드된 로컬 파일 목록만 실시간 조회
   Future<List<CloudDriveFile>> getDemoDriveFiles() async {
-    if (_demoFilesCache != null) return _demoFilesCache!;
-    try {
-      final res = await http
-          .get(Uri.parse('$_demoFilesBase/manifest.json?t=${DateTime.now().millisecondsSinceEpoch ~/ 600000}'))
-          .timeout(const Duration(seconds: 6));
-      if (res.statusCode == 200) {
-        final raw = jsonDecode(utf8.decode(res.bodyBytes)) as List<dynamic>;
-        final list = <CloudDriveFile>[];
-        for (final e in raw) {
-          final m = e as Map<String, dynamic>;
-          final file = (m['file'] ?? '').toString();
-          if (file.isEmpty) continue;
-          list.add(CloudDriveFile(
-            id: 'demo_$file',
-            name: (m['name'] ?? file).toString(),
-            mimeType: (m['mime'] ?? 'application/octet-stream').toString(),
-            size: (m['size'] as num?)?.toInt() ?? 0,
-            modifiedTime: DateTime.tryParse((m['modified'] ?? '').toString()) ?? DateTime.now(),
-          ));
-        }
-        _demoFilesCache = list;
-        return list;
-      }
-    } catch (e) {
-      debugPrint('[CloudDriveService] demo manifest error: $e');
-    }
-    return [];
+    return List<CloudDriveFile>.from(_localUploadedFiles);
   }
 
   /// Google Drive REST API — 지정 폴더 또는 bst-save 내 파일 및 폴더 목록 가져오기
   Future<List<CloudDriveFile>> fetchDriveFiles({String? folderId, bool includeFolders = true}) async {
     if (!isLoggedIn || _hasAuthError) return [];
-    if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) {
+    if (!isGoogleDriveConnected) {
       return await getDemoDriveFiles();
     }
 
@@ -2364,6 +2397,13 @@ class CloudDriveService with ChangeNotifier {
         await querySpace(null);
       }
 
+      // 로컬 업로드 파일도 실시간 병합
+      for (final f in _localUploadedFiles) {
+        if (!allFiles.any((existing) => existing.id == f.id || existing.name == f.name)) {
+          allFiles.insert(0, f);
+        }
+      }
+
       return allFiles;
     } catch (e) {
       debugPrint('[CloudDriveService] fetchDriveFiles error: $e');
@@ -2374,7 +2414,7 @@ class CloudDriveService with ChangeNotifier {
   /// 3번 탭: 'bst-Free' 폴더 내 화이트보드 판서 파일 (.Free.pen) 목록 조회
   Future<List<CloudDriveFile>> fetchFreePenFiles() async {
     if (!isLoggedIn || _hasAuthError) return [];
-    if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) {
+    if (!isGoogleDriveConnected) {
       return (await getDemoDriveFiles()).where((f) => f.name.endsWith('.pen')).toList();
     }
     try {
@@ -2448,15 +2488,10 @@ class CloudDriveService with ChangeNotifier {
   Future<File?> downloadDriveFileToTemp(CloudDriveFile driveFile) async {
     if (!isLoggedIn) return null;
 
-    // 데모: 호스팅된 실제 파일만 다운로드 (없는 파일은 null)
-    if (driveFile.id.startsWith('demo_')) {
-      try {
-        final key = driveFile.id.substring(5);
-        final res = await http
-            .get(Uri.parse('$_demoFilesBase/${Uri.encodeComponent(key)}'))
-            .timeout(const Duration(seconds: 25));
-        if (res.statusCode != 200 || res.bodyBytes.isEmpty) return null;
-        final bytes = res.bodyBytes;
+    // 로컬/캐시 파일 처리
+    if (driveFile.id.startsWith('local_') || _localUploadedBytesCache.containsKey(driveFile.id) || _localUploadedBytesCache.containsKey(driveFile.name)) {
+      final bytes = _localUploadedBytesCache[driveFile.id] ?? _localUploadedBytesCache[driveFile.name];
+      if (bytes != null) {
         webMemoryFiles[driveFile.id] = bytes;
         webMemoryFiles[driveFile.name] = bytes;
         if (!kIsWeb) {
@@ -2466,9 +2501,6 @@ class CloudDriveService with ChangeNotifier {
           return f;
         }
         return File(driveFile.name);
-      } catch (e) {
-        debugPrint('[CloudDriveService] demo download error: $e');
-        return null;
       }
     }
 
@@ -2576,6 +2608,9 @@ class CloudDriveService with ChangeNotifier {
   /// 로컬 저장 없이 인메모리(RAM) 스트리밍 바이트 가져오기
   Future<Uint8List?> fetchDriveFileBytes(String fileId) async {
     if (!isLoggedIn) return null;
+    if (_localUploadedBytesCache.containsKey(fileId)) {
+      return _localUploadedBytesCache[fileId];
+    }
     try {
       final url = Uri.parse(getDriveMediaUrl(fileId));
       var response = await http.get(url, headers: authHeaders);
@@ -2834,11 +2869,51 @@ class CloudDriveService with ChangeNotifier {
   /// Google Drive REST API — 바이트 기반 파일 업로드 (웹/네이티브 공용 Multipart/Related)
   Future<bool> uploadBytesToDrive(Uint8List bytes, String fileName, {String? folderId}) async {
     if (!isLoggedIn) return false;
+
+    // Google Drive 미연동(데모/오프라인) 상태에서는 로컬 스토리지에 즉시 실시간 저장
+    if (!isGoogleDriveConnected) {
+      try {
+        final localId = 'local_${DateTime.now().millisecondsSinceEpoch}_${fileName.hashCode.abs()}';
+        _localUploadedBytesCache[localId] = bytes;
+        _localUploadedBytesCache[fileName] = bytes;
+        webMemoryFiles[localId] = bytes;
+        webMemoryFiles[fileName] = bytes;
+
+        if (!kIsWeb) {
+          try {
+            final tempDir = await getTemporaryDirectory();
+            final cacheDir = Directory(p.join(tempDir.path, 'bst_cloud_cache'));
+            if (!await cacheDir.exists()) await cacheDir.create(recursive: true);
+            final localFile = File(p.join(cacheDir.path, fileName));
+            await localFile.writeAsBytes(bytes);
+          } catch (_) {}
+        }
+
+        final fileItem = CloudDriveFile(
+          id: localId,
+          name: fileName,
+          mimeType: _guessMimeType(fileName),
+          size: bytes.length,
+          modifiedTime: DateTime.now(),
+        );
+        _localUploadedFiles.removeWhere((f) => f.name == fileName);
+        _localUploadedFiles.insert(0, fileItem);
+        await _saveLocalUploadedFilesMeta();
+        return true;
+      } catch (e) {
+        debugPrint('[CloudDriveService] demo uploadBytes error: $e');
+        return false;
+      }
+    }
+
     for (int attempt = 0; attempt < 2; attempt++) {
       try {
-        final targetParent = (folderId != null && folderId.isNotEmpty)
+        String? targetParent = (folderId != null && folderId.isNotEmpty && !folderId.startsWith('demo_'))
             ? folderId
             : (_boardestFolderId ?? await getOrCreateConnectFolder());
+        if (targetParent != null && targetParent.startsWith('demo_')) {
+          targetParent = null;
+        }
         final boundary = '----BoardestBoundary${DateTime.now().millisecondsSinceEpoch}';
 
         final metadataJson = jsonEncode({
@@ -2866,10 +2941,14 @@ class CloudDriveService with ChangeNotifier {
         );
 
         if (response.statusCode == 200 || response.statusCode == 201) {
+          final localId = 'drive_${DateTime.now().millisecondsSinceEpoch}';
+          _localUploadedBytesCache[localId] = bytes;
+          _localUploadedBytesCache[fileName] = bytes;
+          webMemoryFiles[fileName] = bytes;
           // bst-pen 에도 동일 파일명으로 판서 저장 폴더 자동 생성
           try {
             final penFolderId = await getOrCreatePenFolder();
-            if (penFolderId != null) {
+            if (penFolderId != null && !penFolderId.startsWith('demo_')) {
               await createFolderInDrive(fileName, parentFolderId: penFolderId);
             }
           } catch (_) {}
@@ -3250,10 +3329,24 @@ class CloudDriveService with ChangeNotifier {
     try {
       final bytes = Uint8List.fromList(utf8.encode(content));
       final cacheKey = '$tbpFolderId/$fileName';
+      _tbpMemoryCache[cacheKey] = content;
+      _localUploadedBytesCache[cacheKey] = bytes;
+      webMemoryFiles[cacheKey] = bytes;
+
+      if (!isGoogleDriveConnected) {
+        return true;
+      }
+
+      String targetFolderId = tbpFolderId;
+      if (targetFolderId.startsWith('demo_')) {
+        final realTbpFolder = await getOrCreateTextbookProFolder();
+        if (realTbpFolder != null) targetFolderId = realTbpFolder;
+      }
+
       String? existingFileId = _tbpFileIdCache[cacheKey];
 
       if (existingFileId == null || existingFileId.isEmpty) {
-        final q = "'$tbpFolderId' in parents and name = '$fileName' and trashed = false";
+        final q = "'$targetFolderId' in parents and name = '$fileName' and trashed = false";
         for (final spaceParam in ['', 'spaces=appDataFolder&']) {
           final url = Uri.parse(
             "https://www.googleapis.com/drive/v3/files?${spaceParam}q=${Uri.encodeComponent(q)}&fields=files(id,name)&pageSize=1",
@@ -3286,7 +3379,7 @@ class CloudDriveService with ChangeNotifier {
         return patchRes.statusCode == 200;
       }
 
-      final uploadSuccess = await uploadBytesToDrive(bytes, fileName, folderId: tbpFolderId);
+      final uploadSuccess = await uploadBytesToDrive(bytes, fileName, folderId: targetFolderId);
       return uploadSuccess;
     } catch (e) {
       debugPrint('[CloudDriveService] saveTbpFolderFileText($fileName) error: $e');
@@ -3302,12 +3395,31 @@ class CloudDriveService with ChangeNotifier {
   }) async {
     if (!isLoggedIn) return null;
     try {
+      final safeTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      final folderName = safeTitle.toLowerCase().endsWith('.tbp') ? safeTitle : '$safeTitle.tbp';
+
+      if (!isGoogleDriveConnected) {
+        final localTbpId = 'local_tbp_${DateTime.now().millisecondsSinceEpoch}';
+        final fileItem = CloudDriveFile(
+          id: localTbpId,
+          name: folderName,
+          mimeType: 'application/vnd.google-apps.folder',
+          size: 0,
+          modifiedTime: DateTime.now(),
+        );
+        _localUploadedFiles.removeWhere((f) => f.name == folderName);
+        _localUploadedFiles.insert(0, fileItem);
+        await _saveLocalUploadedFilesMeta();
+        return localTbpId;
+      }
+
       String? projectFolderId = existingDriveFolderId;
+      if (projectFolderId != null && projectFolderId.startsWith('demo_')) {
+        projectFolderId = null;
+      }
       if (projectFolderId == null || projectFolderId.isEmpty) {
         final tbpRootId = await getOrCreateTextbookProFolder();
         if (tbpRootId == null) return null;
-        final safeTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-        final folderName = safeTitle.toLowerCase().endsWith('.tbp') ? safeTitle : '$safeTitle.tbp';
         final existingFolders = await fetchDriveFoldersInParent(tbpRootId);
         final matched = existingFolders.where((f) => f.name == folderName || f.name == safeTitle).firstOrNull;
         projectFolderId = matched?.id ?? await createFolderInDrive(folderName, parentFolderId: tbpRootId);
