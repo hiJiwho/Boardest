@@ -2866,10 +2866,12 @@ class _SetupWizardViewState extends State<SetupWizardView> {
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
-                            value: _selectedTeacherDropdown,
+                            value: _comciganTeachers.toSet().contains(_selectedTeacherDropdown)
+                                ? _selectedTeacherDropdown
+                                : (_comciganTeachers.isNotEmpty ? _comciganTeachers.first : null),
                             isExpanded: true,
                             dropdownColor: const Color(0xFF16161A),
-                            items: _comciganTeachers.map((t) {
+                            items: _comciganTeachers.where((t) => t.trim().isNotEmpty).toSet().map((t) {
                               return DropdownMenuItem<String>(
                                 value: t,
                                 child: Text(

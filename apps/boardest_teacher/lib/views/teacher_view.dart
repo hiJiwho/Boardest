@@ -2621,6 +2621,8 @@ class _TeacherViewState extends State<TeacherView> {
                           }
                         },
                         activeContent: _buildTeacherActiveContent(scale),
+                        todayTimetableWidget: _buildTeacherTimetablePanel(1.0),
+                        dashboardFilesWidget: _buildCloudOpenWorkspace(1.0),
                         teacherTimetableWidget: _buildWeeklyGridTable(scale, isHomeroom: false, inline: true),
                         homeroomTimetableWidget: _settings.isHomeroom
                             ? _buildWeeklyGridTable(scale, isHomeroom: true, inline: true)
@@ -2840,10 +2842,23 @@ class _TeacherViewState extends State<TeacherView> {
             ? _settings.selectedTeacher
             : '교사');
 
-    final teacherLessons = (_timetableResult?.lessons ?? [])
+    var teacherLessons = (_timetableResult?.lessons ?? [])
         .where((l) => l.weekday == displayDay && _isTeacherMatch(l.teacher))
-        .toList()
-      ..sort((a, b) => a.classTime.compareTo(b.classTime));
+        .toList();
+    if (teacherLessons.isEmpty && (_timetableResult?.lessons.isNotEmpty ?? false)) {
+      final firstTeacher = _timetableResult!.lessons.map((l) => l.teacher).where((t) => t.trim().isNotEmpty).firstOrNull;
+      if (firstTeacher != null) {
+        teacherLessons = _timetableResult!.lessons
+            .where((l) => l.weekday == displayDay && l.teacher.replaceAll('*', '').trim() == firstTeacher.replaceAll('*', '').trim())
+            .toList();
+      }
+      if (teacherLessons.isEmpty) {
+        teacherLessons = _timetableResult!.lessons
+            .where((l) => l.weekday == displayDay && l.grade == _settings.selectedGrade && l.classNum == _settings.selectedClass)
+            .toList();
+      }
+    }
+    teacherLessons.sort((a, b) => a.classTime.compareTo(b.classTime));
 
     const totalPeriods = 7;
 

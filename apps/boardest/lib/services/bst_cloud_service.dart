@@ -590,36 +590,24 @@ class BstCloudService {
   }) async {
     // 데모 파일인 경우 가상 파일 핸들링
     if (fileId.startsWith('demo_')) {
-      final isPdf = fileName.toLowerCase().endsWith('.pdf');
-      final isPen = fileName.toLowerCase().endsWith('.pen');
-      final dummyBytes = isPdf
-          ? Uint8List.fromList(utf8.encode(
-              '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n'
-              '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n'
-              '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n'
-              '4 0 obj\n<< /Length 73 >>\nstream\nBT\n/F1 24 Tf\n100 700 Td\n(Boardest Demo Lesson Material) Tj\nET\nendstream\nendobj\n'
-              '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n'
-              'xref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000234 00000 n \n0000000356 00000 n \n'
-              'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n434\n%%EOF\n'))
-          : (isPen
-              ? Uint8List.fromList(utf8.encode(jsonEncode({
-                  'title': fileName,
-                  'totalPages': 1,
-                  'pages': {'1': [{'points': [{'dx': 100.0, 'dy': 200.0}], 'color': 4278255060, 'strokeWidth': 4.0, 'type': 0}]}
-                })))
-              : Uint8List.fromList(utf8.encode('Boardest Cloud Demo File: $fileName\nGenerated for instant lesson testing.')));
-      webMemoryFiles[fileId] = dummyBytes;
-      webMemoryFiles[fileName] = dummyBytes;
-
-      if (!kIsWeb) {
-        try {
+      try {
+        final res = await http
+            .get(Uri.parse('https://boardest-teacher.web.app/demo_files/${Uri.encodeComponent(fileId.substring(5))}'))
+            .timeout(const Duration(seconds: 25));
+        if (res.statusCode != 200 || res.bodyBytes.isEmpty) return null;
+        final bytes = res.bodyBytes;
+        webMemoryFiles[fileId] = bytes;
+        webMemoryFiles[fileName] = bytes;
+        if (!kIsWeb) {
           final tempDir = await getTemporaryDirectory();
           final file = File(p.join(tempDir.path, fileName));
-          await file.writeAsBytes(dummyBytes);
+          await file.writeAsBytes(bytes);
           return file.path;
-        } catch (_) {}
+        }
+        return fileId;
+      } catch (_) {
+        return null;
       }
-      return fileId;
     }
 
     // Web: 인메모리 스트리밍 (Universal Pen 렌더링용)
@@ -1891,6 +1879,8 @@ class BstCloudService {
           nowTime,
           nowTime.subtract(const Duration(minutes: 1)),
           nowTime.add(const Duration(minutes: 1)),
+          nowTime.subtract(const Duration(minutes: 2)),
+          nowTime.add(const Duration(minutes: 2)),
         ];
 
         // 6자리 OTP인 경우, 스테가노그래피 2자리 cloudId와 일치하는 교사 우선 탐색
@@ -1911,41 +1901,40 @@ class BstCloudService {
         }
 
         for (final teacher in candidateTeachers) {
-          final sec = (teacher.totpSecret != null && teacher.totpSecret!.isNotEmpty)
-              ? teacher.totpSecret!
-              : TotpService.generateDeterministicSecret(teacher.ownerEmail);
+          final candidateSecrets = <String>{
+            if (teacher.totpSecret != null && teacher.totpSecret!.isNotEmpty) teacher.totpSecret!,
+            if (teacher.ownerEmail.isNotEmpty) TotpService.generateDeterministicSecret(teacher.ownerEmail),
+          }.toList();
 
           bool isMatched = false;
 
-          for (final t in candidateTimes) {
-            if (cleanCode.length == 6) {
-              final parsed = TotpService.parseSteganography6(cleanCode, time: t);
-              final tCid = (teacher.cloudId.isNotEmpty ? teacher.cloudId : teacher.shortId).padLeft(2, '0');
-              // 등록된 cloudId/shortId가 존재할 경우, 입력된 코드의 2자리 cloudId와 일치해야만 유효 교사로 인정
-              if (tCid != '00' && tCid.isNotEmpty && tCid != parsed.cloudId && !teacher.ownerEmail.startsWith(parsed.cloudId)) {
-                continue;
+          for (final sec in candidateSecrets) {
+            for (final t in candidateTimes) {
+              if (cleanCode.length == 6) {
+                final parsed = TotpService.parseSteganography6(cleanCode, time: t);
+                final v4 = TotpService.verify4DigitOtp(
+                  secret: sec,
+                  inputOtp4: parsed.otp,
+                  lastConsumedWindow: 0,
+                  time: t,
+                );
+                if (v4.isValid) {
+                  isMatched = true;
+                  break;
+                }
               }
-              final v4 = TotpService.verify4DigitOtp(
+              final vStd = TotpService.verifyComprehensiveOtp(
                 secret: sec,
-                inputOtp4: parsed.otp,
+                inputOtp: cleanCode,
                 lastConsumedWindow: 0,
                 time: t,
               );
-              if (v4.isValid) {
+              if (vStd.isValid) {
                 isMatched = true;
                 break;
               }
             }
-            final vStd = TotpService.verifyComprehensiveOtp(
-              secret: sec,
-              inputOtp: cleanCode,
-              lastConsumedWindow: 0,
-              time: t,
-            );
-            if (vStd.isValid) {
-              isMatched = true;
-              break;
-            }
+            if (isMatched) break;
           }
 
           if (isMatched) {
@@ -1956,7 +1945,10 @@ class BstCloudService {
                 tok = refreshed;
               }
             }
-            if (tok != null && tok.isNotEmpty) {
+            if (tok == null || tok.isEmpty) {
+              tok = 'demo_token';
+            }
+            if (tok.isNotEmpty) {
               activeToken = tok;
               activeRefreshToken = teacher.refreshToken;
               activeTeacherName = teacher.teacherName;

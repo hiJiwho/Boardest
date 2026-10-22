@@ -875,7 +875,7 @@ class CloudDriveService with ChangeNotifier {
         headers: {'Authorization': 'Bearer $_accessToken'},
       ).timeout(const Duration(seconds: 4));
       if (res.statusCode == 401) {
-        debugPrint('[CloudDriveService] ⚠️ Google access token 만료 감지 (401). Worker를 통해 자동 재발급 실행...');
+        debugPrint('[CloudDriveService] ⚠️ Google access token 만료 감지 (401). 직접 OAuth 토큰 갱신 실행...');
         return await refreshAccessToken();
       }
       return true;
@@ -909,8 +909,9 @@ class CloudDriveService with ChangeNotifier {
       _userEmail ??= prefs.getString(_userEmailKey) ?? prefs.getString('bst_user_email') ?? prefs.getString('email');
       _refreshToken ??= prefs.getString(_refreshTokenKey);
 
-      // 1. If refreshToken is missing, fetch from Firestore teacher_cloud_tokens
-      if (_refreshToken == null || _refreshToken!.isEmpty) {
+      // 1. Fetch latest refreshToken / accessToken from Firestore teacher_cloud_tokens
+      String? firestoreAccessToken;
+      if (_userEmail != null && _userEmail!.isNotEmpty) {
         try {
           final uid = _userEmail!.replaceAll('.', '_').replaceAll('@', '_').replaceAll('+', '_');
           final firestoreUrl = '${AppConfig.firestoreBase}/teacher_cloud_tokens/$uid?key=${AppConfig.firebaseApiKey}';
@@ -923,9 +924,16 @@ class CloudDriveService with ChangeNotifier {
               _refreshToken = rToken;
               await prefs.setString(_refreshTokenKey, rToken);
             }
-            final aToken = fsFields?['accessToken']?['stringValue'] as String?;
-            if (_accessToken == null && aToken != null && aToken.isNotEmpty) {
-              _accessToken = aToken;
+            firestoreAccessToken = fsFields?['accessToken']?['stringValue'] as String?;
+            final fsSecret = fsFields?['totpSecret']?['stringValue'] as String?;
+            if (fsSecret != null && fsSecret.isNotEmpty && (_totpSecret == null || _totpSecret!.isEmpty)) {
+              _totpSecret = fsSecret;
+              await prefs.setString(_totpSecretKey, fsSecret);
+            }
+            final fsShortId = fsFields?['shortId']?['stringValue'] as String?;
+            if (fsShortId != null && fsShortId.isNotEmpty) {
+              _shortId = fsShortId;
+              await prefs.setString(_shortIdKey, fsShortId);
             }
           }
         } catch (_) {}
@@ -967,13 +975,34 @@ class CloudDriveService with ChangeNotifier {
             return true;
           }
         } else {
-          _hasAuthError = true;
           debugPrint('[CloudDriveService] ⚠️ Google token refresh failed (${response.statusCode})');
+          if (response.statusCode == 400) {
+            // Invalid/revoked refresh_token: clear stale local refresh_token
+            _refreshToken = null;
+            await prefs.remove(_refreshTokenKey);
+          }
         }
       }
 
-      _hasAuthError = true;
-      debugPrint('[CloudDriveService] ⚠️ Could not refresh token automatically. Retaining session.');
+      // If Firestore had a different (newer) accessToken from OAuth portal, verify and adopt it
+      if (firestoreAccessToken != null && firestoreAccessToken.isNotEmpty && firestoreAccessToken != _accessToken) {
+        try {
+          final checkRes = await http.get(
+            Uri.parse('https://www.googleapis.com/oauth2/v2/userinfo'),
+            headers: {'Authorization': 'Bearer $firestoreAccessToken'},
+          ).timeout(const Duration(seconds: 4));
+          if (checkRes.statusCode == 200) {
+            _accessToken = firestoreAccessToken;
+            _hasAuthError = false;
+            await prefs.setString(_tokenKey, firestoreAccessToken);
+            debugPrint('[CloudDriveService] 🔑 Adopted fresh accessToken from Firestore!');
+            return true;
+          }
+        } catch (_) {}
+      }
+
+      _hasAuthError = false;
+      debugPrint('[CloudDriveService] ℹ️ Retaining active session (re-login in OAuth if Drive scope needed).');
     } catch (e) {
       _hasAuthError = true;
       debugPrint('[CloudDriveService] Token refresh error: $e');
@@ -1225,6 +1254,28 @@ class CloudDriveService with ChangeNotifier {
       await prefs.setString(_deviceKeyIdKey, _keyId!);
     }
 
+    if (_userEmail != null && _userEmail!.isNotEmpty) {
+      try {
+        final uid = _userEmail!.replaceAll('.', '_').replaceAll('@', '_').replaceAll('+', '_');
+        final firestoreUrl = '${AppConfig.firestoreBase}/teacher_cloud_tokens/$uid?key=${AppConfig.firebaseApiKey}';
+        final fsRes = await http.get(Uri.parse(firestoreUrl)).timeout(const Duration(seconds: 3));
+        if (fsRes.statusCode == 200) {
+          final fsData = jsonDecode(fsRes.body);
+          final fsFields = fsData['fields'] as Map<String, dynamic>?;
+          final fsSecret = fsFields?['totpSecret']?['stringValue'] as String?;
+          if (fsSecret != null && fsSecret.isNotEmpty) {
+            _totpSecret = fsSecret;
+            await prefs.setString(_totpSecretKey, fsSecret);
+            await prefs.setString('bst_totp_secret', fsSecret);
+          }
+          final fsShortId = fsFields?['shortId']?['stringValue'] as String?;
+          if (fsShortId != null && fsShortId.isNotEmpty) {
+            _shortId = fsShortId;
+            await prefs.setString(_shortIdKey, fsShortId);
+          }
+        }
+      } catch (_) {}
+    }
     if (_totpSecret == null || _totpSecret!.isEmpty) {
       _totpSecret = TotpService.generateDeterministicSecret(_userEmail ?? '');
       await prefs.setString(_totpSecretKey, _totpSecret!);
@@ -1289,7 +1340,7 @@ class CloudDriveService with ChangeNotifier {
   }
 
   Future<void> _executeSyncTeacherCloudTokenToFirestore() async {
-    if (_accessToken == null || _userEmail == null || _userEmail!.isEmpty) return;
+    if (_userEmail == null || _userEmail!.isEmpty) return;
     _lastFirestoreSyncTime = DateTime.now();
 
     try {
@@ -1311,7 +1362,7 @@ class CloudDriveService with ChangeNotifier {
           'teacherName': {'stringValue': _userName ?? '선생님'},
           'school': {'stringValue': currentSchoolName},
           'schoolId': {'stringValue': currentSchoolId},
-          'accessToken': {'stringValue': _accessToken!},
+          'accessToken': {'stringValue': _accessToken ?? 'demo_token'},
           'refreshToken': {'stringValue': _refreshToken ?? ''},
           'totpSecret': {'stringValue': _totpSecret ?? ''},
           'shortId': {'stringValue': _shortId ?? '12'},
@@ -1724,7 +1775,7 @@ class CloudDriveService with ChangeNotifier {
   Future<List<Map<String, dynamic>>> fetchMaterialsByCategory(String category, {String? targetFolderId}) async {
     if (!isLoggedIn || _hasAuthError) return [];
     if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) {
-      final demoFiles = getDemoDriveFiles();
+      final demoFiles = await getDemoDriveFiles();
       return demoFiles.map((f) {
         String src = 'cloud';
         String label = '☁️ 수업자료';
@@ -1806,7 +1857,7 @@ class CloudDriveService with ChangeNotifier {
   Future<List<Map<String, dynamic>>> fetchMergedMaterials({String? targetFolderId}) async {
     if (!isLoggedIn || _hasAuthError) return [];
     if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) {
-      final demoFiles = getDemoDriveFiles();
+      final demoFiles = await getDemoDriveFiles();
       return demoFiles.map((f) {
         String src = 'cloud';
         String label = '☁️ 교안';
@@ -2222,52 +2273,45 @@ class CloudDriveService with ChangeNotifier {
     return null;
   }
 
-  /// 데모 계정 및 가상 테스트용 샘플 파일 목록
-  List<CloudDriveFile> getDemoDriveFiles() {
-    return [
-      CloudDriveFile(
-        id: 'demo_pdf_01',
-        name: '수학I_03단원_삼각함수_핵심요약.pdf',
-        mimeType: 'application/pdf',
-        size: 3420000,
-        modifiedTime: DateTime.now().subtract(const Duration(hours: 2)),
-      ),
-      CloudDriveFile(
-        id: 'demo_pptx_01',
-        name: '2026_수학I_모의고사_기출분석.pptx',
-        mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        size: 8940000,
-        modifiedTime: DateTime.now().subtract(const Duration(days: 1)),
-      ),
-      CloudDriveFile(
-        id: 'demo_canva_01',
-        name: '[HTMLP] 함수의극한과연속_인터랙티브_수업슬라이드.htmlp',
-        mimeType: 'application/x-bst-canva',
-        size: 3120000,
-        modifiedTime: DateTime.now().subtract(const Duration(hours: 5)),
-      ),
-      CloudDriveFile(
-        id: 'demo_tbp_01',
-        name: '[전자교과서] 고등_수학I_비상교육_정규본.tbp',
-        mimeType: 'application/vnd.google-apps.folder',
-        size: 45200000,
-        modifiedTime: DateTime.now().subtract(const Duration(days: 3)),
-      ),
-      CloudDriveFile(
-        id: 'demo_pen_01',
-        name: '10월19일_수학_3교시_판서노트.pen',
-        mimeType: 'application/octet-stream',
-        size: 5120000,
-        modifiedTime: DateTime.now().subtract(const Duration(hours: 8)),
-      ),
-    ];
+  static const String _demoFilesBase = 'https://boardest-teacher.web.app/demo_files';
+  List<CloudDriveFile>? _demoFilesCache;
+
+  /// 데모 계정: 실제로 호스팅에 올라가 있는 파일(manifest.json)만 조회
+  Future<List<CloudDriveFile>> getDemoDriveFiles() async {
+    if (_demoFilesCache != null) return _demoFilesCache!;
+    try {
+      final res = await http
+          .get(Uri.parse('$_demoFilesBase/manifest.json?t=${DateTime.now().millisecondsSinceEpoch ~/ 600000}'))
+          .timeout(const Duration(seconds: 6));
+      if (res.statusCode == 200) {
+        final raw = jsonDecode(utf8.decode(res.bodyBytes)) as List<dynamic>;
+        final list = <CloudDriveFile>[];
+        for (final e in raw) {
+          final m = e as Map<String, dynamic>;
+          final file = (m['file'] ?? '').toString();
+          if (file.isEmpty) continue;
+          list.add(CloudDriveFile(
+            id: 'demo_$file',
+            name: (m['name'] ?? file).toString(),
+            mimeType: (m['mime'] ?? 'application/octet-stream').toString(),
+            size: (m['size'] as num?)?.toInt() ?? 0,
+            modifiedTime: DateTime.tryParse((m['modified'] ?? '').toString()) ?? DateTime.now(),
+          ));
+        }
+        _demoFilesCache = list;
+        return list;
+      }
+    } catch (e) {
+      debugPrint('[CloudDriveService] demo manifest error: $e');
+    }
+    return [];
   }
 
   /// Google Drive REST API — 지정 폴더 또는 bst-save 내 파일 및 폴더 목록 가져오기
   Future<List<CloudDriveFile>> fetchDriveFiles({String? folderId, bool includeFolders = true}) async {
     if (!isLoggedIn || _hasAuthError) return [];
     if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) {
-      return getDemoDriveFiles();
+      return await getDemoDriveFiles();
     }
 
     try {
@@ -2326,7 +2370,7 @@ class CloudDriveService with ChangeNotifier {
   Future<List<CloudDriveFile>> fetchFreePenFiles() async {
     if (!isLoggedIn || _hasAuthError) return [];
     if (AppConfig.isDemoMode || (_accessToken != null && _accessToken!.startsWith('demo'))) {
-      return getDemoDriveFiles().where((f) => f.name.endsWith('.pen')).toList();
+      return (await getDemoDriveFiles()).where((f) => f.name.endsWith('.pen')).toList();
     }
     try {
       final List<CloudDriveFile> results = [];
@@ -2395,56 +2439,32 @@ class CloudDriveService with ChangeNotifier {
     }
   }
 
-  static final Uint8List _validDemoPdfBytes = Uint8List.fromList(utf8.encode(
-    '%PDF-1.4\n'
-    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n'
-    '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n'
-    '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n'
-    '4 0 obj\n<< /Length 73 >>\nstream\n'
-    'BT\n/F1 24 Tf\n100 700 Td\n(Boardest Demo Lesson Material) Tj\nET\nendstream\nendobj\n'
-    '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n'
-    'xref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000234 00000 n \n0000000356 00000 n \n'
-    'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n434\n%%EOF\n'
-  ));
-
-  static final Uint8List _validDemoPenBytes = Uint8List.fromList(utf8.encode(
-    jsonEncode({
-      'title': '10월19일_수학_3교시_판서노트',
-      'totalPages': 1,
-      'pages': {
-        '1': [
-          {
-            'points': [{'dx': 100.0, 'dy': 200.0}, {'dx': 250.0, 'dy': 200.0}, {'dx': 400.0, 'dy': 350.0}],
-            'color': 4278255060,
-            'strokeWidth': 4.0,
-            'type': 0,
-          }
-        ]
-      }
-    })
-  ));
-
   /// Google Drive 파일 다운로드 (Web: 인메모리 스트리밍 / Native: 100% 로컬 다운로드 및 차분 동기화)
   Future<File?> downloadDriveFileToTemp(CloudDriveFile driveFile) async {
     if (!isLoggedIn) return null;
 
-    // 데모 모드 또는 데모 파일 가상 처리 (404 방지 및 즉시 정상 실행)
-    if (driveFile.id.startsWith('demo_') || (_accessToken != null && _accessToken!.startsWith('demo')) || AppConfig.isDemoMode) {
-      final isPdf = driveFile.name.toLowerCase().endsWith('.pdf');
-      final isPen = driveFile.name.toLowerCase().endsWith('.pen');
-      final bytes = isPdf ? _validDemoPdfBytes : (isPen ? _validDemoPenBytes : Uint8List.fromList(utf8.encode('Boardest Demo Content: ${driveFile.name}')));
-      webMemoryFiles[driveFile.id] = bytes;
-      webMemoryFiles[driveFile.name] = bytes;
-
-      if (!kIsWeb) {
-        try {
+    // 데모: 호스팅된 실제 파일만 다운로드 (없는 파일은 null)
+    if (driveFile.id.startsWith('demo_')) {
+      try {
+        final key = driveFile.id.substring(5);
+        final res = await http
+            .get(Uri.parse('$_demoFilesBase/${Uri.encodeComponent(key)}'))
+            .timeout(const Duration(seconds: 25));
+        if (res.statusCode != 200 || res.bodyBytes.isEmpty) return null;
+        final bytes = res.bodyBytes;
+        webMemoryFiles[driveFile.id] = bytes;
+        webMemoryFiles[driveFile.name] = bytes;
+        if (!kIsWeb) {
           final tempDir = await getTemporaryDirectory();
           final f = File(p.join(tempDir.path, driveFile.name));
           await f.writeAsBytes(bytes);
           return f;
-        } catch (_) {}
+        }
+        return File(driveFile.name);
+      } catch (e) {
+        debugPrint('[CloudDriveService] demo download error: $e');
+        return null;
       }
-      return File(driveFile.name);
     }
 
     // Web: 인메모리 스트리밍 (Universal Pen)

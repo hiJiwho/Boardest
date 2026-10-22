@@ -14,6 +14,8 @@ class BstTeacherMainLayout extends StatelessWidget {
 
   final Widget? teacherTimetableWidget;
   final Widget? homeroomTimetableWidget;
+  final Widget? todayTimetableWidget;
+  final Widget? dashboardFilesWidget;
   final bool isHomeroom;
 
   final String currentOtp;
@@ -41,6 +43,8 @@ class BstTeacherMainLayout extends StatelessWidget {
     this.activeContent,
     this.teacherTimetableWidget,
     this.homeroomTimetableWidget,
+    this.todayTimetableWidget,
+    this.dashboardFilesWidget,
     this.currentOtp = '------',
     this.remainingOtpSeconds = 60,
     this.onOpenPopups,
@@ -63,14 +67,7 @@ class BstTeacherMainLayout extends StatelessWidget {
     (Icons.draw_rounded, '판서 관리함', 'archive'),
   ];
 
-  static const _mockFiles = <(String, String, String, Color, IconData)>[
-    ('수학I_03단원_삼각함수의그래프.pdf', 'PDF', '3.4 MB', Color(0xFFFF6B6B), Icons.picture_as_pdf_rounded),
-    ('2026_전국연합학력평가_기출해설.pptx', 'PPT', '8.9 MB', Color(0xFFFF8906), Icons.slideshow_rounded),
-    ('[전자교과서] 고등 수학I 비상', 'TBP', '45.2 MB', Color(0xFF7F5AF0), Icons.auto_stories_rounded),
-    ('함수의극한과연속_개념정리.hwpx', 'HWP', '1.8 MB', Color(0xFF4D96FF), Icons.description_rounded),
-    ('미적분_인터랙티브시뮬레이션.htmlp', 'HTMLP', '3.1 MB', Color(0xFF00C4CC), Icons.co_present_rounded),
-    ('10월19일_3교시_수업판서.pen', 'PEN', '5.1 MB', Color(0xFF00C896), Icons.draw_rounded),
-  ];
+  static const _mockFiles = <(String, String, String, Color, IconData)>[];
 
   static const _mockTodaySchedule = [
     ('1교시', '09:00', '2-1반', '수학 II', Color(0xFF4D96FF), false),
@@ -200,7 +197,21 @@ class BstTeacherMainLayout extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('BOARDEST', style: _ts(14, w: FontWeight.w900, h: 1.1)),
+                  Row(
+                    children: [
+                      Text('BOARDEST', style: _ts(14, w: FontWeight.w900, h: 1.1)),
+                      const SizedBox(width: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00F5D4).withOpacity(0.16),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFF00F5D4), width: 0.8),
+                        ),
+                        child: Text('V.5.0.6', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
+                      ),
+                    ],
+                  ),
                   Text(kIsWeb ? 'Teacher' : 'Teacher PRO', style: _ts(12, w: FontWeight.w700, c: const Color(0xFF00F5D4))),
                 ],
               ),
@@ -321,11 +332,13 @@ class BstTeacherMainLayout extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 14),
-                // 카테고리 필터 칩 & 검색
-                _chipsAndSearchRow(),
-                const SizedBox(height: 12),
-                // 우측 하단: Cloud 파일함 (세로 리스트형!)
-                Expanded(child: _fileListView()),
+                // 우측 하단: 실제 업로드된 Cloud 파일함 (더미 파일 완전 제거!)
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: dashboardFilesWidget ?? _fileListView(),
+                  ),
+                ),
               ],
             ),
           ),
@@ -396,7 +409,9 @@ class BstTeacherMainLayout extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: ListView.separated(
+            child: todayTimetableWidget != null
+                ? todayTimetableWidget!
+                : ListView.separated(
               itemCount: _mockTodaySchedule.length,
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (c, i) {

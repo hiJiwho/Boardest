@@ -994,7 +994,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                               Expanded(
                                 child: DropdownButtonFormField<int>(
                                   dropdownColor: const Color(0xFF16161A),
-                                  value: _selectedGrade,
+                                  value: _selectedGrade.clamp(1, 6),
                                   style: const TextStyle(color: Colors.white),
                                   decoration: InputDecoration(
                                     labelText: '학년',
@@ -1002,7 +1002,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                                     fillColor: const Color(0xFF16161A),
                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                                   ),
-                                  items: [1, 2, 3].map((g) => DropdownMenuItem(value: g, child: Text('$g학년'))).toList(),
+                                  items: [1, 2, 3, 4, 5, 6].map((g) => DropdownMenuItem(value: g, child: Text('$g학년'))).toList(),
                                   onChanged: (v) => setState(() => _selectedGrade = v ?? 1),
                                 ),
                               ),
@@ -1010,7 +1010,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                               Expanded(
                                 child: DropdownButtonFormField<int>(
                                   dropdownColor: const Color(0xFF16161A),
-                                  value: _selectedClass,
+                                  value: _selectedClass.clamp(1, 15),
                                   style: const TextStyle(color: Colors.white),
                                   decoration: InputDecoration(
                                     labelText: '반',
@@ -1018,7 +1018,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
                                     fillColor: const Color(0xFF16161A),
                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                                   ),
-                                  items: List.generate(8, (i) => i + 1).map((c) => DropdownMenuItem(value: c, child: Text('$c반'))).toList(),
+                                  items: List.generate(15, (i) => i + 1).map((c) => DropdownMenuItem(value: c, child: Text('$c반'))).toList(),
                                   onChanged: (v) => setState(() => _selectedClass = v ?? 1),
                                 ),
                               ),

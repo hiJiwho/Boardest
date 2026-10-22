@@ -93,7 +93,7 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
       List<String> teachersList = [];
       if (s.selectedSchool != null) {
         setState(() => _loadingTeachers = true);
-        teachersList = await _comcigan.getTeachers(s.selectedSchool!.code);
+        teachersList = (await _comcigan.getTeachers(s.selectedSchool!.code)).map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
       }
       final hasDrive = CloudDriveService.instance.isLoggedIn;
       final driveEmail = CloudDriveService.instance.userEmail ?? '';
@@ -102,13 +102,13 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
         setState(() {
           _settings = s;
           _selectedSchool = s.selectedSchool;
-          _selectedGrade = s.selectedGrade;
-          _selectedClass = s.selectedClass;
+          _selectedGrade = s.selectedGrade.clamp(1, 6);
+          _selectedClass = s.selectedClass.clamp(1, 15);
           _teachers = teachersList;
           _selectedTeacher = s.selectedTeacher;
           _teacherController.text = s.selectedTeacher;
           _themeMode = s.themeMode;
-          _uiScale = s.scaleFactor;
+          _uiScale = s.scaleFactor.clamp(0.8, 1.4);
           _hasCloudDrive = hasDrive;
           _cloudUserEmail = driveEmail;
           _loading = false;
@@ -162,7 +162,7 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
       _homeroomMatched = false;
     });
     try {
-      final list = await _comcigan.getTeachers(school.code);
+      final list = (await _comcigan.getTeachers(school.code)).map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
       if (mounted) {
         setState(() {
           _teachers = list;
@@ -626,7 +626,7 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<int>(
-                  value: _selectedGrade,
+                  value: _selectedGrade.clamp(1, 6),
                   dropdownColor: const Color(0xFF141A29),
                   style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14),
                   decoration: InputDecoration(
@@ -645,7 +645,7 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
               const SizedBox(width: 14),
               Expanded(
                 child: DropdownButtonFormField<int>(
-                  value: _selectedClass,
+                  value: _selectedClass.clamp(1, 15),
                   dropdownColor: const Color(0xFF141A29),
                   style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14),
                   decoration: InputDecoration(
@@ -771,7 +771,7 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
                   ],
                 ),
                 Slider(
-                  value: _uiScale,
+                  value: _uiScale.clamp(0.8, 1.4),
                   min: 0.8,
                   max: 1.4,
                   divisions: 6,

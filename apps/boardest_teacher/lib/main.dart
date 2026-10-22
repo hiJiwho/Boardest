@@ -1,3 +1,4 @@
+import 'dart:ui' show PlatformDispatcher;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -5,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_acrylic/flutter_acrylic.dart' as acrylic;
@@ -34,6 +36,17 @@ import 'package:pdfrx/pdfrx.dart';
 import 'views/bst_viewer_route.dart';
 
 void main(List<String> args) async {
+  // 어떤 예외도 앱을 종료시키지 않도록 전역 가드
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint('[Teacher Fatal] FlutterError: ${details.exception}');
+  };
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    debugPrint('[Teacher Fatal] PlatformError: $error');
+    return true;
+  };
+  ErrorWidget.builder = (FlutterErrorDetails details) => const SizedBox.shrink();
+
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await pdfrxFlutterInitialize();
@@ -477,6 +490,7 @@ class _TeacherAppState extends State<TeacherApp> with WindowListener {
     _themeColor = _settings.themeColor;
     _loadWindowsAccentColor();
     TeacherView.onSettingsChanged = _reloadSettings;
+    HardwareKeyboard.instance.addHandler(_handleFullscreenKey);
     CloudDriveService.instance.registerLoginCallback(() {
       _reloadSettings();
     });
@@ -488,8 +502,41 @@ class _TeacherAppState extends State<TeacherApp> with WindowListener {
     }
   }
 
+  bool _handleFullscreenKey(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+    if (event.logicalKey != LogicalKeyboardKey.keyF) return false;
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isAltPressed ||
+        HardwareKeyboard.instance.isMetaPressed) {
+      return false;
+    }
+    final focusCtx = FocusManager.instance.primaryFocus?.context;
+    if (focusCtx != null) {
+      bool editing = false;
+      focusCtx.visitAncestorElements((el) {
+        if (el.widget is EditableText) {
+          editing = true;
+          return false;
+        }
+        return true;
+      });
+      if (editing || focusCtx.widget is EditableText) return false;
+    }
+    if (!kIsWeb && Platform.isWindows) {
+      () async {
+        try {
+          final fs = await windowManager.isFullScreen();
+          await windowManager.setFullScreen(!fs);
+        } catch (_) {}
+      }();
+      return true;
+    }
+    return false; // Web 은 index.html 의 keydown 리스너가 처리
+  }
+
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleFullscreenKey);
     if (!kIsWeb && Platform.isWindows && widget.initialTool != 'lite_map') {
       windowManager.removeListener(this);
     }

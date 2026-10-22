@@ -41,7 +41,7 @@ class UpdateService {
   UpdateService._internal();
   static final instance = UpdateService._internal();
 
-  static const String defaultVersion = '5.0.4';
+  static const String defaultVersion = '5.0.6';
   static const String _api =
       'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String downloadPage = 'https://boardest-downloads.web.app';
@@ -71,21 +71,26 @@ class UpdateService {
   }
 
   static Future<void> initVersion() async {
+    // 설치된 바이너리에 컴파일된 버전(defaultVersion)이 유일한 기준.
+    // (SharedPreferences 캐시는 다운로드만 하고 설치 안 한 경우에도 새 버전으로 보이게 하는 원인이었음)
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedVer = prefs.getString('bst_installed_version');
-      if (savedVer != null && savedVer.isNotEmpty) {
-        _resolvedVersion = savedVer;
-      }
+      await prefs.remove('bst_installed_version');
     } catch (_) {}
-    try {
-      final jsonStr = await rootBundle.loadString('version.json');
-      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-      final v = data['version'] as String?;
-      if (v != null && v.isNotEmpty) {
-        _resolvedVersion = v.trim();
-      }
-    } catch (_) {}
+    if (_resolvedVersion == null || _isNewerVersion(defaultVersion, _resolvedVersion!)) {
+      _resolvedVersion = null;
+    }
+  }
+
+  static bool _isNewerVersion(String a, String b) {
+    final pa = a.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    final pb = b.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    for (var i = 0; i < 3; i++) {
+      final x = i < pa.length ? pa[i] : 0;
+      final y = i < pb.length ? pb[i] : 0;
+      if (x != y) return x > y;
+    }
+    return false;
   }
 
   Future<UpdateInfo?> checkForUpdate({
@@ -309,10 +314,22 @@ class _TeacherOptionalUpdateDialogState
 
     if (widget.info.isWindows) {
       try {
-        // msiexec.exe /i 직접 실행 (PowerShell 미사용으로 AhnLab V3 및 백신 오탐 원천 차단)
-        await Process.start('msiexec.exe', ['/i', savePath]);
+        final isMsi = savePath.toLowerCase().endsWith('.msi');
+        if (isMsi) {
+          // MajorUpgrade(같은 UpgradeCode)로 기존 버전을 덮어씀. 파일 잠금 방지를 위해 앱을 먼저 종료하고
+          // 설치 완료 후 자동 재실행. (msiexec 가 UAC 권한 상승 요청)
+          final exePath = Platform.resolvedExecutable;
+          final script = 'timeout /t 2 /nobreak >nul & '
+              'msiexec.exe /i "$savePath" /passive /norestart REINSTALLMODE=vomus & '
+              'if exist "$exePath" start "" "$exePath"';
+          await Process.start('cmd.exe', ['/c', script], mode: ProcessStartMode.detached);
+          await Future.delayed(const Duration(milliseconds: 600));
+          exit(0);
+        } else {
+          await Process.start('msiexec.exe', ['/i', savePath]);
+        }
       } catch (e) {
-        debugPrint('[UpdateService] msiexec launch failed: $e');
+        debugPrint('[UpdateService] installer launch failed: $e');
         try {
           await Process.start('cmd.exe', ['/c', 'start', '', savePath]);
         } catch (_) {}

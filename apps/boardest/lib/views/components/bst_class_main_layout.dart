@@ -400,7 +400,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                           ),
                           const SizedBox(width: 10),
                           Text(
-                            '🚀 새 버전(${UpdateService.latestVersion ?? '5.0.4'}) 백그라운드 다운로드 중... ($pct%)',
+                            '🚀 새 버전(${UpdateService.latestVersion ?? '5.0.6'}) 백그라운드 다운로드 중... ($pct%)',
                             style: _ts(12, w: FontWeight.w900, c: Colors.black),
                           ),
                           const Spacer(),
@@ -676,21 +676,24 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    // 우측: 교과서 사진 썸네일
-                    AspectRatio(
-                      aspectRatio: 0.72,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(4),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.4),
-                              blurRadius: 4,
-                              offset: const Offset(1, 1),
-                            ),
-                          ],
+                    // 우측: 교과서 사진 썸네일 (컴팩트 사이즈 축소)
+                    Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 33,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(4),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.35),
+                                blurRadius: 3,
+                                offset: const Offset(1, 1),
+                              ),
+                            ],
+                          ),
+                          child: _buildBookCoverWidget(p.subject, radius: 4, isMini: true),
                         ),
-                        child: _buildBookCoverWidget(p.subject, radius: 4, isMini: true),
                       ),
                     ),
                   ],
@@ -780,7 +783,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(color: const Color(0xFF00F5D4), width: 0.8),
                       ),
-                      child: Text('V.5.0.4', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
+                      child: Text('V.5.0.6', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
                     ),
                     if (!kIsWeb) ...[
                       const SizedBox(width: 3),
@@ -1276,8 +1279,8 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
           Opacity(
             opacity: isPast ? 0.45 : 0.95,
             child: SizedBox(
-              width: 48,
-              height: double.infinity,
+              width: 34,
+              height: 46,
               child: _buildBookCoverWidget(p.subject, radius: 6, isMini: true),
             ),
           ),
@@ -1395,15 +1398,39 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
       grad1 = const Color(0xFF3E2723); grad2 = const Color(0xFF8D6E63); icon = '🏮'; category = '한문과';
     }
 
+    final isDemoCover = AppConfig.isDemoMode || widget.schoolName.contains('데모');
+    if (isDemoCover) {
+      // 데모 버전 전용 신규 모던 일러스트형 교과서 표지 테마
+      if (subject.contains('국어') || subject.contains('문학')) {
+        grad1 = const Color(0xFF3A1C71); grad2 = const Color(0xFFD76D77); icon = '🖋️'; category = 'DEMO 국어';
+      } else if (subject.contains('수학')) {
+        grad1 = const Color(0xFF0F2027); grad2 = const Color(0xFF00B4DB); icon = '💠'; category = 'DEMO 수학';
+      } else if (subject.contains('영어')) {
+        grad1 = const Color(0xFF1A2980); grad2 = const Color(0xFF26D0CE); icon = '🌐'; category = 'DEMO 영어';
+      } else if (subject.contains('과학') || subject.contains('물리') || subject.contains('화학') || subject.contains('생물')) {
+        grad1 = const Color(0xFF134E5E); grad2 = const Color(0xFF71B280); icon = '🧬'; category = 'DEMO 과학';
+      } else if (subject.contains('역사') || subject.contains('사회')) {
+        grad1 = const Color(0xFF4B1248); grad2 = const Color(0xFFF0C27B); icon = '🧭'; category = 'DEMO 사회';
+      } else if (subject.contains('정보') || subject.contains('AI') || subject.contains('컴퓨터')) {
+        grad1 = const Color(0xFF0F0C29); grad2 = const Color(0xFF7F5AF0); icon = '🤖'; category = 'DEMO 정보';
+      } else if (subject.contains('체육') || subject.contains('스포츠')) {
+        grad1 = const Color(0xFF11998E); grad2 = const Color(0xFF38EF7D); icon = '🏅'; category = 'DEMO 체육';
+      } else if (subject.contains('음악') || subject.contains('미술') || subject.contains('예술')) {
+        grad1 = const Color(0xFF833AB4); grad2 = const Color(0xFFFD1D1D); icon = '🎭'; category = 'DEMO 예술';
+      } else {
+        grad1 = const Color(0xFF1F1C2C); grad2 = const Color(0xFF928DAB); icon = '✨'; category = 'DEMO 교과';
+      }
+    }
+
     if (isMini) {
       return Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(radius),
           gradient: LinearGradient(colors: [grad1, grad2], begin: Alignment.topLeft, end: Alignment.bottomRight),
-          border: Border.all(color: Colors.white.withOpacity(0.2)),
+          border: Border.all(color: isDemoCover ? const Color(0xFF00F5D4).withOpacity(0.55) : Colors.white.withOpacity(0.2)),
         ),
         alignment: Alignment.center,
-        child: Text(icon, style: const TextStyle(fontSize: 20)),
+        child: Text(icon, style: TextStyle(fontSize: isDemoCover ? 14 : 15)),
       );
     }
 
@@ -1460,7 +1487,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('중학교 교과서', style: _ts(12.5, w: FontWeight.w700, c: Colors.white70)),
+                    Text(isDemoCover ? '2026 미래형 데모교과서' : '중학교 교과서', style: _ts(12.5, w: FontWeight.w700, c: Colors.white70)),
                     const SizedBox(height: 3),
                     Text(
                       subject,
@@ -1476,7 +1503,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                     color: Colors.white.withOpacity(0.18),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Text('디지털 교과서 TBP', style: _ts(11, w: FontWeight.w800, c: Colors.white)),
+                  child: Text(isDemoCover ? 'BOARDEST 스마트북' : '디지털 교과서 TBP', style: _ts(11, w: FontWeight.w800, c: Colors.white)),
                 ),
               ],
             ),
@@ -1727,15 +1754,17 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 const SizedBox(width: 10),
                 Expanded(
                   flex: 1,
-                  child: ValueListenableBuilder<UpdateState>(
-                    valueListenable: UpdateService.stateNotifier,
-                    builder: (ctx, updateState, _) {
-                      if (updateState == UpdateState.downloaded) {
-                        return _updateRequiredCard();
-                      }
-                      return _mealTableFull();
-                    },
-                  ),
+                  child: (widget.isCloudActive && widget.showCloudFiles && widget.cloudFilesWidget != null)
+                      ? _recessCloudPanel()
+                      : ValueListenableBuilder<UpdateState>(
+                          valueListenable: UpdateService.stateNotifier,
+                          builder: (ctx, updateState, _) {
+                            if (updateState == UpdateState.downloaded) {
+                              return _updateRequiredCard();
+                            }
+                            return _mealTableFull();
+                          },
+                        ),
                 ),
               ],
             ),
@@ -1807,6 +1836,8 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
 
   Widget _buildHorizontalToolsRow({required bool inClass}) {
     final tools = inClass ? _classTools : _recessTools;
+    final canUseSystemApps = !kIsWeb && (widget.isPro || Platform.isWindows || Platform.isAndroid);
+    final customSlots = canUseSystemApps ? (widget.customSlots ?? const <LauncherSlot>[]) : const <LauncherSlot>[];
 
     return _glassSurface(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1837,16 +1868,16 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Container(
-                        width: 32,
-                        height: 32,
+                        width: 30,
+                        height: 30,
                         decoration: BoxDecoration(
                           color: tool.$4.withOpacity(0.18),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: tool.$4.withOpacity(0.4), width: 1.1),
                         ),
-                        child: Icon(tool.$1, color: tool.$4, size: 18),
+                        child: Icon(tool.$1, color: tool.$4, size: 17),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Flexible(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -1856,13 +1887,13 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                               tool.$2,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: _ts(14.5, w: FontWeight.w800, c: Colors.white),
+                              style: _ts(13.5, w: FontWeight.w800, c: Colors.white),
                             ),
                             Text(
                               tool.$3,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: _ts(10, c: Colors.white54),
+                              style: _ts(9.5, c: Colors.white54),
                             ),
                           ],
                         ),
@@ -1874,18 +1905,98 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
             ),
             const SizedBox(width: 6),
           ],
-          if (widget.onAddAppTap != null)
-            InkWell(
-              onTap: widget.onAddAppTap,
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                width: 44,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white.withOpacity(0.12)),
+          for (int idx = 0; idx < customSlots.length; idx++) ...[
+            Expanded(
+              child: InkWell(
+                onTap: () {
+                  final slot = customSlots[idx];
+                  if (widget.onLaunchApp != null) {
+                    widget.onLaunchApp!(slot);
+                  } else {
+                    SystemAppScanner.launchApp(slot.id);
+                  }
+                },
+                onLongPress: () => widget.onRemoveApp?.call(idx),
+                borderRadius: BorderRadius.circular(10),
+                child: _glassTile(
+                  radius: 10,
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00F5D4).withOpacity(0.16),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.45)),
+                        ),
+                        alignment: Alignment.center,
+                        child: (customSlots[idx].iconPath != null &&
+                                customSlots[idx].iconPath!.isNotEmpty &&
+                                File(customSlots[idx].iconPath!).existsSync())
+                            ? Image.file(File(customSlots[idx].iconPath!), width: 20, height: 20)
+                            : const Icon(Icons.apps_rounded, color: Color(0xFF00F5D4), size: 17),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              customSlots[idx].name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _ts(13, w: FontWeight.w800, c: Colors.white),
+                            ),
+                            Text(
+                              '시스템 앱',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _ts(9.5, c: const Color(0xFF00F5D4)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (widget.onRemoveApp != null)
+                        InkWell(
+                          onTap: () => widget.onRemoveApp?.call(idx),
+                          child: const Padding(
+                            padding: EdgeInsets.only(left: 2),
+                            child: Icon(Icons.close_rounded, size: 13, color: Colors.white38),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-                child: const Icon(Icons.add_rounded, color: Color(0xFF00F5D4), size: 22),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          if (canUseSystemApps && widget.onAddAppTap != null)
+            Tooltip(
+              message: '도구함에 시스템 앱 추가',
+              child: InkWell(
+                onTap: widget.onAddAppTap,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00F5D4).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.add_rounded, color: Color(0xFF00F5D4), size: 20),
+                      const SizedBox(width: 4),
+                      Text('앱 추가', style: _ts(12, w: FontWeight.w800, c: const Color(0xFF00F5D4))),
+                    ],
+                  ),
+                ),
               ),
             ),
         ],
@@ -2251,7 +2362,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
   /// [쉬는 시간용] 급식 대신 노출되는 대형 업데이트 필요 알림 카드
   Widget _updateRequiredCard() {
     final isWin = !kIsWeb && Platform.isWindows;
-    final ver = UpdateService.latestVersion ?? '5.0.4';
+    final ver = UpdateService.latestVersion ?? '5.0.6';
 
     return _glassSurface(
       padding: const EdgeInsets.all(28),
@@ -2471,11 +2582,12 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     );
   }
 
-  /// [PRO 에디션] 수업 시간 도구 아래 설치된 시스템 앱 바로가기 (도구 카드처럼 큼직하고 시원하게 확대!)
+  /// [PRO 에디션] 수업 시간 도구 아래 설치된 시스템 앱 바로가기 (Windows / Android 공통 지원 + 직접 앱 추가/제거)
   Widget _buildSystemAppsRow() {
     if (kIsWeb) return const SizedBox.shrink();
+    final customSlots = widget.customSlots ?? const <LauncherSlot>[];
     final hasNativeApps = _systemApps.isNotEmpty;
-    final displayApps = hasNativeApps ? _systemApps.take(5).toList() : _defaultDemoSystemApps.take(5).toList();
+    final fallbackApps = hasNativeApps ? _systemApps.take(4).toList() : _defaultDemoSystemApps.take(4).toList();
 
     return Container(
       width: double.infinity,
@@ -2510,6 +2622,29 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 ),
               ),
               const Spacer(),
+              if (widget.onAddAppTap != null) ...[
+                InkWell(
+                  onTap: widget.onAddAppTap,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00F5D4).withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.45)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.add_rounded, size: 14, color: Color(0xFF00F5D4)),
+                        const SizedBox(width: 3),
+                        Text('시스템 앱 넣기', style: _ts(11, w: FontWeight.w800, c: const Color(0xFF00F5D4))),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               InkWell(
                 onTap: () {
                   if (!kIsWeb) {
@@ -2541,46 +2676,121 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
           const SizedBox(height: 10),
           Row(
             children: [
-              for (int i = 0; i < displayApps.length; i++) ...[
-                if (i > 0) const SizedBox(width: 10),
+              // 1) 사용자가 직접 등록한 시스템 앱 슬롯 우선 표시
+              for (int i = 0; i < customSlots.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
                 Expanded(
                   child: InkWell(
                     onTap: () {
-                      if (!kIsWeb) {
-                        SystemAppScanner.launchApp(displayApps[i].appId);
+                      if (widget.onLaunchApp != null) {
+                        widget.onLaunchApp!(customSlots[i]);
                       } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('${displayApps[i].name} 앱은 Windows / Android PRO 환경에서 바로 실행됩니다.'),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
+                        SystemAppScanner.launchApp(customSlots[i].id);
                       }
                     },
+                    onLongPress: () => widget.onRemoveApp?.call(i),
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
                       height: 52,
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
+                        color: const Color(0xFF00F5D4).withOpacity(0.10),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white.withOpacity(0.1)),
+                        border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.35)),
                       ),
                       child: Row(
                         children: [
-                          if (displayApps[i].iconPath != null &&
-                              displayApps[i].iconPath!.isNotEmpty &&
-                              File(displayApps[i].iconPath!).existsSync())
-                            Image.file(File(displayApps[i].iconPath!), width: 26, height: 26)
+                          if (customSlots[i].iconPath != null &&
+                              customSlots[i].iconPath!.isNotEmpty &&
+                              File(customSlots[i].iconPath!).existsSync())
+                            Image.file(File(customSlots[i].iconPath!), width: 24, height: 24)
                           else
-                            const Icon(Icons.apps_rounded, size: 24, color: Color(0xFF00F5D4)),
-                          const SizedBox(width: 8),
+                            const Icon(Icons.apps_rounded, size: 22, color: Color(0xFF00F5D4)),
+                          const SizedBox(width: 7),
                           Expanded(
                             child: Text(
-                              displayApps[i].name,
+                              customSlots[i].name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: _ts(13.5, w: FontWeight.w800, c: Colors.white),
+                              style: _ts(13, w: FontWeight.w800, c: Colors.white),
+                            ),
+                          ),
+                          if (widget.onRemoveApp != null)
+                            InkWell(
+                              onTap: () => widget.onRemoveApp?.call(i),
+                              child: const Icon(Icons.close_rounded, size: 15, color: Colors.white54),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              // 2) 사용자 슬롯이 비어있을 경우 기본 추천 시스템 앱 노출
+              if (customSlots.isEmpty)
+                for (int i = 0; i < fallbackApps.length && i < 3; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => SystemAppScanner.launchApp(fallbackApps[i].appId),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        height: 52,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.06),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white.withOpacity(0.1)),
+                        ),
+                        child: Row(
+                          children: [
+                            if (fallbackApps[i].iconPath != null &&
+                                fallbackApps[i].iconPath!.isNotEmpty &&
+                                File(fallbackApps[i].iconPath!).existsSync())
+                              Image.file(File(fallbackApps[i].iconPath!), width: 24, height: 24)
+                            else
+                              const Icon(Icons.apps_rounded, size: 22, color: Color(0xFF00F5D4)),
+                            const SizedBox(width: 7),
+                            Expanded(
+                              child: Text(
+                                fallbackApps[i].name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _ts(13, w: FontWeight.w800, c: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              // 3) 시스템 앱 추가 슬롯 카드 (최대 4개 미만일 때 표시)
+              if (widget.onAddAppTap != null && customSlots.length < 4) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: InkWell(
+                    onTap: widget.onAddAppTap,
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      height: 52,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00F5D4).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.35)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.add_circle_outline_rounded, size: 20, color: Color(0xFF00F5D4)),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              '앱 추가',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _ts(13, w: FontWeight.w800, c: const Color(0xFF00F5D4)),
                             ),
                           ),
                         ],

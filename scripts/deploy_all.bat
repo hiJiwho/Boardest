@@ -1,8 +1,8 @@
 @echo off
 setlocal
 cd /d "%~dp0.."
-set "VERSION=5.0.5"
-set "APPX_VERSION=5.0.5.0"
+set "VERSION=5.0.6"
+set "APPX_VERSION=5.0.6.0"
 set "PROJECT=jiwhosboardest"
 
 echo [1/7] Building Boardest and Teacher web releases...
@@ -34,7 +34,7 @@ call flutter pub get || goto :fail
 popd
 
 echo [4/7] Building Windows packages and all Android APKs...
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\build_all_appx.ps1 -AppVersion %APPX_VERSION% || goto :fail
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\build_all_appx.ps1 -AppVersion %APPX_VERSION% -SkipApk || goto :fail
 goto :native_build_done
 
 :native_build_skipped

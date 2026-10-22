@@ -3398,20 +3398,31 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
     _pauseDashboardTimer();
     bool settingsChanged = false;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => SettingsFullscreenView(
-          settings: _settings,
-          onSettingsChanged: () {
-            settingsChanged = true;
-          },
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => SettingsFullscreenView(
+            settings: _settings,
+            onSettingsChanged: () {
+              settingsChanged = true;
+            },
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e, st) {
+      debugPrint('[Dashboard] settings route error: $e');
+      debugPrint('[Dashboard] SettingsRoute error: $e, stack: $st');
+    }
     if (!mounted) return;
-    _resumeDashboardTimer();
-    if (settingsChanged) {
-      await _loadPreferencesAndFetch();
+    try {
+      _resumeDashboardTimer();
+      if (settingsChanged) {
+        await _loadPreferencesAndFetch();
+      }
+    } catch (e, st) {
+      debugPrint('[Dashboard] settings reload error: $e');
+      debugPrint('[Dashboard] SettingsReload error: $e, stack: $st');
+      if (mounted) setState(() { _isLoading = false; });
     }
   }
 

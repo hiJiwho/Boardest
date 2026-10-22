@@ -127,49 +127,6 @@ class _SavedInkViewState extends State<SavedInkView> {
           }
         }
       } catch (_) {}
-
-      // 기본 판서 보관 샘플 데이터 (웹 및 초기 실행 시)
-      if (list.isEmpty) {
-        final now = DateTime.now();
-        list.addAll([
-          {
-            'id': 'web_sample_1',
-            'name': '[201] 2교시_수학_일차함수그래프.pen',
-            'rawFileName': '2교시_수학_일차함수그래프',
-            'classCode': '[201]',
-            'isCloud': true,
-            'isFolderDoc': false,
-            'modifiedTime': now.subtract(const Duration(hours: 2)),
-            'size': 142000,
-            'source': 'Cloud 보관함 (.pen)',
-            'localPath': null,
-          },
-          {
-            'id': 'web_sample_2',
-            'name': '[Teacher] 영어교과서_Unit3_본문해석.pen',
-            'rawFileName': '영어교과서_Unit3_본문해석',
-            'classCode': '[Teacher]',
-            'isCloud': true,
-            'isFolderDoc': false,
-            'modifiedTime': now.subtract(const Duration(days: 1)),
-            'size': 210500,
-            'source': 'Cloud 보관함 (.pen)',
-            'localPath': null,
-          },
-          {
-            'id': 'web_sample_3',
-            'name': '[102] 4교시_과학_물질의특성_필기.pen',
-            'rawFileName': '4교시_과학_물질의특성_필기',
-            'classCode': '[102]',
-            'isCloud': false,
-            'isFolderDoc': false,
-            'modifiedTime': now.subtract(const Duration(days: 2)),
-            'size': 98000,
-            'source': '로컬 보관함 (.pen)',
-            'localPath': null,
-          },
-        ]);
-      }
     }
 
     // 정렬 (최신순)
