@@ -1120,6 +1120,19 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                 'messageSentAt': nowIso,
               }),
             ).timeout(const Duration(seconds: 4));
+
+            if (_schoolId.toLowerCase() == 'demo' || _schoolName.contains('데모') || docId.startsWith('demo')) {
+              final demoUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/demo.json';
+              await http.patch(
+                Uri.parse(demoUrl),
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode({
+                  'message': msg,
+                  'messageFrom': senderTitle,
+                  'messageSentAt': nowIso,
+                }),
+              ).timeout(const Duration(seconds: 4));
+            }
           } catch (_) {}
         } catch (_) {}
       }

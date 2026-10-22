@@ -76,6 +76,13 @@ class _MessageViewState extends State<MessageView> {
   }
 
   String _getSchoolConnName() {
+    final isDemo = AppConfig.isDemoMode ||
+        (_settings?.schoolId.toLowerCase() == 'demo') ||
+        (_settings?.connectionName.toLowerCase() == 'demo') ||
+        (_settings?.selectedSchool?.name.contains('데모') ?? false) ||
+        (CloudDriveService.instance.userEmail?.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz') ?? false);
+    if (isDemo) return 'demo';
+
     if (_settings == null) return 'ydm';
     final code = _settings!.selectedSchool?.code?.toString() ?? '';
     final schoolId = _settings!.schoolId.trim();
@@ -115,7 +122,12 @@ class _MessageViewState extends State<MessageView> {
                   docId.toLowerCase().contains('special');
               if (isLite) return;
 
-              // 학교 소속 필터링 (다른 학교 교실 철저 제외)
+              // 학교 소속 필터링 (데모 모드 시 demo 프리픽스 및 데모 교실 전면 수용)
+              final isDemoMatch = AppConfig.isDemoMode ||
+                  connName == 'demo' ||
+                  (_settings?.schoolId.toLowerCase() == 'demo') ||
+                  (CloudDriveService.instance.userEmail?.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz') ?? false);
+
               final docSchoolCode = (val['schoolCode']?.toString() ?? '').toLowerCase();
               final docSchoolName = (val['schoolName']?.toString() ?? '').toLowerCase();
               final schoolCode = (_settings?.selectedSchool?.code?.toString() ?? '').toLowerCase();
@@ -123,19 +135,23 @@ class _MessageViewState extends State<MessageView> {
               final schoolName = (_settings?.selectedSchool?.name ?? '').toLowerCase();
 
               bool isMatch = false;
-              if (schoolCode.isNotEmpty) {
-                isMatch = docSchoolCode == schoolCode || docId.toLowerCase().startsWith('${schoolCode}_');
+              if (isDemoMatch) {
+                isMatch = docSchoolCode == 'demo' || docSchoolName.contains('데모') || docId.toLowerCase().startsWith('demo');
+              } else {
+                if (schoolCode.isNotEmpty) {
+                  isMatch = docSchoolCode == schoolCode || docId.toLowerCase().startsWith('${schoolCode}_');
+                }
+                if (!isMatch && schoolId.isNotEmpty) {
+                  isMatch = docSchoolCode == schoolId || docId.toLowerCase().startsWith('${schoolId}_');
+                }
+                if (!isMatch && schoolName.isNotEmpty && docSchoolName.isNotEmpty) {
+                  isMatch = docSchoolName == schoolName;
+                }
+                if (!isMatch && connName.isNotEmpty) {
+                  isMatch = docId.toLowerCase().startsWith('${connName}_');
+                }
               }
-              if (!isMatch && schoolId.isNotEmpty) {
-                isMatch = docSchoolCode == schoolId || docId.toLowerCase().startsWith('${schoolId}_');
-              }
-              if (!isMatch && schoolName.isNotEmpty && docSchoolName.isNotEmpty) {
-                isMatch = docSchoolName == schoolName;
-              }
-              if (!isMatch && connName.isNotEmpty) {
-                isMatch = docId.toLowerCase().startsWith('${connName}_');
-              }
-              if (!isMatch) return; // 다른 학교 교실 제외
+              if (!isMatch) return;
 
               // 온라인 여부 확인: isOnline=true 및 최근 5분 이내 하트비트 필수
               if (val['isOnline'] != true) return;
@@ -172,6 +188,24 @@ class _MessageViewState extends State<MessageView> {
       } catch (_) {}
 
       // RTDB 결과만 사용 (Cloudflare Worker 및 Firestore 100건 폴백 제거로 0 Firestore Reads 달성)
+
+      // 데모 모드인데 실시간 온라인 기기가 아직 없으면 9개 데모 학급을 상시 노출하여 시연/쪽지 발송 보장
+      final isDemoActive = AppConfig.isDemoMode || connName == 'demo';
+      if (isDemoActive && parsed.isEmpty) {
+        for (int g = 1; g <= 3; g++) {
+          for (int c = 1; c <= 3; c++) {
+            parsed.add({
+              'docId': 'demo_1_${g}_$c',
+              'cafeteria': '1',
+              'grade': g,
+              'class': c,
+              'nickname': '$g학년 $c반 (데모)',
+              'isOnline': true,
+              'lastActive': DateTime.now().millisecondsSinceEpoch,
+            });
+          }
+        }
+      }
 
       // 동일 학급(2학년 1반 등) 중복 접속 시 최신 1개만 단일 병합 (중복 제거)
       final Map<String, Map<String, dynamic>> dedupMap = {};
@@ -264,6 +298,21 @@ class _MessageViewState extends State<MessageView> {
             if (res.statusCode >= 200 && res.statusCode < 300) {
               sent = true;
             }
+          } catch (_) {}
+        }(),
+        // 데모 모드일 경우 demo.json 공통 토픽에도 동시 발송하여 모든 데모 교실에 즉각 전달 보장
+        if (_getSchoolConnName() == 'demo' || AppConfig.isDemoMode) () async {
+          try {
+            final demoAllUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/demo.json';
+            await http.patch(
+              Uri.parse(demoAllUrl),
+              headers: {"Content-Type": "application/json"},
+              body: json.encode({
+                'message': text,
+                'messageFrom': senderName,
+                'messageSentAt': nowIso,
+              }),
+            ).timeout(const Duration(seconds: 3));
           } catch (_) {}
         }(),
       ]);

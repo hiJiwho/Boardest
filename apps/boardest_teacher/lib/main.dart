@@ -172,18 +172,24 @@ void main(List<String> args) async {
   if (kIsWeb) {
     final uri = Uri.base;
     final q = uri.queryParameters['Demo'] ?? uri.queryParameters['demo'];
-    if (q?.toLowerCase() == 'yes') {
+    if (q?.toLowerCase() == 'yes' || q == '1' || q?.toLowerCase() == 'true') {
+      AppConfig.isDemoMode = true;
+      await prefs.setBool('bst_persisted_demo', true);
+    } else if (q == '0' || q?.toLowerCase() == 'false' || q?.toLowerCase() == 'no') {
+      AppConfig.isDemoMode = false;
+      await prefs.remove('bst_persisted_demo');
+    } else if (prefs.getBool('bst_persisted_demo') == true || currentEmailCheck.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) {
       AppConfig.isDemoMode = true;
     }
-  } else if (hasExplicitDemoArg) {
+  } else if (hasExplicitDemoArg || prefs.getBool('bst_persisted_demo') == true || currentEmailCheck.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) {
     AppConfig.isDemoMode = true;
   } else {
     AppConfig.isDemoMode = false;
   }
 
-  // 실사용 환경에서 과거 잔류 데모 세션(이수학 등) 완전 소각
-  if (!AppConfig.isDemoMode && currentEmailCheck.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) {
-    debugPrint('[main.dart] 🧹 Wiping legacy demo teacher session (이수학) from disk & prefs...');
+  // 데모 계정이 아닌 일반 환경에서만 옛 레거시 더미 데이터 정리
+  if (!AppConfig.isDemoMode && currentEmailCheck.toLowerCase().startsWith('demo_') && currentEmailCheck.toLowerCase().endsWith('@boardest.com')) {
+    debugPrint('[main.dart] 🧹 Wiping legacy dummy demo session from disk & prefs...');
     await prefs.remove('bst_google_user_email');
     await prefs.remove('bst_user_email');
     await prefs.remove('bst_google_user_name');
@@ -195,10 +201,10 @@ void main(List<String> args) async {
   }
 
   if (AppConfig.isDemoMode) {
-    // 1. 데모 모드: 9개 반(1-1~1-3, 2-1~2-3, 3-1~3-3) 및 9명 교사 완전 순환 배정
+    // 1. 데모 모드: 9개 반(1-1~1-3, 2-1~2-3, 3-1~3-3) 및 9명 교사 완전 순환 배정 (01=김도덕/도덕, 02=이수학/수학)
     final demoTeachers = [
-      (name: '김국어', subject: '국어', grade: 1, classNum: 1, shortId: '11'),
-      (name: '이수학', subject: '수학', grade: 1, classNum: 2, shortId: '12'),
+      (name: '김윤리', subject: '도덕', grade: 1, classNum: 1, shortId: '11'),
+      (name: '이도형', subject: '수학', grade: 1, classNum: 2, shortId: '12'),
       (name: '박영어', subject: '영어', grade: 1, classNum: 3, shortId: '13'),
       (name: '최과학', subject: '과학', grade: 2, classNum: 1, shortId: '14'),
       (name: '정사회', subject: '사회', grade: 2, classNum: 2, shortId: '15'),
@@ -211,10 +217,10 @@ void main(List<String> args) async {
     int teacherSlot = 0;
     // 특정 데모 계정(01, 02 등) 우선 매핑
     final activeEmail = currentEmailCheck.toLowerCase();
-    if (activeEmail.startsWith('01@') || activeEmail.contains('teacher-demo.753210.xyz') && activeEmail.startsWith('01')) {
-      teacherSlot = 0; // 김국어 (1-1 담임)
-    } else if (activeEmail.startsWith('02@') || activeEmail.contains('teacher-demo.753210.xyz') && activeEmail.startsWith('02')) {
-      teacherSlot = 1; // 이수학 (1-2 담임)
+    if (activeEmail.startsWith('01@') || (activeEmail.contains('teacher-demo.753210.xyz') && activeEmail.startsWith('01'))) {
+      teacherSlot = 0; // 김윤리 (도덕, 1-1 담임)
+    } else if (activeEmail.startsWith('02@') || (activeEmail.contains('teacher-demo.753210.xyz') && activeEmail.startsWith('02'))) {
+      teacherSlot = 1; // 이도형 (수학, 1-2 담임)
     } else {
       var deviceId = prefs.getString('bst_demo_device_uuid');
       if (deviceId == null || deviceId.isEmpty) {
@@ -415,7 +421,24 @@ void main(List<String> args) async {
     }
   }
 
-  final settings = await storage.loadConfigAndSync();
+  var settings = await storage.loadConfigAndSync();
+
+  // 교사 윈도우/데스크톱/웹 자동 로그인 세션 자동 복원 (기억했다가 재실행 시 즉시 자동 로그인)
+  final savedEmail = prefs.getString('bst_google_user_email') ?? prefs.getString('bst_user_email') ?? CloudDriveService.instance.userEmail ?? '';
+  final savedName = prefs.getString('bst_google_user_name') ?? prefs.getString('bst_user_name') ?? CloudDriveService.instance.userName ?? '';
+  final savedSchool = prefs.getString('bst_school_name') ?? CloudDriveService.instance.schoolName ?? '';
+  if (savedEmail.isNotEmpty && (!settings.isSetupComplete || settings.selectedSchool == null)) {
+    final sName = savedSchool.isNotEmpty ? savedSchool : (AppConfig.isDemoMode ? '데모중학교' : '양동중학교');
+    final sCode = AppConfig.isDemoMode ? 11111 : 44134;
+    final school = School(id: sCode, code: sCode, name: sName, region: '서울');
+    settings = settings.copyWith(
+      selectedSchool: school,
+      schoolId: settings.schoolId.isNotEmpty ? settings.schoolId : (AppConfig.isDemoMode ? 'Demo' : '44134'),
+      selectedTeacherName: savedName.isNotEmpty ? savedName : settings.selectedTeacherName,
+      isSetupComplete: true,
+    );
+    await storage.saveSettings(settings);
+  }
 
   if (!kIsWeb && Platform.isWindows) {
     try {

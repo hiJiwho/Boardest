@@ -49,14 +49,13 @@ class _TimetableViewState extends State<TimetableView>
   @override
   void initState() {
     super.initState();
-    _weekdayTabController = TabController(length: 5, vsync: this);
+    _weekdayTabController = TabController(length: 7, vsync: this);
     _showCalendarView = widget.initialShowCalendar;
     _calendarMonth = DateTime.now();
 
-    // Set weekday to current day if Mon-Fri, else Monday
     final today = DateTime.now().weekday;
-    _selectedWeekday = (today >= 1 && today <= 5) ? today : 1;
-    _weekdayTabController.index = _selectedWeekday - 1;
+    _selectedWeekday = (today >= 1 && today <= 7) ? today : 1;
+    _weekdayTabController.index = (_selectedWeekday - 1).clamp(0, 6);
 
     _loadSavedPreferencesAndFetch();
   }
@@ -848,12 +847,19 @@ class _TimetableViewState extends State<TimetableView>
     );
   }
 
-  /// Weekly Grid Schedule View
+  /// Weekly Grid Schedule View (주말 수업 있으면 7열 지원)
   Widget _buildWeekViewGrid() {
-    final weekdays = ['월', '화', '수', '목', '금'];
+    final hasWeekend = _getLessonsForDay(6).isNotEmpty || _getLessonsForDay(7).isNotEmpty;
+    final maxDays = hasWeekend ? 7 : 5;
+    final weekdays = hasWeekend ? ['월', '화', '수', '목', '금', '토', '일'] : ['월', '화', '수', '목', '금'];
     final Map<int, List<Lesson>> dayLessons = {};
-    for (int d = 1; d <= 5; d++) {
+    for (int d = 1; d <= maxDays; d++) {
       dayLessons[d] = _getLessonsForDay(d);
+    }
+
+    final colWidths = <int, TableColumnWidth>{0: const FixedColumnWidth(45)};
+    for (int d = 1; d <= maxDays; d++) {
+      colWidths[d] = const FlexColumnWidth();
     }
 
     return LayoutBuilder(
@@ -866,21 +872,14 @@ class _TimetableViewState extends State<TimetableView>
             physics: const BouncingScrollPhysics(),
             child: Container(
               padding: const EdgeInsets.all(16.0),
-              width: constraints.maxWidth > 600 ? constraints.maxWidth : 600,
+              width: constraints.maxWidth > (hasWeekend ? 760 : 600) ? constraints.maxWidth : (hasWeekend ? 760 : 600),
               child: Table(
                 border: TableBorder.all(
                   color: Colors.white10,
                   width: 1,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                columnWidths: const {
-                  0: FixedColumnWidth(45), // Period column
-                  1: FlexColumnWidth(), // Mon
-                  2: FlexColumnWidth(), // Tue
-                  3: FlexColumnWidth(), // Wed
-                  4: FlexColumnWidth(), // Thu
-                  5: FlexColumnWidth(), // Fri
-                },
+                columnWidths: colWidths,
                 children: [
                   // Weekdays Header Row
                   TableRow(
@@ -1008,9 +1007,9 @@ class _TimetableViewState extends State<TimetableView>
     );
   }
 
-  /// Day View with tab selectors
+  /// Day View with tab selectors (월~일 7일 전체 지원)
   Widget _buildDayViewTabs() {
-    final weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일'];
+    final weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
 
     return Column(
       children: [
@@ -1032,7 +1031,7 @@ class _TimetableViewState extends State<TimetableView>
           child: TabBarView(
             controller: _weekdayTabController,
             physics: const BouncingScrollPhysics(),
-            children: List.generate(5, (index) {
+            children: List.generate(7, (index) {
               final weekday = index + 1;
               final lessons = _getLessonsForDay(weekday);
 

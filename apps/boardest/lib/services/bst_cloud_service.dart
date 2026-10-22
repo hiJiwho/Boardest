@@ -285,8 +285,8 @@ class BstCloudService {
 
     // 데모 교사 9명 내장 등록 (Firestore 미동기화 및 데모 모드 접속 100% 보장)
     final demoPresets = [
-      (name: '김국어', subject: '국어', grade: 1, classNum: 1, shortId: '11', cloudId: '11', email: '01@boardest-teacher-demo.753210.xyz'),
-      (name: '이수학', subject: '수학', grade: 1, classNum: 2, shortId: '12', cloudId: '12', email: '02@boardest-teacher-demo.753210.xyz'),
+      (name: '김윤리', subject: '도덕', grade: 1, classNum: 1, shortId: '11', cloudId: '11', email: '01@boardest-teacher-demo.753210.xyz'),
+      (name: '이도형', subject: '수학', grade: 1, classNum: 2, shortId: '12', cloudId: '12', email: '02@boardest-teacher-demo.753210.xyz'),
       (name: '박영어', subject: '영어', grade: 1, classNum: 3, shortId: '13', cloudId: '13', email: '13@boardest-teacher-demo.753210.xyz'),
       (name: '최과학', subject: '과학', grade: 2, classNum: 1, shortId: '14', cloudId: '14', email: '14@boardest-teacher-demo.753210.xyz'),
       (name: '정사회', subject: '사회', grade: 2, classNum: 2, shortId: '15', cloudId: '15', email: '15@boardest-teacher-demo.753210.xyz'),
@@ -1203,46 +1203,22 @@ class BstCloudService {
   List<BstCloudFile> getDemoCloudDriveFiles() {
     return [
       BstCloudFile(
-        id: 'demo_pdf_01',
-        name: '수학I_03단원_삼각함수_핵심요약.pdf',
+        id: 'demo_math_trigonometry_summary.pdf',
+        name: '수학I_삼각함수_핵심요약.pdf',
         mimeType: 'application/pdf',
-        size: 3420000,
+        size: 2067,
       ),
       BstCloudFile(
-        id: 'demo_pptx_01',
-        name: '2026_수학I_모의고사_기출분석.pptx',
-        mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        size: 8940000,
-      ),
-      BstCloudFile(
-        id: 'demo_hwpx_01',
-        name: '삼각함수그래프와활용_교수학습지도안.hwpx',
-        mimeType: 'application/x-hwp',
-        size: 1450000,
-      ),
-      BstCloudFile(
-        id: 'demo_tbp_01',
-        name: '[전자교과서] 고등_수학I_비상교육_정규본.tbp',
-        mimeType: 'application/x-bst-tbp-folder',
-        size: 45200000,
-      ),
-      BstCloudFile(
-        id: 'demo_canva_01',
-        name: '[HTMLP] 함수의극한과연속_인터랙티브_수업슬라이드.canva',
-        mimeType: 'application/x-bst-canva',
-        size: 3120000,
-      ),
-      BstCloudFile(
-        id: 'demo_pen_01',
-        name: '10월19일_수학_3교시_판서노트.pen',
-        mimeType: 'application/octet-stream',
-        size: 5120000,
-      ),
-      BstCloudFile(
-        id: 'demo_pdf_02',
-        name: '인공지능수학_특강보조자료.pdf',
+        id: 'demo_english_unit3_reading.pdf',
+        name: '영어_Unit3_본문학습지.pdf',
         mimeType: 'application/pdf',
-        size: 4210000,
+        size: 1375,
+      ),
+      BstCloudFile(
+        id: 'demo_science_matter_properties.pdf',
+        name: '과학_물질의특성_정리.pdf',
+        mimeType: 'application/pdf',
+        size: 1377,
       ),
     ];
   }
@@ -1371,9 +1347,9 @@ class BstCloudService {
       debugPrint('[BstCloudService] fetch myDriveFiles error: $e');
     }
 
-    // 만약 실제 Drive에 파일이 하나도 없다면, 빈 화면 대신 데모 교안 샘플을 반환하여 즉시 활용 가능하도록 함
-    if (results.isEmpty || _hasAuthError) {
-      return getDemoCloudDriveFiles();
+    // 만약 실제 Drive에 파일이 하나도 없다면 실제 파일 목록(빈 리스트)을 반환 (더미 파일 누출 방지)
+    if (_hasAuthError) {
+      return isDemoOrVirtual ? getDemoCloudDriveFiles() : [];
     }
 
     return results;

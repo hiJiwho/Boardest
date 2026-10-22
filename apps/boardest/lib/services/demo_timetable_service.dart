@@ -2,7 +2,7 @@ import '../models/lesson.dart';
 
 class DemoTimetableService {
   static const List<String> subjects = [
-    '국어',
+    '도덕',
     '수학',
     '영어',
     '과학',
@@ -14,8 +14,8 @@ class DemoTimetableService {
   ];
 
   static const List<String> teachers = [
-    '김국어',
-    '이수학',
+    '김윤리',
+    '이도형',
     '박영어',
     '최과학',
     '정사회',

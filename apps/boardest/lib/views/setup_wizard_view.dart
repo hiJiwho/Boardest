@@ -2865,28 +2865,34 @@ class _SetupWizardViewState extends State<SetupWizardView> {
                           border: Border.all(color: const Color(0xFF2EC4B6).withValues(alpha: 0.5)),
                         ),
                         child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _comciganTeachers.toSet().contains(_selectedTeacherDropdown)
-                                ? _selectedTeacherDropdown
-                                : (_comciganTeachers.isNotEmpty ? _comciganTeachers.first : null),
-                            isExpanded: true,
-                            dropdownColor: const Color(0xFF16161A),
-                            items: _comciganTeachers.where((t) => t.trim().isNotEmpty).toSet().map((t) {
-                              return DropdownMenuItem<String>(
-                                value: t,
-                                child: Text(
-                                  '선생님: $t',
-                                  style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14 * scale),
-                                ),
-                              );
-                            }).toList(),
+                          child: Builder(
+                            builder: (context) {
+                              final validTeachers = _comciganTeachers.where((t) => t.trim().isNotEmpty).toSet().toList();
+                              final effectiveVal = validTeachers.contains(_selectedTeacherDropdown)
+                                  ? _selectedTeacherDropdown
+                                  : (validTeachers.isNotEmpty ? validTeachers.first : null);
+                              return DropdownButton<String>(
+                                value: effectiveVal,
+                                isExpanded: true,
+                                dropdownColor: const Color(0xFF16161A),
+                                items: validTeachers.map((t) {
+                                  return DropdownMenuItem<String>(
+                                    value: t,
+                                    child: Text(
+                                      '선생님: $t',
+                                      style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14 * scale),
+                                    ),
+                                  );
+                                }).toList(),
                             onChanged: (val) {
                               if (val != null) {
                                 setState(() => _selectedTeacherDropdown = val);
                               }
                             },
-                          ),
-                        ),
+                          );
+                        },
+                      ),
+                    ),
                       ),
                       SizedBox(height: 16 * scale),
                       SizedBox(

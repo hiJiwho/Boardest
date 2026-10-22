@@ -24,11 +24,11 @@ class TimetableResult {
 
   /// 데모 전용 시간표 생성 (교실 9개: 1-1~1-3, 2-1~2-3, 3-1~3-3 / 교사 9명 / 하루 안에서 교사 수업 절대 안 겹치게 완전 순환)
   static TimetableResult generateDemo(String teacherName, {int homeroomGrade = 1, int homeroomClass = 1}) {
-    final effectiveName = teacherName.isNotEmpty ? teacherName : '김국어';
+    final effectiveName = teacherName.isNotEmpty ? teacherName : '김윤리';
 
     final teachers = [
-      effectiveName, // 0: 국어 (01 계정 기본 교사)
-      '이수학',       // 1: 수학 (02 계정 기본 교사)
+      '김윤리',       // 0: 도덕 (01 계정 기본 교사)
+      '이도형',       // 1: 수학 (02 계정 기본 교사)
       '박영어',       // 2: 영어
       '최과학',       // 3: 과학
       '정사회',       // 4: 사회
@@ -38,7 +38,29 @@ class TimetableResult {
       '조미술',       // 8: 미술
     ];
 
-    final subjects = ['국어', '수학', '영어', '과학', '사회', '역사', '음악', '체육', '미술'];
+    final subjects = ['도덕', '수학', '영어', '과학', '사회', '역사', '음악', '체육', '미술'];
+
+    int targetSlot = 0;
+    if (effectiveName.contains('수학') || effectiveName == '이수학' || effectiveName == '이도형') {
+      targetSlot = 1;
+    } else if (effectiveName.contains('영어') || effectiveName == '박영어') {
+      targetSlot = 2;
+    } else if (effectiveName.contains('과학') || effectiveName == '최과학') {
+      targetSlot = 3;
+    } else if (effectiveName.contains('사회') || effectiveName == '정사회') {
+      targetSlot = 4;
+    } else if (effectiveName.contains('역사') || effectiveName == '강역사') {
+      targetSlot = 5;
+    } else if (effectiveName.contains('음악') || effectiveName == '송음악') {
+      targetSlot = 6;
+    } else if (effectiveName.contains('체육') || effectiveName == '윤체육') {
+      targetSlot = 7;
+    } else if (effectiveName.contains('미술') || effectiveName == '조미술') {
+      targetSlot = 8;
+    } else {
+      targetSlot = 0;
+    }
+    teachers[targetSlot] = effectiveName;
 
     // 9개 학급: 1학년 1~3반, 2학년 1~3반, 3학년 1~3반
     final classList = <({int grade, int classNum})>[
@@ -56,7 +78,7 @@ class TimetableResult {
     final lessons = <Lesson>[];
 
     // 라틴 방진 순환: 어떤 요일, 어떤 교시에서도 9개 반에 9명의 교사가 정확히 1:1로 들어가 하루 동안 절대 겹치지 않음!
-    for (int day = 1; day <= 5; day++) {
+    for (int day = 1; day <= 7; day++) {
       for (int p = 1; p <= 7; p++) {
         for (int k = 0; k < classList.length; k++) {
           final cInfo = classList[k];

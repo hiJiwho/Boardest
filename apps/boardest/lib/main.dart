@@ -47,9 +47,21 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main(List<String> args) async {
   // Catch all unhandled Flutter errors
   FlutterError.onError = (FlutterErrorDetails details) {
+    final errStr = details.exceptionAsString();
+    if (errStr.contains('RenderFlex overflowed')) {
+      return; // Ignore benign layout pixel overflows
+    }
     FlutterError.presentError(details);
     debugPrint('[Boardest Fatal] Unhandled Flutter Error: ${details.exception}');
     NativeStartupHelper.writeCrashLog('FlutterError: ${details.exception}', details.stack?.toString() ?? 'No stacktrace');
+  };
+
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    debugPrint('[Boardest ErrorWidget] Handled UI Exception: ${details.exception}');
+    return const Material(
+      color: Colors.transparent,
+      child: Center(child: SizedBox.shrink()),
+    );
   };
 
   // Catch all unhandled platform/async errors

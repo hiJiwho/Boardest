@@ -89,6 +89,7 @@ class DemoClassAllocatorService {
     final newSettings = currentSettings.copyWith(
       selectedSchool: demoSchool,
       schoolId: 'Demo',
+      connectionName: 'Demo',
       selectedGrade: randomGrade,
       selectedClass: randomClass,
       specialClassroomMode: false,

@@ -900,14 +900,19 @@ class CloudDriveService with ChangeNotifier {
   }
 
   Future<bool> _executeRefreshAccessToken({bool force = false}) async {
-    if ((_userEmail != null && _userEmail!.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) ||
-        (_accessToken != null && _accessToken!.startsWith('demo_token') && (_refreshToken == null || _refreshToken!.isEmpty))) {
+    final prefs = await SharedPreferences.getInstance();
+    _userEmail ??= prefs.getString(_userEmailKey) ?? prefs.getString('bst_user_email') ?? prefs.getString('email');
+    _accessToken ??= prefs.getString(_tokenKey) ?? prefs.getString('bst_google_access_token');
+    _refreshToken ??= prefs.getString(_refreshTokenKey);
+
+    final isDemo = AppConfig.isDemoMode ||
+        (_userEmail != null && _userEmail!.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) ||
+        (_accessToken != null && _accessToken!.startsWith('demo_token'));
+    if (isDemo) {
+      _hasAuthError = false;
       return true;
     }
     try {
-      final prefs = await SharedPreferences.getInstance();
-      _userEmail ??= prefs.getString(_userEmailKey) ?? prefs.getString('bst_user_email') ?? prefs.getString('email');
-      _refreshToken ??= prefs.getString(_refreshTokenKey);
 
       // 1. Fetch latest refreshToken / accessToken from Firestore teacher_cloud_tokens
       String? firestoreAccessToken;

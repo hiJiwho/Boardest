@@ -1494,8 +1494,9 @@ class _TeacherViewState extends State<TeacherView> {
       return;
     }
     final weekday = _now.weekday;
-    final isWeekend = weekday == 6 || weekday == 7;
-    final displayDay = isWeekend ? 1 : weekday;
+    // 수업이 있으면 주말(토:6, 일:7)도 당일 시간표 즉시 표시, 없으면 월요일(1) 폴백
+    final hasLessonsToday = (_timetableResult?.lessons ?? []).any((l) => l.weekday == weekday && _isTeacherMatch(l.teacher));
+    final displayDay = hasLessonsToday ? weekday : ((weekday == 6 || weekday == 7) ? 1 : weekday);
     final targetPeriod = _nextPeriod ?? _currentPeriod ?? 1;
 
     final teacherLesson = (_timetableResult?.lessons ?? []).firstWhere(
@@ -2864,14 +2865,21 @@ class _TeacherViewState extends State<TeacherView> {
 
     return Container(
         decoration: BoxDecoration(
-          color: _surfaceColor,
+          color: const Color(0xFF141721).withOpacity(0.92),
           borderRadius: BorderRadius.circular(20 * s),
-          border: Border.all(color: _borderColor),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.4),
+              blurRadius: 16 * s,
+              offset: Offset(0, 4 * s),
+            ),
+          ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20 * s),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
             child: Padding(
               padding: EdgeInsets.all(14 * s),
               child: Column(
@@ -2882,23 +2890,23 @@ class _TeacherViewState extends State<TeacherView> {
                       Container(
                         padding: EdgeInsets.all(4 * s),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2EC4B6).withOpacity(0.15),
+                          color: const Color(0xFF00F5D4).withOpacity(0.18),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
                           Icons.person_rounded,
-                          color: const Color(0xFF2EC4B6),
+                          color: const Color(0xFF00F5D4),
                           size: 14 * s,
                         ),
                       ),
                       SizedBox(width: 6 * s),
                       Expanded(
                         child: Text(
-                          '$teacherDisplayName 선생님 (${isWeekend ? '월' : _getKoreanWeekday(weekday)})',
+                          '$teacherDisplayName 선생님 (${_getKoreanWeekday(displayDay)})',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.notoSansKr(
-                            color: _textColor,
+                            color: Colors.white,
                             fontSize: 12 * s,
                             fontWeight: FontWeight.bold,
                           ),
@@ -2946,13 +2954,13 @@ class _TeacherViewState extends State<TeacherView> {
                             padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
                             decoration: BoxDecoration(
                               color: isCurrent
-                                  ? const Color(0xFF2EC4B6).withOpacity(0.12)
-                                  : _cardColor,
+                                  ? const Color(0xFF00F5D4).withOpacity(0.16)
+                                  : Colors.white.withOpacity(0.04),
                               borderRadius: BorderRadius.circular(10 * s),
                               border: Border.all(
                                 color: isCurrent
-                                    ? const Color(0xFF2EC4B6).withOpacity(0.5)
-                                    : _borderColor,
+                                    ? const Color(0xFF00F5D4).withOpacity(0.45)
+                                    : Colors.white.withOpacity(0.08),
                               ),
                             ),
                             child: Row(
@@ -2961,14 +2969,14 @@ class _TeacherViewState extends State<TeacherView> {
                                   width: 20 * s,
                                   height: 20 * s,
                                   decoration: BoxDecoration(
-                                    color: isCurrent ? const Color(0xFF2EC4B6) : _borderColor,
+                                    color: isCurrent ? const Color(0xFF00F5D4) : Colors.white.withOpacity(0.12),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Center(
                                     child: Text(
                                       '$period',
                                       style: GoogleFonts.outfit(
-                                        color: isCurrent ? Colors.black : _textColor54,
+                                        color: isCurrent ? Colors.black : Colors.white70,
                                         fontSize: 10 * s,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -2980,7 +2988,7 @@ class _TeacherViewState extends State<TeacherView> {
                                   child: Text(
                                     hasClass ? lesson.subject.replaceAll('*', '') : '— (공강)',
                                     style: GoogleFonts.notoSansKr(
-                                      color: hasClass ? _textColor : _textColor24,
+                                      color: hasClass ? Colors.white : Colors.white30,
                                       fontSize: 14.5 * s,
                                       fontWeight: hasClass ? FontWeight.w900 : FontWeight.normal,
                                     ),
@@ -2990,7 +2998,7 @@ class _TeacherViewState extends State<TeacherView> {
                                   Text(
                                     '${lesson.grade}-${lesson.classNum}반',
                                     style: GoogleFonts.notoSansKr(
-                                      color: const Color(0xFF2EC4B6),
+                                      color: const Color(0xFF00F5D4),
                                       fontSize: 10 * s,
                                       fontWeight: FontWeight.w600,
                                     ),

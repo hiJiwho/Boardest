@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../models/app_settings.dart';
+import '../config/app_config.dart';
 import 'storage_service.dart';
 
 class MealCallService {
@@ -301,6 +302,15 @@ class MealCallService {
 
   String get _documentId {
     if (_currentSettings == null) return '';
+    final isDemoMode = AppConfig.isDemoMode ||
+        _currentSettings!.schoolId.toLowerCase() == 'demo' ||
+        _currentSettings!.connectionName.toLowerCase() == 'demo' ||
+        (_currentSettings!.selectedSchool?.name.contains('데모') ?? false);
+    if (isDemoMode) {
+      final grade = _currentSettings!.selectedGrade;
+      final classNum = _currentSettings!.selectedClass;
+      return 'demo_1_${grade}_$classNum';
+    }
     final code = _currentSettings!.selectedSchool?.code.toString() ?? '';
     final schoolId = _currentSettings!.schoolId.trim();
     String connName = schoolId.isNotEmpty ? schoolId : _currentSettings!.connectionName;
@@ -366,8 +376,12 @@ class MealCallService {
       }
       connName = connName.toLowerCase();
 
-      final schoolName = _currentSettings!.selectedSchool?.name ?? connName;
-      final schoolCode = connName;
+      final isDemoMode = AppConfig.isDemoMode ||
+          _currentSettings!.schoolId.toLowerCase() == 'demo' ||
+          _currentSettings!.connectionName.toLowerCase() == 'demo' ||
+          (_currentSettings!.selectedSchool?.name.contains('데모') ?? false);
+      final schoolName = isDemoMode ? '데모중학교' : (_currentSettings!.selectedSchool?.name ?? connName);
+      final schoolCode = isDemoMode ? 'demo' : connName;
       final place = _currentSettings!.selectedSchool?.region ?? "연결";
       final classNickname = _currentSettings!.classNickname.isNotEmpty 
           ? _currentSettings!.classNickname 
