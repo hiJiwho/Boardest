@@ -300,17 +300,16 @@ class BstCloudService {
         final sec = TotpService.generateDeterministicSecret(dp.email);
         teachers.add(BstCloudTeacher(
           ownerEmail: dp.email,
-          name: dp.name,
+          teacherName: dp.name,
           school: '데모중학교',
           schoolId: 'Demo',
-          subject: dp.subject,
-          grade: dp.grade,
-          classNum: dp.classNum,
+          folderId: 'demo_folder_${dp.shortId}',
+          bstCloudFolderId: 'demo_cloud_${dp.shortId}',
+          bstPenFolderId: 'demo_pen_${dp.shortId}',
           shortId: dp.shortId,
           cloudId: dp.cloudId,
           totpSecret: sec,
           directAccessToken: 'demo_token_teacher_${dp.shortId}',
-          driveConnected: true,
         ));
       }
     }
