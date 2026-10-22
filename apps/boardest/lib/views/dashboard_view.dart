@@ -3340,6 +3340,10 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
   Future<void> _exitDemoMode() async {
     AppConfig.isDemoMode = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('bst_persisted_demo');
+    } catch (_) {}
     final clearedSettings = _settings.copyWith(
       isSetupComplete: false,
       schoolId: '',
@@ -4648,11 +4652,16 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
     final effectiveDpiScale = AppPaths.adaptiveUiScale(context, _settings.scaleFactor);
 
-    final dashboardScaffold = MediaQuery(
-      data: MediaQuery.of(
-        context,
-      ).copyWith(textScaler: TextScaler.linear(effectiveDpiScale.clamp(0.5, 4.0))),
-      child: Scaffold(
+    final dashboardScaffold = PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        // Root route must not pop on desktop to prevent accidental app shutdown
+      },
+      child: MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(effectiveDpiScale.clamp(0.5, 4.0))),
+        child: Scaffold(
         backgroundColor: const Color(0xFF06100E),
         body: Stack(
           children: [
@@ -4911,7 +4920,29 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 },
                 onCloseTap: () async {
                   if (!kIsWeb && Platform.isWindows) {
-                    await windowManager.close();
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        backgroundColor: const Color(0xFF16161A),
+                        title: const Text('앱 종료', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        content: const Text('Boardest 앱을 종료하시겠습니까?', style: TextStyle(color: Colors.white70)),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4565)),
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('종료', style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      try {
+                        await windowManager.close();
+                      } catch (_) {
+                        exit(0);
+                      }
+                    }
                   }
                 },
                 onLogoTap: _openWeeklyTimetable,
@@ -4940,6 +4971,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           ],
         ),
       ),
+    ),
     );
 
     // Web 전용 가상 16:9 / 4:3 캔버스 래퍼 (화면 크기/비율에 관계없이 정확한 화면 비율 유지)
@@ -12187,7 +12219,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
               });
 
               if (ctx.mounted) Navigator.of(ctx).pop();
-              if (mounted) Navigator.of(context).pop();
             },
             child: const Text(
               '등록',

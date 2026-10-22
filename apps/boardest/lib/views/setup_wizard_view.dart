@@ -212,7 +212,7 @@ class _SetupWizardViewState extends State<SetupWizardView> {
   Future<void> _startClassTeacherGoogleLogin() async {
     if (kIsWeb) {
       final returnUrl = Uri.encodeComponent(Uri.base.toString());
-      final oauthUrl = Uri.parse('https://boardest-cloud-connect.web.app/?target=web&return_url=$returnUrl');
+      final oauthUrl = Uri.parse('https://boardest-teacher-oauth.web.app/?target=web&return_url=$returnUrl');
       await launchUrl(oauthUrl, webOnlyWindowName: '_self');
       return;
     }
@@ -314,7 +314,7 @@ class _SetupWizardViewState extends State<SetupWizardView> {
         }
       });
 
-      final oauthUrl = Uri.parse('https://boardest-cloud-connect.web.app/?target=win&port=$port');
+      final oauthUrl = Uri.parse('https://boardest-teacher-oauth.web.app/?target=win&port=$port');
       if (await canLaunchUrl(oauthUrl)) {
         await launchUrl(oauthUrl, mode: LaunchMode.externalApplication);
       }
@@ -658,6 +658,10 @@ class _SetupWizardViewState extends State<SetupWizardView> {
     setState(() => _isLoading = true);
     try {
       AppConfig.isDemoMode = true;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('bst_persisted_demo', true);
+      } catch (_) {}
       final current = _existingSettings ?? AppSettings();
       final demoSettings = await DemoClassAllocatorService.instance.allocateDemoSettings(current);
       await _storageService.saveSettings(demoSettings);

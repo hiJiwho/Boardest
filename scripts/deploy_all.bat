@@ -1,8 +1,8 @@
 @echo off
 setlocal
 cd /d "%~dp0.."
-set "VERSION=4.2.4"
-set "APPX_VERSION=4.2.4.0"
+set "VERSION=5.0.4"
+set "APPX_VERSION=5.0.4.0"
 set "PROJECT=jiwhosboardest"
 
 echo [1/7] Building Boardest and Teacher web releases...
@@ -41,8 +41,8 @@ goto :native_build_done
 echo [3/7] Windows and all Android builds already passed; using their artifacts.
 :native_build_done
 
-echo [5/7] Deploying all Firebase Hosting sites...
-call firebase.cmd deploy --only hosting --project %PROJECT% || goto :fail
+echo [5/7] Deploying Firebase Hosting and Security Rules...
+call firebase.cmd deploy --only hosting,firestore:rules,database --project %PROJECT% || goto :fail
 
 echo [6/7] Committing and pushing complete source to GitHub...
 for %%E in (appx msi apk cer zip) do for /f "delims=" %%F in ('git ls-files "infra/download_web/*.%%E"') do git rm --cached --ignore-unmatch -- "%%F" || goto :fail

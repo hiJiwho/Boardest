@@ -400,7 +400,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                           ),
                           const SizedBox(width: 10),
                           Text(
-                            '🚀 새 버전(${UpdateService.latestVersion ?? '5.0.2'}) 백그라운드 다운로드 중... ($pct%)',
+                            '🚀 새 버전(${UpdateService.latestVersion ?? '5.0.4'}) 백그라운드 다운로드 중... ($pct%)',
                             style: _ts(12, w: FontWeight.w900, c: Colors.black),
                           ),
                           const Spacer(),
@@ -775,7 +775,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(color: const Color(0xFF00F5D4), width: 0.8),
                       ),
-                      child: Text('V.5.0.2', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
+                      child: Text('V.5.0.4', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
                     ),
                     if (!kIsWeb) ...[
                       const SizedBox(width: 3),
@@ -2245,7 +2245,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
   /// [쉬는 시간용] 급식 대신 노출되는 대형 업데이트 필요 알림 카드
   Widget _updateRequiredCard() {
     final isWin = !kIsWeb && Platform.isWindows;
-    final ver = UpdateService.latestVersion ?? '5.0.2';
+    final ver = UpdateService.latestVersion ?? '5.0.4';
 
     return _glassSurface(
       padding: const EdgeInsets.all(28),
@@ -3707,17 +3707,10 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                             final isResultTime = _isMealVoteResultTimeNow();
 
                             return InkWell(
-                              onTap: () async {
-                                // 당일 것만 점심시간 5분 전까지 투표 가능 (한 번만 눌러도 1표 증가)
-                                if (today && _isMealVoteTimeNow()) {
-                                  await widget.onMealVote?.call(d.name);
-                                  if (context.mounted) setState(() {});
-                                } else {
-                                  _showDishFullDetailDialog(context, d, isToday: today);
-                                }
+                              onTap: () {
+                                _showDishFullDetailDialog(context, d, isToday: today);
                               },
                               onLongPress: () {
-                                // 꾹 누르면 투표 내역 / 형광펜 / 알레르기 / 10표 올리기 통합 팝업
                                 _showDishFullDetailDialog(context, d, isToday: today);
                               },
                               borderRadius: BorderRadius.circular(8),
@@ -3778,56 +3771,103 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                                         ],
                                       ),
                                     ),
+                                    if (today) ...[
+                                      InkWell(
+                                        onTap: () async {
+                                          final sId = widget.schoolName.isNotEmpty ? widget.schoolName : 'Demo';
+                                          final cKey = widget.gradeClass.isNotEmpty ? widget.gradeClass : '우리반';
+                                          final now = widget.currentTime ?? DateTime.now();
+                                          await MealVoteService.instance.recordLocalVote(
+                                            schoolId: sId,
+                                            date: DateTime(now.year, now.month, now.day),
+                                            dishName: d.name,
+                                            classKey: cKey,
+                                            amount: 10,
+                                          );
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('🔥 ${d.name}에 10표를 투표했습니다! (현재 총 ${MealVoteService.instance.getTotalVotes(d.name)}표)'),
+                                                backgroundColor: const Color(0xFF00C896),
+                                                duration: const Duration(seconds: 2),
+                                              ),
+                                            );
+                                            setState(() {});
+                                          }
+                                        },
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF00F5D4).withOpacity(0.18),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.5)),
+                                          ),
+                                          child: Text('+10', style: _ts(11, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                    ],
                                     // 점심시간 투표 기능 및 점심시간 전/후 득표수 분기 (점심시간 전에는 표수 숨김)
                                     ValueListenableBuilder<Map<String, Map<String, int>>>(
                                       valueListenable: MealVoteService.instance.votesNotifier,
                                       builder: (ctx, _, __) {
                                         final votes = MealVoteService.instance.getTotalVotes(d.name);
-                                        return Container(
-                                          margin: const EdgeInsets.only(left: 6),
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: votes > 0
-                                                ? const Color(0xFFFF6B6B).withOpacity(0.22)
-                                                : Colors.white.withOpacity(0.06),
-                                            borderRadius: BorderRadius.circular(10),
-                                            border: Border.all(
+                                        return InkWell(
+                                          onTap: () async {
+                                            if (today && _isMealVoteTimeNow()) {
+                                              await widget.onMealVote?.call(d.name);
+                                              if (context.mounted) setState(() {});
+                                            }
+                                          },
+                                          borderRadius: BorderRadius.circular(10),
+                                          child: Container(
+                                            margin: const EdgeInsets.only(left: 2),
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
                                               color: votes > 0
-                                                  ? const Color(0xFFFF6B6B).withOpacity(0.65)
-                                                  : Colors.white24,
-                                              width: 1,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                votes > 0 ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                                color: votes > 0 ? const Color(0xFFFF6B6B) : Colors.white60,
-                                                size: 14,
+                                                  ? const Color(0xFFFF6B6B).withOpacity(0.22)
+                                                  : Colors.white.withOpacity(0.06),
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: votes > 0
+                                                    ? const Color(0xFFFF6B6B).withOpacity(0.65)
+                                                    : Colors.white24,
+                                                width: 1,
                                               ),
-                                              if (isResultTime) ...[
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  '$votes표',
-                                                  style: _ts(
-                                                    11.5,
-                                                    w: FontWeight.w800,
-                                                    c: votes > 0 ? const Color(0xFFFF6B6B) : Colors.white70,
-                                                  ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  votes > 0 ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                                  color: votes > 0 ? const Color(0xFFFF6B6B) : Colors.white60,
+                                                  size: 14,
                                                 ),
-                                              ] else if (votes > 0) ...[
-                                                const SizedBox(width: 4),
-                                                Text(
-                                                  '투표완료',
-                                                  style: _ts(
-                                                    10.5,
-                                                    w: FontWeight.w800,
-                                                    c: const Color(0xFFFF6B6B),
+                                                if (isResultTime) ...[
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    '$votes표',
+                                                    style: _ts(
+                                                      11.5,
+                                                      w: FontWeight.w800,
+                                                      c: votes > 0 ? const Color(0xFFFF6B6B) : Colors.white70,
+                                                    ),
                                                   ),
-                                                ),
+                                                ] else if (votes > 0) ...[
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    '${votes}표',
+                                                    style: _ts(
+                                                      10.5,
+                                                      w: FontWeight.w800,
+                                                      c: const Color(0xFFFF6B6B),
+                                                    ),
+                                                  ),
+                                                ],
                                               ],
-                                            ],
+                                            ),
                                           ),
                                         );
                                       },

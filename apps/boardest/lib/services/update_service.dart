@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_io/io.dart';
 
 enum UpdateState {
@@ -23,7 +24,7 @@ enum UpdateState {
 /// 3. 다운로드 완료 후 수업시간이면 보류, 쉬는시간에 급식 대신 [업데이트 필요함!!] 카드 노출
 /// 4. 안드로이드는 수동 설치 안내 후 패키지 인스톨러 열기, 윈도우는 Add-AppxPackage 실행 후 재실행
 class UpdateService {
-  static const String defaultVersion = '5.0.2';
+  static const String defaultVersion = '5.0.4';
   static const String _releaseApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String downloadPage = 'https://boardest-downloads.web.app';
@@ -63,6 +64,13 @@ class UpdateService {
   }
 
   static Future<void> initVersion() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedVer = prefs.getString('bst_installed_version');
+      if (savedVer != null && savedVer.isNotEmpty) {
+        _resolvedVersion = savedVer;
+      }
+    } catch (_) {}
     try {
       final jsonStr = await rootBundle.loadString('version.json');
       final data = jsonDecode(jsonStr) as Map<String, dynamic>;
@@ -233,6 +241,14 @@ class UpdateService {
     if (savePath == null || !File(savePath).existsSync()) {
       return;
     }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (latestVersion != null && latestVersion!.isNotEmpty) {
+        await prefs.setString('bst_installed_version', latestVersion!);
+        _resolvedVersion = latestVersion;
+      }
+    } catch (_) {}
 
     if (!kIsWeb && Platform.isAndroid) {
       // 안드로이드: 수동 설치 안내 다이얼로그 표시

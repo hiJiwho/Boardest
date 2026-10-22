@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_io/io.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -40,7 +41,7 @@ class UpdateService {
   UpdateService._internal();
   static final instance = UpdateService._internal();
 
-  static const String defaultVersion = '5.0.2';
+  static const String defaultVersion = '5.0.4';
   static const String _api =
       'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String downloadPage = 'https://boardest-downloads.web.app';
@@ -70,6 +71,13 @@ class UpdateService {
   }
 
   static Future<void> initVersion() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedVer = prefs.getString('bst_installed_version');
+      if (savedVer != null && savedVer.isNotEmpty) {
+        _resolvedVersion = savedVer;
+      }
+    } catch (_) {}
     try {
       final jsonStr = await rootBundle.loadString('version.json');
       final data = jsonDecode(jsonStr) as Map<String, dynamic>;

@@ -35,6 +35,13 @@
           ".read": true,
           ".write": true
         }
+      },
+      "auto_otp": {
+        ".read": false,
+        "$token": {
+          ".read": true,
+          ".write": true
+        }
       }
     },
     "passkey_pairs": {

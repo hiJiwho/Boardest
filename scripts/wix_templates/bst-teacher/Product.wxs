@@ -14,6 +14,7 @@
     <Package InstallerVersion="500"
              Compressed="yes"
              InstallScope="perMachine"
+             InstallPrivileges="elevated"
              Platform="x64"
              Description="$(var.ProductName) Installer"
              Manufacturer="$(var.Manufacturer)" />
@@ -27,6 +28,7 @@
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
     <Property Id="ARPHELPLINK" Value="https://boardest-downloads.web.app" />
     <Property Id="ARPURLINFOABOUT" Value="https://boardest-downloads.web.app" />
+    <Property Id="MSIUSEREALADMINDETECTION" Value="1" />
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
@@ -56,7 +58,7 @@
                   WorkingDirectory="INSTALLFOLDER"
                   Icon="AppIcon" />
         <RemoveFolder Id="CleanUpShortcuts" Directory="ApplicationProgramsFolder" On="uninstall" />
-        <RegistryValue Root="HKCU"
+        <RegistryValue Root="HKLM"
                        Key="Software\$(var.Manufacturer)\$(var.ProductName)"
                        Name="installed"
                        Type="integer"

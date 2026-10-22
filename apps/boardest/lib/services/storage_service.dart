@@ -132,13 +132,14 @@ class StorageService {
 
     try {
       final settings = AppSettings.fromJson(json.decode(jsonStr) as Map<String, dynamic>);
-      if (!AppConfig.isDemoMode &&
-          (settings.schoolId.toLowerCase() == 'demo' ||
-           settings.classNickname?.startsWith('Demo-class') == true ||
-           settings.selectedSchool?.name.contains('데모') == true)) {
-        // 이전 데모 방문으로 인한 로컬 스토리지 오염 자동 정리
-        await prefs.remove(_keyAppSettings);
-        return AppSettings();
+      final isDemoSettings = (settings.schoolId.toLowerCase() == 'demo' ||
+          settings.classNickname.startsWith('Demo-class') == true ||
+          settings.selectedSchool?.name.contains('데모') == true);
+      final isPersistedDemo = prefs.getBool('bst_persisted_demo') == true;
+
+      if (isDemoSettings || isPersistedDemo) {
+        AppConfig.isDemoMode = true;
+        return settings;
       }
       return settings;
     } catch (_) {

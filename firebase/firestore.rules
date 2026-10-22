@@ -111,6 +111,21 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // ─── /user_settings — 사용자 개인 설정 ───────────────────────
+    match /user_settings/{userId} {
+      allow read, write: if true;
+    }
+
+    // ─── /teacher_lesson_states — 교사 수업 상태 실시간 동기화 ────
+    match /teacher_lesson_states/{docId} {
+      allow read, write: if true;
+    }
+
+    // ─── /classrooms — 교실 목록 및 연결 상태 ────────────────────
+    match /classrooms/{classId} {
+      allow read, write: if true;
+    }
+
     // ─── /cloud_pair_sessions — 전자칠판 스마트폰 역방향 QR 연동 ─────────
     match /cloud_pair_sessions/{sessionId} {
       allow read, write: if true;

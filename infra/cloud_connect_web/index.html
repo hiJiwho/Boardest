@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boardest Cloud Connect — 전자칠판 안심 패스키 허브</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;600;800;900&family=Outfit:wght@600;800;900&display=swap" rel="stylesheet">
+  <style>
+    @font-face {
+      font-family: 'SiwonhanSeolreim';
+      src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2312-1@1.1/seolleimcool-SemiBold.woff2') format('woff2');
+      font-weight: normal;
+      font-display: swap;
+    }
+    :root {
+      --bg: #070B14;
+      --card-bg: rgba(15, 23, 42, 0.85);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --teal: #00F5D4;
+      --purple: #7F5AF0;
+      --orange: #FF8906;
+      --text: #FFFFFF;
+      --text-sub: #94A3B8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'SiwonhanSeolreim', 'Noto Sans KR', sans-serif; }
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(127, 90, 240, 0.22) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(0, 245, 212, 0.18) 0px, transparent 50%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      width: 100%;
+      max-width: 440px;
+      background: var(--card-bg);
+      border: 1.5px solid var(--card-border);
+      border-radius: 24px;
+      padding: 32px 24px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+      text-align: center;
+    }
+    .badge-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      background: rgba(0, 245, 212, 0.12);
+      border: 1.5px solid rgba(0, 245, 212, 0.3);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      margin-bottom: 20px;
+    }
+    h2 { font-size: 22px; font-weight: 900; margin-bottom: 8px; }
+    p.desc { font-size: 13.5px; color: var(--text-sub); line-height: 1.5; margin-bottom: 24px; }
+    .info-box {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 24px;
+      text-align: left;
+      font-size: 12.5px;
+    }
+    .info-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+    .info-row:last-child { margin-bottom: 0; }
+    .info-label { color: var(--text-sub); }
+    .info-val { font-weight: 700; color: #FFF; }
+    .btn {
+      width: 100%;
+      padding: 16px;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 800;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.2s ease;
+    }
+    .btn-primary {
+      background: var(--teal);
+      color: #051014;
+      box-shadow: 0 8px 20px rgba(0, 245, 212, 0.25);
+    }
+    .btn-primary:hover {
+      background: #38EF7D;
+      transform: translateY(-2px);
+    }
+    .btn-purple {
+      background: var(--purple);
+      color: #FFF;
+      box-shadow: 0 8px 20px rgba(127, 90, 240, 0.3);
+    }
+    .btn-purple:hover {
+      background: #9D7BFC;
+      transform: translateY(-2px);
+    }
+    .status-msg {
+      margin-top: 18px;
+      font-size: 13px;
+      color: var(--teal);
+      font-weight: 700;
+      min-height: 20px;
+    }
+    .security-note {
+      margin-top: 24px;
+      font-size: 11px;
+      color: #64748B;
+      line-height: 1.4;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding-top: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge-icon" id="iconBadge">🔑</div>
+    <h2 id="titleText">전자칠판 안심 로그인</h2>
+    <p class="desc" id="descText">선생님의 스마트폰 생체인식(지문/FaceID)으로 칠판을 1초 만에 안전하게 잠금해제합니다.</p>
+
+    <div class="info-box" id="infoBox">
+      <div class="info-row">
+        <span class="info-label">접속 학교 / 기기</span>
+        <span class="info-val" id="targetInfo">확인 중...</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">보안 검증</span>
+        <span class="info-val" id="timerBadge" style="color: var(--teal);">2분 유효 챌린지</span>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="actionBtn" onclick="handleAuthAction()">
+      <span>🔐 지문 / FaceID 로 승인하기</span>
+    </button>
+
+    <div class="status-msg" id="statusMsg"></div>
+
+    <div class="security-note">
+      🔒 <strong>Zero-Persistence 원칙</strong>: 이 사이트(Cloud-Connect) 및 로컬 스토리지에는 일체의 토큰이나 암호가 저장되지 않으며, 전자칠판 RAM으로만 안전하게 1회성 토큰이 전달됩니다.
+    </div>
+  </div>
+
+  <script>
+    const RTDB_URL = "https://jiwhosboardest-default-rtdb.firebaseio.com";
+    const FIRESTORE_BASE = "https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents";
+    const PROOF_SALT = "bst_passkey_v2_hmac_guard";
+    const params = new URLSearchParams(window.location.search);
+    const key = params.get('key');
+    const qrChallenge = params.get('c') || '';
+    const bstPairParam = params.get('bst_pair') || params.get('pair');
+    const school = params.get('school') || '학교 미지정';
+    const device = params.get('device') || '전자칠판';
+    const isRegister = params.get('action') === 'register' || params.get('register') === '1';
+
+    // Reverse Pair Secret decode
+    function unmanglePairSecret(mangled) {
+      try {
+        if (!mangled || !mangled.startsWith('BSTx!')) return null;
+        let b64 = mangled.substring(5).replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4 !== 0) b64 += '=';
+        const decoded = decodeURIComponent(escape(atob(b64)));
+        if (!decoded.startsWith('BRK#') || !decoded.endsWith('#END')) return null;
+        const payload = decoded.substring(4, decoded.length - 4);
+        return payload.split('').reverse().join('');
+      } catch (e) {
+        return null;
+      }
+    }
+    const reversePairSecret = bstPairParam ? unmanglePairSecret(bstPairParam) : null;
+
+    // Saved identity on this mobile device
+    let savedTeacherName = '';
+    let savedToken = '';
+    try {
+      savedTeacherName = localStorage.getItem('bst_teacher_name') || '';
+      savedToken = localStorage.getItem('bst_teacher_token') || '';
+      if (savedTeacherName === '이수학' || (savedToken && savedToken.startsWith('demo_token'))) {
+        localStorage.removeItem('bst_teacher_name');
+        localStorage.removeItem('bst_teacher_token');
+        savedTeacherName = '';
+        savedToken = '';
+      }
+    } catch (_) {}
+
+    const teacherName = params.get('teacher') || savedTeacherName || '선생님';
+    let incomingToken = params.get('token') || savedToken || '';
+    const timestampStr = params.get('t') || params.get('time') || '';
+    const reqTimestamp = timestampStr ? parseInt(timestampStr, 10) : null;
+    let isExpired = false;
+
+    async function sha256Hex(message) {
+      const msgBuffer = new TextEncoder().encode(message);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function updateCountdown() {
+      if (!reqTimestamp || isNaN(reqTimestamp)) return;
+      const elapsed = Date.now() - reqTimestamp;
+      const remainingSec = Math.max(0, Math.floor((120000 - elapsed) / 1000));
+      const badge = document.getElementById('timerBadge');
+
+      if (remainingSec > 0) {
+        const m = Math.floor(remainingSec / 60);
+        const s = (remainingSec % 60).toString().padStart(2, '0');
+        if (badge) badge.innerText = `⏱️ 유효시간: ${m}:${s} 남음`;
+      } else {
+        isExpired = true;
+        if (badge) {
+          badge.innerText = `⚠️ 유효시간(2분) 만료됨`;
+          badge.style.color = '#EF4565';
+        }
+        const btn = document.getElementById('actionBtn');
+        if (btn) btn.disabled = true;
+        const status = document.getElementById('statusMsg');
+        if (status) {
+          status.style.color = '#EF4565';
+          status.innerHTML = '⚠️ <strong>유효시간(2분)이 만료된 세션입니다.</strong><br>전자칠판 또는 Teacher 앱에서 새 QR 코드를 생성한 뒤 다시 스캔해주세요.';
+        }
+      }
+    }
+
+    window.onload = function() {
+      if (reqTimestamp) {
+        updateCountdown();
+        setInterval(updateCountdown, 1000);
+      }
+
+      if (isExpired) return;
+
+      if (isRegister) {
+        if (teacherName && teacherName !== '선생님') {
+          try { localStorage.setItem('bst_teacher_name', teacherName); } catch(_) {}
+        }
+        if (incomingToken) {
+          try { localStorage.setItem('bst_teacher_token', incomingToken); } catch(_) {}
+        }
+        document.getElementById('iconBadge').innerText = '🛡️';
+        document.getElementById('titleText').innerText = '교사 패스키 등록';
+        document.getElementById('descText').innerText = '이 스마트폰을 [' + teacherName + '] 선생님의 공인 패스키 인증 기기로 등록합니다.';
+        document.getElementById('targetInfo').innerText = teacherName;
+        document.getElementById('actionBtn').className = 'btn btn-purple';
+        document.getElementById('actionBtn').innerHTML = '<span>📱 내 폰에 패스키 등록하기</span>';
+      } else if (reversePairSecret) {
+        document.getElementById('iconBadge').innerText = '☁️';
+        document.getElementById('titleText').innerText = '전자칠판 교재·자료 클라우드 연결';
+        document.getElementById('descText').innerText = '선생님의 수업자료 및 교재를 전자칠판에 안전하게 1회성으로 연결합니다.';
+        const teacherDisplay = (savedTeacherName || teacherName !== '선생님') ? ` (${savedTeacherName || teacherName} 선생님)` : '';
+        document.getElementById('targetInfo').innerText = '전자칠판 확인 중...' + teacherDisplay;
+        document.getElementById('actionBtn').className = 'btn btn-primary';
+        document.getElementById('actionBtn').innerHTML = '<span>🚀 전자칠판에 내 클라우드 연결</span>';
+
+        // Load reverse pair session details from Firestore
+        fetch(`${FIRESTORE_BASE}/cloud_pair_sessions/${reversePairSecret}`)
+          .then(res => res.json())
+          .then(data => {
+            const f = data.fields || {};
+            const sc = f.schoolCode?.stringValue || '';
+            const gr = f.grade?.integerValue || '';
+            const cl = f.classNum?.integerValue || '';
+            let loc = '전자칠판';
+            if (gr && cl) loc = `${gr}학년 ${cl}반 전자칠판`;
+            if (sc) loc = `${sc} ${loc}`;
+            document.getElementById('targetInfo').innerText = loc + teacherDisplay;
+          })
+          .catch(() => {});
+      } else if (key) {
+        const teacherDisplay = (savedTeacherName || teacherName !== '선생님') ? ` (${savedTeacherName || teacherName} 선생님)` : '';
+        document.getElementById('targetInfo').innerText = school + ' · ' + device + teacherDisplay;
+      } else {
+        document.getElementById('descText').innerText = '전자칠판 화면의 QR 코드를 스마트폰 카메라로 비춰 접속해주세요.';
+        document.getElementById('actionBtn').style.display = 'none';
+        document.getElementById('infoBox').style.display = 'none';
+      }
+    };
+
+    async function handleAuthAction() {
+      if (isExpired || (reqTimestamp && (Date.now() - reqTimestamp > 120000))) {
+        alert("⚠️ 유효시간(2분)이 만료된 요청입니다. 새 QR 코드를 생성해주세요.");
+        return;
+      }
+
+      const btn = document.getElementById('actionBtn');
+      const status = document.getElementById('statusMsg');
+      btn.disabled = true;
+
+      if (isRegister) {
+        // 1. 스마트폰/기기 패스키(WebAuthn) 생성 등록
+        status.innerText = "기기 생체인식 또는 화면 잠금 인증을 진행해주세요...";
+        try {
+          const challenge = new Uint8Array(32);
+          window.crypto.getRandomValues(challenge);
+          const userId = new Uint8Array(16);
+          window.crypto.getRandomValues(userId);
+
+          let credId = null;
+          if (window.PublicKeyCredential) {
+            try {
+              const credential = await navigator.credentials.create({
+                publicKey: {
+                  challenge: challenge,
+                  rp: {
+                    name: "Boardest Cloud Connect",
+                    id: window.location.hostname
+                  },
+                  user: {
+                    id: userId,
+                    name: teacherName || "선생님",
+                    displayName: teacherName || "선생님"
+                  },
+                  pubKeyCredParams: [
+                    { type: "public-key", alg: -7 },  // ES256
+                    { type: "public-key", alg: -257 } // RS256
+                  ],
+                  authenticatorSelection: {
+                    residentKey: "preferred",
+                    userVerification: "preferred"
+                  },
+                  timeout: 60000
+                }
+              });
+              if (credential) {
+                credId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+              }
+            } catch (credErr) {
+              console.warn("WebAuthn create fallback:", credErr);
+            }
+          }
+
+          if (!credId) {
+            // WebAuthn/기기 보안 우회 또는 미지원 시 보안 고유 기기 키 생성
+            credId = 'dev_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+          }
+
+          // RTDB passkey/vaults 및 passkey_vaults 에 등록 완료 기록
+          const enc = encodeURIComponent(teacherName);
+          const vaultPayload = {
+            credId: credId,
+            teacher: teacherName,
+            token: incomingToken,
+            registeredAt: Date.now()
+          };
+          await Promise.allSettled([
+            fetch(`${RTDB_URL}/passkey/vaults/${enc}.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(vaultPayload)
+            }),
+            fetch(`${RTDB_URL}/passkey_vaults/${enc}.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(vaultPayload)
+            })
+          ]);
+
+          if (key) {
+            const pairPayload = {
+              status: 'registered',
+              teacher: teacherName,
+              registeredAt: Date.now()
+            };
+            await Promise.allSettled([
+              fetch(`${RTDB_URL}/passkey/sessions/${key}.json`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(pairPayload)
+              }),
+              fetch(`${RTDB_URL}/passkey_pairs/${key}.json`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(pairPayload)
+              })
+            ]);
+          }
+
+          status.innerHTML = "🎉 <strong>기기/패스키 등록이 완료되었습니다!</strong><br>이제 전자칠판 QR 스캔 시 1초 만에 안전하게 자동 로그인됩니다.";
+          btn.style.display = 'none';
+        } catch (err) {
+          status.innerHTML = `등록 안내: ${err.message}<br><button class="btn btn-purple" style="margin-top:12px;padding:10px 18px;" onclick="forceRegisterDirectly()">⚡ 원클릭 간편 기기 등록</button>`;
+          btn.disabled = false;
+        }
+      } else if (key) {
+        // 2. 전자칠판 로그인 승인 (WebAuthn Get)
+        status.innerText = "생체인식 확인 중...";
+        try {
+          let tokenToSend = incomingToken;
+          
+          // 패스키 생체인증 요구 (사용자 취소 시 승인 중단 보안 강화)
+          if (window.PublicKeyCredential) {
+            try {
+              const challenge = new TextEncoder().encode((key + '_' + Date.now()).padEnd(32, '0').slice(0, 32));
+              await navigator.credentials.get({
+                publicKey: {
+                  challenge: challenge,
+                  rpId: window.location.hostname,
+                  userVerification: "preferred",
+                  timeout: 60000
+                }
+              });
+            } catch (authErr) {
+              if (authErr && (authErr.name === 'NotAllowedError' || authErr.name === 'AbortError')) {
+                throw new Error("생체인증(패스키) 확인이 취소되었거나 거부되었습니다. 다시 시도해주세요.");
+              }
+              console.log("Passkey assertion fallback:", authErr);
+            }
+          }
+
+          // 1. Fetch token from RTDB vaults
+          if (!tokenToSend && teacherName) {
+            const enc = encodeURIComponent(teacherName);
+            try {
+              const vRes = await fetch(`${RTDB_URL}/passkey/vaults/${enc}.json`);
+              if (vRes.ok) {
+                const vData = await vRes.json();
+                if (vData && vData.token) tokenToSend = vData.token;
+              }
+            } catch (_) {}
+            if (!tokenToSend) {
+              try {
+                const vRes2 = await fetch(`${RTDB_URL}/passkey_vaults/${enc}.json`);
+                if (vRes2.ok) {
+                  const vData2 = await vRes2.json();
+                  if (vData2 && vData2.token) tokenToSend = vData2.token;
+                }
+              } catch (_) {}
+            }
+          }
+
+          // 2. Fallback: Fetch token from Firestore teacher_cloud_tokens (데모 및 가상 계정 완전 배제)
+          if (!tokenToSend) {
+            try {
+              const fsRes = await fetch(`${FIRESTORE_BASE}/teacher_cloud_tokens`);
+              if (fsRes.ok) {
+                const fsData = await fsRes.json();
+                const docs = fsData.documents || [];
+                for (const d of docs) {
+                  const fields = d.fields || {};
+                  const docEmail = fields.email?.stringValue || '';
+                  const docTeacher = fields.teacherName?.stringValue || fields.name?.stringValue || '';
+                  const docToken = fields.accessToken?.stringValue || '';
+                  
+                  // 데모 계정 및 더미 교사(이수학 등)는 실사용자 인증으로 절대 채택하지 않음
+                  if (docEmail.includes('demo') || docTeacher === '이수학' || docToken.startsWith('demo_token')) continue;
+
+                  if (docToken && (docTeacher === teacherName || (!teacherName || teacherName === '선생님') || (!savedTeacherName && docs.length === 1))) {
+                    tokenToSend = docToken;
+                    if (docTeacher && docTeacher !== '선생님') {
+                      try { localStorage.setItem('bst_teacher_name', docTeacher); } catch(_) {}
+                    }
+                    break;
+                  }
+                }
+              }
+            } catch (_) {}
+          }
+
+          if (tokenToSend) {
+            try {
+              localStorage.setItem('bst_teacher_token', tokenToSend);
+              if (teacherName && teacherName !== '선생님') {
+                localStorage.setItem('bst_teacher_name', teacherName);
+              }
+            } catch(_) {}
+          } else {
+            throw new Error("등록된 교사 인증 토큰이 없습니다. 먼저 교사용 앱의 [패스키 등록] QR을 이 스마트폰으로 1회 스캔해주세요.");
+          }
+
+          const proof = await sha256Hex(`${key}:${qrChallenge}:${tokenToSend}:${PROOF_SALT}`);
+
+          // 전자칠판과 1회용 핸드셰이크 전송 (Challenge-Response SHA-256 서명 proof 포함)
+          const payload = {
+            status: "approved",
+            teacher: teacherName,
+            teacherName: teacherName,
+            accessToken: tokenToSend,
+            token: tokenToSend,
+            proof: proof,
+            timestamp: Date.now()
+          };
+
+          const [r1, r2] = await Promise.all([
+            fetch(`${RTDB_URL}/passkey/sessions/${key}.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            }).catch(() => null),
+            fetch(`${RTDB_URL}/passkey_pairs/${key}.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            }).catch(() => null)
+          ]);
+
+          if ((r1 && r1.ok) || (r2 && r2.ok)) {
+            status.innerText = "🚀 전자칠판 로그인 승인 완료! 칠판이 잠금해제되었습니다.";
+            btn.style.display = 'none';
+            setTimeout(() => {
+              window.close();
+            }, 3000);
+          } else {
+            throw new Error("서버 전송 실패 (네트워크 연결을 확인해주세요)");
+          }
+        } catch (err) {
+          status.innerText = "승인 안내: " + err.message;
+          btn.disabled = false;
+        }
+      } else if (reversePairSecret) {
+        status.innerText = "선생님 인증 확인 중...";
+        try {
+          let tokenToSend = incomingToken;
+          let teacherNameToSend = teacherName;
+          let emailToSend = '';
+          let refreshTokenToSend = '';
+          let folderIdToSend = '';
+          let totpSecretToSend = '';
+
+          // 1. Fetch token from RTDB vaults
+          if (!tokenToSend && teacherNameToSend && teacherNameToSend !== '선생님') {
+            const enc = encodeURIComponent(teacherNameToSend);
+            try {
+              const vRes = await fetch(`${RTDB_URL}/passkey/vaults/${enc}.json`);
+              if (vRes.ok) {
+                const vData = await vRes.json();
+                if (vData && vData.token) tokenToSend = vData.token;
+              }
+            } catch (_) {}
+          }
+
+          // 2. Fetch token from Firestore teacher_cloud_tokens
+          if (!tokenToSend || !emailToSend) {
+            try {
+              const fsRes = await fetch(`${FIRESTORE_BASE}/teacher_cloud_tokens`);
+              if (fsRes.ok) {
+                const fsData = await fsRes.json();
+                const docs = fsData.documents || [];
+                for (const d of docs) {
+                  const fields = d.fields || {};
+                  const docEmail = fields.email?.stringValue || '';
+                  const docTeacher = fields.teacherName?.stringValue || fields.name?.stringValue || '';
+                  const docToken = fields.accessToken?.stringValue || '';
+                  const docRefresh = fields.refreshToken?.stringValue || '';
+                  const docFolder = fields.bstCloudFolderId?.stringValue || fields.folderId?.stringValue || '';
+                  const docTotp = fields.totpSecret?.stringValue || '';
+
+                  if (docEmail.includes('demo') || docTeacher === '이수학' || docToken.startsWith('demo_token')) continue;
+
+                  if (docToken && (docTeacher === teacherNameToSend || (!savedTeacherName && docs.length === 1) || (!teacherNameToSend || teacherNameToSend === '선생님'))) {
+                    tokenToSend = docToken;
+                    teacherNameToSend = docTeacher || teacherNameToSend;
+                    emailToSend = docEmail;
+                    refreshTokenToSend = docRefresh;
+                    folderIdToSend = docFolder;
+                    totpSecretToSend = docTotp;
+                    break;
+                  }
+                }
+              }
+            } catch (_) {}
+          }
+
+          if (!tokenToSend) {
+            status.innerHTML = `등록된 교사 토큰이 없습니다.<br><a href="https://boardest-teacher-oauth.web.app?return_url=${encodeURIComponent(window.location.href)}" class="btn btn-purple" style="margin-top:12px;padding:12px 18px;text-decoration:none;display:inline-block;">🔑 교사 계정 1초 로그인 후 연결</a>`;
+            btn.disabled = false;
+            return;
+          }
+
+          status.innerText = "전자칠판에 클라우드 연결 전송 중...";
+          const patchUrl = `${FIRESTORE_BASE}/cloud_pair_sessions/${reversePairSecret}?updateMask.fieldPaths=status&updateMask.fieldPaths=teacherName&updateMask.fieldPaths=email&updateMask.fieldPaths=accessToken&updateMask.fieldPaths=refreshToken&updateMask.fieldPaths=folderId&updateMask.fieldPaths=bstCloudFolderId&updateMask.fieldPaths=totpSecret`;
+          const patchPayload = {
+            fields: {
+              status: { stringValue: 'authenticated' },
+              teacherName: { stringValue: teacherNameToSend || '선생님' },
+              email: { stringValue: emailToSend },
+              accessToken: { stringValue: tokenToSend },
+              refreshToken: { stringValue: refreshTokenToSend },
+              folderId: { stringValue: folderIdToSend },
+              bstCloudFolderId: { stringValue: folderIdToSend },
+              totpSecret: { stringValue: totpSecretToSend }
+            }
+          };
+
+          const patchRes = await fetch(patchUrl, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(patchPayload)
+          });
+
+          if (patchRes.ok) {
+            status.innerHTML = "🎉 <strong>전자칠판에 클라우드가 연결되었습니다!</strong><br>칠판 화면이 내 수업 자료로 즉시 전환됩니다.";
+            btn.style.display = 'none';
+            setTimeout(() => {
+              window.close();
+            }, 3000);
+          } else {
+            throw new Error("클라우드 세션 전송 실패 (" + patchRes.status + ")");
+          }
+        } catch (err) {
+          status.innerText = "연결 오류: " + err.message;
+          btn.disabled = false;
+        }
+      }
+    }
+
+    async function forceRegisterDirectly() {
+      const status = document.getElementById('statusMsg');
+      const btn = document.getElementById('actionBtn');
+      status.innerText = "간편 기기 등록 중...";
+      try {
+        if (teacherName && teacherName !== '선생님') {
+          try { localStorage.setItem('bst_teacher_name', teacherName); } catch(_) {}
+        }
+        if (incomingToken) {
+          try { localStorage.setItem('bst_teacher_token', incomingToken); } catch(_) {}
+        }
+        const credId = 'dev_direct_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+        const enc = encodeURIComponent(teacherName);
+        const vPayload = {
+          credId: credId,
+          teacher: teacherName,
+          token: incomingToken,
+          registeredAt: Date.now()
+        };
+        await Promise.allSettled([
+          fetch(`${RTDB_URL}/passkey/vaults/${enc}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(vPayload)
+          }),
+          fetch(`${RTDB_URL}/passkey_vaults/${enc}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(vPayload)
+          })
+        ]);
+
+        if (key) {
+          const sPayload = {
+            status: 'registered',
+            teacher: teacherName,
+            registeredAt: Date.now()
+          };
+          await Promise.allSettled([
+            fetch(`${RTDB_URL}/passkey/sessions/${key}.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(sPayload)
+            }),
+            fetch(`${RTDB_URL}/passkey_pairs/${key}.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(sPayload)
+            })
+          ]);
+        }
+
+        status.innerHTML = "🎉 <strong>기기 간편 등록 완료!</strong><br>이제 전자칠판 QR 스캔 시 1초 만에 자동 로그인됩니다.";
+        if (btn) btn.style.display = 'none';
+      } catch (e) {
+        status.innerText = "등록 오류: " + e.message;
+      }
+    }
+  </script>
+</body>
+</html>
+

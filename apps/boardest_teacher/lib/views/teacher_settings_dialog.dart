@@ -681,7 +681,7 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
 
   // 2. Cloud & OAuth 탭 (iframe 임베드 지원)
   Widget _buildCloudOAuthTab() {
-    const oauthUrl = 'https://boardest-cloud-connect.web.app';
+    const oauthUrl = 'https://boardest-teacher-oauth.web.app';
 
     return Column(
       children: [

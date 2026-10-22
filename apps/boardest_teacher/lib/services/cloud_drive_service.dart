@@ -812,7 +812,7 @@ class CloudDriveService with ChangeNotifier {
   /// Google 계정 재인증 및 토큰 최신화 (?re-login 호출)
   Future<void> reauthenticateGoogle() async {
     final target = kIsWeb ? 'web' : 'win';
-    final url = 'https://boardest-cloud-connect.web.app?re-login&$target';
+    final url = 'https://boardest-teacher-oauth.web.app?re-login&$target';
     await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
@@ -1472,14 +1472,14 @@ class CloudDriveService with ChangeNotifier {
       final queryString = params.isNotEmpty ? params.join('&') : 'boardest-login=true';
 
       if (kIsWeb) {
-        final webAuthUrl = 'https://boardest-cloud-connect.web.app/?$queryString&target=web&sys=web';
+        final webAuthUrl = 'https://boardest-teacher-oauth.web.app/?$queryString&target=web&sys=web';
         await launchUrl(Uri.parse(webAuthUrl), mode: LaunchMode.platformDefault);
         _isAuthenticating = false;
         return true;
       }
 
       final port = _activePort;
-      final authUrl = 'https://boardest-cloud-connect.web.app/?sys=win&target=win&port=$port&$queryString';
+      final authUrl = 'https://boardest-teacher-oauth.web.app/?sys=win&target=win&port=$port&$queryString';
       final uri = Uri.parse(authUrl);
 
       if (await canLaunchUrl(uri)) {
@@ -1505,7 +1505,7 @@ class CloudDriveService with ChangeNotifier {
         await startPersistentLoopbackServer();
       }
       final port = _activePort;
-      final redirectUri = 'https://boardest-cloud-connect.web.app/?sys=win&target=win&port=$port&boardest-cloud-login=true';
+      final redirectUri = 'https://boardest-teacher-oauth.web.app/?sys=win&target=win&port=$port&boardest-cloud-login=true';
       final uri = Uri.parse(redirectUri);
 
       if (await canLaunchUrl(uri)) {

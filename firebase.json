@@ -19,7 +19,10 @@
         {
           "source": "**",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
           ]
         }
       ],
@@ -61,10 +64,22 @@
         }
       ],
       "rewrites": [
-        { "source": "/student", "destination": "/student/index.html" },
-        { "source": "/student/**", "destination": "/student/index.html" },
-        { "source": "/web", "destination": "/web/index.html" },
-        { "source": "**", "destination": "/index.html" }
+        {
+          "source": "/student",
+          "destination": "/student/index.html"
+        },
+        {
+          "source": "/student/**",
+          "destination": "/student/index.html"
+        },
+        {
+          "source": "/web",
+          "destination": "/web/index.html"
+        },
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
       ]
     },
     {
@@ -80,7 +95,10 @@
         {
           "source": "**",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
           ]
         }
       ],
@@ -122,17 +140,37 @@
         }
       ],
       "rewrites": [
-        { "source": "/Class-Win-Guide", "destination": "/Class-Win-Guide/index.html" },
-        { "source": "/Class-Lite-Win-Guide", "destination": "/Class-Lite-Win-Guide/index.html" },
-        { "source": "/Teacher-PRO-Guide", "destination": "/Teacher-PRO-Guide/index.html" },
-        { "source": "**", "destination": "/index.html" }
+        {
+          "source": "/Class-Win-Guide",
+          "destination": "/Class-Win-Guide/index.html"
+        },
+        {
+          "source": "/Class-Lite-Win-Guide",
+          "destination": "/Class-Lite-Win-Guide/index.html"
+        },
+        {
+          "source": "/Teacher-PRO-Guide",
+          "destination": "/Teacher-PRO-Guide/index.html"
+        },
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
       ]
     },
     {
       "target": "boardest-class",
       "redirects": [
-        { "source": "/class", "destination": "/", "type": 302 },
-        { "source": "/class/:path*", "destination": "/:path*", "type": 302 }
+        {
+          "source": "/class",
+          "destination": "/",
+          "type": 302
+        },
+        {
+          "source": "/class/:path*",
+          "destination": "/:path*",
+          "type": 302
+        }
       ],
       "public": "apps/boardest/build/web",
       "ignore": [
@@ -144,24 +182,36 @@
         {
           "source": "**/index.html",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
           ]
         },
         {
           "source": "**/version.json",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
           ]
         },
         {
           "source": "**/*.@(wasm|js|otf|ttf|woff|woff2|png|jpg|jpeg|gif|svg|ico)",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
           ]
         }
       ],
       "rewrites": [
-        { "source": "**", "destination": "/index.html" }
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
       ]
     },
     {
@@ -176,18 +226,27 @@
         {
           "source": "**/index.html",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
           ]
         },
         {
           "source": "**/*.@(wasm|js|otf|ttf|woff|woff2|png|jpg|jpeg|gif|svg|ico)",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
           ]
         }
       ],
       "rewrites": [
-        { "source": "**", "destination": "/index.html" }
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
       ]
     },
     {
@@ -202,13 +261,19 @@
         {
           "source": "**",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
           ]
         }
       ],
       "cleanUrls": true,
       "rewrites": [
-        { "source": "**", "destination": "/index.html" }
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
       ]
     },
     {
@@ -223,13 +288,19 @@
         {
           "source": "**",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
           ]
         }
       ],
       "cleanUrls": true,
       "rewrites": [
-        { "source": "**", "destination": "/index.html" }
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
       ]
     },
     {
@@ -244,24 +315,50 @@
         {
           "source": "**",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
           ]
         }
       ],
       "cleanUrls": true,
       "rewrites": [
-        { "source": "/class", "destination": "/class/index.html" },
-        { "source": "/class/**", "destination": "/class/index.html" },
-        { "source": "/teacher", "destination": "/teacher/index.html" },
-        { "source": "/teacher/**", "destination": "/teacher/index.html" },
-        { "source": "**", "destination": "/index.html" }
+        {
+          "source": "/class",
+          "destination": "/class/index.html"
+        },
+        {
+          "source": "/class/**",
+          "destination": "/class/index.html"
+        },
+        {
+          "source": "/teacher",
+          "destination": "/teacher/index.html"
+        },
+        {
+          "source": "/teacher/**",
+          "destination": "/teacher/index.html"
+        },
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
       ]
     },
     {
       "target": "boardest-teacher",
       "redirects": [
-        { "source": "/teacher", "destination": "/", "type": 302 },
-        { "source": "/teacher/:path*", "destination": "/:path*", "type": 302 }
+        {
+          "source": "/teacher",
+          "destination": "/",
+          "type": 302
+        },
+        {
+          "source": "/teacher/:path*",
+          "destination": "/:path*",
+          "type": 302
+        }
       ],
       "public": "apps/boardest_teacher/build/web",
       "ignore": [
@@ -273,19 +370,31 @@
         {
           "source": "**/index.html",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
           ]
         },
         {
           "source": "**/*.@(wasm|js|otf|ttf|woff|woff2|png|jpg|jpeg|gif|svg|ico)",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
           ]
         }
       ],
       "rewrites": [
-        { "source": "/lite/**", "destination": "/lite/index.html" },
-        { "source": "**", "destination": "/index.html" }
+        {
+          "source": "/lite/**",
+          "destination": "/lite/index.html"
+        },
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
       ]
     },
     {
@@ -321,12 +430,18 @@
         {
           "source": "**",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
           ]
         }
       ],
       "rewrites": [
-        { "source": "**", "destination": "/index.html" }
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
       ]
     },
     {
@@ -337,13 +452,7 @@
         "**/.*",
         "**/node_modules/**"
       ],
-      "redirects": [
-        {
-          "source": "/**",
-          "destination": "https://boardest-cloud-connect.web.app",
-          "type": 302
-        }
-      ]
+      "cleanUrls": true
     },
     {
       "target": "boardest-eat",
@@ -357,12 +466,18 @@
         {
           "source": "**",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
           ]
         }
       ],
       "rewrites": [
-        { "source": "**", "destination": "/index.html" }
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
       ]
     },
     {
@@ -379,38 +494,74 @@
         {
           "source": "**",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" },
-            { "key": "Access-Control-Allow-Origin", "value": "*" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            },
+            {
+              "key": "Access-Control-Allow-Origin",
+              "value": "*"
+            }
           ]
         },
         {
           "source": "**/*.ps1",
           "headers": [
-            { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
-            { "key": "Access-Control-Allow-Origin", "value": "*" }
+            {
+              "key": "Content-Type",
+              "value": "text/plain; charset=utf-8"
+            },
+            {
+              "key": "Access-Control-Allow-Origin",
+              "value": "*"
+            }
           ]
         },
         {
           "source": "**/*.cer",
           "headers": [
-            { "key": "Content-Type", "value": "application/x-x509-ca-cert" },
-            { "key": "Access-Control-Allow-Origin", "value": "*" }
+            {
+              "key": "Content-Type",
+              "value": "application/x-x509-ca-cert"
+            },
+            {
+              "key": "Access-Control-Allow-Origin",
+              "value": "*"
+            }
           ]
         },
         {
           "source": "**/*.appx",
           "headers": [
-            { "key": "Content-Type", "value": "application/appx" },
-            { "key": "Cache-Control", "value": "no-cache, max-age=0" },
-            { "key": "Access-Control-Allow-Origin", "value": "*" }
+            {
+              "key": "Content-Type",
+              "value": "application/appx"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, max-age=0"
+            },
+            {
+              "key": "Access-Control-Allow-Origin",
+              "value": "*"
+            }
           ]
         },
         {
           "source": "**/*.msi",
           "headers": [
-            { "key": "Content-Type", "value": "application/x-msi" },
-            { "key": "Cache-Control", "value": "no-cache, max-age=0" },
-            { "key": "Access-Control-Allow-Origin", "value": "*" }
+            {
+              "key": "Content-Type",
+              "value": "application/x-msi"
+            },
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, max-age=0"
+            },
+            {
+              "key": "Access-Control-Allow-Origin",
+              "value": "*"
+            }
           ]
         }
       ],
@@ -525,21 +676,36 @@
         {
           "source": "**",
           "headers": [
-            { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate, max-age=0" },
-            { "key": "Access-Control-Allow-Origin", "value": "*" }
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            },
+            {
+              "key": "Access-Control-Allow-Origin",
+              "value": "*"
+            }
           ]
         },
         {
           "source": "/.well-known/**",
           "headers": [
-            { "key": "Content-Type", "value": "application/json; charset=utf-8" },
-            { "key": "Access-Control-Allow-Origin", "value": "*" }
+            {
+              "key": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            },
+            {
+              "key": "Access-Control-Allow-Origin",
+              "value": "*"
+            }
           ]
         }
       ],
       "cleanUrls": true,
       "rewrites": [
-        { "source": "**", "destination": "/index.html" }
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
       ]
     }
   ]

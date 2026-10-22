@@ -62,9 +62,9 @@ void main(List<String> args) async {
 
   WidgetsFlutterBinding.ensureInitialized();
   AppConfig.initDemoMode(args);
-  if (kIsWeb) {
-    try {
-      final prefs = await SharedPreferences.getInstance();
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    if (kIsWeb) {
       final uri = Uri.base;
       final qDemo = uri.queryParameters['demo'] ?? uri.queryParameters['Demo'];
       if (qDemo == '1' || qDemo == 'true') {
@@ -76,8 +76,12 @@ void main(List<String> args) async {
       } else if (prefs.getBool('bst_persisted_demo') == true) {
         AppConfig.isDemoMode = true;
       }
-    } catch (_) {}
-  }
+    } else {
+      if (prefs.getBool('bst_persisted_demo') == true) {
+        AppConfig.isDemoMode = true;
+      }
+    }
+  } catch (_) {}
   AppConfig.initLiteMode(args);
   AppConfig.initToolsMode(args);
   try {
