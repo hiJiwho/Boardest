@@ -117,6 +117,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
 
       final isAuthSuccess = params['auth'] == 'success';
       final token = params['token'] ?? params['access_token'];
+      final refreshToken = params['refreshToken'] ?? '';
       String email = params['email'] ?? '';
       String name = params['teacherName'] ?? '';
       final teacherId = params['teacherId'] ?? '';
@@ -139,7 +140,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
             schoolId.toLowerCase().contains('demo');
 
         if (isDemoReq && schoolName.isEmpty) {
-          schoolName = 'Boardest 데모 중학교';
+          schoolName = '데모중학교';
         }
 
         setState(() {
@@ -165,6 +166,7 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
           await CloudDriveService.instance.setSession(
             accessToken: token,
             bstCldToken: token,
+            refreshToken: refreshToken,
             email: email,
             name: name,
             school: schoolName,
@@ -272,14 +274,17 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
       }
 
       if (matchedProfile == null && isDemoReq) {
+        final is02 = email.toLowerCase().startsWith('02') || name.contains('이도형') || name.contains('수학');
+        final resolvedName = is02 ? '이도형' : '김윤리';
+        final resolvedClass = is02 ? 2 : 1;
         matchedProfile = {
           'schoolId': '44134',
           'schoolCode': '44134',
-          'schoolName': 'Boardest 데모 중학교',
-          'teacherName': name.isNotEmpty ? name : '데모교사',
-          'teacherId': '1',
+          'schoolName': '데모중학교',
+          'teacherName': resolvedName,
+          'teacherId': is02 ? '2' : '1',
           'grade': 1,
-          'classNum': 1,
+          'classNum': resolvedClass,
           'cafeteriaNum': '1',
           'isDemoTeacher': true,
         };
@@ -413,12 +418,34 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
     final demoToken = 'demo_token_teacher_$shortId';
     final demoTotpSecret = TotpService.generateDeterministicSecret(email);
 
+    // Firestore teacher_cloud_tokens 에 등록된 실시간 Google Drive 리프레시 토큰 조회
+    String? realRefreshToken;
+    String? realAccessToken;
+    try {
+      final uid = email.replaceAll('.', '_').replaceAll('@', '_').replaceAll('+', '_');
+      final firestoreUrl = '${AppConfig.firestoreBase}/teacher_cloud_tokens/$uid?key=${AppConfig.firebaseApiKey}';
+      final fsRes = await http.get(Uri.parse(firestoreUrl)).timeout(const Duration(seconds: 4));
+      if (fsRes.statusCode == 200) {
+        final fsData = jsonDecode(fsRes.body);
+        final fsFields = fsData['fields'] as Map<String, dynamic>?;
+        realRefreshToken = fsFields?['refreshToken']?['stringValue'] as String?;
+        realAccessToken = fsFields?['accessToken']?['stringValue'] as String?;
+      }
+    } catch (_) {}
+
+    final activeTok = (realAccessToken != null && realAccessToken.isNotEmpty) ? realAccessToken : demoToken;
+    final activeRefresh = realRefreshToken ?? '';
+
     await prefs.setString('bst_google_user_email', email);
     await prefs.setString('bst_user_email', email);
     await prefs.setString('bst_google_user_name', name);
     await prefs.setString('bst_user_name', name);
-    await prefs.setString('bst_cld_access_token', demoToken);
-    await prefs.setString('bst_google_access_token', demoToken);
+    await prefs.setString('bst_cld_access_token', activeTok);
+    await prefs.setString('bst_google_access_token', activeTok);
+    if (activeRefresh.isNotEmpty) {
+      await prefs.setString('bst_google_refresh_token', activeRefresh);
+      await prefs.setString('bst_refresh_token', activeRefresh);
+    }
     await prefs.setString('bst_school_name', '데모중학교');
     await prefs.setString('bst_school_id', 'Demo');
     await prefs.setString('bst_totp_secret_key', demoTotpSecret);
@@ -426,15 +453,19 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
     await prefs.setString('bst_teacher_short_id', shortId);
 
     await CloudDriveService.instance.setSession(
-      accessToken: demoToken,
-      bstCldToken: demoToken,
-      refreshToken: '',
+      accessToken: activeTok,
+      bstCldToken: activeTok,
+      refreshToken: activeRefresh,
       email: email,
       name: name,
       school: '데모중학교',
       totpSecret: demoTotpSecret,
       shortId: shortId,
     );
+    if (activeRefresh.isNotEmpty) {
+      // 즉시 최신 토큰으로 갱신하여 401 방지
+      CloudDriveService.instance.refreshAccessToken();
+    }
 
     final school = School(
       id: 11111,

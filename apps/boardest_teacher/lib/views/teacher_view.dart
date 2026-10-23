@@ -368,6 +368,10 @@ class _TeacherViewState extends State<TeacherView> {
         final curTeacher = _settings.selectedTeacherName.isNotEmpty && _settings.selectedTeacherName != '김국어' && _settings.selectedTeacherName != '데모교사'
             ? _settings.selectedTeacherName
             : (_settings.selectedTeacher.isNotEmpty && _settings.selectedTeacher != '김국어' && _settings.selectedTeacher != '데모교사' ? _settings.selectedTeacher : defaultDemoTeacher);
+        if (_settings.selectedTeacher == '데모교사' || _settings.selectedTeacherName == '데모교사') {
+          _settings = _settings.copyWith(selectedTeacher: curTeacher, selectedTeacherName: curTeacher);
+          _storageService.saveSettings(_settings);
+        }
         final isDemo = AppConfig.isDemoMode ||
             _settings.schoolId.toLowerCase() == 'demo' ||
             _settings.selectedTeacher.contains('데모') ||
@@ -443,6 +447,10 @@ class _TeacherViewState extends State<TeacherView> {
       final curTeacher = _settings.selectedTeacherName.isNotEmpty && _settings.selectedTeacherName != '김국어' && _settings.selectedTeacherName != '데모교사'
           ? _settings.selectedTeacherName
           : (_settings.selectedTeacher.isNotEmpty && _settings.selectedTeacher != '김국어' && _settings.selectedTeacher != '데모교사' ? _settings.selectedTeacher : defaultDemoTeacher);
+      if (_settings.selectedTeacher == '데모교사' || _settings.selectedTeacherName == '데모교사') {
+        _settings = _settings.copyWith(selectedTeacher: curTeacher, selectedTeacherName: curTeacher);
+        await _storageService.saveSettings(_settings);
+      }
       final isDemo = AppConfig.isDemoMode ||
           _settings.schoolId.toLowerCase() == 'demo' ||
           _settings.selectedTeacher.contains('데모') ||

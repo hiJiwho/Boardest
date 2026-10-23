@@ -1,7 +1,30 @@
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v4.2.4 (Boardest 4.2.4)** (App: v4.2.4 / Teacher: v4.2.4 / Lite: v4.2.4 / Web: v4.2.4)  
+> **현재 시스템 버전**: **v5.0.9 (Boardest 5.0.9)** (App: v5.0.9 / Teacher: v5.0.9 / Lite: v5.0.9 / Web: v5.0.9)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
+
+---
+
+## 📌 v5.0.9 (2026-10-23) — 🧑‍🏫 데모 교사 DB/앱 완결(01 김윤리·02 이도형), Google Drive 401 오류 해소 & 토큰 자급자족 Refresh 복원, build.md 가이드 배포
+
+### 1. 🧑‍🏫 데모 교사 명칭 및 Firestore DB 실시간 연동 완결
+- **Firestore DB 실시간 갱신 완료**:
+  - `teacher_profiles` 및 `teacher_cloud_tokens` 컬렉션의 `01_boardest-teacher-demo_753210_xyz` 문서를 **`김윤리`** (도덕, 1-1반, 데모중학교)로 확정.
+  - `02_boardest-teacher-demo_753210_xyz` 문서를 **`이도형`** (수학, 1-2반, 데모중학교)로 확정.
+  - 비정상 키 문서(`02@boardest-teacher-demo.753210.xyz`) 정리 삭제.
+- **앱 코드 내부 `'데모교사'` 하드코딩 완전 제거**:
+  - `teacher_setup_wizard_view.dart`, `apps/boardest_teacher_oauth/index.html`, `teacher_view.dart`에서 데모 계정 요청 시 01은 무조건 **김윤리**, 02는 **이도형**으로 자동 주입 및 캐시 치환.
+
+### 2. 🔑 Google Drive 401 Unauthorized 원천 해소 & Web 자동 Refresh 복원
+- **Web 환경 Refresh 차단 버그 제거**:
+  - `bst_cloud_service.dart` 내 `if (!kIsWeb && activeRefreshToken != null)` 조건에서 `!kIsWeb` 제약을 제거하여 Web 환경에서도 401 발생 시 Google Token Endpoint를 직접 호출해 즉시 새 `access_token`을 자급자족 발급하도록 개선.
+- **토큰 자동 복원(Self-Healing) 파이프라인**:
+  - `_resolveRefreshToken()` 헬퍼를 추가하여 메모리, SharedPreferences, Firestore `teacher_cloud_tokens` 순으로 유효한 `refreshToken`을 즉시 복원.
+  - 교사 앱 `cloud_drive_service.dart`에서 데모 계정이라도 실제 Google `refreshToken`이 있는 경우 가상 토큰 대신 실제 Google Drive OAuth 토큰을 갱신하도록 허용하여 401 차단 및 영구 락(`_hasAuthError`) 방지.
+
+### 3. 📦 버전 5.0.9 판올림 및 `build.md` 배포 가이드 생성
+- 4개 앱 `pubspec.yaml` 버전 `5.0.9+5090`, Windows 패키지 `5.0.9.0`, `UpdateService.defaultVersion` 동기화 완료.
+- 사용자 지시에 따라 즉시 빌드를 실행하지 않고, **Class Pro(`boardest.apk`)**와 **Class Lite(`bst-class-lite.apk`)** 2종만 빌드하는 명령어 및 Web 14개 호스팅 배포 명령어를 포함한 **`build.md`** 가이드 작성 완료.
 
 ---
 

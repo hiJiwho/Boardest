@@ -499,11 +499,13 @@ class BstCloudService {
         ).timeout(const Duration(seconds: 8));
 
         if (res.statusCode == 401) {
-          if (activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
-            final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+          final rToken = await _resolveRefreshToken();
+          if (rToken != null && rToken.isNotEmpty) {
+            final newToken = await exchangeRefreshTokenForAccessToken(rToken);
             if (newToken != null && newToken.isNotEmpty) {
               activeToken = newToken;
               currentToken = newToken;
+              _hasAuthError = false;
               res = await http.get(
                 Uri.parse(url),
                 headers: {'Authorization': 'Bearer $currentToken'},
@@ -728,12 +730,14 @@ class BstCloudService {
       ).timeout(const Duration(seconds: 60));
 
       if (res.statusCode == 401) {
-        if (!kIsWeb && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+        final rToken = await _resolveRefreshToken();
+        if (rToken != null && rToken.isNotEmpty) {
           debugPrint('[BstCloudService] downloadDriveFileBytes 401 Unauthorized. Auto-refreshing access token...');
-          final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+          final newToken = await exchangeRefreshTokenForAccessToken(rToken);
           if (newToken != null && newToken.isNotEmpty) {
             activeToken = newToken;
             currentToken = newToken;
+            _hasAuthError = false;
             res = await http.get(
               Uri.parse(url),
               headers: {'Authorization': 'Bearer $currentToken'},
@@ -782,10 +786,12 @@ class BstCloudService {
       ).timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 401) {
-        if (!kIsWeb && activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
-          final refreshed = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+        final rToken = await _resolveRefreshToken();
+        if (rToken != null && rToken.isNotEmpty) {
+          final refreshed = await exchangeRefreshTokenForAccessToken(rToken);
           if (refreshed != null && refreshed.isNotEmpty) {
             activeToken = refreshed;
+            _hasAuthError = false;
             final retryRes = await http.get(
               Uri.parse(url),
               headers: {'Authorization': 'Bearer $refreshed'},
@@ -938,6 +944,42 @@ class BstCloudService {
   static final Map<String, ({String token, DateTime expiresAt})> _tokenCache = {};
   static final Map<String, Future<String?>> _ongoingTokenExchanges = {};
 
+  /// 활성화된 교사 또는 저장소/Firestore로부터 Google Drive refresh_token 확보
+  Future<String?> _resolveRefreshToken() async {
+    if (activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
+      return activeRefreshToken;
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('bst_active_refresh_token');
+      if (saved != null && saved.isNotEmpty) {
+        activeRefreshToken = saved;
+        return saved;
+      }
+      final teachers = await getCloudTeachers();
+      if (activeTeacherName != null && activeTeacherName!.isNotEmpty) {
+        final match = teachers.where((t) => t.teacherName == activeTeacherName || t.ownerEmail == activeTeacherName).firstOrNull ??
+            teachers.where((t) => t.teacherName.contains(activeTeacherName!) || (activeTeacherName!.contains(t.teacherName) && t.teacherName.isNotEmpty)).firstOrNull;
+        if (match != null && match.refreshToken != null && match.refreshToken!.isNotEmpty) {
+          activeRefreshToken = match.refreshToken;
+          await prefs.setString('bst_active_refresh_token', match.refreshToken!);
+          return match.refreshToken;
+        }
+      } else if (teachers.isNotEmpty) {
+        for (final t in teachers) {
+          if (t.refreshToken != null && t.refreshToken!.isNotEmpty) {
+            activeRefreshToken = t.refreshToken;
+            await prefs.setString('bst_active_refresh_token', t.refreshToken!);
+            return t.refreshToken;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[BstCloudService] _resolveRefreshToken error: $e');
+    }
+    return null;
+  }
+
   /// 9. Refresh Token -> Google 임시 Access Token 교환 (인플라이트 중복 제거 & 10분 캐시 & Worker CORS 폴백)
   Future<String?> exchangeRefreshTokenForAccessToken(String refreshToken) async {
     if (refreshToken.isEmpty) return null;
@@ -1059,11 +1101,13 @@ class BstCloudService {
         );
         var res = await http.get(url, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
         if (res.statusCode == 401) {
-          if (activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
-            final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
+          final rToken = await _resolveRefreshToken();
+          if (rToken != null && rToken.isNotEmpty) {
+            final newToken = await exchangeRefreshTokenForAccessToken(rToken);
             if (newToken != null && newToken.isNotEmpty) {
               activeToken = newToken;
               currentToken = newToken;
+              _hasAuthError = false;
               res = await http.get(url, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
             } else {
               _hasAuthError = true;

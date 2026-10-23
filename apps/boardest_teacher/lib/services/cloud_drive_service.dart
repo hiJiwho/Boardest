@@ -955,10 +955,11 @@ class CloudDriveService with ChangeNotifier {
     _accessToken ??= prefs.getString(_tokenKey) ?? prefs.getString('bst_google_access_token');
     _refreshToken ??= prefs.getString(_refreshTokenKey);
 
-    final isDemo = AppConfig.isDemoMode ||
-        (_userEmail != null && _userEmail!.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz')) ||
-        (_accessToken != null && _accessToken!.startsWith('demo_token'));
-    if (isDemo) {
+    // Firestore에 refreshToken이 없는 순수 오프라인 가상 데모 계정일 때만 갱신 바이패스
+    final isVirtualDemo = (_accessToken != null && _accessToken!.startsWith('demo_token')) &&
+        (_refreshToken == null || _refreshToken!.isEmpty) &&
+        (_userEmail == null || !_userEmail!.toLowerCase().endsWith('boardest-teacher-demo.753210.xyz'));
+    if (isVirtualDemo) {
       _hasAuthError = false;
       return true;
     }
