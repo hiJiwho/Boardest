@@ -239,11 +239,12 @@ class ComciganService {
     }
 
     // 2. Fallback map
-    const fallbackMap = {'ydm': 44134};
+    const fallbackMap = {'ydm': 44134, 'demo': 44134, '44134': 44134};
     final int fallbackCode = fallbackMap[cleanId] ?? int.tryParse(cleanId) ?? 44134;
+    final fallbackName = (cleanId == 'ydm') ? '양동중학교' : '데모중학교';
     final fallbackResult = {
       'schoolCode': fallbackCode,
-      'schoolName': cleanId == 'ydm' ? '보데스트 중학교' : '보데스트 중학교',
+      'schoolName': fallbackName,
       'schoolId': cleanId,
     };
     _schoolConfigCache[cleanId] = fallbackResult;

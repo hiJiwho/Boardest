@@ -387,9 +387,10 @@ class _TeacherViewState extends State<TeacherView> {
         } else if (_settings.schoolId.isNotEmpty || _settings.selectedSchool != null) {
           try {
             final sId = _settings.schoolId.isNotEmpty ? _settings.schoolId : 'ydm';
+            final isDemoModeActive = AppConfig.isDemoMode || sId.toLowerCase() == 'demo' || sId == '44134';
             final schoolCfg = await ComciganService.fetchSchoolConfig(sId);
             final int resolvedCode = schoolCfg['schoolCode'] as int? ?? 44134;
-            final String resolvedName = schoolCfg['schoolName'] as String? ?? '보데스트 중학교';
+            final String resolvedName = isDemoModeActive ? '데모중학교' : (schoolCfg['schoolName'] as String? ?? '양동중학교');
             _settings = _settings.copyWith(
               selectedSchool: School(id: resolvedCode, code: resolvedCode, name: resolvedName, region: '서울'),
               schoolId: sId,
@@ -428,9 +429,10 @@ class _TeacherViewState extends State<TeacherView> {
 
       // Boardest Control에 등록된 control_configs 학교 설정 상시 동기화
       final sId = _settings.schoolId.isNotEmpty ? _settings.schoolId : 'ydm';
+      final isDemoModeActive = AppConfig.isDemoMode || sId.toLowerCase() == 'demo' || sId == '44134';
       final schoolCfg = await ComciganService.fetchSchoolConfig(sId);
       final int resolvedCode = schoolCfg['schoolCode'] as int? ?? 44134;
-      final String resolvedName = schoolCfg['schoolName'] as String? ?? '보데스트 중학교';
+      final String resolvedName = isDemoModeActive ? '데모중학교' : (schoolCfg['schoolName'] as String? ?? '양동중학교');
 
       if (_settings.selectedSchool == null || _settings.selectedSchool!.code != resolvedCode || _settings.selectedSchool!.code <= 0) {
         _settings = _settings.copyWith(
