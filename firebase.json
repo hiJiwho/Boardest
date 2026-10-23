@@ -12,7 +12,12 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.appx",
+        "**/*.msix"
       ],
       "cleanUrls": true,
       "headers": [
@@ -88,7 +93,12 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.appx",
+        "**/*.msix"
       ],
       "cleanUrls": true,
       "headers": [
@@ -176,7 +186,12 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.appx",
+        "**/*.msix"
       ],
       "headers": [
         {
@@ -220,7 +235,12 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.appx",
+        "**/*.msix"
       ],
       "headers": [
         {
@@ -255,7 +275,12 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.appx",
+        "**/*.msix"
       ],
       "headers": [
         {
@@ -282,7 +307,12 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.appx",
+        "**/*.msix"
       ],
       "headers": [
         {
@@ -309,7 +339,12 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.appx",
+        "**/*.msix"
       ],
       "headers": [
         {
@@ -364,7 +399,12 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.appx",
+        "**/*.msix"
       ],
       "headers": [
         {
@@ -403,7 +443,12 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.appx",
+        "**/*.msix"
       ],
       "redirects": [
         {
@@ -424,7 +469,12 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.appx",
+        "**/*.msix"
       ],
       "headers": [
         {
@@ -450,7 +500,12 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.appx",
+        "**/*.msix"
       ],
       "cleanUrls": true
     },
@@ -460,7 +515,12 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.appx",
+        "**/*.msix"
       ],
       "headers": [
         {
@@ -488,7 +548,10 @@
         "**/.*",
         "**/node_modules/**",
         "**/*.apk",
-        "**/*.appx"
+        "**/*.appx",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.msix"
       ],
       "headers": [
         {
@@ -670,7 +733,12 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.appx",
+        "**/*.msix"
       ],
       "headers": [
         {

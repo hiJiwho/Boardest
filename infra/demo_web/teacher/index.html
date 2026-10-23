@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta name="application-version" content="5.0.4">
-  <base href="/teacher/">
+  <meta name="application-version" content="5.0.9">
+  <base href="/">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
@@ -253,6 +253,20 @@
 
   <!-- Flutter Web Bootstrapper JS -->
   <script src="flutter.js" defer></script>
+  <script>
+    // F key fullscreen (교사용 웹)
+    window.addEventListener('keydown', function(e) {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      if (e.key !== 'f' && e.key !== 'F') return;
+      var tag = (document.activeElement && document.activeElement.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable)) return;
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(function() {});
+      } else {
+        document.exitFullscreen().catch(function() {});
+      }
+    });
+  </script>
 </head>
 <body>
   <script>
