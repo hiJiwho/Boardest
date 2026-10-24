@@ -1,3 +1,15 @@
+## 🚀 [정식 릴리즈] Boardest v5.0.11 (2026-10-24)
+- **TBP & HTMLP 단일 통합 엔진 구축**:
+  - 교과서(TBP)와 프레젠터(HTMLP)를 단일 dHash 기반 인터랙티브 엔진(`TbpViewerRoute`)으로 통합.
+  - HTMLP는 우클릭 핫스팟 생성만 비활성화하고 dHash 기반 페이지별 판서 및 네이티브 Webview를 풀스펙으로 공유.
+- **Native Webview 우선 최적화**: Windows(`webview_windows`), Android(`webview_flutter`) 네이티브 웹뷰 기본 적용 및 웹 브라우저 iframe 샌드박스 지원.
+- **hijiwho/boardbook 정밀 동기화**: [0, 1000, 2000, 5000]ms 지수 버스트 캡처 및 5초 주기 포커스 감지, 페이지 전환 1초 후 자동 판서 교체.
+- **Cloud TBP & HTMLP 가상 파일 표출 (Folder as File)**: 드라이브 내 폴더 형태인 TBP/HTMLP를 탐색기에서 단일 파일로 표출하고 원클릭 즉시 실행.
+- **교실 스마트교과서 서재(`_showTbpWebSelectionDialog`) 전면 개편**: Cloud 연결 없이도 지학사, 비바샘, 엠티처, 티셀파, Canva 등 기본 스마트교과서 및 새 URL 즉시 실행 지원.
+- **앱 UI 버전 뱃지 통일**: 헤더 앱 이름 옆 버전 뱃지를 `V.5.0.11`로 일괄 갱신.
+
+---
+
 # 📜 Boardest Platform — Version Release & Change Log
 
 > **현재 시스템 버전**: **v5.0.10 (Boardest 5.0.10)** (App: v5.0.9 / Teacher: v5.0.9 / Lite: v5.0.9 / Web: v5.0.9)  

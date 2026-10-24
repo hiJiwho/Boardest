@@ -309,11 +309,10 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
     final name = (file['name'] ?? '').toString().toLowerCase();
     final mimeType = (file['mimeType'] ?? '').toString();
     final source = (file['source'] ?? '').toString();
-    if (source == 'tbp' || mimeType == 'application/x-bst-tbp-folder') {
-      return true;
-    }
+    if (source == 'tbp' || source == 'canva' || source == 'htmlp') return true;
+    if (mimeType == 'application/x-bst-tbp-folder' || mimeType == 'application/x-bst-htmlp-folder') return true;
     if (mimeType == 'application/vnd.google-apps.folder' &&
-        (name.endsWith('.tbp') || name.endsWith('.bsttbp'))) {
+        (name.endsWith('.tbp') || name.endsWith('.bsttbp') || name.endsWith('.htmlp') || name.endsWith('.canva.bst') || name.endsWith('.bstcanva'))) {
       return true;
     }
     return false;

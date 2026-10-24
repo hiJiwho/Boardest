@@ -32,7 +32,7 @@ class TbpDhashEngine {
   bool _disposed = false;
 
   // 지수 버스트 딜레이 (ms): 페이지 넘김 직후 즉각 감지
-  static const List<int> _burstDelaysMs = [0, 120, 280, 550, 1000, 1800, 3200];
+  static const List<int> _burstDelaysMs = [0, 1000, 2000, 5000];
 
   // 동일 페이지 판정 임계값 (256비트 중 32비트 이하 차이는 같은 페이지의 렌더링/커서 노이즈로 간주)
   static const int _samePageThreshold = 32;

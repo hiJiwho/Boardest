@@ -223,25 +223,8 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
   }
 
   void _handleWebviewHotspotContext(double rx, double ry) {
-    if (!mounted) return;
-    if (_inputMode == TbpInputMode.pen) return;
-    setIframePointerEvents(false);
-    TbpHotspotOverlay.showAddHotspotModal(
-      context,
-      rx.clamp(0.02, 0.98),
-      ry.clamp(0.02, 0.98),
-      _tbpFolderPath,
-      _currentDhash,
-      _currentHotspots,
-      (updated) {
-        if (mounted) {
-          setState(() {
-            _currentHotspots = updated;
-          });
-        }
-        _syncIframePointerEvents();
-      },
-    ).then((_) => _syncIframePointerEvents());
+    // HTMLP mode: Hotspots disabled, annotation-only
+    return;
   }
 
   @override

@@ -24,7 +24,7 @@ class TbpDhashEngine {
   bool _disposed = false;
 
   // boadbook 동일 지수 버스트 딜레이 (ms): 2.15^n * 100
-  static const List<int> _burstDelaysMs = [0, 215, 462, 994, 2137, 4594, 9877];
+  static const List<int> _burstDelaysMs = [0, 1000, 2000, 5000];
 
   // Hamming distance 매칭 임계값
   static const int _matchThreshold = 64;
