@@ -35,7 +35,6 @@ import 'timetable_view.dart';
 import 'boardest_pen_view.dart';
 import 'setup_wizard_view.dart';
 import 'settings_fullscreen_view.dart';
-import 'weather_view.dart';
 import 'school_calendar_view.dart';
 import 'ppt_overlay_view.dart';
 import 'hwp_overlay_view.dart';
@@ -206,10 +205,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   int? _pickerWinner;
   bool _pickerRolling = false;
 
-  bool _showMiniWeather = false;
-  Offset _weatherWindowOffset = const Offset(300, 100);
-
-  bool _showMiniCalendar = false;
+      bool _showMiniCalendar = false;
   Offset _calendarWindowOffset = const Offset(200, 80);
   DateTime _miniCalendarMonth = DateTime.now();
 
@@ -323,8 +319,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             toolId = 'timer';
           } else if (arg == '-picker') {
             toolId = 'picker';
-          } else if (arg == '-weather') {
-            toolId = 'weather';
+          } else if (false) {
           } else if (arg == '-calendar') {
             toolId = 'school_calendar';
           } else if (arg == '-ppt' || arg == '-ppt_board') {
@@ -1979,14 +1974,31 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         ),
                         onPressed: () async {
                           Navigator.pop(context);
-                          await MealCallService.instance.clearMessage();
+                          final ok = await MealCallService.instance.sendAckToTeacher(
+                            classroomName: _settings.classNickname.isNotEmpty ? _settings.classNickname : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반',
+                          );
+                          if (mounted && ok) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('👍 선생님께 "확인했습니다" 답장을 보냈습니다!'),
+                                duration: Duration(seconds: 2),
+                                backgroundColor: Color(0xFF2EC4B6),
+                              ),
+                            );
+                          }
                         },
-                        child: Text(
-                          '확인',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 16 * scale,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('👍 ', style: TextStyle(fontSize: 18)),
+                            Text(
+                              '확인했습니다 (답장 보내기)',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 16 * scale,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -2226,14 +2238,32 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         ),
                         onPressed: () async {
                           Navigator.pop(context);
-                          await MealCallService.instance.clearMealCall();
+                          final ok = await MealCallService.instance.sendAckToTeacher(
+                            classroomName: _settings.classNickname.isNotEmpty ? _settings.classNickname : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반',
+                          );
+                          if (mounted && ok) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('🍱 급식실에 "확인했습니다" 회신을 보냈습니다!'),
+                                duration: Duration(seconds: 2),
+                                backgroundColor: Color(0xFF00F5D4),
+                              ),
+                            );
+                          }
                         },
-                        child: Text(
-                          '확인',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 16 * scale,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('🍱 ', style: TextStyle(fontSize: 18)),
+                            Text(
+                              '확인했습니다 (급식실로 이동)',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 16 * scale,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -4989,8 +5019,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             if (_showMiniTimer) _buildMiniTimerWindow(scale),
             if (_showMiniCalculator) _buildMiniCalculatorWindow(scale),
             if (_showMiniPicker) _buildMiniPickerWindow(scale),
-            if (_showMiniWeather) _buildMiniWeatherWindow(scale),
-            if (_showMiniCalendar) _buildMiniCalendarWindow(scale),
+                        if (_showMiniCalendar) _buildMiniCalendarWindow(scale),
             if (_showMiniAppDrawer) _buildMiniAppDrawerWindow(scale),
             if (_activePluginId != null)
               PluginRunnerView(
@@ -7344,8 +7373,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     ];
 
     final col2 = [
-      {'name': '날씨', 'icon': Icons.cloud, 'action': _openWeatherDialog},
-      {'name': '제비뽑기', 'icon': Icons.casino, 'action': _openRandomPicker},
+            {'name': '제비뽑기', 'icon': Icons.casino, 'action': _openRandomPicker},
       {'name': '판서하기', 'icon': Icons.edit, 'action': _openUnifiedPenDialog},
     ];
 
@@ -10586,7 +10614,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             child: Padding(
               padding: EdgeInsets.all(2.5 * scale),
               child: _buildGridSlot(
-                LauncherSlot(id: 'weather', name: '날씨', type: LauncherSlotType.boardestTool),
+                LauncherSlot(id: "timer", name: "타이머", type: LauncherSlotType.boardestTool),
                 scale,
                 0,
               ),
@@ -10684,8 +10712,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         _buildToolSlotItem('unified_pen', '판서하기', 7, scale),
                         _buildToolSlotItem('bst_cloud', 'Cloud', 8, scale),
                       ],
-                      _buildToolSlotItem('weather', '날씨', 9, scale),
-                      _buildToolSlotItem('school_calendar', '학사달력', 10, scale),
+                                            _buildToolSlotItem('school_calendar', '학사달력', 10, scale),
                       _buildToolSlotItem('app_drawer', '앱서랍', 11, scale),
                       _buildToolSlotItem('timer', '타이머', 12, scale),
                       _buildToolSlotItem('settings', '설정', 13, scale),
@@ -11192,9 +11219,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         return Icons.calculate_rounded;
       case 'picker':
         return Icons.person_search_rounded;
-      case 'weather':
-        return Icons.wb_sunny_rounded;
-      case 'school_calendar':
+            case 'school_calendar':
         return Icons.calendar_month_rounded;
       case 'notepad':
         return Icons.note_alt_rounded;
@@ -11246,9 +11271,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         return _openCalculator;
       case 'picker':
         return _openRandomPicker;
-      case 'weather':
-        return _openWeatherDialog;
-      case 'school_calendar':
+            case 'school_calendar':
         return _openSchoolCalendarDialog;
       case 'notepad':
         return _openNotepad;
@@ -14263,366 +14286,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     );
   }
 
-  Widget _buildMiniWeatherWindow(double scale) {
-    final accentColor = const Color(0xFF00F5D4);
-    const String temp = '23°';
-    const String status = '대체로 맑음';
-    const String loc = '우리학교 (교실)';
-    const String humidity = '48%';
-    const String wind = '3.2 m/s';
-    const String fineDust = '18 ㎍/㎥ (좋음)';
-    const String uv = '보통 (4)';
-    final weeklyForecast = [
-      {
-        'day': '오늘',
-        'temp': '15°/24°',
-        'icon': Icons.wb_sunny_rounded,
-        'color': Colors.amberAccent,
-      },
-      {
-        'day': '내일',
-        'temp': '16°/25°',
-        'icon': Icons.wb_cloudy_rounded,
-        'color': Colors.blueGrey,
-      },
-      {
-        'day': '화요일',
-        'temp': '14°/23°',
-        'icon': Icons.umbrella_rounded,
-        'color': Colors.blueAccent,
-      },
-      {
-        'day': '수요일',
-        'temp': '15°/26°',
-        'icon': Icons.wb_sunny_rounded,
-        'color': Colors.amberAccent,
-      },
-      {
-        'day': '목요일',
-        'temp': '17°/27°',
-        'icon': Icons.wb_sunny_rounded,
-        'color': Colors.amberAccent,
-      },
-    ];
-
-    return Positioned(
-      left: _weatherWindowOffset.dx,
-      top: _weatherWindowOffset.dy,
-      child: GestureDetector(
-        onPanUpdate: (details) {
-          setState(() {
-            _weatherWindowOffset += details.delta;
-          });
-        },
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            width: 320 * scale,
-            decoration: BoxDecoration(
-              color: const Color(0xFF16161A).withOpacity(0.7),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: accentColor.withOpacity(0.4),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                ),
-                BoxShadow(
-                  color: accentColor.withOpacity(0.08),
-                  blurRadius: 10,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header Bar
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 14 * scale,
-                        vertical: 8 * scale,
-                      ),
-                      color: Colors.white.withOpacity(0.04),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.wb_sunny_rounded,
-                            color: accentColor,
-                            size: 14 * scale,
-                          ),
-                          SizedBox(width: 8 * scale),
-                          Text(
-                            '기상 정보',
-                            style: GoogleFonts.notoSansKr(
-                              color: Colors.white.withOpacity(0.9),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11 * scale,
-                            ),
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            constraints: const BoxConstraints(),
-                            padding: EdgeInsets.zero,
-                            icon: Icon(
-                              Icons.close_rounded,
-                              color: const Color(0xFFEF4565),
-                              size: 14 * scale,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _showMiniWeather = false;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Main Area
-                    Padding(
-                      padding: EdgeInsets.all(12.0 * scale),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            padding: EdgeInsets.all(10 * scale),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  const Color(0xFF2EC4B6).withOpacity(0.15),
-                                  const Color(0xFF2CB67D).withOpacity(0.05),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.06),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.wb_sunny_rounded,
-                                  size: 40 * scale,
-                                  color: Colors.amberAccent,
-                                ),
-                                SizedBox(width: 12 * scale),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        loc,
-                                        style: GoogleFonts.notoSansKr(
-                                          color: Colors.white70,
-                                          fontSize: 9 * scale,
-                                        ),
-                                      ),
-                                      Text(
-                                        temp,
-                                        style: GoogleFonts.outfit(
-                                          color: Colors.white,
-                                          fontSize: 24 * scale,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      Text(
-                                        status,
-                                        style: GoogleFonts.notoSansKr(
-                                          color: accentColor,
-                                          fontSize: 10 * scale,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(height: 10 * scale),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildMiniWeatherDetailCard(
-                                  '습도',
-                                  humidity,
-                                  Icons.water_drop_rounded,
-                                  const Color(0xFF00F5D4),
-                                  scale,
-                                ),
-                              ),
-                              SizedBox(width: 6 * scale),
-                              Expanded(
-                                child: _buildMiniWeatherDetailCard(
-                                  '바람',
-                                  wind,
-                                  Icons.air_rounded,
-                                  const Color(0xFF2CB67D),
-                                  scale,
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 6 * scale),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildMiniWeatherDetailCard(
-                                  '미세먼지',
-                                  fineDust,
-                                  Icons.grain_rounded,
-                                  Colors.amberAccent,
-                                  scale,
-                                ),
-                              ),
-                              SizedBox(width: 6 * scale),
-                              Expanded(
-                                child: _buildMiniWeatherDetailCard(
-                                  '자외선',
-                                  uv,
-                                  Icons.wb_sunny_outlined,
-                                  Colors.orangeAccent,
-                                  scale,
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 10 * scale),
-                          Divider(
-                            color: Colors.white.withOpacity(0.08),
-                            height: 1,
-                          ),
-                          SizedBox(height: 8 * scale),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              '주간 예보',
-                              style: GoogleFonts.notoSansKr(
-                                color: Colors.white60,
-                                fontSize: 9 * scale,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          SizedBox(height: 6 * scale),
-                          SizedBox(
-                            height: 62 * scale,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: weeklyForecast.map((f) {
-                                return Container(
-                                  width: 54 * scale,
-                                  padding: EdgeInsets.symmetric(
-                                    vertical: 4 * scale,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.02),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: Colors.white.withOpacity(0.04),
-                                    ),
-                                  ),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        f['day'] as String,
-                                        style: GoogleFonts.notoSansKr(
-                                          color: Colors.white54,
-                                          fontSize: 8 * scale,
-                                        ),
-                                      ),
-                                      SizedBox(height: 2 * scale),
-                                      Icon(
-                                        f['icon'] as IconData,
-                                        color: f['color'] as Color,
-                                        size: 14 * scale,
-                                      ),
-                                      SizedBox(height: 2 * scale),
-                                      Text(
-                                        f['temp'] as String,
-                                        style: GoogleFonts.outfit(
-                                          color: Colors.white.withOpacity(0.85),
-                                          fontSize: 8 * scale,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMiniWeatherDetailCard(
-    String title,
-    String val,
-    IconData icon,
-    Color iconColor,
-    double scale,
-  ) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 6 * scale),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: iconColor, size: 12 * scale),
-          SizedBox(width: 6 * scale),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.notoSansKr(
-                    color: Colors.white38,
-                    fontSize: 8 * scale,
-                  ),
-                ),
-                Text(
-                  val,
-                  style: GoogleFonts.notoSansKr(
-                    color: Colors.white.withOpacity(0.9),
-                    fontSize: 9 * scale,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildMiniCalendarWindow(double scale) {
     final accentColor = const Color(0xFF00F5D4);
     final firstDay = DateTime(
@@ -15579,15 +15242,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         context,
       ).showSnackBar(SnackBar(content: Text('파일을 열 수 없습니다: $e')));
     }
-  }
-
-  void _openWeatherDialog() {
-    setState(() {
-      _showMiniWeather = !_showMiniWeather;
-      if (_showMiniWeather) {
-        _weatherWindowOffset = const Offset(300, 100);
-      }
-    });
   }
 
   void _openSchoolCalendarDialog() {

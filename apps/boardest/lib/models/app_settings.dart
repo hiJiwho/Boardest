@@ -157,8 +157,7 @@ class LauncherSlot {
     LauncherSlot._tool('타이머', 'timer'),
     LauncherSlot._tool('계산기', 'calculator'),
     LauncherSlot._tool('발표자', 'picker'),
-    LauncherSlot._tool('날씨', 'weather'),
-    LauncherSlot._tool('학사달력', 'school_calendar'),
+        LauncherSlot._tool('학사달력', 'school_calendar'),
 
     // 판서 관련 (Annotation Tools)
     LauncherSlot._tool('기본판서', 'whiteboard'),
@@ -268,12 +267,7 @@ class AppSettings {
         name: '발표자',
         id: 'picker',
       ),
-      LauncherSlot(
-        type: LauncherSlotType.boardestTool,
-        name: '날씨',
-        id: 'weather',
-      ),
-      LauncherSlot(
+            LauncherSlot(
         type: LauncherSlotType.boardestTool,
         name: '학사달력',
         id: 'school_calendar',

@@ -50,7 +50,6 @@ import 'meal_view.dart';
 import 'message_view.dart';
 import '../services/tray_service.dart';
 import '../services/update_service.dart';
-import 'weather_view.dart';
 import 'saved_ink_view.dart';
 import 'video_board_view.dart';
 import 'web_hwp_ppt_view.dart';
@@ -5462,9 +5461,7 @@ class _TeacherViewState extends State<TeacherView> {
         return Icons.calculate_rounded;
       case 'picker':
         return Icons.person_search_rounded;
-      case 'weather':
-        return Icons.wb_sunny_rounded;
-      case 'school_calendar':
+            case 'school_calendar':
         return Icons.calendar_month_rounded;
       case 'notepad':
         return Icons.note_alt_rounded;
@@ -5534,9 +5531,7 @@ class _TeacherViewState extends State<TeacherView> {
         return _openCalculator;
       case 'picker':
         return _openRandomPicker;
-      case 'weather':
-        return _openWeatherDialog;
-      case 'school_calendar':
+            case 'school_calendar':
         return _openSchoolCalendarDialog;
       case 'whiteboard':
         return _openWhiteboard;
@@ -5672,7 +5667,6 @@ class _TeacherViewState extends State<TeacherView> {
       {'name': 'HTML Present (.HTMLP)', 'icon': Icons.slideshow_rounded, 'color': const Color(0xFF00F5D4), 'action': () { Navigator.of(context).pop(); _openCanvaBoard(); }},
       {'name': '급식 지도 & 문자', 'icon': Icons.restaurant_menu_rounded, 'color': const Color(0xFF2EC4B6), 'action': () { Navigator.of(context).pop(); Navigator.of(context).push(MaterialPageRoute(builder: (_) => MealView(scaleFactor: s))); }},
       {'name': '학급 쪽지', 'icon': Icons.mail_rounded, 'color': const Color(0xFFFF8906), 'action': () { Navigator.of(context).pop(); Navigator.of(context).push(MaterialPageRoute(builder: (_) => MessageView(scaleFactor: s))); }},
-      {'name': '날씨 정보', 'icon': Icons.wb_sunny_rounded, 'color': const Color(0xFFFF8906), 'action': () { Navigator.of(context).pop(); showDialog(context: context, builder: (_) => WeatherDialog(scaleFactor: s)); }},
       {'name': '학사 일정', 'icon': Icons.calendar_month_rounded, 'color': const Color(0xFF00F5D4), 'action': () { Navigator.of(context).pop(); showDialog(context: context, builder: (_) => SchoolCalendarDialog(scaleFactor: s, apiScheduleEvents: const [])); }},
       {'name': '웹 브라우저', 'icon': Icons.language_rounded, 'color': const Color(0xFF3B82F6), 'action': () { Navigator.of(context).pop(); launchUrl(Uri.parse('https://www.google.com')); }},
       {'name': 'TBP 교과서 (.TBP)', 'icon': Icons.menu_book_rounded, 'color': const Color(0xFF7F5AF0), 'action': () { Navigator.of(context).pop(); _openBoardBookEditor(); }},
@@ -5795,14 +5789,7 @@ class _TeacherViewState extends State<TeacherView> {
     });
   }
 
-  void _openWeatherDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => WeatherDialog(scaleFactor: _settings.scaleFactor),
-    );
-  }
-
-  void _openSchoolCalendarDialog() {
+    void _openSchoolCalendarDialog() {
     showDialog(
       context: context,
       builder: (context) => SchoolCalendarDialog(
@@ -6352,8 +6339,7 @@ class _TeacherViewState extends State<TeacherView> {
       {'id': 'meal_call',       'name': '급식문자'},
       {'id': 'school_calendar', 'name': '학사달력'},
       {'id': 'message_box',     'name': '학급쪽지'},
-      {'id': 'weather',         'name': '날씨'},
-      {'id': 'settings',        'name': '설정'},
+            {'id': 'settings',        'name': '설정'},
     ];
 
     return Container(
@@ -7435,8 +7421,7 @@ class _TeacherViewState extends State<TeacherView> {
       {'id': 'whiteboard', 'name': '기본판서'},
       {'id': 'picker', 'name': '발표자'},
       {'id': 'document_board', 'name': '문서판서'},
-      {'id': 'weather', 'name': '날씨'},
-      {'id': 'website_board', 'name': '사이트 판서'},
+            {'id': 'website_board', 'name': '사이트 판서'},
       {'id': 'school_calendar', 'name': '학사달력'},
       {'id': 'settings', 'name': '설정'},
     ];

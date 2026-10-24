@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boardest 학교 도입 및 설치 가이드 — Boardest Install Guide</title>
+  <link rel="icon" type="image/png" href="https://boardest-teacher.web.app/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0A0E14;
+      --card-bg: rgba(18, 24, 34, 0.88);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #00F5D4;
+      --secondary: #7F5AF0;
+      --accent-orange: #FF8906;
+      --accent-blue: #00BAF2;
+      --text: #FFFFFF;
+      --text-sub: #94A1B2;
+      --font-brand: 'Outfit', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans KR', sans-serif; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(127, 90, 240, 0.2) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(0, 245, 212, 0.15) 0px, transparent 50%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 20px 80px;
+    }
+
+    .container {
+      max-width: 960px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* Top Nav */
+    .top-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 40px;
+      padding: 14px 24px;
+      border-radius: 16px;
+      background: rgba(14, 19, 28, 0.85);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(16px);
+      position: sticky;
+      top: 14px;
+      z-index: 100;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      text-decoration: none;
+    }
+
+    .nav-brand-title {
+      font-family: var(--font-brand);
+      font-size: 26px;
+      font-weight: 900;
+      color: #FFF;
+      letter-spacing: -0.5px;
+    }
+
+    .nav-brand-sub {
+      font-family: var(--font-brand);
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--primary);
+    }
+
+    .nav-menu {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .nav-btn {
+      color: #FFF;
+      text-decoration: none;
+      font-size: 13.5px;
+      font-weight: 700;
+      padding: 8px 16px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--card-border);
+      transition: all 0.2s ease;
+    }
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+    .nav-btn.primary {
+      background: var(--primary);
+      color: #080D11;
+      border: none;
+    }
+    .nav-btn.primary:hover {
+      background: #38EF7D;
+    }
+
+    /* Hero */
+    header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .badge-hero {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: rgba(0, 245, 212, 0.12);
+      border: 1px solid rgba(0, 245, 212, 0.3);
+      color: var(--primary);
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: 40px;
+      font-weight: 900;
+      line-height: 1.2;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #FFFFFF 0%, #00F5D4 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    p.subtitle {
+      font-size: 16px;
+      color: var(--text-sub);
+      max-width: 640px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* Steps Timeline */
+    .step-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 32px 28px;
+      margin-bottom: 28px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      position: relative;
+    }
+
+    .step-card.highlight {
+      border-color: rgba(0, 245, 212, 0.35);
+      box-shadow: 0 12px 36px rgba(0, 245, 212, 0.1);
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .step-num {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--secondary) 0%, var(--primary) 100%);
+      color: #080D11;
+      font-family: var(--font-brand);
+      font-size: 20px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .step-title-box h3 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #FFF;
+      margin-bottom: 4px;
+    }
+
+    .step-title-box p {
+      font-size: 13.5px;
+      color: var(--text-sub);
+    }
+
+    .step-body {
+      font-size: 14.5px;
+      color: #CBD5E1;
+      line-height: 1.7;
+    }
+
+    .code-box {
+      background: #06090E;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin: 16px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 14px;
+      color: #00F5D4;
+      overflow-x: auto;
+    }
+
+    .code-box code {
+      font-family: inherit;
+    }
+
+    .btn-copy {
+      background: rgba(0, 245, 212, 0.15);
+      border: 1px solid rgba(0, 245, 212, 0.3);
+      color: #00F5D4;
+      padding: 6px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      transition: all 0.2s;
+      flex-shrink: 0;
+      margin-left: 12px;
+    }
+    .btn-copy:hover {
+      background: #00F5D4;
+      color: #080D11;
+    }
+
+    .tip-box {
+      background: rgba(127, 90, 240, 0.12);
+      border-left: 4px solid var(--secondary);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-top: 16px;
+      font-size: 13.5px;
+      color: #E2E8F0;
+    }
+
+    .btn-link-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+      padding: 10px 20px;
+      border-radius: 10px;
+      background: rgba(0, 245, 212, 0.15);
+      border: 1px solid rgba(0, 245, 212, 0.35);
+      color: #00F5D4;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 700;
+      transition: all 0.2s ease;
+    }
+    .btn-link-action:hover {
+      background: var(--primary);
+      color: #080D11;
+      transform: translateY(-2px);
+    }
+
+    footer {
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-sub);
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid var(--card-border);
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Top Nav -->
+    <nav class="top-nav">
+      <a href="https://boardest.web.app" class="nav-brand">
+        <span class="nav-brand-title">Boardest</span>
+        <span class="nav-brand-sub">Install</span>
+      </a>
+      <div class="nav-menu">
+        <a href="https://boardest.web.app" class="nav-btn">← 메인 허브</a>
+        <a href="https://boardest-control.web.app" class="nav-btn" target="_blank">⚙️ Control 센터</a>
+        <a href="https://boardest-downloads.web.app" class="nav-btn primary" target="_blank">📥 다운로드관</a>
+      </div>
+    </nav>
+
+    <!-- Header -->
+    <header>
+      <div class="badge-hero">🚀 쉽고 빠른 4단계 도입</div>
+      <h1>학교에 Boardest 도입하기</h1>
+      <p class="subtitle">
+        중앙 관리 센터(Control)에서 학교를 등록하고, 교실 전자칠판과 교사용 기기를 단 5분 만에 연결하여 올인원 스마트 교육 환경을 시작하세요.
+      </p>
+    </header>
+
+    <!-- Step 1: Control 학교 만들기 -->
+    <div class="step-card highlight">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-title-box">
+          <h3>Control 센터에서 학교 생성 및 등록</h3>
+          <p>학교별 고유 코드와 학급 구조를 단 한 번만 등록합니다.</p>
+        </div>
+      </div>
+      <div class="step-body">
+        <p>1. <strong>Boardest Control 관리자 콘솔</strong>(<a href="https://boardest-control.web.app" target="_blank" style="color: #00F5D4;">boardest-control.web.app</a>)에 접속합니다.</p>
+        <p>2. [새 학교 만들기]를 클릭하고 <strong>학교명</strong>(예: 서울중학교)과 <strong>학교 영문 식별 코드</strong>(예: <code>seoul</code> 또는 <code>ydm</code>)를 지정합니다.</p>
+        <p>3. 학년 및 반 개수(예: 1~3학년, 각 1~8반)와 특별실(음악실, 미술실, 과학실 등), 급식실 번호(1~9번)를 설정 후 저장합니다.</p>
+        <div class="tip-box">
+          💡 <strong>학교 식별 코드</strong>는 교탁 PC와 교사용 기기에서 학교를 1초 만에 식별하는 핵심 키가 됩니다.
+        </div>
+        <a href="https://boardest-control.web.app" target="_blank" class="btn-link-action">
+          ⚙️ Boardest Control 센터 바로가기 ➔
+        </a>
+      </div>
+    </div>
+
+    <!-- Step 2: 윈도우 보안 인증서 등록 -->
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-title-box">
+          <h3>영구 보안 서명 인증서 등록 (최초 1회)</h3>
+          <p>교실 윈도우 PC 및 교사용 노트북에 영구 코드 서명 인증서를 원클릭 등록합니다.</p>
+        </div>
+      </div>
+      <div class="step-body">
+        <p>교탁 PC(Windows)의 PowerShell을 관리자 권한으로 열고 아래 원클릭 명령어를 붙여넣어 실행합니다:</p>
+        <div class="code-box">
+          <code id="cmd-cer">irm https://download-boardest.web.app/win-cer.ps1 | iex</code>
+          <button class="btn-copy" onclick="copyCmd('cmd-cer')">복사</button>
+        </div>
+        <p>이 스크립트는 2999년까지 유효한 Boardest 자체 보안 인증서를 Windows 인증서 저장소에 안전하게 등록하여, 차단 경고 없이 영구적으로 앱을 실행할 수 있도록 합니다.</p>
+      </div>
+    </div>
+
+    <!-- Step 3: 전자칠판(교탁 PC) 앱 설치 및 연결 -->
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-title-box">
+          <h3>전자칠판(교탁 PC) 앱 설치 & 교실 배정</h3>
+          <p>교실 전자칠판에 Boardest Class Pro를 설치하고 학급을 설정합니다.</p>
+        </div>
+      </div>
+      <div class="step-body">
+        <p>1. <a href="https://boardest-downloads.web.app" target="_blank" style="color: #00F5D4;">공식 다운로드관</a>에서 <strong>Boardest Class Pro (.appx 또는 .apk)</strong>를 다운로드하여 설치합니다.</p>
+        <p>2. 앱을 실행하고 첫 화면 설정 마법사에서 <strong>1단계에서 만든 학교 식별 코드</strong>(예: <code>ydm</code>)를 입력합니다.</p>
+        <p>3. 해당 교실의 <strong>학년과 반</strong>(예: 1학년 7반) 또는 <strong>전용 교실명</strong>(예: 음악실)을 선택하면 설정이 완료됩니다!</p>
+        <div class="tip-box">
+          ✨ <strong>하트비트 없는 친환경 24시간 감지</strong>: 앱이 켜질 때 서버에 1회 출석 등록을 완료하여, 30초 주기 트래픽 낭비 없이 24시간 동안 교사 앱 및 급식 지도 관제에 안전하게 표출됩니다.
+        </div>
+        <a href="https://boardest-downloads.web.app" target="_blank" class="btn-link-action">
+          📥 최신 설치 패키지 다운로드 ➔
+        </a>
+      </div>
+    </div>
+
+    <!-- Step 4: 교사용 기기 및 급식 지도 연동 -->
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-num">4</div>
+        <div class="step-title-box">
+          <h3>교사용 디바이스 및 급식 지도 연동</h3>
+          <p>교안 클라우드(Google Drive) 연동과 실시간 급식 호출/쪽지 전송을 시작합니다.</p>
+        </div>
+      </div>
+      <div class="step-body">
+        <p>1. <strong>교사용 PC/웹</strong>(<a href="https://boardest-demo.web.app/teacher" target="_blank" style="color: #00F5D4;">boardest-demo.web.app/teacher</a>)에서 Google 로그인을 완료합니다.</p>
+        <p>2. 전자칠판 화면의 [Cloud]를 누르고 <strong>Web QR 스캔</strong> 또는 <strong>6자리 Stegano OTP</strong>를 입력하면 1초 만에 내 Google Drive 수업 교안이 칠판에 열립니다.</p>
+        <p>3. <strong>독립 급식 지도</strong>: 영양사 및 교사는 브라우저에서 <code>https://boardest-eat.web.app?schoolCode=학교코드</code>로 접속하여 1~9급식실 호출 및 학년 일괄 호출을 실행합니다.</p>
+        <p>4. <strong>FCM 직접 답장</strong>: 칠판 화면에 쪽지나 호출이 뜨면 교실에서 <strong>[👍 확인했습니다]</strong> 버튼을 누르는 즉시 발신 교사에게 확인 알림이 즉각 회신됩니다!</p>
+        <div class="tip-box">
+          🍱 급식 지도 관제 웹: <code>https://boardest-eat.web.app?schoolCode=내학교코드</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      Copyright © 2026 <strong>Boardest Platform</strong>. All rights reserved.
+    </footer>
+  </div>
+
+  <script>
+    function copyCmd(elemId) {
+      const text = document.getElementById(elemId).innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        alert("명령어가 클립보드에 복사되었습니다:\n" + text);
+      }).catch(err => {
+        prompt("아래 명령어를 복사하세요:", text);
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1863,9 +1863,9 @@ class BstCloudService {
         return (success: false, accessToken: null, teacherName: null, email: null, errorMessage: '6자리 OTP 코드를 입력해주세요.');
       }
 
-      // 1차: Firestore teacher_cloud_tokens 에 동기화된 실제 교사 계정 (일반 및 데모 모두 포함) 직접 검증
+      // 1차: [쿼터 초절약] 로컬/메모리 캐시 교사 우선 검증 (Read 0회 달성)
       try {
-        final teachers = await getCloudTeachers(forceRefresh: true);
+        var teachers = await getCloudTeachers(forceRefresh: false);
         final nowTime = DateTime.now();
         final candidateTimes = [
           nowTime,
@@ -1956,6 +1956,10 @@ class BstCloudService {
               );
             }
           }
+        }
+        // 캐시로 매칭되지 않았을 때만 서버에서 최신 교사 목록 1회 새로고침 후 재검증
+        if (!teachers.any((t) => t.ownerEmail.isNotEmpty)) {
+          teachers = await getCloudTeachers(forceRefresh: true);
         }
       } catch (fbErr) {
         debugPrint('[BstCloudService] Firestore OTP verification error: ' + fbErr.toString());

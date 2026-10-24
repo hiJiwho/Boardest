@@ -150,8 +150,7 @@ class LauncherSlot {
     LauncherSlot._tool('타이머', 'timer'),
     LauncherSlot._tool('계산기', 'calculator'),
     LauncherSlot._tool('발표자', 'picker'),
-    LauncherSlot._tool('날씨', 'weather'),
-    LauncherSlot._tool('학사달력', 'school_calendar'),
+        LauncherSlot._tool('학사달력', 'school_calendar'),
 
     // 판서 관련 (Annotation Tools)
     LauncherSlot._tool('기본판서', 'whiteboard'),
@@ -241,8 +240,7 @@ class AppSettings {
       LauncherSlot(type: LauncherSlotType.boardestTool, name: '타이머', id: 'timer'),
       LauncherSlot(type: LauncherSlotType.boardestTool, name: '계산기', id: 'calculator'),
       LauncherSlot(type: LauncherSlotType.boardestTool, name: '발표자', id: 'picker'),
-      LauncherSlot(type: LauncherSlotType.boardestTool, name: '날씨', id: 'weather'),
-      LauncherSlot(type: LauncherSlotType.boardestTool, name: '학사달력', id: 'school_calendar'),
+            LauncherSlot(type: LauncherSlotType.boardestTool, name: '학사달력', id: 'school_calendar'),
       LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''), // 빈칸 1 (기존 메모장 제거)
       LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''), // 빈칸 2 (기존 파일 탐색기 제거)
 

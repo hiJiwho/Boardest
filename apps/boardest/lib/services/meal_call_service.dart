@@ -64,7 +64,60 @@ class MealCallService {
     setManualActive(!isManualActive);
   }
 
-  // Callbacks to notify UI when events occur
+  String? lastSenderFcmToken;
+  String? lastSenderName;
+
+  // ─── 교사에게 [확인했습니다] 1회성 답장 전송 ───
+  Future<bool> sendAckToTeacher({String? classroomName}) async {
+    final docId = _documentId;
+    if (docId.isEmpty) return false;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final clName = classroomName ?? (_currentSettings?.classNickname.isNotEmpty == true ? _currentSettings!.classNickname : '${_currentSettings?.selectedGrade ?? 1}학년 ${_currentSettings?.selectedClass ?? 1}반') ?? '교실';
+
+    try {
+      // 1. RTDB에 확인 답장 1회 기록 (0.05초 즉시 교사 앱 화면 반영)
+      final rtdbUrl = '$_rtdbBase/eat_calls/$docId.json';
+      await http.patch(
+        Uri.parse(rtdbUrl),
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({
+          'acknowledged': true,
+          'acknowledgedAt': nowMs,
+          'ackClassroom': clName,
+          'called': false,
+          'message': null,
+        }),
+      ).timeout(const Duration(seconds: 4));
+
+      // 2. 발신 교사의 FCM 토큰이 있는 경우 직접 FCM 답장 푸시 트리거
+      if (lastSenderFcmToken != null && lastSenderFcmToken!.isNotEmpty) {
+        try {
+          final fcmUrl = '${AppConfig.firebaseFunctionsBase}/sendFcmNotification';
+          await http.post(
+            Uri.parse(fcmUrl),
+            headers: {"Content-Type": "application/json"},
+            body: json.encode({
+              'token': lastSenderFcmToken,
+              'title': '📬 쪽지 확인 완료',
+              'body': '$clName에서 쪽지를 확인했습니다!',
+              'data': {
+                'type': 'ack',
+                'classroom': clName,
+                'acknowledgedAt': nowMs.toString(),
+              }
+            }),
+          ).timeout(const Duration(seconds: 3));
+        } catch (_) {}
+      }
+
+      await clearMessage();
+      return true;
+    } catch (e) {
+      debugPrint('[MealCallService] sendAckToTeacher error: $e');
+      await clearMessage();
+      return false;
+    }
+  }
   VoidCallback? onMealCallReceived;
   void Function(String message, String from)? onMessageReceived;
   void Function(String message, String from)? onStudentCallReceived;
@@ -187,6 +240,10 @@ class MealCallService {
         final message = mapData['message']?.toString() ?? '';
         final messageFrom = mapData['messageFrom']?.toString() ?? '';
         final messageSentAt = mapData['messageSentAt']?.toString() ?? '';
+        if (mapData['fromFcmToken'] != null) {
+          lastSenderFcmToken = mapData['fromFcmToken']?.toString();
+        }
+        lastSenderName = messageFrom;
         if (message.isNotEmpty && messageSentAt.isNotEmpty && _lastMessageSentAt != messageSentAt) {
           _lastMessageSentAt = messageSentAt;
           onMessageReceived?.call(message, messageFrom);
@@ -273,18 +330,9 @@ class MealCallService {
     // 1. RTDB 실시간 SSE 스트림 연결 (0.1초 즉시 수신, Firestore 읽기 0회)
     _startRtdbStream();
 
-    // 2. 초기 1회 상태 등록 & 상태 체크
+    // 2. [친환경/쿼터 초절약] 하트비트 완전 제거! 앱 켤 때 1회만 등록 (24시간 유효)
     _registerClassroom();
     _checkCallStatus();
-
-    // 3. 30초 간격으로 하트비트 전송 및 SSE 연결 상태 감시 (0 Firestore Reads)
-    _activeTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      if (_currentSettings == null) return;
-      _registerClassroom();
-      if (_sseSubscription == null || _sseClient == null) {
-        _startRtdbStream();
-      }
-    });
   }
 
   void stopListening() {
@@ -387,8 +435,10 @@ class MealCallService {
           ? _currentSettings!.classNickname 
           : '${_currentSettings!.selectedGrade}학년 ${_currentSettings!.selectedClass}반';
 
-      // 1. Firebase Realtime Database (RTDB) 실시간 온라인 & 하트비트 등록 (0 Firestore Reads)
+      // 1. Firebase Realtime Database (RTDB) 최초 1회 출석 등록 (24시간 유효, 하트비트 없음)
       try {
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        final fcmTok = await FirebaseMessaging.instance.getToken().catchError((_) => null);
         final rtdbUrl = '$_rtdbBase/eat_calls/$docId.json';
         await http.patch(
           Uri.parse(rtdbUrl),
@@ -403,12 +453,14 @@ class MealCallService {
             'classNum': _currentSettings!.selectedClass,
             'classNickname': classNickname,
             'isOnline': true,
-            'lastActive': DateTime.now().millisecondsSinceEpoch,
+            'lastActive': nowMs,
+            'registeredAt': nowMs,
+            'fcmToken': fcmTok,
             'classOrder': _currentSettings!.mealCallClassOrder,
           }),
         ).timeout(const Duration(seconds: 4));
       } catch (re) {
-        debugPrint('[MealCallService] RTDB heartbeat error: $re');
+        debugPrint('[MealCallService] RTDB registration error: $re');
       }
     } catch (e) {
       debugPrint('Error registering classroom for meal call: $e');

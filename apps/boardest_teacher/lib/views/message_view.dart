@@ -153,19 +153,18 @@ class _MessageViewState extends State<MessageView> {
               }
               if (!isMatch) return;
 
-              // 온라인 여부 확인: isOnline=true 및 최근 5분 이내 하트비트 필수
-              if (val['isOnline'] != true) return;
-              final lastActiveVal = val['lastActive'];
-              if (lastActiveVal != null) {
-                if (lastActiveVal is num) {
-                  final diffSec = (nowMs - lastActiveVal.toInt()).abs() / 1000;
-                  if (diffSec > 300) return; // 5분 이상 핑 없으면 오프라인 간주
+              // [친환경 24시간 윈도우]: 24시간 이내에 첫 실행/출석 신호가 있었던 모든 학급 유지
+              final activeTimeVal = val['registeredAt'] ?? val['lastActive'];
+              if (activeTimeVal != null) {
+                int regMs = 0;
+                if (activeTimeVal is num) {
+                  regMs = activeTimeVal.toInt();
                 } else {
-                  try {
-                    final dt = DateTime.parse(lastActiveVal.toString()).toUtc();
-                    final diffSec = nowUtc.difference(dt).inSeconds.abs();
-                    if (diffSec > 300) return;
-                  } catch (_) {}
+                  regMs = DateTime.tryParse(activeTimeVal.toString())?.millisecondsSinceEpoch ?? 0;
+                }
+                if (regMs > 0) {
+                  final diffHours = (nowMs - regMs).abs() / (1000 * 60 * 60);
+                  if (diffHours > 24) return; // 24시간 지난 학급만 제외
                 }
               }
 
@@ -293,6 +292,7 @@ class _MessageViewState extends State<MessageView> {
                 'message': text,
                 'messageFrom': senderName,
                 'messageSentAt': nowIso,
+                'acknowledged': false,
               }),
             ).timeout(const Duration(seconds: 3));
             if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -311,6 +311,7 @@ class _MessageViewState extends State<MessageView> {
                 'message': text,
                 'messageFrom': senderName,
                 'messageSentAt': nowIso,
+                'acknowledged': false,
               }),
             ).timeout(const Duration(seconds: 3));
           } catch (_) {}

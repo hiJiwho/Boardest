@@ -286,8 +286,6 @@ void main(List<String> args) async {
       initialTool = 'timer';
     } else if (arg == '-picker') {
       initialTool = 'picker';
-    } else if (arg == '-weather') {
-      initialTool = 'weather';
     } else if (arg == '-calendar') {
       initialTool = 'school_calendar';
     } else if (arg == '-ppt' || arg == '-ppt_board') {
