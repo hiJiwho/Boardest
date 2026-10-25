@@ -105,4 +105,30 @@ if (fs.existsSync(liteBuildWeb)) {
 copyDirSafe(teacherBuildWeb, path.join(ROOT, 'infra', 'demo_web', 'teacher'));
 copyDirSafe(teacherBuildWeb, path.join(ROOT, 'infra', 'teacher_timetable_web'));
 
+// 6. Boardest Class Web 동기화
+console.log('=== Syncing Web Assets for Boardest Class ===');
+const classBuildWeb = path.join(ROOT, 'apps', 'boardest', 'build', 'web');
+const classWeb = path.join(ROOT, 'apps', 'boardest', 'web');
+const classAssets = path.join(classBuildWeb, 'assets');
+
+const classStaticFiles = [
+  'manifest.json',
+  'firebase-messaging-sw.js',
+  'favicon.png',
+  'passkey.html'
+];
+for (const file of classStaticFiles) {
+  copyFileSafe(path.join(classWeb, file), path.join(classBuildWeb, file));
+}
+fs.mkdirSync(classAssets, { recursive: true });
+if (fs.existsSync(path.join(ROOT, 'infra', 'demo_web', 'class', 'assets', 'FontManifest.json'))) {
+  copyFileSafe(path.join(ROOT, 'infra', 'demo_web', 'class', 'assets', 'FontManifest.json'), path.join(classAssets, 'FontManifest.json'));
+}
+if (fs.existsSync(path.join(ROOT, 'infra', 'demo_web', 'class', 'assets', 'AssetManifest.bin'))) {
+  copyFileSafe(path.join(ROOT, 'infra', 'demo_web', 'class', 'assets', 'AssetManifest.bin'), path.join(classAssets, 'AssetManifest.bin'));
+  const binBuf = fs.readFileSync(path.join(ROOT, 'infra', 'demo_web', 'class', 'assets', 'AssetManifest.bin'));
+  fs.writeFileSync(path.join(classAssets, 'AssetManifest.bin.json'), JSON.stringify(binBuf.toString('base64')), 'utf8');
+}
+copyDirSafe(classBuildWeb, path.join(ROOT, 'infra', 'demo_web', 'class'));
+
 console.log('=== Web Assets Sync Complete! ===');

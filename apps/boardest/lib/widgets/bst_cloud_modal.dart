@@ -12,6 +12,8 @@ import '../views/canva_overlay_view.dart';
 import '../views/pdf_board_view.dart';
 import '../views/ppt_overlay_view.dart';
 import '../views/hwp_overlay_view.dart';
+import '../views/tbp/tbp_viewer_route.dart';
+import '../views/boardest_pen_view.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 /// 전자칠판용 클라우드 파일 탐색기 & 터치 키패드 모달 (BstCloudModal)
@@ -143,10 +145,11 @@ class _BstCloudModalState extends State<BstCloudModal> {
     }
   }
 
+  // 0: Bst (기본 수업자료), 1: Bst TBP (스마트교과서 & 웹교안), 2: Bst Pen (판서노트)
+  int _folderTab = 0;
+
   String get _currentFolderName {
-    if (_categoryFilter == 'canva') return 'bst-canva';
-    if (_categoryFilter == 'tbp') return 'bst-tbs';
-    if (_categoryFilter == 'pen') return 'bst-pen';
+    if (_folderTab == 2) return 'bst-pen';
     return 'bst-save';
   }
 
@@ -182,23 +185,44 @@ class _BstCloudModalState extends State<BstCloudModal> {
   void _applyFilter() {
     List<BstCloudFile> list = _allFiles;
 
-    // 1. 카테고리 필터
+    // 1. 메인 3대 폴더 탭 필터
+    if (_folderTab == 1) {
+      // Bst TBP: TBP 교과서 및 HTMLP 교안 포인터
+      list = list.where((f) {
+        final l = f.name.toLowerCase();
+        return l.endsWith('.tbp') ||
+            l.endsWith('.htmlp') ||
+            l.endsWith('.bsttbp') ||
+            l.endsWith('.canva.bst') ||
+            f.mimeType == 'application/x-bst-tbp-folder';
+      }).toList();
+    } else if (_folderTab == 2) {
+      // Bst Pen: 판서 파일
+      list = list.where((f) => f.name.toLowerCase().endsWith('.pen') || f.name.toLowerCase().endsWith('.bstpen')).toList();
+    } else {
+      // Bst: 일반 수업 자료 (PDF, PPT, HWP 등) + TBP/HTMLP 포함 전체
+      // (기본 표시)
+    }
+
+    // 2. 세부 카테고리 필터
     if (_categoryFilter == 'pdf') {
       list = list.where((f) => f.name.toLowerCase().endsWith('.pdf')).toList();
-    } else if (_categoryFilter == 'canva') {
+    } else if (_categoryFilter == 'canva' || _categoryFilter == 'htmlp') {
       list = list.where((f) {
         final l = f.name.toLowerCase();
         return l.endsWith('.htmlp') || l.endsWith('.canva.bst') || l.endsWith('.canva') || l.endsWith('.bstcanva');
       }).toList();
     } else if (_categoryFilter == 'tbp') {
-      list = list.where((f) => f.name.toLowerCase().endsWith('.tbp') || f.name.toLowerCase().endsWith('.bsttbp')).toList();
+      list = list.where((f) => f.name.toLowerCase().endsWith('.tbp') || f.name.toLowerCase().endsWith('.bsttbp') || f.mimeType == 'application/x-bst-tbp-folder').toList();
     } else if (_categoryFilter == 'ppt') {
       list = list.where((f) => f.name.toLowerCase().endsWith('.ppt') || f.name.toLowerCase().endsWith('.pptx')).toList();
+    } else if (_categoryFilter == 'hwp') {
+      list = list.where((f) => f.name.toLowerCase().endsWith('.hwp') || f.name.toLowerCase().endsWith('.hwpx')).toList();
     } else if (_categoryFilter == 'pen') {
-      list = list.where((f) => f.name.toLowerCase().endsWith('.pen')).toList();
+      list = list.where((f) => f.name.toLowerCase().endsWith('.pen') || f.name.toLowerCase().endsWith('.bstpen')).toList();
     }
 
-    // 2. 검색어 필터
+    // 3. 검색어 필터
     if (_searchQuery.trim().isNotEmpty) {
       final query = _searchQuery.trim().toLowerCase();
       list = list.where((f) => f.name.toLowerCase().contains(query)).toList();
@@ -302,63 +326,51 @@ class _BstCloudModalState extends State<BstCloudModal> {
     if (token == null) return;
     final lower = file.name.toLowerCase();
 
-    if (lower.endsWith('.htmlp') || lower.endsWith('.canva.bst') || lower.endsWith('.canva') || lower.endsWith('.bstcanva')) {
-      // HTML Present / Canva 디자인 열기
-      final content = await BstCloudService.instance.readDriveFileText(file.id, token);
-      if (content != null) {
-        String canvaId = '';
-        String title = file.name;
-        try {
-          final data = jsonDecode(content);
-          canvaId = (data['embedUrl'] ?? data['url'] ?? data['webUrl'] ?? data['canvaUrl'] ?? data['canvaId'] ?? data['link'] ?? '').toString().trim();
-          title = data['title']?.toString() ?? file.name;
-        } catch (_) {
-          canvaId = content.trim();
-        }
-        if (canvaId.isNotEmpty && mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (ctx) => CanvaOverlayView(
-                canvaId: canvaId,
-                title: title,
-                scaleFactor: widget.scaleFactor,
-              ),
+    // 1. TBP 스마트 교과서 또는 HTMLP 프레젠터 열기 (통합 TbpViewerRoute)
+    if (lower.endsWith('.tbp') ||
+        lower.endsWith('.bsttbp') ||
+        lower.endsWith('.htmlp') ||
+        lower.endsWith('.canva.bst') ||
+        lower.endsWith('.canva') ||
+        lower.endsWith('.bstcanva') ||
+        file.mimeType == 'application/x-bst-tbp-folder') {
+      final isHtmlp = lower.endsWith('.htmlp') || lower.endsWith('.canva.bst') || lower.endsWith('.canva') || lower.endsWith('.bstcanva');
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (ctx) => TbpViewerRoute(
+              tbpFilePath: 'drive://tbp/${file.id}',
+              title: file.name,
+              scaleFactor: widget.scaleFactor,
+              mode: isHtmlp ? TbpViewerMode.htmlp : TbpViewerMode.tbp,
             ),
-          );
-        }
+          ),
+        );
       }
-    } else if (lower.endsWith('.tbp') || lower.endsWith('.bsttbp')) {
-      // TBP 교과서 열기
-      if (kIsWeb) {
-        final bytes = await BstCloudService.instance.downloadDriveFileBytes(file.id, token);
-        if (bytes != null && mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (ctx) => PdfBoardView(
-                initialFilePath: file.name,
-                pdfData: bytes,
-                scaleFactor: widget.scaleFactor,
-              ),
+      return;
+    }
+
+    // 2. 전자칠판 판서 노트 열기
+    if (lower.endsWith('.pen') || lower.endsWith('.bstpen')) {
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (ctx) => BoardestPenView(
+              filePath: file.name,
+              scaleFactor: widget.scaleFactor,
+              teacher: _teacherName ?? '선생님',
+              subject: '판서',
             ),
-          );
-        }
-      } else {
-        final localPath = await BstCloudService.instance.downloadDriveFile(file.id, file.name, token);
-        if (localPath != null && mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (ctx) => PdfBoardView(
-                initialFilePath: localPath,
-                scaleFactor: widget.scaleFactor,
-              ),
-            ),
-          );
-        }
+          ),
+        );
       }
-    } else if (lower.endsWith('.pdf')) {
+      return;
+    }
+
+    // 3. PDF 문서 열기
+    if (lower.endsWith('.pdf')) {
       Uint8List? bytes;
       if (file.id.isNotEmpty && token.isNotEmpty) {
         bytes = await BstCloudService.instance.downloadDriveFileBytes(file.id, token);
@@ -375,7 +387,11 @@ class _BstCloudModalState extends State<BstCloudModal> {
           ),
         );
       }
-    } else if (lower.endsWith('.ppt') || lower.endsWith('.pptx')) {
+      return;
+    }
+
+    // 4. PPT 프레젠테이션 열기
+    if (lower.endsWith('.ppt') || lower.endsWith('.pptx')) {
       if (kIsWeb) {
         final driveUrl = 'https://drive.google.com/file/d/${file.id}/view';
         launchUrl(Uri.parse(driveUrl), mode: LaunchMode.externalApplication);
@@ -400,7 +416,11 @@ class _BstCloudModalState extends State<BstCloudModal> {
           }
         }
       }
-    } else if (lower.endsWith('.hwp') || lower.endsWith('.hwpx')) {
+      return;
+    }
+
+    // 5. 한글 문서 열기
+    if (lower.endsWith('.hwp') || lower.endsWith('.hwpx')) {
       if (kIsWeb) {
         final driveUrl = 'https://drive.google.com/file/d/${file.id}/view';
         launchUrl(Uri.parse(driveUrl), mode: LaunchMode.externalApplication);
@@ -425,15 +445,88 @@ class _BstCloudModalState extends State<BstCloudModal> {
           }
         }
       }
+      return;
+    }
+
+    // 기타 파일
+    if (kIsWeb) {
+      final driveUrl = 'https://drive.google.com/file/d/${file.id}/view';
+      launchUrl(Uri.parse(driveUrl), mode: LaunchMode.externalApplication);
     } else {
-      if (kIsWeb) {
-        final driveUrl = 'https://drive.google.com/file/d/${file.id}/view';
-        launchUrl(Uri.parse(driveUrl), mode: LaunchMode.externalApplication);
+      final localPath = await BstCloudService.instance.downloadDriveFile(file.id, file.name, token);
+      if (localPath != null) {
+        await launchUrl(Uri.file(localPath), mode: LaunchMode.externalApplication);
+      }
+    }
+  }
+
+  /// 파일 삭제 핸들러 (TBP/HTMLP 영구 삭제 사전 경고)
+  Future<void> _deleteFile(BstCloudFile file) async {
+    final lower = file.name.toLowerCase();
+    final isTbpOrHtmlp = lower.endsWith('.tbp') ||
+        lower.endsWith('.htmlp') ||
+        lower.endsWith('.bsttbp') ||
+        lower.endsWith('.canva.bst') ||
+        file.mimeType == 'application/x-bst-tbp-folder';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16161A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(
+              isTbpOrHtmlp ? Icons.warning_amber_rounded : Icons.delete_outline_rounded,
+              color: const Color(0xFFEF4565),
+              size: 22 * widget.scaleFactor,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isTbpOrHtmlp ? '스마트 교재/교안 삭제 확인' : '파일 삭제 확인',
+              style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ],
+        ),
+        content: Text(
+          isTbpOrHtmlp
+              ? '[${file.name}] 을(를) 삭제하시겠습니까?\n\n⚠️ TBP/HTMLP 스마트 교안은 클라우드 포인터 파일 및 bst-tbp에 저장된 원본 프로젝트 데이터가 모두 영구히 삭제됩니다.'
+              : '[${file.name}] 파일을 클라우드에서 삭제하시겠습니까?',
+          style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('취소', style: GoogleFonts.notoSansKr(color: Colors.white38)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4565)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              isTbpOrHtmlp ? '영구 삭제' : '삭제',
+              style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      bool ok = false;
+      if (isTbpOrHtmlp) {
+        ok = await BstCloudService.instance.deletePointerShellWithCascade(file);
       } else {
-        final localPath = await BstCloudService.instance.downloadDriveFile(file.id, file.name, token);
-        if (localPath != null) {
-          await launchUrl(Uri.file(localPath), mode: LaunchMode.externalApplication);
-        }
+        ok = await BstCloudService.instance.deleteDriveFile(file.id);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ok ? '파일이 삭제되었습니다.' : '파일 삭제에 실패했습니다.'),
+            backgroundColor: ok ? const Color(0xFF10B981) : const Color(0xFFEF4565),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        _loadFiles();
       }
     }
   }
@@ -1062,28 +1155,18 @@ class _BstCloudModalState extends State<BstCloudModal> {
   Widget _buildFileExplorerView(double s) {
     return Column(
       children: [
-        // 상단 툴바: 경로 표시줄 & 검색창 & 새로고침
+        // 상단 툴바: 3대 폴더 전환 탭 (Bst, Bst TBP, Bst Pen) & 검색창 & 새로고침
         Container(
           padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 10 * s),
           color: const Color(0xFF1E293B).withOpacity(0.4),
           child: Row(
             children: [
-              // Breadcrumbs
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
-                  borderRadius: BorderRadius.circular(8 * s),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.folder_rounded, color: Color(0xFFFACC15), size: 16),
-                    SizedBox(width: 6 * s),
-                    Text('내 드라이브 > $_currentFolderName', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12 * s, fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
+              // 3대 핵심 보관함 전환 탭
+              _buildFolderTabButton(0, '📁 Bst (자료)', const Color(0xFF38BDF8), s),
+              SizedBox(width: 6 * s),
+              _buildFolderTabButton(1, '📐 Bst TBP (교재)', const Color(0xFF818CF8), s),
+              SizedBox(width: 6 * s),
+              _buildFolderTabButton(2, '🎨 Bst Pen (판서)', const Color(0xFF00F5D4), s),
 
               SizedBox(width: 12 * s),
 
@@ -1100,7 +1183,7 @@ class _BstCloudModalState extends State<BstCloudModal> {
                   child: TextField(
                     style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 12 * s),
                     decoration: InputDecoration(
-                      hintText: '수업 자료 파일 검색...',
+                      hintText: '자료 파일 검색...',
                       hintStyle: GoogleFonts.notoSansKr(color: Colors.white30, fontSize: 11.5 * s),
                       border: InputBorder.none,
                       icon: Icon(Icons.search_rounded, color: Colors.white38, size: 16 * s),
@@ -1127,26 +1210,14 @@ class _BstCloudModalState extends State<BstCloudModal> {
           ),
         ),
 
-        // 카테고리 필터 탭 (전체, PDF, Canva, PPT, 판서노트)
+        // 카테고리 필터 서브 탭
         Container(
           padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 8 * s),
           decoration: BoxDecoration(
             border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.06))),
           ),
           child: Row(
-            children: [
-              _buildFilterChip('all', '전체 자료 (${_allFiles.length})', s),
-              SizedBox(width: 8 * s),
-              _buildFilterChip('pdf', '📄 PDF 교안', s),
-              SizedBox(width: 8 * s),
-              _buildFilterChip('canva', '🎨 Canva 디자인', s),
-              SizedBox(width: 8 * s),
-              _buildFilterChip('tbp', '📐 TBP 교과서', s),
-              SizedBox(width: 8 * s),
-              _buildFilterChip('ppt', '📊 PPT 슬라이드', s),
-              SizedBox(width: 8 * s),
-              _buildFilterChip('pen', '📝 판서 기록', s),
-            ],
+            children: _buildSubCategoryChips(s),
           ),
         ),
 
@@ -1162,8 +1233,12 @@ class _BstCloudModalState extends State<BstCloudModal> {
                           Icon(Icons.folder_open_rounded, color: Colors.white24, size: 48 * s),
                           SizedBox(height: 10 * s),
                           Text(
-                            '보관된 수업 자료가 없습니다.\n교사용 앱에서 교안을 업로드하거나 Canva 디자인을 등록하세요.',
-                            style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 12 * s),
+                            _folderTab == 1
+                                ? '등록된 스마트교과서 또는 웹교안(.tbp / .htmlp)이 없습니다.\n교사용 앱에서 교과서/교안을 저장해주세요.'
+                                : _folderTab == 2
+                                    ? '보관된 전자칠판 판서 노트(.pen)가 없습니다.'
+                                    : '보관된 수업 자료가 없습니다.\n교사용 앱에서 교안을 업로드하세요.',
+                            style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 12.5 * s),
                             textAlign: TextAlign.center,
                           ),
                         ],
@@ -1188,6 +1263,69 @@ class _BstCloudModalState extends State<BstCloudModal> {
     );
   }
 
+  Widget _buildFolderTabButton(int index, String title, Color activeColor, double s) {
+    final isSelected = _folderTab == index;
+    return InkWell(
+      onTap: () {
+        if (_folderTab != index) {
+          setState(() {
+            _folderTab = index;
+            _categoryFilter = 'all';
+          });
+          _loadFiles();
+        }
+      },
+      borderRadius: BorderRadius.circular(10 * s),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor.withOpacity(0.2) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10 * s),
+          border: Border.all(color: isSelected ? activeColor : Colors.white12, width: 1.2),
+        ),
+        child: Text(
+          title,
+          style: GoogleFonts.notoSansKr(
+            color: isSelected ? Colors.white : Colors.white60,
+            fontSize: 11.5 * s,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildSubCategoryChips(double s) {
+    if (_folderTab == 1) {
+      // Bst TBP
+      return [
+        _buildFilterChip('all', '전체 TBP/HTMLP (${_filteredFiles.length})', s),
+        SizedBox(width: 8 * s),
+        _buildFilterChip('tbp', '📐 TBP 교과서', s),
+        SizedBox(width: 8 * s),
+        _buildFilterChip('htmlp', '🌐 HTMLP 웹교안', s),
+      ];
+    } else if (_folderTab == 2) {
+      // Bst Pen
+      return [
+        _buildFilterChip('all', '전체 판서 (${_filteredFiles.length})', s),
+      ];
+    } else {
+      // Bst 전체
+      return [
+        _buildFilterChip('all', '전체 자료 (${_allFiles.length})', s),
+        SizedBox(width: 8 * s),
+        _buildFilterChip('tbp', '📐 TBP/HTMLP', s),
+        SizedBox(width: 8 * s),
+        _buildFilterChip('pdf', '📕 PDF', s),
+        SizedBox(width: 8 * s),
+        _buildFilterChip('ppt', '📊 PPT', s),
+        SizedBox(width: 8 * s),
+        _buildFilterChip('hwp', '📝 한글', s),
+      ];
+    }
+  }
+
   Widget _buildFilterChip(String key, String label, double s) {
     final isSelected = _categoryFilter == key;
     return InkWell(
@@ -1195,13 +1333,13 @@ class _BstCloudModalState extends State<BstCloudModal> {
         if (_categoryFilter != key) {
           setState(() {
             _categoryFilter = key;
+            _applyFilter();
           });
-          _loadFiles();
         }
       },
       borderRadius: BorderRadius.circular(20 * s),
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 6 * s),
+        padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 5 * s),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF6366F1) : const Color(0xFF1E293B),
           borderRadius: BorderRadius.circular(20 * s),
@@ -1221,50 +1359,74 @@ class _BstCloudModalState extends State<BstCloudModal> {
 
   Widget _buildFileCard(BstCloudFile file, double s) {
     final lower = file.name.toLowerCase();
-    final isCanva = lower.endsWith('.canva.bst') || lower.endsWith('.canva');
+    final isTbp = lower.endsWith('.tbp') || lower.endsWith('.bsttbp') || file.mimeType == 'application/x-bst-tbp-folder';
+    final isHtmlp = lower.endsWith('.htmlp') || lower.endsWith('.canva.bst') || lower.endsWith('.canva') || lower.endsWith('.bstcanva');
     final isPdf = lower.endsWith('.pdf');
     final isPpt = lower.endsWith('.ppt') || lower.endsWith('.pptx');
-    final isPen = lower.endsWith('.pen');
+    final isHwp = lower.endsWith('.hwp') || lower.endsWith('.hwpx');
+    final isPen = lower.endsWith('.pen') || lower.endsWith('.bstpen');
 
-    final iconColor = isCanva
-        ? const Color(0xFF00C4CC)
-        : isPdf
-            ? const Color(0xFFFF5252)
-            : isPpt
-                ? const Color(0xFFFF9800)
-                : isPen
-                    ? const Color(0xFF00F5D4)
-                    : const Color(0xFF818CF8);
+    final iconColor = isTbp
+        ? const Color(0xFF818CF8)
+        : isHtmlp
+            ? const Color(0xFF00C4CC)
+            : isPdf
+                ? const Color(0xFFFF5252)
+                : isPpt
+                    ? const Color(0xFFFF9800)
+                    : isHwp
+                        ? const Color(0xFF3B82F6)
+                        : isPen
+                            ? const Color(0xFF00F5D4)
+                            : const Color(0xFF94A3B8);
 
-    final icon = isCanva
-        ? Icons.palette_rounded
-        : isPdf
-            ? Icons.picture_as_pdf_rounded
-            : isPpt
-                ? Icons.slideshow_rounded
-                : isPen
-                    ? Icons.edit_note_rounded
-                    : Icons.insert_drive_file_rounded;
+    final icon = isTbp
+        ? Icons.auto_stories_rounded
+        : isHtmlp
+            ? Icons.co_present_rounded
+            : isPdf
+                ? Icons.picture_as_pdf_rounded
+                : isPpt
+                    ? Icons.slideshow_rounded
+                    : isHwp
+                        ? Icons.description_rounded
+                        : isPen
+                            ? Icons.history_edu_rounded
+                            : Icons.insert_drive_file_rounded;
+
+    final typeLabel = isTbp
+        ? '📐 TBP 스마트교과서'
+        : isHtmlp
+            ? '🌐 HTMLP 웹교안'
+            : isPdf
+                ? '📕 PDF 문서'
+                : isPpt
+                    ? '📊 PPT 슬라이드'
+                    : isHwp
+                        ? '📝 한글 문서'
+                        : isPen
+                            ? '🎨 판서 기록'
+                            : '수업 자료';
 
     return InkWell(
       onTap: () => _openFile(file),
       borderRadius: BorderRadius.circular(14 * s),
       child: Container(
-        padding: EdgeInsets.all(10 * s),
+        padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 8 * s),
         decoration: BoxDecoration(
           color: const Color(0xFF1E293B).withOpacity(0.7),
           borderRadius: BorderRadius.circular(14 * s),
-          border: Border.all(color: Colors.white10),
+          border: Border.all(color: iconColor.withOpacity(0.25)),
         ),
         child: Row(
           children: [
             Container(
-              padding: EdgeInsets.all(10 * s),
+              padding: EdgeInsets.all(9 * s),
               decoration: BoxDecoration(
                 color: iconColor.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(10 * s),
               ),
-              child: Icon(icon, color: iconColor, size: 24 * s),
+              child: Icon(icon, color: iconColor, size: 22 * s),
             ),
             SizedBox(width: 10 * s),
             Expanded(
@@ -1276,7 +1438,7 @@ class _BstCloudModalState extends State<BstCloudModal> {
                     file.name,
                     style: GoogleFonts.notoSansKr(
                       color: Colors.white,
-                      fontSize: 12 * s,
+                      fontSize: 12.5 * s,
                       fontWeight: FontWeight.bold,
                     ),
                     maxLines: 1,
@@ -1284,11 +1446,16 @@ class _BstCloudModalState extends State<BstCloudModal> {
                   ),
                   SizedBox(height: 2 * s),
                   Text(
-                    isCanva ? 'Canva 웹 교안' : isPdf ? 'PDF 전자문서' : isPpt ? 'PowerPoint 슬라이드' : '수업 자료',
-                    style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 10 * s),
+                    typeLabel,
+                    style: GoogleFonts.notoSansKr(color: iconColor.withOpacity(0.85), fontSize: 10.5 * s, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
+            ),
+            IconButton(
+              icon: Icon(Icons.delete_outline_rounded, color: Colors.white30, size: 18 * s),
+              tooltip: '삭제',
+              onPressed: () => _deleteFile(file),
             ),
             Icon(Icons.arrow_forward_ios_rounded, color: Colors.white30, size: 12 * s),
           ],

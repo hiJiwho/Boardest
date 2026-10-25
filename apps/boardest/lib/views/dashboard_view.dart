@@ -9313,23 +9313,13 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
                     return InkWell(
                       onTap: () async {
-                        if (isCanva) {
-                          _openCloudCanvaFile(f);
-                        } else if (isTbp) {
-                          final token = BstCloudService.instance.activeToken ?? '';
-                          final isFolder = f.mimeType == 'application/x-bst-tbp-folder' ||
-                              f.mimeType == 'application/vnd.google-apps.folder';
-                          String targetPath = isFolder ? 'drive://tbp/${f.id}' : f.id;
-                          if (!kIsWeb && !isFolder) {
-                            try {
-                              final dl = await BstCloudService.instance.downloadDriveFile(f.id, f.name, token);
-                              if (dl != null && dl.isNotEmpty) targetPath = dl;
-                            } catch (_) {}
-                          }
+                        if (isCanva || isTbp) {
                           _pushBoardRoute(
                             TbpViewerRoute(
-                              tbpFilePath: targetPath,
+                              tbpFilePath: 'drive://tbp/${f.id}',
+                              title: f.name,
                               scaleFactor: _settings.scaleFactor,
+                              mode: isCanva ? TbpViewerMode.htmlp : TbpViewerMode.tbp,
                             ),
                           );
                         } else if (isPen) {
@@ -9798,13 +9788,16 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       );
     } else if (lower.endsWith('.bsttbp') ||
         lower.endsWith('.tbp') ||
+        lower.endsWith('.htmlp') ||
+        lower.endsWith('.canva.bst') ||
         file.mimeType == 'application/x-bst-tbp-folder') {
-      final isTbpOrHtmlp = file.mimeType == 'application/x-bst-tbp-folder' || file.name.toLowerCase().endsWith('.tbp') || file.name.toLowerCase().endsWith('.bsttbp') || file.name.toLowerCase().endsWith('.htmlp') || file.name.toLowerCase().endsWith('.canva.bst');
-final isFolder = file.mimeType == 'application/vnd.google-apps.folder' && !isTbpOrHtmlp;
+      final isHtmlp = lower.endsWith('.htmlp') || lower.endsWith('.canva.bst');
       _pushBoardRoute(
         TbpViewerRoute(
-          tbpFilePath: isFolder ? 'drive://tbp/${file.id}' : file.id,
+          tbpFilePath: 'drive://tbp/${file.id}',
+          title: file.name,
           scaleFactor: _settings.scaleFactor,
+          mode: isHtmlp ? TbpViewerMode.htmlp : TbpViewerMode.tbp,
         ),
       );
     } else {
@@ -11506,22 +11499,9 @@ final isFolder = file.mimeType == 'application/vnd.google-apps.folder' && !isTbp
                       trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 14),
                       onTap: () async {
                         Navigator.of(ctx).pop();
-                        // 껍데기 JSON 다운로드하여 내부 32자리 ID 추출
-                        String targetPath = file.id;
-                        try {
-                          final bytes = await BstCloudService.instance.downloadDriveFileBytes(file.id, token);
-                          if (bytes != null && bytes.isNotEmpty) {
-                            final content = utf8.decode(bytes);
-                            final parsed = jsonDecode(content);
-                            if (parsed is Map && parsed['id'] != null) {
-                              targetPath = 'drive://tbp/' + parsed['id'].toString();
-                            }
-                          }
-                        } catch (_) {}
-
                         _pushBoardRoute(
                           TbpViewerRoute(
-                            tbpFilePath: targetPath,
+                            tbpFilePath: 'drive://tbp/${file.id}',
                             title: file.name,
                             scaleFactor: _settings.scaleFactor,
                             mode: isHtmlp ? TbpViewerMode.htmlp : TbpViewerMode.tbp,

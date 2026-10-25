@@ -1064,8 +1064,8 @@ class BstCloudService {
     try {
       final List<BstCloudFile> results = [];
       List<String> targetFolderNames = [folderName];
-      if (folderName == 'bst-tbs' || folderName == 'bst-textbookpro') {
-        targetFolderNames = ['bst-tbs', 'bst-textbookpro'];
+      if (folderName == 'bst-tbs' || folderName == 'bst-textbookpro' || folderName == 'bst-tbp') {
+        targetFolderNames = ['bst-tbp', 'bst-tbs', 'bst-textbookpro'];
       } else if (folderName == 'bst-save') {
         targetFolderNames = ['bst-save', 'boardest-cloud-connect', 'bst-cld'];
       }
@@ -2435,6 +2435,62 @@ class BstCloudService {
       );
     } catch (e) {
       debugPrint('[BstCloudService] saveTbpFolderFileText($fileName) error: $e');
+      return false;
+    }
+  }
+
+  /// Google Drive 파일/폴더 삭제
+  Future<bool> deleteDriveFile(String fileId) async {
+    final token = activeToken;
+    if (token == null || token.isEmpty) return false;
+    try {
+      final url = Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId');
+      final res = await http.delete(
+        url,
+        headers: {'Authorization': 'Bearer $token'},
+      ).timeout(const Duration(seconds: 8));
+      return res.statusCode == 204 || res.statusCode == 200;
+    } catch (e) {
+      debugPrint('[BstCloudService] deleteDriveFile error: $e');
+      return false;
+    }
+  }
+
+  /// TBP / HTMLP 포인터 껍데기 파일 삭제 및 실체 32자리 ID 폴더 연쇄 삭제
+  Future<bool> deletePointerShellWithCascade(BstCloudFile shellFile) async {
+    final token = activeToken;
+    if (token == null || token.isEmpty) return false;
+    try {
+      final shellFileId = shellFile.id;
+      if (shellFileId.isEmpty) return false;
+
+      // 1. 껍데기 파일에서 32자리 ID 확인
+      String? target32Id;
+      try {
+        final content = await readDriveFileText(shellFileId, token);
+        if (content != null && content.isNotEmpty) {
+          final parsed = jsonDecode(content);
+          if (parsed is Map) {
+            target32Id = (parsed['id'] ?? parsed['ID'])?.toString();
+          }
+        }
+      } catch (_) {}
+
+      // 2. bst-save 껍데기 파일 삭제
+      final deletedShell = await deleteDriveFile(shellFileId);
+
+      // 3. 대상 32자리 ID가 있으면 bst-tbp 실체 폴더 연쇄 삭제
+      if (target32Id != null && target32Id.isNotEmpty) {
+        final realFolder = await findDriveFolderByName(target32Id, '', token);
+        if (realFolder != null && realFolder.isNotEmpty) {
+          await deleteDriveFile(realFolder);
+          debugPrint('[BstCloudService] Deleted real bst-tbp folder: $target32Id');
+        }
+      }
+
+      return deletedShell;
+    } catch (e) {
+      debugPrint('[BstCloudService] deletePointerShellWithCascade error: $e');
       return false;
     }
   }

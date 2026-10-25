@@ -216,6 +216,11 @@ class TbpStorageService {
       final file = File(tbpFilePath);
       if (!await file.exists()) return null;
       final content = await file.readAsString();
+      final shell = TbpStorageService.parsePointerShell(content);
+      if (shell != null) {
+        final targetId = shell['id'].toString();
+        return await loadTbpFile('drive://tbp/' + targetId);
+      }
       final json = jsonDecode(content) as Map<String, dynamic>;
       return TbpMetadata.fromJson(json);
     } catch (e) {
@@ -226,33 +231,94 @@ class TbpStorageService {
 
   Future<TbpMetadata?> _loadFromDriveTbpFolder(String rawKey, String driveFolderId) async {
     try {
+      final token = BstCloudService.instance.activeToken ?? '';
+      String actualFolderId = driveFolderId;
       final vPath = 'drive_tbp_$driveFolderId';
       String? rawJson = _webJsonCache['$vPath::info'] ?? _webJsonCache['$rawKey::info'];
 
+      // 1. 만약 driveFolderId가 32자리 고유 ID(Hex) 형태인 경우 실체 Google Drive 폴더 검색
+      if (rawJson == null && RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(driveFolderId)) {
+        if (token.isNotEmpty) {
+          final realFolder = await BstCloudService.instance.findDriveFolderByName(driveFolderId, '', token);
+          if (realFolder != null && realFolder.isNotEmpty) {
+            actualFolderId = realFolder;
+          }
+        }
+      }
+
+      // 2. actualFolderId가 폴더인 경우 manifest.json / meta.bstsave / info.json 검색
       if (rawJson == null || rawJson.trim().isEmpty) {
         for (final fileName in ['manifest.json', 'meta.bstsave', 'info.json']) {
-          rawJson = await BstCloudService.instance.fetchTbpFolderFileText(driveFolderId, fileName);
+          rawJson = await BstCloudService.instance.fetchTbpFolderFileText(actualFolderId, fileName);
           if (rawJson != null && rawJson.trim().isNotEmpty) break;
         }
       }
+
+      // 3. 폴더 내부에서 못 찾은 경우: driveFolderId가 단일 포인터 껍데기 파일 ID인 경우
+      if ((rawJson == null || rawJson.trim().isEmpty) && token.isNotEmpty) {
+        try {
+          final fileText = await BstCloudService.instance.readDriveFileText(driveFolderId, token);
+          if (fileText != null && fileText.trim().isNotEmpty) {
+            final parsed = jsonDecode(fileText);
+            if (parsed is Map<String, dynamic>) {
+              final target32Id = (parsed['id'] ?? parsed['ID'] ?? '').toString().trim();
+              if (target32Id.isNotEmpty) {
+                final realFolder = await BstCloudService.instance.findDriveFolderByName(target32Id, '', token);
+                if (realFolder != null && realFolder.isNotEmpty) {
+                  actualFolderId = realFolder;
+                  for (final fileName in ['manifest.json', 'meta.bstsave', 'info.json']) {
+                    rawJson = await BstCloudService.instance.fetchTbpFolderFileText(actualFolderId, fileName);
+                    if (rawJson != null && rawJson.trim().isNotEmpty) break;
+                  }
+                }
+              }
+
+              if (rawJson == null || rawJson.trim().isEmpty) {
+                final directUrl = (parsed['webUrl'] ?? parsed['targetUrl'] ?? parsed['url'] ?? parsed['embedUrl'] ?? '').toString().trim();
+                if (directUrl.isNotEmpty || parsed.containsKey('title')) {
+                  rawJson = jsonEncode({
+                    'id': target32Id.isNotEmpty ? target32Id : driveFolderId,
+                    'folderId': actualFolderId,
+                    'title': parsed['title'] ?? parsed['name'] ?? 'TBP/HTMLP 교재',
+                    'webUrl': directUrl,
+                    'type': parsed['type'] ?? 'TBP',
+                    'version': parsed['version'] ?? '1.0.0',
+                  });
+                }
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('[TbpStorageService] Shell pointer resolution error: $e');
+        }
+      }
+
       if (rawJson == null || rawJson.trim().isEmpty) return null;
 
       final json = jsonDecode(rawJson) as Map<String, dynamic>;
       json['folderId'] = (json['folderId']?.toString().isNotEmpty == true)
           ? json['folderId']
-          : driveFolderId;
+          : actualFolderId;
       final encoded = jsonEncode(json);
       _webJsonCache['$vPath::info'] = encoded;
       _webJsonCache['$rawKey::info'] = encoded;
+      _webJsonCache['drive_tbp_$actualFolderId::info'] = encoded;
+
+      _driveFolderIds[vPath] = actualFolderId;
+      _driveFolderIds[rawKey] = actualFolderId;
+      _driveFolderIds['drive_tbp_$actualFolderId'] = actualFolderId;
+      _driveFolderIds[driveFolderId] = actualFolderId;
 
       if (kIsWeb) {
         _extractCache[rawKey] = vPath;
-        _driveFolderIds[vPath] = driveFolderId;
+        _extractCache['drive://tbp/$actualFolderId'] = vPath;
+        _extractCache['drive://tbp/$driveFolderId'] = vPath;
+        _driveFolderIds[vPath] = actualFolderId;
         return TbpMetadata.fromJson(json);
       }
 
       final tmpDir = await getTemporaryDirectory();
-      final safeId = driveFolderId.replaceAll(RegExp(r'[^\w-]'), '_');
+      final safeId = actualFolderId.replaceAll(RegExp(r'[^\w-]'), '_');
       final cacheDir = Directory(p.join(tmpDir.path, 'bstTBP_cloud_$safeId'));
       if (!cacheDir.existsSync()) {
         cacheDir.createSync(recursive: true);
@@ -261,7 +327,9 @@ class TbpStorageService {
       await File(p.join(cacheDir.path, 'info.json')).writeAsString(encoded, flush: true);
 
       _extractCache[rawKey] = cacheDir.path;
-      _driveFolderIds[cacheDir.path] = driveFolderId;
+      _extractCache['drive://tbp/$actualFolderId'] = cacheDir.path;
+      _extractCache['drive://tbp/$driveFolderId'] = cacheDir.path;
+      _driveFolderIds[cacheDir.path] = actualFolderId;
       _webJsonCache['${cacheDir.path}::info'] = encoded;
       unawaited(cleanupOldExtractCache());
       return TbpMetadata.fromJson(json);
