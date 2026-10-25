@@ -70,6 +70,9 @@ copyDir(
   path.join(ROOT, 'infra', 'teacher_timetable_web', 'lite')
 );
 
+// Sync missing web manifests & FCM assets across web builds
+run('node scripts/sync_web_assets.js', ROOT);
+
 // 3. Firebase Hosting 배포
 console.log('\n== [4/5] Deploying to Firebase Hosting... ==');
 run('firebase deploy --only hosting', ROOT);
