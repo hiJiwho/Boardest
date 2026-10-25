@@ -14,6 +14,7 @@ import '../views/ppt_overlay_view.dart';
 import '../views/hwp_overlay_view.dart';
 import '../views/tbp/tbp_viewer_route.dart';
 import '../views/boardest_pen_view.dart';
+import '../services/tbp/tbp_crx_bridge.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 /// 전자칠판용 클라우드 파일 탐색기 & 터치 키패드 모달 (BstCloudModal)
@@ -338,6 +339,17 @@ class _BstCloudModalState extends State<BstCloudModal> {
         lower.endsWith('.bstcanva') ||
         file.mimeType == 'application/x-bst-tbp-folder') {
       final isHtmlp = lower.endsWith('.htmlp') || lower.endsWith('.canva.bst') || lower.endsWith('.canva') || lower.endsWith('.bstcanva');
+      if (kIsWeb) {
+        // 웹 브라우저 환경: BoardBook 크롬 익스텐션 우선 시도 (안내 팝업 및 다운로드 옵션 포함)
+        TbpCrxBridge.instance.launchBoardBookExtension(
+          context: context,
+          title: file.name,
+          fileUrl: 'https://docs.google.com/uc?id=${file.id}&export=download',
+          type: isHtmlp ? 'HTMLP' : 'TBP',
+          driveToken: token,
+          pointerId: file.id,
+        );
+      }
       if (mounted) {
         Navigator.push(
           context,
