@@ -1,3 +1,22 @@
+## 🚀 [정식 릴리즈] Boardest v5.0.12 (2026-10-25)
+- **TBP & HTMLP 3대 클라우드 폴더 일원화 (bst-save, bst-tbp, bst-pen)**:
+  - 기존 `bst-canva` 폴더를 완전히 제거하고 모든 프로젝트를 `bst-tbp`로 일원화.
+- **32자리 고유 ID 기반 포인터 껍데기(Pointer Shell) 2중 아키텍처**:
+  - `bst-tbp`에 32자리 무작위 ID로 실체 데이터 폴더 생성 (`manifest.json`, `hotspot_*.bstsave`).
+  - `bst-save`에는 경량 포인터 껍데기 JSON 파일(`[이름].tbp` / `[이름].htmlp`)로 저장되어 일반 파일처럼 자유롭게 이동 및 폴더 정리 가능.
+  - 클릭 시 껍데기 JSON의 32자리 ID를 읽어 실체 데이터 뷰어로 즉각 연결.
+- **삭제 시 필수 경고 모달 및 연쇄 삭제(Cascade Delete)**:
+  - 껍데기 파일 삭제 전 필수 확인 다이얼로그 노출.
+  - 확인 시 `bst-save` 껍데기 파일 + `bst-tbp/{32자리ID}` 실체 폴더 + `bst-pen/{32자리ID}` 판서 폴더 동시 영구 삭제.
+- **비밀번호(boardest1217) 암호화 압축 백업 및 자동 복원 파이프라인**:
+  - 다운로드 시: `boardest1217` 비밀번호로 잠긴 `[이름].tbp.save` / `[이름].htmlp.save` 패키지 다운로드.
+  - 업로드 시: 암호화 해제 $ightarrow$ 신규 32자리 ID 자동 발급 $ightarrow$ `bst-tbp` 복원 $ightarrow$ `bst-save` 껍데기 생성.
+- **교실 앱 Cloud 연결 필수화**:
+  - Cloud 미연결 시 간편 OTP/QR 연결 모달을 제공하여 연결 상태에서만 스마트교과서 및 교안 구동.
+- **앱 UI 버전 뱃지 통일**: 헤더 앱 이름 옆 버전 뱃지를 `V.5.0.12`로 일괄 갱신.
+
+---
+
 ## 🚀 [정식 릴리즈] Boardest v5.0.11 (2026-10-24)
 - **TBP & HTMLP 단일 통합 엔진 구축**:
   - 교과서(TBP)와 프레젠터(HTMLP)를 단일 dHash 기반 인터랙티브 엔진(`TbpViewerRoute`)으로 통합.

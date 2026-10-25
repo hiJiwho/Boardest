@@ -3191,7 +3191,17 @@ class _TeacherViewState extends State<TeacherView> {
         setProgressState?.call(() {});
 
         bool ok = false;
-        if (f.bytes != null && f.bytes!.isNotEmpty) {
+        final lower = f.name.toLowerCase();
+        final isSavePackage = lower.endsWith('.tbp.save') || lower.endsWith('.htmlp.save');
+        if (isSavePackage) {
+          Uint8List? b = f.bytes;
+          if (b == null && !kIsWeb && f.path != null) {
+            b = await File(f.path!).readAsBytes();
+          }
+          if (b != null) {
+            ok = await CloudDriveService.instance.importEncryptedPackage(b, f.name);
+          }
+        } else if (f.bytes != null && f.bytes!.isNotEmpty) {
           ok = await CloudDriveService.instance.uploadBytesToDrive(f.bytes!, f.name);
         } else if (!kIsWeb && f.path != null) {
           ok = await CloudDriveService.instance.uploadFileToDrive(File(f.path!));

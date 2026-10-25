@@ -11323,445 +11323,225 @@ final isFolder = file.mimeType == 'application/vnd.google-apps.folder' && !isTbp
     final isCloudActive = cloud.activeToken != null;
     final token = cloud.activeToken ?? '';
 
-    // 기본 스마트교과서 및 HTMLP 프리셋 목록
-    final defaultBooks = [
-      {
-        'id': '685358',
-        'name': '국어 2-1 (스마트교과서)',
-        'url': 'https://s3.ap-northeast-2.amazonaws.com/tsol.jihak.co.kr/tsol/22_m/kor2-1/korm2_1.html',
-        'subject': '국어',
-        'grade': '2학년',
-        'icon': Icons.menu_book_rounded,
-        'color': const Color(0xFF7F5AF0),
-        'isHtmlp': false,
-      },
-      {
-        'id': 'jihak_tsol',
-        'name': '티솔루션 수학/스마트교과서',
-        'url': 'https://tsol.jihak.co.kr/',
-        'subject': '수학',
-        'grade': '공통',
-        'icon': Icons.calculate_rounded,
-        'color': const Color(0xFF00F5D4),
-        'isHtmlp': false,
-      },
-      {
-        'id': 'vivasam_sci',
-        'name': '비바샘 과학/스마트교과서',
-        'url': 'https://e.vivasam.com/',
-        'subject': '과학',
-        'grade': '공통',
-        'icon': Icons.biotech_rounded,
-        'color': const Color(0xFF2EC4B6),
-        'isHtmlp': false,
-      },
-      {
-        'id': 'mteacher_soc',
-        'name': '엠티처 사회/역사 교과서',
-        'url': 'https://v.mirae-n.com/',
-        'subject': '사회',
-        'grade': '공통',
-        'icon': Icons.public_rounded,
-        'color': const Color(0xFFFFB703),
-        'isHtmlp': false,
-      },
-      {
-        'id': 'tsherpa_eng',
-        'name': '티셀파 영어/스마트교과서',
-        'url': 'https://www.tsherpa.co.kr/',
-        'subject': '영어',
-        'grade': '공통',
-        'icon': Icons.language_rounded,
-        'color': const Color(0xFFEF4565),
-        'isHtmlp': false,
-      },
-      {
-        'id': 'canva_present',
-        'name': 'Canva 수업 교안 (HTMLP)',
-        'url': 'https://www.canva.com/',
-        'subject': '전체',
-        'grade': '공통',
-        'icon': Icons.slideshow_rounded,
-        'color': const Color(0xFF6366F1),
-        'isHtmlp': true,
-      },
-      {
-        'id': 'google_slides',
-        'name': 'Google 슬라이드 (HTMLP)',
-        'url': 'https://docs.google.com/presentation',
-        'subject': '전체',
-        'grade': '공통',
-        'icon': Icons.co_present_rounded,
-        'color': const Color(0xFFFF8906),
-        'isHtmlp': true,
-      },
-    ];
+    // ── 1. Cloud 미연결 시: 반드시 교사용 Cloud 연결 필요 안내 모달 ──
+    if (!isCloudActive) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF16161A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20 * scale),
+            side: const BorderSide(color: Color(0xFF242629)),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8 * scale),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366F1).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10 * scale),
+                ),
+                child: Icon(Icons.cloud_off_rounded, color: const Color(0xFF818CF8), size: 24 * scale),
+              ),
+              SizedBox(width: 12 * scale),
+              Text(
+                '교사용 Cloud 연결 필요',
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18 * scale,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'TBP 전자교과서 및 HTMLP 웹교안은 선생님 Cloud에 연결된 상태에서만 작동합니다.',
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white70,
+                  fontSize: 14 * scale,
+                  height: 1.5,
+                ),
+              ),
+              SizedBox(height: 10 * scale),
+              Text(
+                '교사용 앱의 6자리 OTP 또는 QR로 간편 접속하면 드라이브에 저장된 교과서와 교안(.tbp / .htmlp)을 즉시 불러옵니다.',
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white38,
+                  fontSize: 12 * scale,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('닫기', style: GoogleFonts.notoSansKr(color: Colors.white54)),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * scale)),
+              ),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _openBstCloud();
+              },
+              icon: const Icon(Icons.login_rounded, size: 16),
+              label: const Text('☁️ Cloud 간편 연결하기'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
 
+    // ── 2. Cloud 연결 상태: bst-save 내의 포인터 껍데기 파일(.tbp, .htmlp) 탐색 및 실행 ──
     showDialog(
       context: context,
-      builder: (ctx) {
-        int selectedTab = 0; // 0: 로컬/내장 교과서 서재, 1: Cloud 교과서
-        final urlInputCtrl = TextEditingController();
-        final titleInputCtrl = TextEditingController();
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return AlertDialog(
-              backgroundColor: const Color(0xFF16161A),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20 * scale),
-                side: const BorderSide(color: Color(0xFF242629)),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16161A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20 * scale),
+          side: const BorderSide(color: Color(0xFF242629)),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(8 * scale),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7F5AF0).withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10 * scale),
               ),
-              title: Row(
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(8 * scale),
+              child: Icon(Icons.auto_stories_rounded, color: const Color(0xFF00F5D4), size: 24 * scale),
+            ),
+            SizedBox(width: 12 * scale),
+            Text(
+              '교사용 Cloud 교과서 & 웹교안 (TBP / HTMLP)',
+              style: GoogleFonts.notoSansKr(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 18 * scale,
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 520 * scale,
+          height: 420 * scale,
+          child: FutureBuilder<List<BstCloudFile>>(
+            future: Future.wait([
+              BstCloudService.instance.fetchFilesBySpecificFolder(accessToken: token, folderName: 'bst-save'),
+              BstCloudService.instance.fetchDriveFolderFiles(accessToken: token),
+            ]).then((lists) => [...lists[0], ...lists[1]]),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)));
+              }
+              final allFiles = snapshot.data ?? [];
+              final seenIds = <String>{};
+              final pointerFiles = allFiles.where((f) {
+                if (!seenIds.add(f.id)) return false;
+                final name = f.name.toLowerCase();
+                return name.endsWith('.tbp') ||
+                    name.endsWith('.htmlp') ||
+                    name.endsWith('.bsttbp') ||
+                    name.endsWith('.canva.bst');
+              }).toList();
+
+              if (pointerFiles.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.folder_open_rounded, size: 48 * scale, color: Colors.white24),
+                      SizedBox(height: 12 * scale),
+                      Text(
+                        'Cloud에 등록된 교과서나 교안(.tbp / .htmlp)이 없습니다',
+                        style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 14 * scale, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 6 * scale),
+                      Text(
+                        '교사용 앱에서 스마트교과서 또는 Canva 교안을 저장해주세요.',
+                        style: TextStyle(color: Colors.white38, fontSize: 12 * scale),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return ListView.separated(
+                itemCount: pointerFiles.length,
+                separatorBuilder: (_, __) => SizedBox(height: 8 * scale),
+                itemBuilder: (context, index) {
+                  final file = pointerFiles[index];
+                  final lower = file.name.toLowerCase();
+                  final isHtmlp = lower.endsWith('.htmlp') || lower.endsWith('.canva.bst');
+
+                  return Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF7F5AF0).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(10 * scale),
+                      color: Colors.white.withOpacity(0.03),
+                      borderRadius: BorderRadius.circular(12 * scale),
+                      border: Border.all(color: Colors.white.withOpacity(0.06)),
                     ),
-                    child: Icon(Icons.auto_stories_rounded, color: const Color(0xFF00F5D4), size: 24 * scale),
-                  ),
-                  SizedBox(width: 12 * scale),
-                  Text(
-                    '스마트교과서 & 웹교안 서재 (TBP / HTMLP)',
-                    style: GoogleFonts.notoSansKr(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18 * scale,
+                    child: ListTile(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12 * scale)),
+                      leading: Icon(
+                        isHtmlp ? Icons.slideshow_rounded : Icons.menu_book_rounded,
+                        color: isHtmlp ? const Color(0xFF6366F1) : const Color(0xFF00F5D4),
+                      ),
+                      title: Text(
+                        file.name,
+                        style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13.5 * scale),
+                      ),
+                      subtitle: Text(
+                        isHtmlp ? 'HTMLP 웹교안 포인터' : 'TBP 스마트교과서 포인터',
+                        style: TextStyle(color: Colors.white38, fontSize: 11 * scale),
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 14),
+                      onTap: () async {
+                        Navigator.of(ctx).pop();
+                        // 껍데기 JSON 다운로드하여 내부 32자리 ID 추출
+                        String targetPath = file.id;
+                        try {
+                          final bytes = await BstCloudService.instance.downloadDriveFileBytes(file.id, token);
+                          if (bytes != null && bytes.isNotEmpty) {
+                            final content = utf8.decode(bytes);
+                            final parsed = jsonDecode(content);
+                            if (parsed is Map && parsed['id'] != null) {
+                              targetPath = 'drive://tbp/' + parsed['id'].toString();
+                            }
+                          }
+                        } catch (_) {}
+
+                        _pushBoardRoute(
+                          TbpViewerRoute(
+                            tbpFilePath: targetPath,
+                            title: file.name,
+                            scaleFactor: _settings.scaleFactor,
+                            mode: isHtmlp ? TbpViewerMode.htmlp : TbpViewerMode.tbp,
+                          ),
+                        );
+                      },
                     ),
-                  ),
-                  const Spacer(),
-                  // 탭 전환 버튼
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(10 * scale),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        InkWell(
-                          onTap: () => setModalState(() => selectedTab = 0),
-                          borderRadius: BorderRadius.circular(10 * scale),
-                          child: Container(
-                            padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 6 * scale),
-                            decoration: BoxDecoration(
-                              color: selectedTab == 0 ? const Color(0xFF7F5AF0) : Colors.transparent,
-                              borderRadius: BorderRadius.circular(10 * scale),
-                            ),
-                            child: Text(
-                              '📚 교과서 서재',
-                              style: TextStyle(
-                                color: selectedTab == 0 ? Colors.white : Colors.white60,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12 * scale,
-                              ),
-                            ),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () => setModalState(() => selectedTab = 1),
-                          borderRadius: BorderRadius.circular(10 * scale),
-                          child: Container(
-                            padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 6 * scale),
-                            decoration: BoxDecoration(
-                              color: selectedTab == 1 ? const Color(0xFF00F5D4) : Colors.transparent,
-                              borderRadius: BorderRadius.circular(10 * scale),
-                            ),
-                            child: Text(
-                              isCloudActive ? '☁️ Cloud TBP' : '☁️ Cloud 연결',
-                              style: TextStyle(
-                                color: selectedTab == 1 ? Colors.black : Colors.white60,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12 * scale,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              content: SizedBox(
-                width: 580 * scale,
-                height: 440 * scale,
-                child: selectedTab == 0
-                    // ── [탭 0: 내장 스마트교과서 서재 & URL 열기] ──
-                    ? Column(
-                        children: [
-                          // 새 교과서 URL 즉시 실행 폼
-                          Container(
-                            padding: EdgeInsets.all(10 * scale),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.03),
-                              borderRadius: BorderRadius.circular(12 * scale),
-                              border: Border.all(color: Colors.white.withOpacity(0.08)),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: TextField(
-                                    controller: urlInputCtrl,
-                                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                                    decoration: InputDecoration(
-                                      hintText: '출판사 스마트교과서 웹 링크 또는 Canva 주소 입력 (https://...)',
-                                      hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
-                                      prefixIcon: const Icon(Icons.link_rounded, color: Color(0xFF00F5D4), size: 18),
-                                      isDense: true,
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8 * scale),
-                                        borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(width: 8 * scale),
-                                ElevatedButton.icon(
-                                  onPressed: () {
-                                    final u = urlInputCtrl.text.trim();
-                                    if (u.isNotEmpty) {
-                                      Navigator.of(ctx).pop();
-                                      _pushBoardRoute(
-                                        TbpViewerRoute(
-                                          initialUrl: u,
-                                          title: titleInputCtrl.text.trim().isNotEmpty ? titleInputCtrl.text.trim() : '스마트교과서',
-                                          scaleFactor: _settings.scaleFactor,
-                                          mode: u.contains('canva.com') || u.contains('presentation') ? TbpViewerMode.htmlp : TbpViewerMode.tbp,
-                                        ),
-                                      );
-                                    }
-                                  },
-                                  icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                                  label: const Text('열기'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF00F5D4),
-                                    foregroundColor: Colors.black,
-                                    padding: EdgeInsets.symmetric(horizontal: 14 * scale, vertical: 10 * scale),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8 * scale)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(height: 12 * scale),
-                          // 프리셋 그리드
-                          Expanded(
-                            child: GridView.builder(
-                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 2,
-                                childAspectRatio: 2.5,
-                                crossAxisSpacing: 10 * scale,
-                                mainAxisSpacing: 10 * scale,
-                              ),
-                              itemCount: defaultBooks.length,
-                              itemBuilder: (context, idx) {
-                                final b = defaultBooks[idx];
-                                final col = b['color'] as Color;
-                                final isHtmlp = b['isHtmlp'] as bool;
-
-                                return InkWell(
-                                  borderRadius: BorderRadius.circular(12 * scale),
-                                  onTap: () {
-                                    Navigator.of(ctx).pop();
-                                    _pushBoardRoute(
-                                      TbpViewerRoute(
-                                        initialUrl: b['url'] as String,
-                                        title: b['name'] as String,
-                                        scaleFactor: _settings.scaleFactor,
-                                        mode: isHtmlp ? TbpViewerMode.htmlp : TbpViewerMode.tbp,
-                                      ),
-                                    );
-                                  },
-                                  child: Container(
-                                    padding: EdgeInsets.all(12 * scale),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.03),
-                                      borderRadius: BorderRadius.circular(12 * scale),
-                                      border: Border.all(color: col.withOpacity(0.3), width: 1.2),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          padding: EdgeInsets.all(8 * scale),
-                                          decoration: BoxDecoration(
-                                            color: col.withOpacity(0.15),
-                                            borderRadius: BorderRadius.circular(8 * scale),
-                                          ),
-                                          child: Icon(b['icon'] as IconData, color: col, size: 22 * scale),
-                                        ),
-                                        SizedBox(width: 10 * scale),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Text(
-                                                b['name'] as String,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: GoogleFonts.notoSansKr(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12.5 * scale,
-                                                ),
-                                              ),
-                                              SizedBox(height: 3 * scale),
-                                              Text(
-                                                '${b['subject']} • ${b['grade']} • ${isHtmlp ? "HTMLP" : "TBP"}',
-                                                style: TextStyle(
-                                                  color: Colors.white38,
-                                                  fontSize: 10 * scale,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Icon(Icons.arrow_forward_ios_rounded, color: Colors.white30, size: 12 * scale),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      )
-                    // ── [탭 1: Cloud TBP 교과서 목록] ──
-                    : !isCloudActive
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.cloud_off_rounded, size: 48 * scale, color: Colors.white24),
-                                SizedBox(height: 12 * scale),
-                                Text(
-                                  '교사용 Cloud가 연결되어 있지 않습니다',
-                                  style: GoogleFonts.notoSansKr(
-                                    color: Colors.white,
-                                    fontSize: 15 * scale,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                SizedBox(height: 6 * scale),
-                                Text(
-                                  '교사용 앱의 6자리 OTP 또는 QR로 Cloud를 연결하면\n선생님 드라이브의 TBP 및 교안 폴더를 즉시 불러옵니다.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.white54, fontSize: 12 * scale),
-                                ),
-                                SizedBox(height: 16 * scale),
-                                ElevatedButton.icon(
-                                  onPressed: () {
-                                    Navigator.of(ctx).pop();
-                                    _openBstCloud();
-                                  },
-                                  icon: const Icon(Icons.login_rounded, size: 16),
-                                  label: const Text('☁️ Cloud 연결하기'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF6366F1),
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * scale)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : FutureBuilder<List<BstCloudFile>>(
-                            future: Future.wait([
-                              BstCloudService.instance.fetchFilesBySpecificFolder(
-                                accessToken: token,
-                                folderName: 'bst-tbs',
-                              ),
-                              BstCloudService.instance.fetchDriveFolderFiles(accessToken: token),
-                            ]).then((lists) => [...lists[0], ...lists[1]]),
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState == ConnectionState.waiting) {
-                                return const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)));
-                              }
-                              final allFiles = snapshot.data ?? [];
-                              final seenIds = <String>{};
-                              final tbpFiles = allFiles.where((f) {
-                                if (!seenIds.add(f.id)) return false;
-                                final name = f.name.toLowerCase();
-                                final isTbpFolder = f.mimeType == 'application/x-bst-tbp-folder' ||
-                                    (f.mimeType == 'application/vnd.google-apps.folder' &&
-                                        (name.endsWith('.tbp') || name.endsWith('.bsttbp') || name.endsWith('.htmlp') || name.endsWith('.canva.bst')));
-                                return isTbpFolder ||
-                                    name.endsWith('.bsttbp') ||
-                                    name.endsWith('.tbp') ||
-                                    name.endsWith('.htmlp') ||
-                                    name.endsWith('.canva.bst') ||
-                                    name.contains('교과서') ||
-                                    name.contains('tbp');
-                              }).toList();
-
-                              if (tbpFiles.isEmpty) {
-                                return Center(
-                                  child: Text('Cloud에 등록된 TBP 교과서가 없습니다.\n[교과서 서재] 탭에서 기본 교과서를 바로 이용하실 수 있습니다.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.white54, fontSize: 13 * scale)),
-                                );
-                              }
-
-                              return ListView.separated(
-                                itemCount: tbpFiles.length,
-                                separatorBuilder: (_, __) => SizedBox(height: 8 * scale),
-                                itemBuilder: (context, index) {
-                                  final file = tbpFiles[index];
-                                  final isFolder = file.mimeType == 'application/x-bst-tbp-folder' ||
-                                      file.mimeType == 'application/vnd.google-apps.folder';
-                                  final isHtmlp = file.name.toLowerCase().contains('htmlp') || file.name.toLowerCase().contains('canva');
-
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.03),
-                                      borderRadius: BorderRadius.circular(12 * scale),
-                                      border: Border.all(color: Colors.white.withOpacity(0.06)),
-                                    ),
-                                    child: ListTile(
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12 * scale)),
-                                      leading: Icon(
-                                        isHtmlp ? Icons.slideshow_rounded : Icons.auto_stories_rounded,
-                                        color: isHtmlp ? const Color(0xFF6366F1) : const Color(0xFF00F5D4),
-                                      ),
-                                      title: Text(
-                                        file.name,
-                                        style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13.5 * scale),
-                                      ),
-                                      subtitle: Text(
-                                        isFolder ? 'Cloud TBP/HTMLP 폴더' : 'Cloud 파일',
-                                        style: TextStyle(color: Colors.white38, fontSize: 11 * scale),
-                                      ),
-                                      trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white38, size: 14),
-                                      onTap: () {
-                                        Navigator.of(ctx).pop();
-                                        final targetPath = isFolder ? 'drive://tbp/${file.id}' : file.id;
-                                        _pushBoardRoute(
-                                          TbpViewerRoute(
-                                            tbpFilePath: targetPath,
-                                            scaleFactor: _settings.scaleFactor,
-                                            mode: isHtmlp ? TbpViewerMode.htmlp : TbpViewerMode.tbp,
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  );
-                                },
-                              );
-                            },
-                          ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: Text('닫기', style: GoogleFonts.notoSansKr(color: Colors.white54)),
-                ),
-              ],
-            );
-          },
-        );
-      },
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('닫기', style: GoogleFonts.notoSansKr(color: Colors.white54)),
+          ),
+        ],
+      ),
     );
   }
 

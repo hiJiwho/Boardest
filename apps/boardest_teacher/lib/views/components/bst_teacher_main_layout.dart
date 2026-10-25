@@ -208,7 +208,7 @@ class BstTeacherMainLayout extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(color: const Color(0xFF00F5D4), width: 0.8),
                         ),
-                        child: Text('V.5.0.11', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
+                        child: Text('V.5.0.12', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
                       ),
                     ],
                   ),

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -21,6 +22,30 @@ import 'tbp_dhash_engine.dart';
 ///     └── {classCode}/
 ///         └── {dHash}.bstpen
 class TbpStorageService {
+
+  /// 패키지 암호화 비밀번호 (사용자 지정: boardest1217)
+  static const String packagePassword = 'boardest1217';
+
+  /// 32자리 무작위 고유 ID 발급 (UUID v4 유사 32-hex)
+  static String generate32DigitId() {
+    final rand = Random.secure();
+    return List.generate(32, (_) => rand.nextInt(16).toRadixString(16)).join();
+  }
+
+  /// 파일 내용이 포인터 껍데기 JSON인지 검사하고 대상 ID 반환
+  static Map<String, dynamic>? parsePointerShell(String content) {
+    try {
+      final json = jsonDecode(content);
+      if (json is Map<String, dynamic> && json['id'] != null && json['type'] != null) {
+        final id = json['id'].toString().trim();
+        if (id.length == 32) {
+          return json;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   static final TbpStorageService instance = TbpStorageService._internal();
   TbpStorageService._internal();
 

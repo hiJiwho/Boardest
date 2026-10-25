@@ -235,7 +235,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
       );
       _infoJson = await TbpStorageService.instance.loadInfoJson(_tbpFolderPath);
 
-      final targetUrl = (_infoJson?['webUrl'] ?? _infoJson?['targetUrl'] ?? meta.webUrl).toString().trim();
+      final targetUrl = (_infoJson?['webUrl'] ?? _infoJson?['targetUrl'] ?? '').toString().trim();
       if (targetUrl.isEmpty) {
         setState(() {
           _errorMessage = 'TBP 폴더 내 webUrl 설정이 올바르지 않습니다.';

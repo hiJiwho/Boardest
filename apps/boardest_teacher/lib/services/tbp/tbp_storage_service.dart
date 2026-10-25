@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -16,6 +17,30 @@ import '../cloud_drive_service.dart';
 /// ├── hotspot_{key}.bstsave                   ← 페이지별 핫스팟 데이터 (온디맨드)
 /// └── pen_{key}.bstpen                        ← 페이지별 판서 데이터 (온디맨드)
 class TbpStorageService {
+
+  /// 패키지 암호화 비밀번호 (사용자 지정: boardest1217)
+  static const String packagePassword = 'boardest1217';
+
+  /// 32자리 무작위 고유 ID 발급 (32자리 hex)
+  static String generate32DigitId() {
+    final rand = Random.secure();
+    return List.generate(32, (_) => rand.nextInt(16).toRadixString(16)).join();
+  }
+
+  /// 파일 내용이 32자리 포인터 껍데기 JSON인지 검사하고 대상 메타 반환
+  static Map<String, dynamic>? parsePointerShell(String content) {
+    try {
+      final json = jsonDecode(content);
+      if (json is Map<String, dynamic> && json['id'] != null && json['type'] != null) {
+        final id = json['id'].toString().trim();
+        if (id.length == 32) {
+          return json;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   static final TbpStorageService instance = TbpStorageService._internal();
   TbpStorageService._internal();
 
@@ -142,6 +167,11 @@ class TbpStorageService {
             final f = File(p.join(dir.path, name));
             if (f.existsSync()) {
               final raw = await f.readAsString();
+            final shell = TbpStorageService.parsePointerShell(raw);
+            if (shell != null) {
+              final targetId = shell['id'].toString();
+              return await loadTbpFile('drive://tbp/' + targetId);
+            }
               _webJsonCache['${dir.path}::info'] = raw;
               final json = jsonDecode(raw) as Map<String, dynamic>;
               if (json['folderId'] != null &&

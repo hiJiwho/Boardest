@@ -21,6 +21,8 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:bst_pen/bst_pen.dart';
+import 'package:archive/archive.dart';
+import 'tbp/tbp_storage_service.dart';
 import 'folder_picker_helper.dart';
 
 class _PendingLoginSession {
@@ -1783,7 +1785,7 @@ class CloudDriveService with ChangeNotifier {
       return _bstTextbookProFolderId;
     }
 
-    for (final name in ['bst-tbs', 'bst-textbookpro', 'TBP']) {
+    for (final name in ['bst-tbp', 'bst-tbs', 'bst-textbookpro', 'TBP']) {
       final inRoot = await findFolderByName(name, parentFolderId: 'root', isAppData: false);
       if (inRoot != null) {
         _bstTextbookProFolderId = inRoot;
@@ -1796,7 +1798,7 @@ class CloudDriveService with ChangeNotifier {
       }
     }
 
-    final created = await createFolderInDrive('bst-tbs', parentFolderId: 'root');
+    final created = await createFolderInDrive('bst-tbp', parentFolderId: 'root');
     if (created != null) {
       _bstTextbookProFolderId = created;
     }
@@ -3455,4 +3457,262 @@ class CloudDriveService with ChangeNotifier {
       return null;
     }
   }
+
+
+  // ─── TBP & HTMLP 32자리 ID 및 껍데기-실체 2중 아키텍처 ─────────────
+  static const String packagePassword = 'boardest1217';
+
+  static String generate32DigitId() {
+    final rand = DateTime.now().microsecondsSinceEpoch.toRadixString(16);
+    final randomHex = List.generate(32, (i) => '0123456789abcdef'[(DateTime.now().microsecond + i * 7) % 16]).join();
+    final combined = (rand + randomHex).replaceAll(RegExp(r'[^0-9a-f]'), '');
+    if (combined.length >= 32) return combined.substring(0, 32);
+    return combined.padRight(32, '0');
+  }
+
+  /// TBP 또는 HTMLP 생성: bst-tbp에 32자리 ID 폴더 생성 + bst-save에 포인터 껍데기 JSON 파일 생성
+  Future<Map<String, dynamic>?> createTbpOrHtmlpPointerProject({
+    required String title,
+    required String webUrl,
+    required String type, // 'TBP' 또는 'HTMLP'
+    String? targetFolderId,
+  }) async {
+    try {
+      final safeTitle = title.trim().isNotEmpty ? title.trim().replaceAll(RegExp(r'[\\/:*?"<>|]'), '_') : '제목 없음';
+      final new32Id = generate32DigitId();
+      final ext = type.toUpperCase() == 'HTMLP' ? 'htmlp' : 'tbp';
+      final shellFileName = '$safeTitle.$ext';
+
+      // 1. bst-tbp 루트 폴더 획득
+      final tbpRootId = await getOrCreateTextbookProFolder();
+      if (tbpRootId == null) return null;
+
+      // 2. bst-tbp 안에 32자리 ID 폴더 생성 (실체 폴더)
+      final realFolderId = await createFolderInDrive(new32Id, parentFolderId: tbpRootId);
+      if (realFolderId == null) return null;
+
+      // 3. 실체 폴더 안에 manifest.json 저장
+      final manifestJson = jsonEncode({
+        'id': new32Id,
+        'type': type.toUpperCase(),
+        'title': safeTitle,
+        'webUrl': webUrl.trim(),
+        'createdAt': DateTime.now().toIso8601String(),
+        'version': '1.0.0',
+      });
+      await uploadBytesToDrive(Uint8List.fromList(utf8.encode(manifestJson)), 'manifest.json', folderId: realFolderId);
+
+      // 4. bst-save (또는 사용자가 지정한 하위 폴더)에 가벼운 포인터 껍데기 JSON 파일 생성
+      final saveRootId = await getOrCreateConnectFolder();
+      final destinationFolder = targetFolderId ?? saveRootId;
+      final shellJson = jsonEncode({
+        'type': type.toUpperCase(),
+        'id': new32Id,
+        'title': safeTitle,
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
+        'version': '1.0.0',
+      });
+      final shellSuccess = await uploadBytesToDrive(
+        Uint8List.fromList(utf8.encode(shellJson)),
+        shellFileName,
+        folderId: destinationFolder,
+      );
+
+      if (shellSuccess) {
+        return {
+          'id': new32Id,
+          'realFolderId': realFolderId,
+          'shellFileName': shellFileName,
+          'title': safeTitle,
+          'type': type.toUpperCase(),
+        };
+      }
+    } catch (e) {
+      debugPrint('[CloudDriveService] createTbpOrHtmlpPointerProject error: $e');
+    }
+    return null;
+  }
+
+  /// 껍데기 파일 삭제 시: 껍데기 JSON 읽어 32자리 ID 추출 후 bst-tbp 실체 폴더 & bst-pen 판서 폴더 동시 삭제
+  Future<bool> deletePointerShellWithCascade(Map<String, dynamic> shellFile) async {
+    try {
+      final shellFileId = shellFile['id']?.toString() ?? '';
+      if (shellFileId.isEmpty) return false;
+
+      // 1. 껍데기 파일 다운로드하여 32자리 target ID 파싱
+      String? target32Id;
+      try {
+        final bytes = await fetchDriveFileBytes(shellFileId);
+        if (bytes != null && bytes.isNotEmpty) {
+          final content = utf8.decode(bytes);
+          final parsed = jsonDecode(content);
+          if (parsed is Map && parsed['id'] != null) {
+            target32Id = parsed['id'].toString();
+          }
+        }
+      } catch (_) {}
+
+      // 2. bst-save 껍데기 파일 삭제
+      final deletedShell = await deleteDriveFile(shellFileId);
+
+      // 3. 대상 32자리 ID가 있으면 bst-tbp 실체 폴더 및 bst-pen 판서 폴더 연쇄 삭제
+      if (target32Id != null && target32Id.isNotEmpty) {
+        final tbpRootId = await getOrCreateTextbookProFolder();
+        if (tbpRootId != null) {
+          final realFolder = await findFolderByName(target32Id, parentFolderId: tbpRootId);
+          if (realFolder != null) {
+            await deleteDriveFile(realFolder);
+            debugPrint('[CloudDriveService] Deleted real bst-tbp folder: $target32Id');
+          }
+        }
+        final penRootId = await getOrCreatePenFolder();
+        if (penRootId != null) {
+          final penFolder = await findFolderByName(target32Id, parentFolderId: penRootId);
+          if (penFolder != null) {
+            await deleteDriveFile(penFolder);
+            debugPrint('[CloudDriveService] Deleted real bst-pen folder: $target32Id');
+          }
+        }
+      }
+
+      return deletedShell;
+    } catch (e) {
+      debugPrint('[CloudDriveService] deletePointerShellWithCascade error: $e');
+      return false;
+    }
+  }
+
+  /// .tbp.save 또는 .htmlp.save 비밀번호(boardest1217) 암호화 압축 다운로드
+  Future<Uint8List?> exportEncryptedPackage(Map<String, dynamic> shellFile) async {
+    try {
+      final shellFileId = shellFile['id']?.toString() ?? '';
+      final bytes = await fetchDriveFileBytes(shellFileId);
+      if (bytes == null || bytes.isEmpty) return null;
+
+      final content = utf8.decode(bytes);
+      final shellJson = jsonDecode(content) as Map<String, dynamic>;
+      final target32Id = shellJson['id']?.toString() ?? '';
+
+      if (target32Id.isEmpty) return null;
+
+      final tbpRootId = await getOrCreateTextbookProFolder();
+      if (tbpRootId == null) return null;
+      final realFolderId = await findFolderByName(target32Id, parentFolderId: tbpRootId);
+      if (realFolderId == null) return null;
+
+      // 실체 폴더 내부 파일 목록 수집
+      final filesInReal = await fetchDriveFiles(folderId: realFolderId, includeFolders: false);
+      final archive = Archive();
+
+      for (final f in filesInReal) {
+        final fId = f.id;
+        final fName = f.name;
+        if (fId.isNotEmpty && fName.isNotEmpty && !f.isFolder) {
+          final fBytes = await fetchDriveFileBytes(fId);
+          if (fBytes != null) {
+            if (fName == 'manifest.json' || fName == 'info.json') {
+              // manifest에서 고유 ID 제거하여 기기 비종속화
+              try {
+                final manifestParsed = jsonDecode(utf8.decode(fBytes)) as Map<String, dynamic>;
+                manifestParsed.remove('id');
+                manifestParsed['exportedAt'] = DateTime.now().toIso8601String();
+                final cleanBytes = utf8.encode(jsonEncode(manifestParsed));
+                archive.addFile(ArchiveFile(fName, cleanBytes.length, cleanBytes));
+                continue;
+              } catch (_) {}
+            }
+            archive.addFile(ArchiveFile(fName, fBytes.length, fBytes));
+          }
+        }
+      }
+
+      // 비밀번호 boardest1217 로 암호화 압축
+      final encoder = ZipEncoder(password: TbpStorageService.packagePassword);
+      final zipBytes = encoder.encode(archive);
+      return zipBytes != null ? Uint8List.fromList(zipBytes) : null;
+    } catch (e) {
+      debugPrint('[CloudDriveService] exportEncryptedPackage error: $e');
+      return null;
+    }
+  }
+
+  /// .tbp.save 또는 .htmlp.save 암호화 패키지 업로드 시 복호화 -> 신규 32자리 ID 발급 -> bst-tbp 복원 -> 껍데기 파일 생성
+  Future<bool> importEncryptedPackage(Uint8List packageBytes, String originalFileName, {String? targetFolderId}) async {
+    try {
+      // 1. boardest1217 비밀번호로 압축 해제
+      final decoder = ZipDecoder();
+      final archive = decoder.decodeBytes(packageBytes, password: TbpStorageService.packagePassword);
+      if (archive.isEmpty) return false;
+
+      // 2. manifest.json 확인 및 제목/타입 추출
+      String title = originalFileName.replaceAll(RegExp(r'\.(tbp|htmlp)\.save$', caseSensitive: false), '');
+      String type = originalFileName.toLowerCase().contains('htmlp') ? 'HTMLP' : 'TBP';
+
+      for (final f in archive) {
+        if (f.name == 'manifest.json' || f.name == 'info.json') {
+          try {
+            final manifest = jsonDecode(utf8.decode(f.content as List<int>)) as Map<String, dynamic>;
+            if (manifest['title'] != null && manifest['title'].toString().isNotEmpty) {
+              title = manifest['title'].toString();
+            }
+            if (manifest['type'] != null && manifest['type'].toString().isNotEmpty) {
+              type = manifest['type'].toString().toUpperCase();
+            }
+          } catch (_) {}
+        }
+      }
+
+      // 3. 신규 32자리 ID 생성
+      final new32Id = TbpStorageService.generate32DigitId();
+      final tbpRootId = await getOrCreateTextbookProFolder();
+      if (tbpRootId == null) return false;
+
+      // 4. bst-tbp 내에 신규 32자리 폴더 생성
+      final realFolderId = await createFolderInDrive(new32Id, parentFolderId: tbpRootId);
+      if (realFolderId == null) return false;
+
+      // 5. 압축 해제된 파일들 업로드
+      for (final f in archive) {
+        if (f.isFile) {
+          final data = f.content as List<int>;
+          if (f.name == 'manifest.json' || f.name == 'info.json') {
+            try {
+              final manifest = jsonDecode(utf8.decode(data)) as Map<String, dynamic>;
+              manifest['id'] = new32Id;
+              manifest['importedAt'] = DateTime.now().toIso8601String();
+              final updatedBytes = Uint8List.fromList(utf8.encode(jsonEncode(manifest)));
+              await uploadBytesToDrive(updatedBytes, f.name, folderId: realFolderId);
+              continue;
+            } catch (_) {}
+          }
+          await uploadBytesToDrive(Uint8List.fromList(data), f.name, folderId: realFolderId);
+        }
+      }
+
+      // 6. bst-save 대상 폴더에 껍데기 JSON 파일 생성
+      final saveRootId = await getOrCreateConnectFolder();
+      final destinationFolder = targetFolderId ?? saveRootId;
+      final ext = type == 'HTMLP' ? 'htmlp' : 'tbp';
+      final safeTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      final shellFileName = '$safeTitle.$ext';
+
+      final shellJson = jsonEncode({
+        'type': type,
+        'id': new32Id,
+        'title': safeTitle,
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
+        'version': '1.0.0',
+      });
+
+      return await uploadBytesToDrive(
+        Uint8List.fromList(utf8.encode(shellJson)),
+        shellFileName,
+        folderId: destinationFolder,
+      );
+    } catch (e) {
+      debugPrint('[CloudDriveService] importEncryptedPackage error: $e');
+      return false;
+    }
+  }
+
 }

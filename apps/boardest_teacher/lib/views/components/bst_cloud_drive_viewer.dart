@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/cloud_drive_service.dart';
+import '../../helpers/download_helper.dart';
 
 /// Boardest Teacher 전용 차세대 고시인성 Cloud File Viewer
 /// - 기존의 좁고 잘 안보이던 파일 목록을 시원한 대형 카드 및 리스트로 전면 개편
@@ -122,26 +123,75 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
     final id = (file['id'] ?? '').toString();
     final name = (file['name'] ?? '').toString();
     if (id.isEmpty) return;
+
+    final lower = name.toLowerCase();
+    final isTbpOrHtmlp = lower.endsWith('.tbp') || lower.endsWith('.htmlp') || lower.endsWith('.bsttbp') || lower.endsWith('.canva.bst');
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF16161A),
-        title: Text('삭제', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: Text('"$name" 을(를) Google Drive에서 삭제하시겠습니까?', style: GoogleFonts.notoSansKr(color: Colors.white70)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(isTbpOrHtmlp ? Icons.warning_amber_rounded : Icons.delete_outline_rounded,
+                 color: isTbpOrHtmlp ? const Color(0xFFEF4565) : Colors.white),
+            const SizedBox(width: 8),
+            Text(isTbpOrHtmlp ? 'TBP / HTMLP 영구 삭제 확인' : '파일 삭제',
+                 style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          isTbpOrHtmlp
+              ? '"$name" 을(를) 정말 삭제하시겠습니까?\n\n⚠️ 연결된 스마트교과서/웹교안의 모든 핫스팟 및 페이지 데이터(32자리 클라우드 실체 및 판서)가 함께 영구 삭제됩니다.'
+              : '"$name" 을(를) Google Drive에서 삭제하시겠습니까?',
+          style: GoogleFonts.notoSansKr(color: Colors.white70, height: 1.5),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소', style: TextStyle(color: Colors.white60))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소', style: TextStyle(color: Colors.white60)),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4565)),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('삭제', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text(isTbpOrHtmlp ? '영구 삭제' : '삭제',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
     if (confirmed != true) return;
-    final ok = await CloudDriveService.instance.deleteDriveFile(id);
+
+    bool ok = false;
+    if (isTbpOrHtmlp) {
+      ok = await CloudDriveService.instance.deletePointerShellWithCascade(file);
+    } else {
+      ok = await CloudDriveService.instance.deleteDriveFile(id);
+    }
     _toast(ok ? '삭제되었습니다.' : '삭제에 실패했습니다.');
     if (ok) await _reloadCurrent();
+  }
+
+  /// TBP/HTMLP 암호화 백업 다운로드 (.tbp.save / .htmlp.save, 비밀번호: boardest1217)
+  Future<void> _exportBackupFile(Map<String, dynamic> file) async {
+    final name = (file['name'] ?? 'backup').toString();
+    _toast('📦 패키지 암호화 압축 중 (비밀번호: boardest1217)...');
+    try {
+      final zipBytes = await CloudDriveService.instance.exportEncryptedPackage(file);
+      if (zipBytes != null && zipBytes.isNotEmpty) {
+        final lower = name.toLowerCase();
+        final ext = lower.contains('htmlp') ? 'htmlp.save' : 'tbp.save';
+        final base = name.replaceAll(RegExp(r'\.(tbp|htmlp|bsttbp|canva\.bst)$', caseSensitive: false), '');
+        final outName = '$base.$ext';
+        await triggerBrowserDownload(zipBytes, outName);
+        _toast('✔ 암호화 백업 파일 다운로드 완료: $outName');
+      } else {
+        _toast('백업 패키징에 실패했습니다.');
+      }
+    } catch (e) {
+      _toast('백업 다운로드 오류: $e');
+    }
   }
 
   Future<void> _newFolder() async {
@@ -212,20 +262,29 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
   }
 
   Widget _buildItemMenu(Map<String, dynamic> file, double s) {
+    final name = (file['name'] ?? '').toString().toLowerCase();
+    final isTbpOrHtmlp = name.endsWith('.tbp') || name.endsWith('.htmlp') || name.endsWith('.bsttbp') || name.endsWith('.canva.bst');
+
     return PopupMenuButton<String>(
       tooltip: '더보기',
       color: const Color(0xFF1E293B),
       icon: Icon(Icons.more_vert_rounded, color: Colors.white54, size: 18 * s),
       padding: EdgeInsets.zero,
       onSelected: (v) {
+        if (v == 'export') _exportBackupFile(file);
         if (v == 'rename') _renameFile(file);
         if (v == 'move') _moveFile(file);
         if (v == 'delete') _deleteFile(file);
       },
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: 'rename', child: Text('✏️ 이름 바꾸기', style: TextStyle(color: Colors.white))),
-        PopupMenuItem(value: 'move', child: Text('📂 폴더로 이동', style: TextStyle(color: Colors.white))),
-        PopupMenuItem(value: 'delete', child: Text('🗑️ 삭제', style: TextStyle(color: Color(0xFFFF8BA7)))),
+      itemBuilder: (_) => [
+        if (isTbpOrHtmlp)
+          const PopupMenuItem(
+            value: 'export',
+            child: Text('📦 백업 다운로드 (.save)', style: TextStyle(color: Color(0xFF00F5D4))),
+          ),
+        const PopupMenuItem(value: 'rename', child: Text('✏️ 이름 바꾸기', style: TextStyle(color: Colors.white))),
+        const PopupMenuItem(value: 'move', child: Text('📂 폴더로 이동', style: TextStyle(color: Colors.white))),
+        const PopupMenuItem(value: 'delete', child: Text('🗑️ 삭제', style: TextStyle(color: Color(0xFFFF8BA7)))),
       ],
     );
   }
