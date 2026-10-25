@@ -48,6 +48,8 @@ class _MessageViewState extends State<MessageView> {
   ];
 
   final List<Map<String, String>> _sentHistory = [];
+  final Set<String> _handledInboxMsgIds = {};
+  final List<Map<String, dynamic>> _receivedMessages = [];
 
   @override
   void initState() {
@@ -183,13 +185,24 @@ class _MessageViewState extends State<MessageView> {
                 'lastActive': val['lastActive']?.toString() ?? '',
               });
 
-              // 쪽지 발송 기록의 실시간 응답(O/X) 확인 및 브라우저 알림 트리거
+              // 쪽지 발송 기록의 실시간 응답(O/X/TEXT) 확인
+              final lastRespMsgId = val['lastResponseMsgId']?.toString() ?? '';
               final resp = (val['response']?.toString() ?? '').trim().toUpperCase();
+              final respText = val['responseText']?.toString() ?? '';
+
               if (resp.isNotEmpty) {
                 for (final hist in _sentHistory) {
                   final ids = (hist['docIds'] ?? '').split(',');
-                  if (ids.contains(docId) && hist['response'] != resp) {
+                  final histMsgId = hist['msgId']?.toString() ?? '';
+
+                  // messageId가 일치하거나(최우선 격리), messageId 없는 레거시의 경우 docId 매칭
+                  final isTargetMatch = histMsgId.isNotEmpty
+                      ? (lastRespMsgId == histMsgId || ids.contains(docId))
+                      : ids.contains(docId);
+
+                  if (isTargetMatch && hist['response'] != resp) {
                     hist['response'] = resp;
+                    hist['responseText'] = respText;
                     final clName = val['ackClassroom']?.toString() ?? nickname;
                     if (resp == 'O') {
                       showWebBrowserNotification(
@@ -201,6 +214,11 @@ class _MessageViewState extends State<MessageView> {
                         title: '🔴 쪽지 응답 도착 [X]',
                         body: '$clName에서 "X (불가)" 응답을 보냈습니다.',
                       );
+                    } else if (resp == 'TEXT') {
+                      showWebBrowserNotification(
+                        title: '💬 쪽지 답장 도착',
+                        body: '$clName: "$respText"',
+                      );
                     }
                   }
                 }
@@ -211,7 +229,61 @@ class _MessageViewState extends State<MessageView> {
         }
       } catch (_) {}
 
-      // RTDB 결과만 사용 (Cloudflare Worker 및 Firestore 100건 폴백 제거로 0 Firestore Reads 달성)
+      // 2. message_responses.json 조회하여 고유 msgId 별 응답 확정 (덮어쓰기 방지)
+      try {
+        final respUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/message_responses.json';
+        final respRes = await http.get(Uri.parse(respUrl)).timeout(const Duration(seconds: 3));
+        if (respRes.statusCode == 200 && respRes.body != 'null') {
+          final respData = json.decode(respRes.body);
+          if (respData is Map) {
+            respData.forEach((mId, rVal) {
+              if (rVal is! Map) return;
+              for (final hist in _sentHistory) {
+                if (hist['msgId'] == mId.toString()) {
+                  final rType = (rVal['response']?.toString() ?? '').toUpperCase();
+                  final rText = rVal['responseText']?.toString() ?? '';
+                  if (hist['response'] != rType || hist['responseText'] != rText) {
+                    hist['response'] = rType;
+                    hist['responseText'] = rText;
+                  }
+                }
+              }
+            });
+          }
+        }
+      } catch (_) {}
+
+      // 3. 교실에서 교사/교무실로 보낸 쪽지 (teacher_inbox) 확인
+      try {
+        final inboxUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/teacher_inbox/$connName/messages.json';
+        final inRes = await http.get(Uri.parse(inboxUrl)).timeout(const Duration(seconds: 3));
+        if (inRes.statusCode == 200 && inRes.body != 'null') {
+          final inData = json.decode(inRes.body);
+          if (inData is Map) {
+            inData.forEach((mId, mVal) {
+              if (mVal is! Map) return;
+              final msgId = mId.toString();
+              if (!_handledInboxMsgIds.contains(msgId)) {
+                _handledInboxMsgIds.add(msgId);
+                final sClass = mVal['senderClass']?.toString() ?? '전자칠판';
+                final sText = mVal['text']?.toString() ?? '';
+                _receivedMessages.insert(0, {
+                  'msgId': msgId,
+                  'senderClass': sClass,
+                  'senderDocId': mVal['senderDocId']?.toString() ?? '',
+                  'text': sText,
+                  'sentAt': mVal['sentAt']?.toString() ?? '',
+                  'response': mVal['response']?.toString() ?? '',
+                });
+                showWebBrowserNotification(
+                  title: '📩 교실 쪽지 수신 [$sClass]',
+                  body: '$sClass: "$sText"',
+                );
+              }
+            });
+          }
+        }
+      } catch (_) {}
 
       // 데모 모드인데 실시간 온라인 기기가 아직 없으면 9개 데모 학급을 상시 노출하여 시연/쪽지 발송 보장
       final isDemoActive = AppConfig.isDemoMode || connName == 'demo';
@@ -303,6 +375,9 @@ class _MessageViewState extends State<MessageView> {
         : (trimmed.isNotEmpty ? '$trimmed 선생님' : '교사');
 
     final nowIso = DateTime.now().toIso8601String();
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final msgId = 'msg_$nowMs';
+
     final sendFutures = targetDocIds.map((docId) async {
       bool sent = false;
       await Future.wait([
@@ -315,6 +390,7 @@ class _MessageViewState extends State<MessageView> {
               headers: {"Content-Type": "application/json"},
               body: json.encode({
                 'message': text,
+                'messageId': msgId,
                 'messageFrom': senderName,
                 'messageSentAt': nowIso,
                 'acknowledged': false,
@@ -334,6 +410,7 @@ class _MessageViewState extends State<MessageView> {
               headers: {"Content-Type": "application/json"},
               body: json.encode({
                 'message': text,
+                'messageId': msgId,
                 'messageFrom': senderName,
                 'messageSentAt': nowIso,
                 'acknowledged': false,
@@ -360,11 +437,13 @@ class _MessageViewState extends State<MessageView> {
           _statusMessage = '🎉 [$label] 전자칠판으로 쪽지가 전달되었습니다!';
           _statusIsError = false;
           _sentHistory.insert(0, {
+            'msgId': msgId,
             'text': text,
             'time': '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
             'target': label,
             'docIds': _selectedOnlineDocIds.join(','),
             'response': '',
+            'responseText': '',
           });
           _msgController.clear();
         } else {
@@ -373,6 +452,102 @@ class _MessageViewState extends State<MessageView> {
         }
       });
     }
+  }
+
+  Future<void> _replyToClassroomMessage(Map<String, dynamic> msgItem, String responseType, {String? customText}) async {
+    final connName = _getSchoolConnName();
+    final msgId = msgItem['msgId']?.toString() ?? '';
+    final sDocId = msgItem['senderDocId']?.toString() ?? '';
+    if (msgId.isEmpty) return;
+
+    final nowIso = DateTime.now().toIso8601String();
+    try {
+      final replyUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/teacher_inbox/$connName/messages/$msgId.json';
+      await http.patch(
+        Uri.parse(replyUrl),
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({
+          'response': responseType,
+          'responseText': customText ?? '',
+          'respondedAt': nowIso,
+        }),
+      );
+
+      if (sDocId.isNotEmpty) {
+        final cloud = CloudDriveService.instance;
+        final teacherName = _settings?.selectedTeacherName.isNotEmpty == true
+            ? _settings!.selectedTeacherName
+            : (cloud.userName?.isNotEmpty == true ? cloud.userName! : '선생님');
+        final clUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/$sDocId.json';
+        final replyMsgText = responseType == 'O'
+            ? '🟢 [확인 (O)]'
+            : (responseType == 'X' ? '🔴 [불가 (X)]' : '💬 $customText');
+        await http.patch(
+          Uri.parse(clUrl),
+          headers: {"Content-Type": "application/json"},
+          body: json.encode({
+            'message': '선생님 답장: $replyMsgText',
+            'messageFrom': teacherName,
+            'messageSentAt': nowIso,
+            'acknowledged': false,
+          }),
+        );
+      }
+
+      if (mounted) {
+        setState(() {
+          msgItem['response'] = responseType;
+          msgItem['responseText'] = customText ?? '';
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _showTeacherReplyInputDialog(Map<String, dynamic> msgItem, double s) {
+    final textCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16161A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16 * s)),
+        title: Text('교실로 답장 보내기', style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 16 * s, fontWeight: FontWeight.bold)),
+        content: Container(
+          width: 380 * s,
+          padding: EdgeInsets.symmetric(horizontal: 10 * s),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(10 * s),
+            border: Border.all(color: Colors.white24),
+          ),
+          child: TextField(
+            controller: textCtrl,
+            style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14 * s),
+            decoration: InputDecoration(
+              hintText: '답장 내용을 입력하세요...',
+              hintStyle: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 13 * s),
+              border: InputBorder.none,
+            ),
+            autofocus: true,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('취소', style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 13 * s)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7F5AF0)),
+            onPressed: () {
+              final text = textCtrl.text.trim();
+              if (text.isEmpty) return;
+              Navigator.pop(ctx);
+              _replyToClassroomMessage(msgItem, 'TEXT', customText: text);
+            },
+            child: Text('전송', style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 13 * s, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -803,6 +978,125 @@ class _MessageViewState extends State<MessageView> {
                 ),
                 SizedBox(height: 20 * s),
 
+                // ── 교실에서 수신된 쪽지 바 ─────────────────────────
+                if (_receivedMessages.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      const Icon(Icons.mark_email_unread_rounded, color: Color(0xFF7F5AF0), size: 16),
+                      SizedBox(width: 6 * s),
+                      Text(
+                        '교실에서 온 쪽지 (${_receivedMessages.length})',
+                        style: GoogleFonts.notoSansKr(
+                          color: const Color(0xFF7F5AF0),
+                          fontSize: 13 * s,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8 * s),
+                  ...List.generate(_receivedMessages.length, (idx) {
+                    final item = _receivedMessages[idx];
+                    final resp = (item['response'] ?? '').toString().toUpperCase();
+                    final respText = item['responseText']?.toString() ?? '';
+
+                    return Container(
+                      margin: EdgeInsets.only(bottom: 8 * s),
+                      padding: EdgeInsets.symmetric(horizontal: 14 * s, vertical: 10 * s),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1B1B22),
+                        borderRadius: BorderRadius.circular(12 * s),
+                        border: Border.all(color: const Color(0xFF7F5AF0).withOpacity(0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 3 * s),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF7F5AF0).withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(6 * s),
+                            ),
+                            child: Text(
+                              item['senderClass'] ?? '교실',
+                              style: GoogleFonts.notoSansKr(color: const Color(0xFF9E86F8), fontSize: 11 * s, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          SizedBox(width: 10 * s),
+                          Expanded(
+                            child: Text(
+                              item['text'] ?? '',
+                              style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 13 * s, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                          SizedBox(width: 8 * s),
+                          if (resp.isEmpty) ...[
+                            // 3종 답장 버튼 (X, 입력, O)
+                            InkWell(
+                              onTap: () => _replyToClassroomMessage(item, 'X'),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 4 * s),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444).withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(6 * s),
+                                  border: Border.all(color: const Color(0xFFEF4444)),
+                                ),
+                                child: Text('🔴 X', style: TextStyle(color: const Color(0xFFEF4444), fontSize: 11 * s, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                            SizedBox(width: 6 * s),
+                            InkWell(
+                              onTap: () => _showTeacherReplyInputDialog(item, s),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 4 * s),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6 * s),
+                                  border: Border.all(color: Colors.white30),
+                                ),
+                                child: Text('💬 답장', style: TextStyle(color: Colors.white, fontSize: 11 * s, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                            SizedBox(width: 6 * s),
+                            InkWell(
+                              onTap: () => _replyToClassroomMessage(item, 'O'),
+                              child: Container(
+                                padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 4 * s),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF10B981).withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(6 * s),
+                                  border: Border.all(color: const Color(0xFF10B981)),
+                                ),
+                                child: Text('🟢 O', style: TextStyle(color: const Color(0xFF10B981), fontSize: 11 * s, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                          ] else ...[
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 4 * s),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(6 * s),
+                              ),
+                              child: Text(
+                                resp == 'O'
+                                    ? '🟢 O 회신 완료'
+                                    : (resp == 'X' ? '🔴 X 회신 완료' : '💬 $respText'),
+                                style: GoogleFonts.notoSansKr(
+                                  color: resp == 'O'
+                                      ? const Color(0xFF10B981)
+                                      : (resp == 'X' ? const Color(0xFFEF4444) : const Color(0xFF9E86F8)),
+                                  fontSize: 11 * s,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  }),
+                  SizedBox(height: 16 * s),
+                ],
+
                 // ── 최근 발송 내역 바 ─────────────────────────
                 if (_sentHistory.isNotEmpty) ...[
                   Row(
@@ -845,18 +1139,31 @@ class _MessageViewState extends State<MessageView> {
                             ),
                           ),
                           SizedBox(width: 8 * s),
-                          // 2. 응답 뱃지 (O는 초록, X는 빨강, 안읽으면 회색)
+                          // 2. 응답 뱃지 (O는 초록, X는 빨강, TEXT는 보라/말풍선, 안읽으면 회색)
                           Builder(builder: (_) {
                             final resp = (item['response'] ?? '').toUpperCase();
+                            final respText = item['responseText'] ?? '';
                             final isO = resp == 'O';
                             final isX = resp == 'X';
-                            final badgeBg = isO
-                                ? const Color(0xFF10B981).withOpacity(0.2)
-                                : (isX ? const Color(0xFFEF4444).withOpacity(0.2) : Colors.white.withOpacity(0.08));
-                            final badgeFg = isO
-                                ? const Color(0xFF10B981)
-                                : (isX ? const Color(0xFFEF4444) : const Color(0xFF94A1B2));
-                            final badgeText = isO ? '🟢 O' : (isX ? '🔴 X' : '⚪ 안읽음');
+                            final isText = resp == 'TEXT';
+
+                            Color badgeBg = Colors.white.withOpacity(0.08);
+                            Color badgeFg = const Color(0xFF94A1B2);
+                            String badgeText = '⚪ 안읽음';
+
+                            if (isO) {
+                              badgeBg = const Color(0xFF10B981).withOpacity(0.2);
+                              badgeFg = const Color(0xFF10B981);
+                              badgeText = '🟢 O (확인)';
+                            } else if (isX) {
+                              badgeBg = const Color(0xFFEF4444).withOpacity(0.2);
+                              badgeFg = const Color(0xFFEF4444);
+                              badgeText = '🔴 X (불가)';
+                            } else if (isText) {
+                              badgeBg = const Color(0xFF7F5AF0).withOpacity(0.2);
+                              badgeFg = const Color(0xFF7F5AF0);
+                              badgeText = respText.isNotEmpty ? '💬 $respText' : '💬 답장 완료';
+                            }
 
                             return Container(
                               padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 2 * s),
@@ -868,6 +1175,8 @@ class _MessageViewState extends State<MessageView> {
                               child: Text(
                                 badgeText,
                                 style: TextStyle(color: badgeFg, fontSize: 10 * s, fontWeight: FontWeight.bold),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             );
                           }),

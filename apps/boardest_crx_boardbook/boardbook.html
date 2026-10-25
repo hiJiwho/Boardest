@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boardest BoardBook Viewer</title>
+  <link rel="stylesheet" href="boardbook.css">
+</head>
+<body>
+  <!-- 1. 미인증 접근 차단 화면 -->
+  <div id="auth-blocked" class="blocked-screen hidden">
+    <div class="blocked-card">
+      <div class="blocked-icon">🔒</div>
+      <h2>Boardest 인증 필요</h2>
+      <p>Boardest BoardBook은 직접 접근할 수 없습니다.<br>Boardest 웹사이트에서 교과서(TBP) 또는 웹교안(HTMLP)을 열어주세요.</p>
+      <a href="https://boardest-class.web.app" class="blocked-btn">Boardest 홈으로 이동</a>
+    </div>
+  </div>
+
+  <!-- 2. BoardBook 메인 뷰어 -->
+  <div id="viewer-container" class="viewer-container">
+    <!-- 상단 바 -->
+    <header class="top-nav">
+      <div class="nav-left">
+        <button id="btn-back" class="icon-btn" title="뒤로가기">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+        </button>
+        <span id="doc-type-badge" class="type-badge">TBP</span>
+        <h1 id="doc-title" class="doc-title">교재를 불러오는 중...</h1>
+      </div>
+
+      <div class="nav-center">
+        <button id="btn-prev-page" class="nav-btn" title="이전 페이지 (←)">◀ 이전</button>
+        <span id="page-indicator" class="page-indicator">1 / 1</span>
+        <button id="btn-next-page" class="nav-btn" title="다음 페이지 (→)">다음 ▶</button>
+      </div>
+
+      <div class="nav-right">
+        <button id="btn-toggle-interaction" class="mode-toggle-btn active" title="사이트 조작 / 판서 모드 전환">
+          <span id="mode-icon">✏️</span> <span id="mode-text">판서 모드</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 중앙 뷰포트 (콘텐츠 캡처 + 판서 레이어) -->
+    <main class="canvas-stage" id="stage">
+      <canvas id="bg-canvas"></canvas>
+      <canvas id="pen-canvas"></canvas>
+      <div id="hotspot-layer" class="hotspot-layer"></div>
+    </main>
+
+    <!-- 우측 세로형 판서 툴바 (Right Floating Toolbar) -->
+    <aside class="right-pen-toolbar" id="pen-toolbar">
+      <button class="tool-btn active" id="tool-pen" title="펜">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+      </button>
+
+      <div class="color-palette">
+        <div class="color-dot active" data-color="#00F5D4" style="background:#00F5D4;"></div>
+        <div class="color-dot" data-color="#FFD166" style="background:#FFD166;"></div>
+        <div class="color-dot" data-color="#EF4565" style="background:#EF4565;"></div>
+        <div class="color-dot" data-color="#7F5AF0" style="background:#7F5AF0;"></div>
+        <div class="color-dot" data-color="#FFFFFF" style="background:#FFFFFF;"></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <button class="tool-btn" id="tool-eraser" title="지우개">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M15.14 3c-.4 0-.8.15-1.11.46L2.46 15.03c-.61.61-.61 1.6 0 2.22l4.29 4.29c.61.61 1.6.61 2.22 0L20.54 9.97c.61-.61.61-1.6 0-2.22l-4.29-4.29c-.31-.31-.71-.46-1.11-.46zm0 2.83l3.54 3.54-9.19 9.19-3.54-3.54 9.19-9.19z"/></svg>
+      </button>
+
+      <button class="tool-btn" id="tool-clear-all" title="전체 지우기">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M15 16h4v2h-4zm0-8h7v2h-7zm0 4h6v2h-6zM3 18c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V8H3v10zm2-8h6v8H5v-8zm5-6H6L5 5H2v2h12V5h-3z"/></svg>
+      </button>
+    </aside>
+  </div>
+
+  <script src="boardbook.js"></script>
+</body>
+</html>

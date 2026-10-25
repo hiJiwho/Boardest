@@ -49,6 +49,7 @@ class MealCallService {
   }
 
   bool get isCalled => _lastCalledState;
+  String get documentId => _documentId;
 
   void setManualActive(bool active) {
     _manualActive = active;
@@ -66,15 +67,20 @@ class MealCallService {
 
   String? lastSenderFcmToken;
   String? lastSenderName;
+  String? lastMessageId;
 
-  // ─── 교사에게 [O, X, 이동하기] 양방향 응답 전송 ───
+  // ─── 교사에게 [O, X, TEXT, 이동하기] 양방향 응답 전송 ───
   Future<bool> sendResponseToTeacher({
-    required String response, // 'O', 'X', 'MOVE'
+    required String response, // 'O', 'X', 'MOVE', 'TEXT'
+    String? responseText,
+    String? messageId,
     String? classroomName,
   }) async {
     final docId = _documentId;
     if (docId.isEmpty) return false;
     final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final nowIso = DateTime.now().toIso8601String();
+    final effectiveMsgId = messageId ?? lastMessageId ?? 'msg_$nowMs';
     final clName = classroomName ??
         (_currentSettings?.classNickname.isNotEmpty == true
             ? _currentSettings!.classNickname
@@ -89,6 +95,8 @@ class MealCallService {
         body: json.encode({
           'acknowledged': true,
           'response': response,
+          'responseText': responseText ?? '',
+          'lastResponseMsgId': effectiveMsgId,
           'responseAt': nowMs,
           'acknowledgedAt': nowMs,
           'ackClassroom': clName,
@@ -96,6 +104,23 @@ class MealCallService {
           'message': null,
         }),
       ).timeout(const Duration(seconds: 4));
+
+      // 2. 고유 messageId 별 독립 응답 기록 (과거 O, 최신 X 덮어쓰기 방지)
+      try {
+        final respUrl = '$_rtdbBase/message_responses/$effectiveMsgId.json';
+        await http.put(
+          Uri.parse(respUrl),
+          headers: {"Content-Type": "application/json"},
+          body: json.encode({
+            'messageId': effectiveMsgId,
+            'docId': docId,
+            'response': response,
+            'responseText': responseText ?? '',
+            'ackClassroom': clName,
+            'respondedAt': nowIso,
+          }),
+        ).timeout(const Duration(seconds: 3));
+      } catch (_) {}
 
       // demo 경로 동기화
       try {
@@ -105,6 +130,8 @@ class MealCallService {
           body: json.encode({
             'acknowledged': true,
             'response': response,
+            'responseText': responseText ?? '',
+            'lastResponseMsgId': effectiveMsgId,
             'responseAt': nowMs,
             'acknowledgedAt': nowMs,
             'ackClassroom': clName,
@@ -112,16 +139,20 @@ class MealCallService {
         ).timeout(const Duration(seconds: 2));
       } catch (_) {}
 
-      // 2. 발신 교사의 FCM 토큰이 있는 경우 직접 FCM 답장 푸시 트리거
+      // 3. 발신 교사의 FCM 토큰이 있는 경우 직접 FCM 답장 푸시 트리거
       if (lastSenderFcmToken != null && lastSenderFcmToken!.isNotEmpty) {
         try {
           final fcmUrl = '${AppConfig.firebaseFunctionsBase}/sendFcmNotification';
           final title = response == 'MOVE'
               ? '🍱 급식실 이동 시작'
-              : (response == 'O' ? '🟢 쪽지 응답: O (수락)' : '🔴 쪽지 응답: X (거절)');
+              : (response == 'O'
+                  ? '🟢 쪽지 응답: O (수락)'
+                  : (response == 'X' ? '🔴 쪽지 응답: X (거절)' : '💬 쪽지 답장 도착'));
           final body = response == 'MOVE'
               ? '$clName에서 급식실로 이동을 시작했습니다!'
-              : '$clName에서 [$response] 응답을 보냈습니다.';
+              : (response == 'TEXT' && responseText != null && responseText.isNotEmpty
+                  ? '$clName: "$responseText"'
+                  : '$clName에서 [$response] 응답을 보냈습니다.');
           await http.post(
             Uri.parse(fcmUrl),
             headers: {"Content-Type": "application/json"},
@@ -132,6 +163,8 @@ class MealCallService {
               'data': {
                 'type': 'response',
                 'response': response,
+                'responseText': responseText ?? '',
+                'messageId': effectiveMsgId,
                 'classroom': clName,
                 'responseAt': nowMs.toString(),
               }
@@ -275,6 +308,11 @@ class MealCallService {
         final message = mapData['message']?.toString() ?? '';
         final messageFrom = mapData['messageFrom']?.toString() ?? '';
         final messageSentAt = mapData['messageSentAt']?.toString() ?? '';
+        if (mapData['messageId'] != null) {
+          lastMessageId = mapData['messageId']?.toString();
+        } else {
+          lastMessageId = 'msg_${messageSentAt.replaceAll(RegExp(r'[^0-9]'), '')}';
+        }
         if (mapData['fromFcmToken'] != null) {
           lastSenderFcmToken = mapData['fromFcmToken']?.toString();
         }
@@ -323,6 +361,11 @@ class MealCallService {
         final msg = mapData['message']?.toString() ?? '';
         final from = mapData['messageFrom']?.toString() ?? '';
         final sentAt = mapData['messageSentAt']?.toString() ?? '';
+        if (mapData['messageId'] != null) {
+          lastMessageId = mapData['messageId']?.toString();
+        } else {
+          lastMessageId = 'msg_${sentAt.replaceAll(RegExp(r'[^0-9]'), '')}';
+        }
         if (msg.isNotEmpty && sentAt.isNotEmpty && _lastMessageSentAt != sentAt) {
           _lastMessageSentAt = sentAt;
           onMessageReceived?.call(msg, from);

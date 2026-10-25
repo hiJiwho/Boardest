@@ -127,6 +127,10 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
   DateTime? _debugTimeOverride;
 
+  // 쪽지 답장 직접 입력 상태
+  bool _showCustomReplyInput = false;
+  final TextEditingController _customReplyController = TextEditingController();
+
   // USB & App layout state
   bool _isUsbConnected = false;
   bool _isUsbEjected = false;
@@ -1960,111 +1964,246 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         ),
                       ),
                     ),
-                    SizedBox(height: 32 * scale),
-                    Row(
-                      children: [
-                        // X 버튼 (거절 / 불가 - 빨강)
-                        Expanded(
-                          child: SizedBox(
-                            height: 52 * scale,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFEF4444),
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14 * scale),
+                    SizedBox(height: 24 * scale),
+                    StatefulBuilder(
+                      builder: (ctx, setModalState) {
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_showCustomReplyInput) ...[
+                              Container(
+                                margin: EdgeInsets.only(bottom: 14 * scale),
+                                padding: EdgeInsets.symmetric(horizontal: 12 * scale),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.06),
+                                  borderRadius: BorderRadius.circular(12 * scale),
+                                  border: Border.all(color: const Color(0xFF7F5AF0).withOpacity(0.5)),
+                                ),
+                                child: TextField(
+                                  controller: _customReplyController,
+                                  style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14 * scale),
+                                  decoration: InputDecoration(
+                                    hintText: '선생님께 전달할 답장 내용을 입력하세요...',
+                                    hintStyle: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 13 * scale),
+                                    border: InputBorder.none,
+                                  ),
+                                  autofocus: true,
                                 ),
                               ),
-                              onPressed: () async {
-                                Navigator.pop(context);
-                                final clName = _settings.classNickname.isNotEmpty
-                                    ? _settings.classNickname
-                                    : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
-                                final ok = await MealCallService.instance.sendResponseToTeacher(
-                                  response: 'X',
-                                  classroomName: clName,
-                                );
-                                if (mounted && ok) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('🔴 선생님께 "X" 답장을 보냈습니다.'),
-                                      duration: Duration(seconds: 2),
-                                      backgroundColor: Color(0xFFEF4444),
-                                    ),
-                                  );
-                                }
-                              },
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                              Row(
                                 children: [
-                                  Icon(Icons.close_rounded, size: 22 * scale, color: Colors.white),
-                                  SizedBox(width: 6 * scale),
-                                  Text(
-                                    'X (불가)',
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 16 * scale,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 48 * scale,
+                                      child: OutlinedButton(
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.white70,
+                                          side: const BorderSide(color: Colors.white24),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12 * scale)),
+                                        ),
+                                        onPressed: () {
+                                          setModalState(() {
+                                            _showCustomReplyInput = false;
+                                            _customReplyController.clear();
+                                          });
+                                        },
+                                        child: Text('취소', style: GoogleFonts.notoSansKr(fontSize: 14 * scale)),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 8 * scale),
+                                  Expanded(
+                                    flex: 2,
+                                    child: SizedBox(
+                                      height: 48 * scale,
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF7F5AF0),
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12 * scale)),
+                                        ),
+                                        onPressed: () async {
+                                          final replyText = _customReplyController.text.trim();
+                                          if (replyText.isEmpty) return;
+                                          Navigator.pop(context);
+                                          final clName = _settings.classNickname.isNotEmpty
+                                              ? _settings.classNickname
+                                              : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
+                                          final ok = await MealCallService.instance.sendResponseToTeacher(
+                                            response: 'TEXT',
+                                            responseText: replyText,
+                                            classroomName: clName,
+                                          );
+                                          _customReplyController.clear();
+                                          if (mounted && ok) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('💬 선생님께 "$replyText" 답장을 보냈습니다.'),
+                                                duration: const Duration(seconds: 2),
+                                                backgroundColor: const Color(0xFF7F5AF0),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.send_rounded, size: 18 * scale, color: Colors.white),
+                                            SizedBox(width: 6 * scale),
+                                            Text('답장 전송', style: GoogleFonts.notoSansKr(fontSize: 14 * scale, fontWeight: FontWeight.bold)),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: 12 * scale),
-                        // O 버튼 (승낙 / 확인 - 초록)
-                        Expanded(
-                          child: SizedBox(
-                            height: 52 * scale,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF10B981),
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14 * scale),
-                                ),
-                              ),
-                              onPressed: () async {
-                                Navigator.pop(context);
-                                final clName = _settings.classNickname.isNotEmpty
-                                    ? _settings.classNickname
-                                    : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
-                                final ok = await MealCallService.instance.sendResponseToTeacher(
-                                  response: 'O',
-                                  classroomName: clName,
-                                );
-                                if (mounted && ok) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('🟢 선생님께 "O" 답장을 보냈습니다!'),
-                                      duration: Duration(seconds: 2),
-                                      backgroundColor: Color(0xFF10B981),
-                                    ),
-                                  );
-                                }
-                              },
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                            ] else ...[
+                              Row(
                                 children: [
-                                  Icon(Icons.check_rounded, size: 22 * scale, color: Colors.white),
-                                  SizedBox(width: 6 * scale),
-                                  Text(
-                                    'O (확인)',
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 16 * scale,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
+                                  // X 버튼 (거절 / 불가 - 빨강)
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 52 * scale,
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFFEF4444),
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(14 * scale),
+                                          ),
+                                        ),
+                                        onPressed: () async {
+                                          Navigator.pop(context);
+                                          final clName = _settings.classNickname.isNotEmpty
+                                              ? _settings.classNickname
+                                              : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
+                                          final ok = await MealCallService.instance.sendResponseToTeacher(
+                                            response: 'X',
+                                            classroomName: clName,
+                                          );
+                                          if (mounted && ok) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('🔴 선생님께 "X (불가)" 답장을 보냈습니다.'),
+                                                duration: Duration(seconds: 2),
+                                                backgroundColor: Color(0xFFEF4444),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.close_rounded, size: 20 * scale, color: Colors.white),
+                                            SizedBox(width: 4 * scale),
+                                            Text(
+                                              'X (불가)',
+                                              style: GoogleFonts.notoSansKr(
+                                                fontSize: 14 * scale,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 8 * scale),
+                                  // 메시지 직접 입력 버튼
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 52 * scale,
+                                      child: OutlinedButton(
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: const Color(0xFF7F5AF0),
+                                          side: const BorderSide(color: Color(0xFF7F5AF0), width: 1.5),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(14 * scale),
+                                          ),
+                                        ),
+                                        onPressed: () {
+                                          setModalState(() {
+                                            _showCustomReplyInput = true;
+                                          });
+                                        },
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.edit_note_rounded, size: 20 * scale, color: const Color(0xFF7F5AF0)),
+                                            SizedBox(width: 4 * scale),
+                                            Text(
+                                              '메시지 입력',
+                                              style: GoogleFonts.notoSansKr(
+                                                fontSize: 14 * scale,
+                                                fontWeight: FontWeight.bold,
+                                                color: const Color(0xFF7F5AF0),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 8 * scale),
+                                  // O 버튼 (승낙 / 확인 - 초록)
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 52 * scale,
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF10B981),
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(14 * scale),
+                                          ),
+                                        ),
+                                        onPressed: () async {
+                                          Navigator.pop(context);
+                                          final clName = _settings.classNickname.isNotEmpty
+                                              ? _settings.classNickname
+                                              : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
+                                          final ok = await MealCallService.instance.sendResponseToTeacher(
+                                            response: 'O',
+                                            classroomName: clName,
+                                          );
+                                          if (mounted && ok) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('🟢 선생님께 "O (확인)" 답장을 보냈습니다!'),
+                                                duration: Duration(seconds: 2),
+                                                backgroundColor: Color(0xFF10B981),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.check_rounded, size: 20 * scale, color: Colors.white),
+                                            SizedBox(width: 4 * scale),
+                                            Text(
+                                              'O (확인)',
+                                              style: GoogleFonts.notoSansKr(
+                                                fontSize: 14 * scale,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ),
-                        ),
-                      ],
+                            ],
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -10774,6 +10913,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       if (!AppConfig.isLiteMode) ...[
                         _buildToolSlotItem('unified_pen', '판서하기', 7, scale),
                         _buildToolSlotItem('bst_cloud', 'Cloud', 8, scale),
+                        _buildToolSlotItem('send_message_teacher', '선생님쪽지', 9, scale),
                       ],
                                             _buildToolSlotItem('school_calendar', '학사달력', 10, scale),
                       _buildToolSlotItem('app_drawer', '앱서랍', 11, scale),
@@ -11286,6 +11426,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         return Icons.calendar_month_rounded;
       case 'notepad':
         return Icons.note_alt_rounded;
+      case 'send_message_teacher':
+        return Icons.send_rounded;
 
       // 판서 관련 (Annotation Tools)
       case 'unified_pen':
@@ -11338,6 +11480,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         return _openSchoolCalendarDialog;
       case 'notepad':
         return _openNotepad;
+      case 'send_message_teacher':
+        return _openSendMessageToTeacherDialog;
 
       // 판서 관련 (Annotation Tools)
       case 'unified_pen':
@@ -15198,6 +15342,219 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
   void _openNotepad() {
     showDialog(context: context, builder: (context) => const NotepadModal());
+  }
+
+  // ── 교실에서 교사/교무실로 쪽지 발송 다이얼로그 ──
+  void _openSendMessageToTeacherDialog() {
+    final scale = MediaQuery.of(context).size.width / 1920.0;
+    final textCtrl = TextEditingController();
+    String target = '교무실 (전체 선생님)';
+    final recentTeacher = MealCallService.instance.lastSenderName;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.symmetric(horizontal: 24 * scale),
+          child: Container(
+            width: 480 * scale,
+            padding: EdgeInsets.all(24 * scale),
+            decoration: BoxDecoration(
+              color: const Color(0xFF16161A),
+              borderRadius: BorderRadius.circular(20 * scale),
+              border: Border.all(color: const Color(0xFF7F5AF0).withOpacity(0.5), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.6),
+                  blurRadius: 30,
+                  spreadRadius: 8,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(8 * scale),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF7F5AF0).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10 * scale),
+                      ),
+                      child: Icon(Icons.send_rounded, color: const Color(0xFF7F5AF0), size: 24 * scale),
+                    ),
+                    SizedBox(width: 12 * scale),
+                    Text(
+                      '선생님께 쪽지 보내기',
+                      style: GoogleFonts.notoSansKr(
+                        color: Colors.white,
+                        fontSize: 18 * scale,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Colors.white60),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 16 * scale),
+                Text(
+                  '수신 대상',
+                  style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 12 * scale, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 6 * scale),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12 * scale),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(10 * scale),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: target,
+                      dropdownColor: const Color(0xFF242629),
+                      isExpanded: true,
+                      style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14 * scale),
+                      items: [
+                        '교무실 (전체 선생님)',
+                        if (recentTeacher != null && recentTeacher.isNotEmpty) recentTeacher,
+                      ].toSet().map((name) {
+                        return DropdownMenuItem<String>(
+                          value: name,
+                          child: Text(name),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) setDlgState(() => target = val);
+                      },
+                    ),
+                  ),
+                ),
+                SizedBox(height: 16 * scale),
+                Text(
+                  '쪽지 내용',
+                  style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 12 * scale, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 6 * scale),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12 * scale, vertical: 8 * scale),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12 * scale),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: TextField(
+                    controller: textCtrl,
+                    maxLines: 3,
+                    style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14 * scale),
+                    decoration: InputDecoration(
+                      hintText: '선생님께 전달할 메시지를 입력하세요...',
+                      hintStyle: GoogleFonts.notoSansKr(color: Colors.white38, fontSize: 13 * scale),
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 24 * scale),
+                SizedBox(
+                  height: 48 * scale,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF7F5AF0),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12 * scale)),
+                    ),
+                    onPressed: () async {
+                      final msg = textCtrl.text.trim();
+                      if (msg.isEmpty) return;
+                      Navigator.pop(ctx);
+
+                      final clName = _settings.classNickname.isNotEmpty
+                          ? _settings.classNickname
+                          : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
+                      final docId = MealCallService.instance.documentId;
+                      final sCode = _settings.selectedSchool?.code?.toString() ?? '';
+                      final schoolCode = sCode.isNotEmpty
+                          ? sCode
+                          : (_settings.schoolId.isNotEmpty ? _settings.schoolId : 'ydm');
+                      final nowMs = DateTime.now().millisecondsSinceEpoch;
+                      final msgId = 'msg_$nowMs';
+                      final nowIso = DateTime.now().toIso8601String();
+
+                      try {
+                        final rtdbBase = 'https://jiwhosboardest-default-rtdb.firebaseio.com';
+                        // 1. teacher_inbox에 기록 (모든 교사 앱 실시간 감지)
+                        await http.put(
+                          Uri.parse('$rtdbBase/teacher_inbox/$schoolCode/messages/$msgId.json'),
+                          headers: {"Content-Type": "application/json"},
+                          body: json.encode({
+                            'messageId': msgId,
+                            'targetTeacher': target,
+                            'senderClass': clName,
+                            'senderDocId': docId,
+                            'text': msg,
+                            'sentAt': nowIso,
+                            'response': null,
+                          }),
+                        ).timeout(const Duration(seconds: 4));
+
+                        // demo 경로 동기화
+                        try {
+                          await http.put(
+                            Uri.parse('$rtdbBase/teacher_inbox/demo/messages/$msgId.json'),
+                            headers: {"Content-Type": "application/json"},
+                            body: json.encode({
+                              'messageId': msgId,
+                              'targetTeacher': target,
+                              'senderClass': clName,
+                              'senderDocId': docId,
+                              'text': msg,
+                              'sentAt': nowIso,
+                            }),
+                          ).timeout(const Duration(seconds: 2));
+                        } catch (_) {}
+
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('🎉 [$target]으로 쪽지가 전송되었습니다!'),
+                              backgroundColor: const Color(0xFF7F5AF0),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('쪽지 전송에 실패했습니다. 네트워크를 확인하세요.'),
+                              backgroundColor: Color(0xFFEF4444),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.send_rounded, size: 18 * scale, color: Colors.white),
+                        SizedBox(width: 8 * scale),
+                        Text('전송하기', style: GoogleFonts.notoSansKr(fontSize: 15 * scale, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _openFileExplorer() {

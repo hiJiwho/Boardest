@@ -563,12 +563,12 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                 child: _buildControlBar(s),
               ),
 
-              // ── 하단 플로팅 펜 툴바 ─────────────────────────
+              // ── 우측 플로팅 펜 툴바 (세로형) ─────────────────────────
               if (_isAnnotationEnabled)
                 Positioned(
-                  bottom: 20 * s,
-                  left: 0,
-                  right: 0,
+                  right: 16 * s,
+                  top: 90 * s,
+                  bottom: 90 * s,
                   child: Center(
                     child: _buildFloatingPenBar(s),
                   ),
@@ -715,10 +715,10 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
     ];
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 6 * s),
+      padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 12 * s),
       decoration: BoxDecoration(
         color: const Color(0xFF16161A).withOpacity(0.92),
-        borderRadius: BorderRadius.circular(30 * s),
+        borderRadius: BorderRadius.circular(24 * s),
         border: Border.all(color: Colors.white.withOpacity(0.15)),
         boxShadow: [
           BoxShadow(
@@ -728,7 +728,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
@@ -741,6 +741,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
               });
             },
           ),
+          SizedBox(height: 4 * s),
           ...colors.map((c) => GestureDetector(
             onTap: () {
               setState(() {
@@ -751,7 +752,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
               });
             },
             child: Container(
-              margin: EdgeInsets.symmetric(horizontal: 4 * s),
+              margin: EdgeInsets.symmetric(vertical: 4 * s),
               width: 18 * s,
               height: 18 * s,
               decoration: BoxDecoration(
@@ -765,9 +766,9 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
             ),
           )),
           Container(
-            margin: EdgeInsets.symmetric(horizontal: 8 * s),
-            height: 20 * s,
-            width: 1,
+            margin: EdgeInsets.symmetric(vertical: 8 * s),
+            width: 20 * s,
+            height: 1,
             color: Colors.white24,
           ),
           IconButton(
