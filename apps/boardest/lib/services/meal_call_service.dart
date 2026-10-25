@@ -67,12 +67,18 @@ class MealCallService {
   String? lastSenderFcmToken;
   String? lastSenderName;
 
-  // ─── 교사에게 [확인했습니다] 1회성 답장 전송 ───
-  Future<bool> sendAckToTeacher({String? classroomName}) async {
+  // ─── 교사에게 [O, X, 이동하기] 양방향 응답 전송 ───
+  Future<bool> sendResponseToTeacher({
+    required String response, // 'O', 'X', 'MOVE'
+    String? classroomName,
+  }) async {
     final docId = _documentId;
     if (docId.isEmpty) return false;
     final nowMs = DateTime.now().millisecondsSinceEpoch;
-    final clName = classroomName ?? (_currentSettings?.classNickname.isNotEmpty == true ? _currentSettings!.classNickname : '${_currentSettings?.selectedGrade ?? 1}학년 ${_currentSettings?.selectedClass ?? 1}반') ?? '교실';
+    final clName = classroomName ??
+        (_currentSettings?.classNickname.isNotEmpty == true
+            ? _currentSettings!.classNickname
+            : '${_currentSettings?.selectedGrade ?? 1}학년 ${_currentSettings?.selectedClass ?? 1}반');
 
     try {
       // 1. RTDB에 확인 답장 1회 기록 (0.05초 즉시 교사 앱 화면 반영)
@@ -82,6 +88,8 @@ class MealCallService {
         headers: {"Content-Type": "application/json"},
         body: json.encode({
           'acknowledged': true,
+          'response': response,
+          'responseAt': nowMs,
           'acknowledgedAt': nowMs,
           'ackClassroom': clName,
           'called': false,
@@ -89,21 +97,43 @@ class MealCallService {
         }),
       ).timeout(const Duration(seconds: 4));
 
+      // demo 경로 동기화
+      try {
+        await http.patch(
+          Uri.parse('$_rtdbBase/eat_calls/demo.json'),
+          headers: {"Content-Type": "application/json"},
+          body: json.encode({
+            'acknowledged': true,
+            'response': response,
+            'responseAt': nowMs,
+            'acknowledgedAt': nowMs,
+            'ackClassroom': clName,
+          }),
+        ).timeout(const Duration(seconds: 2));
+      } catch (_) {}
+
       // 2. 발신 교사의 FCM 토큰이 있는 경우 직접 FCM 답장 푸시 트리거
       if (lastSenderFcmToken != null && lastSenderFcmToken!.isNotEmpty) {
         try {
           final fcmUrl = '${AppConfig.firebaseFunctionsBase}/sendFcmNotification';
+          final title = response == 'MOVE'
+              ? '🍱 급식실 이동 시작'
+              : (response == 'O' ? '🟢 쪽지 응답: O (수락)' : '🔴 쪽지 응답: X (거절)');
+          final body = response == 'MOVE'
+              ? '$clName에서 급식실로 이동을 시작했습니다!'
+              : '$clName에서 [$response] 응답을 보냈습니다.';
           await http.post(
             Uri.parse(fcmUrl),
             headers: {"Content-Type": "application/json"},
             body: json.encode({
               'token': lastSenderFcmToken,
-              'title': '📬 쪽지 확인 완료',
-              'body': '$clName에서 쪽지를 확인했습니다!',
+              'title': title,
+              'body': body,
               'data': {
-                'type': 'ack',
+                'type': 'response',
+                'response': response,
                 'classroom': clName,
-                'acknowledgedAt': nowMs.toString(),
+                'responseAt': nowMs.toString(),
               }
             }),
           ).timeout(const Duration(seconds: 3));
@@ -113,10 +143,15 @@ class MealCallService {
       await clearMessage();
       return true;
     } catch (e) {
-      debugPrint('[MealCallService] sendAckToTeacher error: $e');
+      debugPrint('[MealCallService] sendResponseToTeacher error: $e');
       await clearMessage();
       return false;
     }
+  }
+
+  // ─── 하위 호환용 단순 확인 ───
+  Future<bool> sendAckToTeacher({String? classroomName}) async {
+    return sendResponseToTeacher(response: 'O', classroomName: classroomName);
   }
   VoidCallback? onMealCallReceived;
   void Function(String message, String from)? onMessageReceived;

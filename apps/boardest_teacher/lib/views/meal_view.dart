@@ -9,6 +9,7 @@ import '../services/neis_service.dart';
 import '../models/app_settings.dart';
 import '../config/app_config.dart';
 import 'monthly_meal_calendar_dialog.dart';
+import '../helpers/notification_helper.dart';
 
 /// Boardest 네이티브 실시간 급식 지도 & 반별 급식 호출 뷰어
 class MealView extends StatefulWidget {
@@ -29,6 +30,7 @@ class _MealViewState extends State<MealView> {
   String _selectedCafeteria = '1';
   bool _isCalling = false;
   String? _statusMessage;
+  final Set<String> _notifiedMoveAcks = {};
 
   List<Map<String, dynamic>> _onlineClassrooms = [];
   Timer? _pollingTimer;
@@ -168,9 +170,21 @@ class _MealViewState extends State<MealView> {
                 'class': c,
                 'nickname': nick,
                 'isCalled': val['called'] == true,
+                'isMoveAck': val['response'] == 'MOVE' || (val['acknowledged'] == true && val['called'] != true),
                 'isOnline': true,
                 'lastActive': val['lastActive']?.toString() ?? '',
               });
+
+
+              if ((val['response'] == 'MOVE' || (val['acknowledged'] == true && val['called'] != true)) && !_notifiedMoveAcks.contains(docId)) {
+                _notifiedMoveAcks.add(docId);
+                showWebBrowserNotification(
+                  title: '🍱 급식실 이동 시작!',
+                  body: '$nick에서 "이동하기"를 눌렀습니다.',
+                );
+              }
+
+
             });
           }
         }
@@ -478,6 +492,7 @@ class _MealViewState extends State<MealView> {
                           itemBuilder: (ctx, i) {
                             final c = filtered[i];
                             final isCalled = c['isCalled'] as bool;
+                            final isMoveAck = c['isMoveAck'] == true;
                             final nickname = c['nickname'] as String;
                             final docId = c['docId'] as String;
 
@@ -499,7 +514,7 @@ class _MealViewState extends State<MealView> {
                                     height: 8 * s,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: isCalled ? const Color(0xFFFF8906) : const Color(0xFF00F5D4),
+                                      color: isMoveAck ? const Color(0xFF10B981) : (isCalled ? const Color(0xFF94A1B2) : const Color(0xFF00F5D4)),
                                     ),
                                   ),
                                   SizedBox(width: 10 * s),
@@ -512,16 +527,18 @@ class _MealViewState extends State<MealView> {
                                           style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5 * s),
                                         ),
                                         Text(
-                                          isCalled ? '🔔 급식실 이동 호출 팝업 표시 중' : '🟢 온라인 대기 중',
+                                          isMoveAck
+                                              ? '🟢 이동 중 (교실에서 확인 완료)'
+                                              : (isCalled ? '⚪ 호출 전달됨 (신호 대기 중)' : '🟢 온라인 대기 중'),
                                           style: TextStyle(
-                                            color: isCalled ? const Color(0xFFFF8906) : const Color(0xFF00F5D4),
+                                            color: isMoveAck ? const Color(0xFF10B981) : (isCalled ? const Color(0xFF94A1B2) : const Color(0xFF00F5D4)),
                                             fontSize: 11 * s,
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  if (isCalled)
+                                  if (isCalled && !isMoveAck)
                                     OutlinedButton(
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: Colors.white70,

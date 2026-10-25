@@ -401,17 +401,13 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
             !name.endsWith('.htmlp') &&
             !name.contains('canva');
       }
-      if (_categoryFilter == '📐 TBP & HTML Present' || _categoryFilter == '📐 TBP & Canva' || _categoryFilter == 'TBP & Canva') {
-        final isTbp = isTbpFolder || name.endsWith('.bsttbp') || name.endsWith('.tbp') || name.contains('tbp') || name.contains('교과서');
-        final isCanva = file['source'] == 'canva' || name.endsWith('.htmlp') || name.endsWith('.canva') || name.endsWith('.canva.bst') || name.endsWith('.bstcanva') || name.contains('canva');
-        return isTbp || isCanva;
+      if (_categoryFilter == '📐 TBP 교과서' || _categoryFilter == 'TBP') {
+        final isTbp = isTbpFolder || name.endsWith('.bsttbp') || name.endsWith('.tbp');
+        return isTbp;
       }
-      if (_categoryFilter == '✏️ 판서 (.pen)' || _categoryFilter == '판서') {
-        final isPen = name.endsWith('.pen') || name.endsWith('.bstpen');
-        if (!isPen) return false;
-        final size = file['size'];
-        if (size is int && size <= 0) return false;
-        return true;
+      if (_categoryFilter == '🌐 HTMLP 교안' || _categoryFilter == 'HTMLP') {
+        final isHtmlp = file['source'] == 'htmlp' || file['source'] == 'canva' || name.endsWith('.htmlp') || name.endsWith('.canva') || name.endsWith('.canva.bst');
+        return isHtmlp;
       }
 
       return true;
@@ -590,7 +586,7 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
 
   // ─── 2. 검색 & 필터 ───
   Widget _buildSearchAndFilters(double s) {
-    final categories = ['전체', '📁 수업 자료', '📐 TBP & HTML Present', '✏️ 판서 (.pen)'];
+    final categories = ['전체', '📁 수업 자료', '📐 TBP 교과서', '🌐 HTMLP 교안'];
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 8 * s),

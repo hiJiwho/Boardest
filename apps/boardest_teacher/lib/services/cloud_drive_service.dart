@@ -1923,20 +1923,26 @@ class CloudDriveService with ChangeNotifier {
     return merged;
   }
 
-  /// bst-save, bst-canva, bst-textbookpro 에 저장된 모든 수업 자료 리스트 조회 (하위 호환용)
+  /// bst-save 교안 목록 조회 (bst-tbp 내부는 32자리 메인 데이터 저장소이므로 직접 노출하지 않고 bst-save 껍데기만 노출, .pen은 판서 전용함으로 분리)
   Future<List<Map<String, dynamic>>> fetchMergedMaterials({String? targetFolderId}) async {
     if (!isLoggedIn || _hasAuthError) return [];
     if (!isGoogleDriveConnected) {
       final demoFiles = await getDemoDriveFiles();
-      return demoFiles.map((f) {
+      return demoFiles
+          .where((f) => !f.name.toLowerCase().endsWith('.pen'))
+          .map((f) {
         String src = 'cloud';
         String label = '☁️ 교안';
-        if (f.name.endsWith('.htmlp') || f.name.endsWith('.canva')) {
-          src = 'canva';
-          label = '🌐 HTML Present';
-        } else if (f.name.endsWith('.tbp') || f.name.endsWith('.bsttbp') || f.isFolder) {
+        final lower = f.name.toLowerCase();
+        if (lower.endsWith('.htmlp') || lower.endsWith('.canva')) {
+          src = 'htmlp';
+          label = '🌐 HTMLP';
+        } else if (lower.endsWith('.tbp') || lower.endsWith('.bsttbp')) {
           src = 'tbp';
           label = '📐 TBP';
+        } else if (f.isFolder) {
+          src = 'folder';
+          label = '📁 폴더';
         }
         return {
           'file': f,
@@ -1950,55 +1956,34 @@ class CloudDriveService with ChangeNotifier {
     final Set<String> seenIds = {};
 
     try {
-      if (targetFolderId != null) {
-        // 특정 하위 폴더 탐색 시
-        final files = await fetchDriveFiles(folderId: targetFolderId, includeFolders: true);
+      final saveFolderId = targetFolderId ?? await getOrCreateConnectFolder();
+      if (saveFolderId != null) {
+        final files = await fetchDriveFiles(folderId: saveFolderId, includeFolders: true);
         for (final f in files) {
           if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json') continue;
+          // 판서(.pen) 파일은 교안 파일 목록에 노출하지 않고 Bst-pen 판서 보관함으로 별도 취급!
+          if (f.name.toLowerCase().endsWith('.pen')) continue;
+
           if (seenIds.add(f.id)) {
+            String src = 'cloud';
+            String label = '☁️ 교안';
+            final lower = f.name.toLowerCase();
+            if (lower.endsWith('.htmlp') || lower.endsWith('.canva')) {
+              src = 'htmlp';
+              label = '🌐 HTMLP';
+            } else if (lower.endsWith('.tbp') || lower.endsWith('.bsttbp')) {
+              src = 'tbp';
+              label = '📐 TBP';
+            } else if (f.isFolder) {
+              src = 'folder';
+              label = '📁 폴더';
+            }
             merged.add({
               'file': f,
-              'source': 'cloud',
-              'sourceLabel': '☁️ Cloud',
-              'folderId': targetFolderId,
+              'source': src,
+              'sourceLabel': label,
+              'folderId': saveFolderId,
             });
-          }
-        }
-      } else {
-        // 최상위 교안함: 기본 bst-save + bst-canva + bst-textbookpro 3대 전용 보관함 모두 병합 조회
-        final foldersToQuery = <({String id, String label, String src})>[];
-
-        final saveFolderId = await getOrCreateConnectFolder();
-        if (saveFolderId != null) {
-          foldersToQuery.add((id: saveFolderId, label: '☁️ 교안', src: 'cloud'));
-        }
-
-        final canvaFolderId = await getOrCreateCanvaFolder();
-        if (canvaFolderId != null && canvaFolderId != saveFolderId) {
-          foldersToQuery.add((id: canvaFolderId, label: '🌐 HTML Present', src: 'canva'));
-        }
-
-        final tbpFolderId = await getOrCreateTextbookProFolder();
-        if (tbpFolderId != null && tbpFolderId != saveFolderId) {
-          foldersToQuery.add((id: tbpFolderId, label: '📐 TBP', src: 'tbp'));
-        }
-
-        for (final folderInfo in foldersToQuery) {
-          try {
-            final files = await fetchDriveFiles(folderId: folderInfo.id, includeFolders: true);
-            for (final f in files) {
-              if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json') continue;
-              if (seenIds.add(f.id)) {
-                merged.add({
-                  'file': f,
-                  'source': folderInfo.src,
-                  'sourceLabel': folderInfo.label,
-                  'folderId': folderInfo.id,
-                });
-              }
-            }
-          } catch (fe) {
-            debugPrint('[CloudDriveService] fetch files error for ${folderInfo.label}: $fe');
           }
         }
       }

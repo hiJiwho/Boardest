@@ -197,11 +197,14 @@ class _BstCloudModalState extends State<BstCloudModal> {
             f.mimeType == 'application/x-bst-tbp-folder';
       }).toList();
     } else if (_folderTab == 2) {
-      // Bst Pen: 판서 파일
+      // Bst Pen: 판서 파일 전용
       list = list.where((f) => f.name.toLowerCase().endsWith('.pen') || f.name.toLowerCase().endsWith('.bstpen')).toList();
     } else {
-      // Bst: 일반 수업 자료 (PDF, PPT, HWP 등) + TBP/HTMLP 포함 전체
-      // (기본 표시)
+      // Bst: 일반 수업 자료 (PDF, PPT, HWP, TBP/HTMLP 껍데기 등) - 판서(.pen)는 제외!
+      list = list.where((f) {
+        final l = f.name.toLowerCase();
+        return !l.endsWith('.pen') && !l.endsWith('.bstpen');
+      }).toList();
     }
 
     // 2. 세부 카테고리 필터

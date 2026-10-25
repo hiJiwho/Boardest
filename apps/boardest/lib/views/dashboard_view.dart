@@ -1961,46 +1961,110 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                       ),
                     ),
                     SizedBox(height: 32 * scale),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48 * scale,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF7F5AF0),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12 * scale),
-                          ),
-                        ),
-                        onPressed: () async {
-                          Navigator.pop(context);
-                          final ok = await MealCallService.instance.sendAckToTeacher(
-                            classroomName: _settings.classNickname.isNotEmpty ? _settings.classNickname : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반',
-                          );
-                          if (mounted && ok) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('👍 선생님께 "확인했습니다" 답장을 보냈습니다!'),
-                                duration: Duration(seconds: 2),
-                                backgroundColor: Color(0xFF2EC4B6),
+                    Row(
+                      children: [
+                        // X 버튼 (거절 / 불가 - 빨강)
+                        Expanded(
+                          child: SizedBox(
+                            height: 52 * scale,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFEF4444),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14 * scale),
+                                ),
                               ),
-                            );
-                          }
-                        },
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text('👍 ', style: TextStyle(fontSize: 18)),
-                            Text(
-                              '확인했습니다 (답장 보내기)',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 16 * scale,
-                                fontWeight: FontWeight.bold,
+                              onPressed: () async {
+                                Navigator.pop(context);
+                                final clName = _settings.classNickname.isNotEmpty
+                                    ? _settings.classNickname
+                                    : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
+                                final ok = await MealCallService.instance.sendResponseToTeacher(
+                                  response: 'X',
+                                  classroomName: clName,
+                                );
+                                if (mounted && ok) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('🔴 선생님께 "X" 답장을 보냈습니다.'),
+                                      duration: Duration(seconds: 2),
+                                      backgroundColor: Color(0xFFEF4444),
+                                    ),
+                                  );
+                                }
+                              },
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.close_rounded, size: 22 * scale, color: Colors.white),
+                                  SizedBox(width: 6 * scale),
+                                  Text(
+                                    'X (불가)',
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 16 * scale,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
+                        SizedBox(width: 12 * scale),
+                        // O 버튼 (승낙 / 확인 - 초록)
+                        Expanded(
+                          child: SizedBox(
+                            height: 52 * scale,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF10B981),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14 * scale),
+                                ),
+                              ),
+                              onPressed: () async {
+                                Navigator.pop(context);
+                                final clName = _settings.classNickname.isNotEmpty
+                                    ? _settings.classNickname
+                                    : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
+                                final ok = await MealCallService.instance.sendResponseToTeacher(
+                                  response: 'O',
+                                  classroomName: clName,
+                                );
+                                if (mounted && ok) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('🟢 선생님께 "O" 답장을 보냈습니다!'),
+                                      duration: Duration(seconds: 2),
+                                      backgroundColor: Color(0xFF10B981),
+                                    ),
+                                  );
+                                }
+                              },
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.check_rounded, size: 22 * scale, color: Colors.white),
+                                  SizedBox(width: 6 * scale),
+                                  Text(
+                                    'O (확인)',
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 16 * scale,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -2227,24 +2291,29 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                     SizedBox(height: 32 * scale),
                     SizedBox(
                       width: double.infinity,
-                      height: 48 * scale,
+                      height: 52 * scale,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF00F5D4),
                           foregroundColor: Colors.black,
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12 * scale),
+                            borderRadius: BorderRadius.circular(14 * scale),
                           ),
                         ),
                         onPressed: () async {
                           Navigator.pop(context);
-                          final ok = await MealCallService.instance.sendAckToTeacher(
-                            classroomName: _settings.classNickname.isNotEmpty ? _settings.classNickname : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반',
+                          final clName = _settings.classNickname.isNotEmpty
+                              ? _settings.classNickname
+                              : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
+                          final ok = await MealCallService.instance.sendResponseToTeacher(
+                            response: 'MOVE',
+                            classroomName: clName,
                           );
                           if (mounted && ok) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('🍱 급식실에 "확인했습니다" 회신을 보냈습니다!'),
+                                content: Text('🍱 급식실에 "이동 시작" 신호를 보냈습니다!'),
                                 duration: Duration(seconds: 2),
                                 backgroundColor: Color(0xFF00F5D4),
                               ),
@@ -2254,12 +2323,13 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Text('🍱 ', style: TextStyle(fontSize: 18)),
+                            Icon(Icons.directions_walk_rounded, size: 24 * scale, color: Colors.black),
+                            SizedBox(width: 8 * scale),
                             Text(
-                              '확인했습니다 (급식실로 이동)',
+                              '이동하기',
                               style: GoogleFonts.notoSansKr(
-                                fontSize: 16 * scale,
-                                fontWeight: FontWeight.bold,
+                                fontSize: 17 * scale,
+                                fontWeight: FontWeight.w900,
                                 color: Colors.black,
                               ),
                             ),
@@ -12725,10 +12795,27 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   }
 
   Future<void> _openWhiteboardAsync() async {
+    final classroomId = _settings.classNickname.isNotEmpty
+        ? _settings.classNickname
+        : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
+
+    // 1. 가장 최근에 작성된 판서가 있다면 즉시 로드 (사용자 요구사항)
+    final recentPenPath = await BoardStorageService.instance.getMostRecentBoardPath(classroomId: classroomId);
+    if (recentPenPath != null && recentPenPath.isNotEmpty) {
+      _pushBoardRoute(
+        BoardestPenView(
+          filePath: recentPenPath,
+          scaleFactor: _settings.scaleFactor,
+          teacher: BstCloudService.instance.activeTeacherName ?? '교사',
+          subject: '판서',
+        ),
+      );
+      return;
+    }
+
     final now = DateTime.now();
-    final timeStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
-    final classCode = '${_settings.selectedGrade}${_settings.selectedClass.toString().padLeft(2, '0')}';
-    final defaultPenName = '[$classCode] $timeStr.Free.pen';
+    final timeStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+    final defaultPenName = '[$classroomId]$timeStr.pen';
 
     if (kIsWeb) {
       _pushBoardRoute(
@@ -12756,9 +12843,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         period.label.contains('점심');
 
     final isCloud = BstCloudService.instance.activeToken != null;
-    final classroomId = _settings.classNickname.isNotEmpty
-        ? _settings.classNickname
-        : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
 
     if (isCloud) {
       // 3) 전자칠판이지만 Cloud(OTP) 로그인 했을 때 -> [교실ID] {날짜_시간}.pen

@@ -18,67 +18,100 @@ class BoardStorageService {
   static const _mappingFileName = 'board_mappings.json';
 
   /// 판서 파일명 한국어 친절 포맷팅
-  /// 예: "[2-8] 2026-09-04_194842.pen" -> "2학년 8반에서 26년 09월 04일에 시작한 판서"
+  /// 예: "[2학년 1반]2026-10-25_192534.pen" -> "2학년 1반에서 2026년 10월 25일 19시 25분에 시작한 판서입니다."
   static String formatBoardDisplayName(String rawName) {
     if (rawName.isEmpty) return '판서';
     final baseName = p.basenameWithoutExtension(rawName);
 
-    // 1. 학년 / 반 파싱
-    String? gradeText;
-    String? classText;
-
-    // 패턴 1: [2-8], [208], [2학년 8반]
-    final bracketMatch = RegExp(r'\[([0-9]+)[-_ ]?([0-9]*)\]').firstMatch(baseName);
+    // 1. 대괄호 속 [장소] 파싱
+    String? placeText;
+    final bracketMatch = RegExp(r'^\[(.*?)\]').firstMatch(baseName);
     if (bracketMatch != null) {
-      final p1 = bracketMatch.group(1) ?? '';
-      final p2 = bracketMatch.group(2) ?? '';
-      if (p2.isNotEmpty) {
-        gradeText = '${p1}학년';
-        classText = '${int.tryParse(p2) ?? p2}반';
-      } else if (p1.length == 3) {
-        gradeText = '${p1[0]}학년';
-        classText = '${int.tryParse(p1.substring(1)) ?? p1.substring(1)}반';
-      } else if (p1.length == 2) {
-        gradeText = '${p1[0]}학년';
-        classText = '${int.tryParse(p1.substring(1)) ?? p1.substring(1)}반';
+      final inner = bracketMatch.group(1)?.trim() ?? '';
+      // 숫자 코드인 경우 (예: 201, 2-1, 101)
+      final numCodeMatch = RegExp(r'^([0-9]+)[-_ ]?([0-9]*)$').firstMatch(inner);
+      if (numCodeMatch != null) {
+        final p1 = numCodeMatch.group(1) ?? '';
+        final p2 = numCodeMatch.group(2) ?? '';
+        if (p2.isNotEmpty) {
+          placeText = '${p1}학년 ${int.tryParse(p2) ?? p2}반';
+        } else if (p1.length >= 2) {
+          placeText = '${p1[0]}학년 ${int.tryParse(p1.substring(1)) ?? p1.substring(1)}반';
+        } else {
+          placeText = inner;
+        }
+      } else {
+        placeText = inner;
       }
     }
 
-    if (gradeText == null) {
+    if (placeText == null) {
       final prefixMatch = RegExp(r'^([1-6])[-_]([0-9]{1,2})').firstMatch(baseName);
       if (prefixMatch != null) {
-        gradeText = '${prefixMatch.group(1)}학년';
-        classText = '${int.tryParse(prefixMatch.group(2)!) ?? prefixMatch.group(2)}반';
+        placeText = '${prefixMatch.group(1)}학년 ${int.tryParse(prefixMatch.group(2)!) ?? prefixMatch.group(2)}반';
       }
     }
 
-    // 2. 날짜 파싱 (2026-09-04 or 20260904 or 260904)
-    String? dateText;
-    final dateMatch1 = RegExp(r'(20[2-3][0-9])[-_.](0[1-9]|1[0-2])[-_.]([0-3][0-9])').firstMatch(baseName);
-    if (dateMatch1 != null) {
-      final y = dateMatch1.group(1)!.substring(2);
-      final m = dateMatch1.group(2)!;
-      final d = dateMatch1.group(3)!;
-      dateText = '${y}년 ${m}월 ${d}일';
+    // 2. 날짜/시간 파싱: YYYY-MM-DD_HHmmss or YYYY-MM-DD_HHmm
+    String? timeText;
+    final dtMatch = RegExp(r'(\d{4})[-_.](\d{2})[-_.](\d{2})[-_ ]+(\d{2})(\d{2})').firstMatch(baseName);
+    if (dtMatch != null) {
+      final y = dtMatch.group(1)!;
+      final m = dtMatch.group(2)!;
+      final d = dtMatch.group(3)!;
+      final hh = dtMatch.group(4)!;
+      final mm = dtMatch.group(5)!;
+      timeText = '${y}년 ${m}월 ${d}일 ${hh}시 ${mm}분';
     } else {
-      final dateMatch2 = RegExp(r'(2[0-9])(0[1-9]|1[0-2])([0-3][0-9])').firstMatch(baseName);
-      if (dateMatch2 != null) {
-        final y = dateMatch2.group(1)!;
-        final m = dateMatch2.group(2)!;
-        final d = dateMatch2.group(3)!;
-        dateText = '${y}년 ${m}월 ${d}일';
+      final dateMatch = RegExp(r'(\d{4})[-_.](\d{2})[-_.](\d{2})').firstMatch(baseName);
+      if (dateMatch != null) {
+        final y = dateMatch.group(1)!;
+        final m = dateMatch.group(2)!;
+        final d = dateMatch.group(3)!;
+        timeText = '${y}년 ${m}월 ${d}일';
       }
     }
 
-    if (gradeText != null && classText != null && dateText != null) {
-      return '$gradeText $classText에서 $dateText에 시작한 판서';
-    } else if (gradeText != null && classText != null) {
-      return '$gradeText $classText 판서';
-    } else if (dateText != null) {
-      return '$dateText에 시작한 판서';
+    if (placeText != null && timeText != null) {
+      return '$placeText에서 $timeText에 시작한 판서입니다.';
+    } else if (placeText != null) {
+      return '$placeText에서 시작한 판서입니다.';
+    } else if (timeText != null) {
+      return '$timeText에 시작한 판서입니다.';
     }
 
-    return baseName;
+    return '$baseName 판서';
+  }
+
+  /// 가장 최근에 저장/수정된 판서 파일(.pen) 경로 반환 (없으면 null)
+  Future<String?> getMostRecentBoardPath({String? classroomId}) async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('last_active_pen_path');
+    }
+    try {
+      final dir = await _getBoardDirectory();
+      final penRootDir = await _getPenRootDirectory();
+      final List<File> filesToCheck = [];
+      if (dir.existsSync()) {
+        filesToCheck.addAll(dir.listSync(recursive: true).whereType<File>());
+      }
+      if (penRootDir.existsSync()) {
+        filesToCheck.addAll(penRootDir.listSync(recursive: true).whereType<File>());
+      }
+      final penFiles = filesToCheck.where((f) {
+        final ext = p.extension(f.path).toLowerCase();
+        return ext == '.pen' || ext == '.iwb';
+      }).toList();
+
+      if (penFiles.isEmpty) return null;
+
+      penFiles.sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
+      return penFiles.first.path;
+    } catch (e) {
+      debugPrint('[BoardStorage] getMostRecentBoardPath error: $e');
+      return null;
+    }
   }
 
   Future<Directory> _getBoardDirectory() =>

@@ -7,6 +7,7 @@ import '../services/storage_service.dart';
 import '../services/cloud_drive_service.dart';
 import '../models/app_settings.dart';
 import '../config/app_config.dart';
+import '../helpers/notification_helper.dart';
 
 /// Boardest 학급 쪽지 및 긴급 알림/공지 발송 네이티브 뷰어 (온라인 교실 전용)
 class MessageView extends StatefulWidget {
@@ -181,6 +182,30 @@ class _MessageViewState extends State<MessageView> {
                 'isOnline': true,
                 'lastActive': val['lastActive']?.toString() ?? '',
               });
+
+              // 쪽지 발송 기록의 실시간 응답(O/X) 확인 및 브라우저 알림 트리거
+              final resp = (val['response']?.toString() ?? '').trim().toUpperCase();
+              if (resp.isNotEmpty) {
+                for (final hist in _sentHistory) {
+                  final ids = (hist['docIds'] ?? '').split(',');
+                  if (ids.contains(docId) && hist['response'] != resp) {
+                    hist['response'] = resp;
+                    final clName = val['ackClassroom']?.toString() ?? nickname;
+                    if (resp == 'O') {
+                      showWebBrowserNotification(
+                        title: '🟢 쪽지 응답 도착 [O]',
+                        body: '$clName에서 "O (확인)" 응답을 보냈습니다.',
+                      );
+                    } else if (resp == 'X') {
+                      showWebBrowserNotification(
+                        title: '🔴 쪽지 응답 도착 [X]',
+                        body: '$clName에서 "X (불가)" 응답을 보냈습니다.',
+                      );
+                    }
+                  }
+                }
+              }
+
             });
           }
         }
@@ -338,6 +363,8 @@ class _MessageViewState extends State<MessageView> {
             'text': text,
             'time': '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
             'target': label,
+            'docIds': _selectedOnlineDocIds.join(','),
+            'response': '',
           });
           _msgController.clear();
         } else {
@@ -805,6 +832,7 @@ class _MessageViewState extends State<MessageView> {
                       ),
                       child: Row(
                         children: [
+                          // 1. 발송 대상 학급
                           Container(
                             padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 2 * s),
                             decoration: BoxDecoration(
@@ -816,7 +844,34 @@ class _MessageViewState extends State<MessageView> {
                               style: GoogleFonts.notoSansKr(color: const Color(0xFF7F5AF0), fontSize: 10 * s, fontWeight: FontWeight.bold),
                             ),
                           ),
-                          SizedBox(width: 10 * s),
+                          SizedBox(width: 8 * s),
+                          // 2. 응답 뱃지 (O는 초록, X는 빨강, 안읽으면 회색)
+                          Builder(builder: (_) {
+                            final resp = (item['response'] ?? '').toUpperCase();
+                            final isO = resp == 'O';
+                            final isX = resp == 'X';
+                            final badgeBg = isO
+                                ? const Color(0xFF10B981).withOpacity(0.2)
+                                : (isX ? const Color(0xFFEF4444).withOpacity(0.2) : Colors.white.withOpacity(0.08));
+                            final badgeFg = isO
+                                ? const Color(0xFF10B981)
+                                : (isX ? const Color(0xFFEF4444) : const Color(0xFF94A1B2));
+                            final badgeText = isO ? '🟢 O' : (isX ? '🔴 X' : '⚪ 안읽음');
+
+                            return Container(
+                              padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 2 * s),
+                              decoration: BoxDecoration(
+                                color: badgeBg,
+                                borderRadius: BorderRadius.circular(6 * s),
+                                border: Border.all(color: badgeFg.withOpacity(0.4), width: 0.8),
+                              ),
+                              child: Text(
+                                badgeText,
+                                style: TextStyle(color: badgeFg, fontSize: 10 * s, fontWeight: FontWeight.bold),
+                              ),
+                            );
+                          }),
+                          SizedBox(width: 8 * s),
                           Expanded(
                             child: Text(
                               item['text'] ?? '',

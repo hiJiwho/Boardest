@@ -29,6 +29,7 @@ import '../services/totp_service.dart';
 import '../services/folder_picker_helper.dart';
 import '../services/web_pip_helper.dart';
 import '../services/passkey_service.dart';
+import '../helpers/notification_helper.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'usb_format_dialog.dart';
 import '../widgets/usb_explorer.dart';
@@ -342,6 +343,10 @@ class _TeacherViewState extends State<TeacherView> {
 
   Future<void> _init() async {
     _startOtpTimer();
+    if (kIsWeb) {
+      // 사이트 접속 시 브라우저 알림 권한 획득 (사용자 요구사항)
+      unawaited(requestWebNotificationPermission());
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _checkForAppUpdates(silent: true);
@@ -6276,13 +6281,15 @@ class _TeacherViewState extends State<TeacherView> {
                 await prefs.setStringList('saved_canva_urls', list);
                 await prefs.setString('last_canva_url', val);
                 if (saveToDrive && CloudDriveService.instance.isLoggedIn) {
-                  final ok = await CloudDriveService.instance.registerCanvaDesign(
+                  final res = await CloudDriveService.instance.createTbpOrHtmlpPointerProject(
                     title: name.isNotEmpty ? name : 'HTML Present',
-                    canvaUrl: val,
+                    webUrl: val,
+                    type: 'HTMLP',
                   );
+                  final ok = res != null;
                   if (mounted) {
                     ScaffoldMessenger.of(this.context).showSnackBar(
-                      SnackBar(content: Text(ok ? '☁️ "${name.isNotEmpty ? name : 'HTML Present'}.HTMLP" 이(가) 내 드라이브에 저장되었습니다.' : '⚠️ 드라이브 저장에 실패했습니다.')),
+                      SnackBar(content: Text(ok ? '☁️ "${name.isNotEmpty ? name : 'HTML Present'}.htmlp" 이(가) 내 드라이브에 저장되었습니다.' : '⚠️ 드라이브 저장에 실패했습니다.')),
                     );
                     if (ok) _refreshDriveFiles();
                   }

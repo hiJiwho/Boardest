@@ -378,6 +378,7 @@ class _BoardestPenViewState extends State<BoardestPenView>
         final prefs = await SharedPreferences.getInstance();
         final key = 'web_board_${_boardFileBaseName.isNotEmpty ? _boardFileBaseName : 'active'}';
         await prefs.setString(key, payload);
+        await prefs.setString('last_active_pen_path', _activeFilePath);
         debugPrint('[BoardestPenView] Auto-saved whiteboard to web LocalStorage ($key)');
         return;
       }

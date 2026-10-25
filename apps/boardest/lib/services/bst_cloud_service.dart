@@ -2248,6 +2248,10 @@ class BstCloudService {
       if (res.statusCode == 200) {
         return utf8.decode(res.bodyBytes);
       }
+      if (res.statusCode == 403 || res.statusCode == 400 || res.statusCode == 404) {
+        // Google Drive API: 폴더 ID에 alt=media 요청 시 cannotDownloadDir 403 방어
+        return null;
+      }
       return null;
     } catch (e) {
       debugPrint('[BstCloudService] readDriveFileText error: $e');

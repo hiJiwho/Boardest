@@ -4,6 +4,7 @@ import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:webview_windows/webview_windows.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'tbp_web_capture_helper.dart';
 
 /// JS 기반 perceptual dHash 엔진 (DOM + URL Hash)
 /// - JS 스크립트 주입으로 256-bit dHash 계산 결과를 webMessage/JavaScriptChannel로 수신
@@ -197,6 +198,15 @@ class TbpDhashEngine {
   }
 
   Future<void> _requestHashFromJs() async {
+    if (kIsWeb) {
+      try {
+        final webHash = await captureCurrentBrowserScreenHash();
+        if (webHash != null && webHash.isNotEmpty) {
+          _onNewHash(webHash);
+          return;
+        }
+      } catch (_) {}
+    }
     await _executeScript(_hashJsScript);
   }
 

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:webview_windows/webview_windows.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'tbp_storage_service.dart';
+import 'tbp_web_capture_helper.dart';
 
 /// JS 기반 perceptual dHash 엔진 (Visual Canvas + DOM Page Fingerprint + Canonical Hash Matching)
 /// - 페이지 이동 시 실시간으로 256-bit dHash를 감지하고 기존 저장된 페이지 해시와 해밍 거리(<=36bit)로 매칭
@@ -407,6 +408,15 @@ class TbpDhashEngine {
   }
 
   Future<void> _requestHashFromJs() async {
+    if (kIsWeb) {
+      try {
+        final webHash = await captureCurrentBrowserScreenHash();
+        if (webHash != null && webHash.isNotEmpty) {
+          _onNewHash(webHash);
+          return;
+        }
+      } catch (_) {}
+    }
     await _executeScript(_hashJsScript);
   }
 
