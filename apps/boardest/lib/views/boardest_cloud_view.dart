@@ -58,13 +58,24 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
 
   Future<void> _checkInitialConnection() async {
     final activeToken = BstCloudService.instance.activeToken;
-    if (activeToken != null && activeToken.isNotEmpty) {
+    if (activeToken != null && activeToken.isNotEmpty && !BstCloudService.instance.hasAuthError) {
       setState(() {
         _isConnected = true;
         _teacherName = BstCloudService.instance.activeTeacherName ?? '선생님';
       });
       await _loadFiles();
+      if (!_isConnected || BstCloudService.instance.hasAuthError) {
+        BstCloudService.instance.disconnect();
+        if (mounted) {
+          setState(() {
+            _isConnected = false;
+            _teacherName = null;
+          });
+          await _startQrSession();
+        }
+      }
     } else {
+      BstCloudService.instance.disconnect();
       await _startQrSession();
     }
   }
@@ -177,6 +188,17 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
       }
 
       if (mounted) {
+        if (BstCloudService.instance.hasAuthError || BstCloudService.instance.activeToken == null) {
+          BstCloudService.instance.disconnect();
+          setState(() {
+            _isConnected = false;
+            _teacherName = null;
+            _isLoadingFiles = false;
+          });
+          _startQrSession();
+          return;
+        }
+
         setState(() {
           _allFiles = fileMap.values.toList();
           _applyFilter();
@@ -185,15 +207,13 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
       }
     } catch (e) {
       if (mounted) {
+        BstCloudService.instance.disconnect();
         setState(() {
+          _isConnected = false;
+          _teacherName = null;
           _isLoadingFiles = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('파일 목록 갱신 오류: $e'),
-            backgroundColor: const Color(0xFFEF4565),
-          ),
-        );
+        _startQrSession();
       }
     }
   }
