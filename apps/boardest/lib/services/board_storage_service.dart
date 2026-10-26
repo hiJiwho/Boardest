@@ -227,6 +227,31 @@ class BoardStorageService {
     return p.join(dir.path, newPenName);
   }
 
+  /// 과목별 & 쉬는시간 자동 연동 판서 경로 (.pen.bst)
+  /// - 국어시간 판서 -> 다음 국어시간에 판서 들어가면 자동 복원
+  /// - 쉬는시간 판서 -> 다음 쉬는시간에 들어가면 자동 복원
+  /// - Cloud 연동 시 Cloud Drive bst-pen 폴더 자동 동기화
+  Future<String> resolveSubjectBoardPath({
+    required String classroomId,
+    required String subject,
+    bool isCloud = false,
+  }) async {
+    final cleanSubject = _sanitizeKey(subject.trim().isEmpty ? '자율판서' : subject.trim());
+    final cleanClass = classroomId.replaceAll(RegExp(r'[\[\]]'), '').trim();
+    final fileName = '[$cleanClass]_$cleanSubject.pen.bst';
+
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_active_subject_pen_$cleanSubject', fileName);
+      return fileName;
+    }
+
+    final penDir = await _getPenRootDirectory();
+    final localFile = File(p.join(penDir.path, fileName));
+
+    return localFile.path;
+  }
+
   /// 특정 교사의 로컬 화이트보드 목록 조회 (.pen 파일들)
   Future<List<Map<String, dynamic>>> listBoardsForTeacher(String teacher) async {
     if (kIsWeb) return [];

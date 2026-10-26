@@ -2654,7 +2654,7 @@ class CloudDriveService with ChangeNotifier {
   Future<bool> deleteDriveFile(String fileId) async {
     if (!isLoggedIn) return false;
     try {
-      final url = Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId');
+      final url = Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId?supportsAllDrives=true');
       var res = await http.delete(
         url,
         headers: {'Authorization': 'Bearer $_accessToken'},
@@ -2668,7 +2668,7 @@ class CloudDriveService with ChangeNotifier {
           );
         }
       }
-      return res.statusCode == 204 || res.statusCode == 200;
+      return res.statusCode == 204 || res.statusCode == 200 || res.statusCode == 404;
     } catch (e) {
       debugPrint('[CloudDriveService] deleteDriveFile error: $e');
       return false;

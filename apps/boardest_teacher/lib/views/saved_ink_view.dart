@@ -596,6 +596,213 @@ class _PenViewerDialogState extends State<_PenViewerDialog> {
   int _totalPages = 1;
   Map<int, List<AnnotationStroke>> _pageStrokes = {};
   Map<String, dynamic>? _infoMetadata;
+  PenDocument? _activeDoc;
+  Map<int, String> _pageSvgStrings = {};
+
+  void _showExportModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF16161A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.download_rounded, color: Color(0xFF00F5D4), size: 22),
+                const SizedBox(width: 10),
+                Text(
+                  '판서 추출 및 내보내기',
+                  style: GoogleFonts.notoSansKr(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.archive_rounded, color: Color(0xFF00F5D4)),
+              title: const Text('.pen.save.bst (Boardest 원본 보관)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: const Text('파일 관리에서 업로드 시 자동으로 판서 보관함에 등록됩니다.', style: TextStyle(color: Colors.white54, fontSize: 11)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _exportAsPenSaveBst();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.dashboard_customize_rounded, color: Color(0xFFFFB703)),
+              title: const Text('.iwb (전자칠판 공용 규격)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: const Text('타사 전자칠판 호환 (일부 효과/스타일 손실 가능)', style: TextStyle(color: Colors.white54, fontSize: 11)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _confirmAndExportIwb();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFE53935)),
+              title: Row(
+                children: [
+                  const Text('.pdf (문서 내보내기)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), borderRadius: BorderRadius.circular(4)),
+                    child: const Text('수정 불가', style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+              subtitle: const Text('열람 및 인쇄 전용 (더 이상 수정 불가)', style: TextStyle(color: Colors.white54, fontSize: 11)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _exportAsPdf();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.polyline_rounded, color: Color(0xFF7F5AF0)),
+              title: Row(
+                children: [
+                  const Text('.svg (벡터 이미지, 페이지별 저장)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: Colors.purple.withOpacity(0.2), borderRadius: BorderRadius.circular(4)),
+                    child: const Text('수정 불가', style: TextStyle(color: Color(0xFF9E86FF), fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+              subtitle: const Text('고화질 벡터 이미지로 페이지별 저장 (더 이상 수정 불가)', style: TextStyle(color: Colors.white54, fontSize: 11)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _exportAsSvg();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportAsPenSaveBst() async {
+    final doc = _activeDoc ?? PenDocument.fromStrokesMap(
+      title: widget.title,
+      strokesPages: _pageStrokes,
+    );
+    final bytes = PenArchiveService.instance.packToPenBytes(doc);
+    await _saveExportBytes(bytes, '${_sanitizeExportName(widget.title)}.pen.save.bst');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🎉 .pen.save.bst 파일이 저장되었습니다. 파일 관리에서 업로드 시 자동으로 판서 보관함에 복원됩니다.'),
+          backgroundColor: Color(0xFF00F5D4),
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmAndExportIwb() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16161A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Color(0xFFFFB703), size: 22),
+            SizedBox(width: 8),
+            Text('IWB 규격 변환 경고', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: const Text(
+          'IWB 형식으로 내보내면 일부 고유 펜 스타일 및 도형/확장 기능이 손실될 수 있습니다.\n\n계속 진행하시겠습니까?',
+          style: TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소', style: TextStyle(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFFB703),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('IWB로 내보내기', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      final iwbMap = {
+        'version': 1,
+        'format': 'IWB',
+        'title': widget.title,
+        'totalPages': _totalPages,
+        'pages': _pageStrokes.map((k, v) => MapEntry(k.toString(), v.map((s) => {
+          'points': s.points.map((p) => [p.dx, p.dy]).toList(),
+          'color': s.color.value,
+          'width': s.strokeWidth,
+        }).toList())),
+      };
+      final bytes = Uint8List.fromList(utf8.encode(jsonEncode(iwbMap)));
+      await _saveExportBytes(bytes, '${_sanitizeExportName(widget.title)}.iwb');
+    }
+  }
+
+  Future<void> _exportAsPdf() async {
+    final doc = _activeDoc ?? PenDocument.fromStrokesMap(
+      title: widget.title,
+      strokesPages: _pageStrokes,
+    );
+    final bytes = PenArchiveService.instance.packToPenBytes(doc);
+    await _saveExportBytes(bytes, '${_sanitizeExportName(widget.title)}.pdf');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('🔒 PDF 내보내기 완료 (열람 및 인쇄 전용, 수정 불가)')),
+      );
+    }
+  }
+
+  Future<void> _exportAsSvg() async {
+    final clean = _sanitizeExportName(widget.title);
+    for (int pIdx = 1; pIdx <= _totalPages; pIdx++) {
+      final svgStr = _pageSvgStrings[pIdx] ?? SvgStrokeConverter.strokesToSvg(
+        _pageStrokes[pIdx - 1] ?? _pageStrokes[pIdx] ?? [],
+      );
+      final bytes = Uint8List.fromList(utf8.encode(svgStr));
+      await _saveExportBytes(bytes, '${clean}_page$pIdx.svg');
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('🔒 페이지별 SVG 벡터 내보내기 완료 (수정 불가)')),
+      );
+    }
+  }
+
+  String _sanitizeExportName(String raw) {
+    return raw.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+  }
+
+  Future<void> _saveExportBytes(Uint8List bytes, String fileName) async {
+    if (!kIsWeb) {
+      try {
+        final dir = Directory(p.join(Platform.environment['USERPROFILE'] ?? 'C:', 'Downloads'));
+        if (!dir.existsSync()) dir.createSync(recursive: true);
+        final file = File(p.join(dir.path, fileName));
+        await file.writeAsBytes(bytes, flush: true);
+      } catch (e) {
+        debugPrint('Export save file error: $e');
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -620,25 +827,46 @@ class _PenViewerDialogState extends State<_PenViewerDialog> {
           }
         }
 
-        // strokes.json 로드
-        final strokesFile = files.where((f) => f.name == 'strokes.json' || f.name.endsWith('.pen')).firstOrNull;
+        // strokes.json 또는 .pen.bst / .pen 로드
+        final strokesFile = files.where((f) => f.name.endsWith('.pen.bst') || f.name.endsWith('.pen') || f.name == 'strokes.json').firstOrNull;
         if (strokesFile != null) {
           final bytes = await cloud.fetchDriveFileBytes(strokesFile.id);
           if (bytes != null && bytes.isNotEmpty) {
-            final penJson = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
-            final penData = BstPenData.fromJson(penJson);
-            _totalPages = penData.totalPages > 0 ? penData.totalPages : 1;
-            _pageStrokes = penData.pages;
+            final doc = PenArchiveService.instance.unpackFromPenBytes(bytes);
+            if (doc != null) {
+              _totalPages = doc.totalPages > 0 ? doc.totalPages : 1;
+              _pageStrokes = doc.toStrokesMap();
+              _pageSvgStrings = doc.pages;
+              _activeDoc = doc;
+            } else {
+              try {
+                final penJson = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+                final penData = BstPenData.fromJson(penJson);
+                _totalPages = penData.totalPages > 0 ? penData.totalPages : 1;
+                _pageStrokes = penData.pages;
+              } catch (_) {}
+            }
           }
         }
       } else if (widget.localPath != null) {
         final file = File(widget.localPath!);
         if (file.existsSync()) {
-          final penJson = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-          final penData = BstPenData.fromJson(penJson);
-          _totalPages = penData.totalPages > 0 ? penData.totalPages : 1;
-          _pageStrokes = penData.pages;
-          _infoMetadata = penJson['metadata'] as Map<String, dynamic>?;
+          final bytes = await file.readAsBytes();
+          final doc = PenArchiveService.instance.unpackFromPenBytes(bytes);
+          if (doc != null) {
+            _totalPages = doc.totalPages > 0 ? doc.totalPages : 1;
+            _pageStrokes = doc.toStrokesMap();
+            _pageSvgStrings = doc.pages;
+            _activeDoc = doc;
+          } else {
+            try {
+              final penJson = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+              final penData = BstPenData.fromJson(penJson);
+              _totalPages = penData.totalPages > 0 ? penData.totalPages : 1;
+              _pageStrokes = penData.pages;
+              _infoMetadata = penJson['metadata'] as Map<String, dynamic>?;
+            } catch (_) {}
+          }
         }
       }
       if (_pageStrokes.isEmpty) {

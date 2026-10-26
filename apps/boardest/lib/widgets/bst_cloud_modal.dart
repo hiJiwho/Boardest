@@ -68,13 +68,14 @@ class _BstCloudModalState extends State<BstCloudModal> {
     super.initState();
     _loadClassroomName();
 
-    // 기존 활성 세션이 이미 존재하면 즉시 파일 탐색기 상태로 진입 (팝업 닫아도 세션 유지)
-    if (BstCloudService.instance.activeToken != null) {
+    // 기존 활성 세션이 이미 존재하고 인증 에러가 없을 때만 즉시 파일 탐색기 상태로 진입
+    if (BstCloudService.instance.activeToken != null && !BstCloudService.instance.hasAuthError) {
       _driveToken = BstCloudService.instance.activeToken;
       _teacherName = BstCloudService.instance.activeTeacherName ?? '선생님';
       _status = 'approved';
       _loadFiles();
     } else {
+      BstCloudService.instance.disconnect();
       _initModalQrSession();
     }
   }

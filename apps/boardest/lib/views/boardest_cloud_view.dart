@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,9 +12,9 @@ import 'boardest_pen_view.dart';
 import 'pdf_board_view.dart';
 import 'tbp/tbp_viewer_route.dart';
 
-/// Boardest Cloud 전용 메인 뷰
-/// - 미연결 시: 오직 모바일 Web QR 로그인 메인 화면 (학교 인증 필요한 OTP 배제)
-/// - 연결 완료 시: Google Drive 수업 자료 즉시 표시 및 클릭 시 원터치 뷰어 실행
+/// Boardest Cloud 전문형 웹 앱 메인 뷰 (bcld.web.app)
+/// - 스마트보드 터치 키보드 친화적 초단축 도메인 (bcld)
+/// - 순수 Cloud 수업자료 전용: QR 1초 모바일 승인, 실시간 Drive 파일 브라우징, 다이렉트 업로드 & 원터치 뷰어
 class BoardestCloudView extends StatefulWidget {
   const BoardestCloudView({super.key});
 
@@ -36,10 +37,13 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
 
   // 파일 탐색기 상태
   bool _isLoadingFiles = false;
+  bool _isUploadingFile = false;
   List<BstCloudFile> _allFiles = [];
   List<BstCloudFile> _filteredFiles = [];
   String _searchQuery = '';
   String _selectedCategory = 'all'; // 'all', 'tbp', 'pdf', 'ppt', 'hwp', 'pen'
+
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -53,6 +57,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
     if (_sessionId != null) {
       PasskeyService.instance.deleteSession(_sessionId!);
     }
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -62,6 +67,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
       setState(() {
         _isConnected = true;
         _teacherName = BstCloudService.instance.activeTeacherName ?? '선생님';
+        _ownerEmail = BstCloudService.instance.activeOwnerEmail;
       });
       await _loadFiles();
       if (!_isConnected || BstCloudService.instance.hasAuthError) {
@@ -70,6 +76,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
           setState(() {
             _isConnected = false;
             _teacherName = null;
+            _ownerEmail = null;
           });
           await _startQrSession();
         }
@@ -96,7 +103,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
 
     try {
       final res = await PasskeyService.instance.createChallengeSession(
-        schoolName: 'Boardest Cloud',
+        schoolName: 'Boardest Cloud (BCLD)',
         roomName: '전자칠판',
       );
 
@@ -129,7 +136,19 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('🎉 ${_teacherName}님의 Cloud가 안전하게 연결되었습니다!'),
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Colors.black87),
+                  const SizedBox(width: 8),
+                  Text(
+                    '🎉 ${_teacherName}님의 Cloud가 연결되었습니다!',
+                    style: GoogleFonts.notoSansKr(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
               backgroundColor: const Color(0xFF00F5D4),
               behavior: SnackBarBehavior.floating,
             ),
@@ -137,7 +156,6 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
 
           await _loadFiles();
         } else if (event.errorMessage != null && !event.approved) {
-          // 타임아웃 또는 취소
           if (!_isConnected && mounted) {
             setState(() {
               _qrError = event.errorMessage;
@@ -259,6 +277,76 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
     _filteredFiles = list;
   }
 
+  /// 📤 파일 직접 업로드 (Cloud 전문형 기능: 칠판/PC에서 내 드라이브로 바로 업로드)
+  Future<void> _uploadDirectFile() async {
+    final token = BstCloudService.instance.activeToken;
+    if (token == null || token.isEmpty) return;
+
+    try {
+      final result = await FilePicker.pickFiles(
+        allowMultiple: false,
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.first;
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) return;
+
+      setState(() => _isUploadingFile = true);
+
+      // MIME 타입 추정
+      String mimeType = 'application/octet-stream';
+      final lowerName = file.name.toLowerCase();
+      if (lowerName.endsWith('.pdf')) {
+        mimeType = 'application/pdf';
+      } else if (lowerName.endsWith('.ppt') || lowerName.endsWith('.pptx')) {
+        mimeType = 'application/vnd.ms-powerpoint';
+      } else if (lowerName.endsWith('.png')) {
+        mimeType = 'image/png';
+      } else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) {
+        mimeType = 'image/jpeg';
+      }
+
+      final success = await BstCloudService.instance.uploadFileToDrive(
+        fileName: file.name,
+        bytes: bytes,
+        mimeType: mimeType,
+        accessToken: token,
+      );
+
+      if (mounted) {
+        setState(() => _isUploadingFile = false);
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ [${file.name}] 파일이 Cloud에 성공적으로 업로드되었습니다!'),
+              backgroundColor: const Color(0xFF10B981),
+            ),
+          );
+          await _loadFiles();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ 파일 업로드에 실패했습니다. 드라이브 권한을 확인해주세요.'),
+              backgroundColor: Color(0xFFEF4565),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUploadingFile = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('업로드 오류: $e'),
+            backgroundColor: const Color(0xFFEF4565),
+          ),
+        );
+      }
+    }
+  }
+
   /// 🚀 파일 클릭 시 원터치 뷰어 실행
   Future<void> _openFile(BstCloudFile file) async {
     final lower = file.name.toLowerCase();
@@ -298,7 +386,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
       if (file.id.isNotEmpty && token.isNotEmpty) {
         bytes = await BstCloudService.instance.downloadDriveFileBytes(file.id, token);
       }
-      if (mounted) Navigator.pop(context); // 로딩 닫기
+      if (mounted) Navigator.pop(context);
 
       if (mounted) {
         Navigator.push(
@@ -334,6 +422,55 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
     // 4. PPT / HWP / 기타 문서
     final driveUrl = 'https://drive.google.com/file/d/${file.id}/view';
     await launchUrl(Uri.parse(driveUrl), mode: LaunchMode.externalApplication);
+  }
+
+  /// 🗑️ 파일 삭제
+  Future<void> _confirmDeleteFile(BstCloudFile file) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: Color(0xFF334155)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.delete_forever_rounded, color: Color(0xFFEF4565)),
+            const SizedBox(width: 8),
+            Text(
+              '파일 삭제 확인',
+              style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 17),
+            ),
+          ],
+        ),
+        content: Text(
+          '[${file.name}]\nGoogle Drive에서 이 파일을 삭제하시겠습니까?',
+          style: GoogleFonts.notoSansKr(color: const Color(0xFF94A3B8), fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('취소', style: GoogleFonts.notoSansKr(color: Colors.white60)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4565)),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final ok = await BstCloudService.instance.deleteDriveFile(file.id);
+      if (ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('🗑️ [${file.name}] 파일이 삭제되었습니다.')),
+        );
+        await _loadFiles();
+      }
+    }
   }
 
   /// 🔒 클라우드 연결 해제
@@ -404,14 +541,14 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 1. 미연결 상태: QR 로그인 메인 화면 (오직 QR만 제공, OTP 배제)
+  // 1. 미연결 상태: QR 로그인 메인 화면 (터치 키보드 친화적 bcld.web.app)
   // ─────────────────────────────────────────────────────────────
   Widget _buildQrLoginView() {
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
         child: Container(
-          width: 480,
+          width: 500,
           decoration: BoxDecoration(
             color: const Color(0xFF0F172A),
             borderRadius: BorderRadius.circular(28),
@@ -431,36 +568,63 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
               ),
             ],
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 36),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 로고 & 타이틀
+              // 도메인 뱃지 (스마트보드 터치 4글자 안내)
               Container(
-                width: 64,
-                height: 64,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00F5D4).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF00F5D4).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.flash_on_rounded, color: Color(0xFF00F5D4), size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      'bcld.web.app',
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF00F5D4),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // BCLD 브랜드 로고
+              Container(
+                width: 68,
+                height: 68,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF00F5D4), Color(0xFF7F5AF0)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(22),
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF00F5D4).withValues(alpha: 0.4),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
                     ),
                   ],
                 ),
                 child: const Icon(
                   Icons.cloud_sync_rounded,
                   color: Colors.black87,
-                  size: 34,
+                  size: 38,
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               ShaderMask(
                 shaderCallback: (bounds) => const LinearGradient(
                   colors: [Color(0xFF00F5D4), Color(0xFFA78BFA)],
@@ -475,16 +639,16 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
                   ),
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
-                '선생님의 수업 자료 클라우드 연결',
+                '스마트 교실을 위한 클라우드 수업자료 허브',
                 style: GoogleFonts.notoSansKr(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w500,
                   color: const Color(0xFF94A3B8),
                 ),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
 
               // QR 코드 카드
               Container(
@@ -517,7 +681,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
                             child: Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 48),
                           ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               // 안내 문구 (QR 전용, 학교 인증 없이 모바일 즉시 승인)
               Container(
@@ -525,9 +689,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E293B).withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: const Color(0xFF334155),
-                  ),
+                  border: Border.all(color: const Color(0xFF334155)),
                 ),
                 child: Row(
                   children: [
@@ -559,7 +721,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
 
               // 새로고침 버튼
               OutlinedButton.icon(
@@ -584,7 +746,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 2. 연결 완료 상태: 파일 브라우저 & 원터치 실행 화면
+  // 2. 연결 완료 상태: Cloud 전문형 파일 브라우저
   // ─────────────────────────────────────────────────────────────
   Widget _buildCloudBrowser() {
     return Column(
@@ -594,7 +756,17 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
         Expanded(
           child: _isLoadingFiles
               ? const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF00F5D4)),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: Color(0xFF00F5D4)),
+                      SizedBox(height: 16),
+                      Text(
+                        'Google Drive 수업 자료를 동기화하는 중...',
+                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                      ),
+                    ],
+                  ),
                 )
               : _filteredFiles.isEmpty
                   ? _buildEmptyState()
@@ -606,7 +778,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
 
   Widget _buildBrowserHeader() {
     return Container(
-      height: 68,
+      height: 72,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: const BoxDecoration(
         color: Color(0xFF0F172A),
@@ -616,7 +788,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
       ),
       child: Row(
         children: [
-          // 브랜드 로고
+          // 브랜드 로고 & 도메인 칩
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -625,16 +797,50 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
               ),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.cloud_done_rounded, color: Colors.black87, size: 20),
+            child: const Icon(Icons.cloud_done_rounded, color: Colors.black87, size: 22),
           ),
           const SizedBox(width: 12),
-          Text(
-            'Boardest Cloud',
-            style: GoogleFonts.outfit(
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-            ),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    'Boardest Cloud',
+                    style: GoogleFonts.outfit(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'BCLD',
+                      style: GoogleFonts.outfit(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF00F5D4),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_ownerEmail != null && _ownerEmail!.isNotEmpty)
+                Text(
+                  _ownerEmail!,
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(width: 20),
 
@@ -672,7 +878,42 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
 
           const Spacer(),
 
-          // 파일 새로고침 버튼
+          // 📤 자료 업로드 버튼 (Cloud 전문형)
+          ElevatedButton.icon(
+            onPressed: _isUploadingFile ? null : _uploadDirectFile,
+            icon: _isUploadingFile
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black87),
+                  )
+                : const Icon(Icons.cloud_upload_rounded, size: 16),
+            label: Text(
+              _isUploadingFile ? '업로드 중...' : '자료 올리기',
+              style: GoogleFonts.notoSansKr(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00F5D4),
+              foregroundColor: Colors.black87,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          const SizedBox(width: 10),
+
+          // 🌐 Google Drive 바로가기
+          IconButton(
+            onPressed: () {
+              launchUrl(
+                Uri.parse('https://drive.google.com/drive/my-drive'),
+                mode: LaunchMode.externalApplication,
+              );
+            },
+            icon: const Icon(Icons.open_in_new_rounded, color: Color(0xFF94A3B8), size: 20),
+            tooltip: '내 Google Drive 열기',
+          ),
+
+          // 새로고침
           IconButton(
             onPressed: _loadFiles,
             icon: const Icon(Icons.refresh_rounded, color: Color(0xFF94A3B8)),
@@ -711,11 +952,12 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
       ),
       child: Row(
         children: [
-          // 검색창
+          // 스마트보드 터치 친화적 검색창
           SizedBox(
             width: 280,
-            height: 40,
+            height: 42,
             child: TextField(
+              controller: _searchController,
               onChanged: (val) {
                 setState(() {
                   _searchQuery = val;
@@ -727,6 +969,18 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
                 hintText: '파일명 검색...',
                 hintStyle: GoogleFonts.notoSansKr(color: const Color(0xFF64748B), fontSize: 13),
                 prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, color: Color(0xFF64748B), size: 16),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                            _applyFilter();
+                          });
+                        },
+                      )
+                    : null,
                 filled: true,
                 fillColor: const Color(0xFF1E293B),
                 contentPadding: EdgeInsets.zero,
@@ -749,7 +1003,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
                   _buildCategoryChip('tbp', '📘 TBP 스마트교과서'),
                   _buildCategoryChip('pdf', '📕 PDF 교재'),
                   _buildCategoryChip('ppt', '📙 프레젠테이션'),
-                  _buildCategoryChip('hwp', '📄 문서(한글)'),
+                  _buildCategoryChip('hwp', '📄 문서(한글/워드)'),
                   _buildCategoryChip('pen', '✏️ 판서 노트'),
                 ],
               ),
@@ -794,15 +1048,15 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
   Widget _buildFileGrid() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 화면 너비에 따른 열 수 계산 (최소 220px 너비)
-        final crossAxisCount = (constraints.maxWidth / 220).floor().clamp(2, 6);
+        // 스마트보드 터치 편의성을 고려한 최소 230px 타겟 너비
+        final crossAxisCount = (constraints.maxWidth / 230).floor().clamp(2, 6);
 
         return GridView.builder(
           padding: const EdgeInsets.all(24),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
+            crossAxisSpacing: 18,
+            mainAxisSpacing: 18,
             childAspectRatio: 0.95,
           ),
           itemCount: _filteredFiles.length,
@@ -822,7 +1076,10 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
     Color badgeColor = const Color(0xFF334155);
     String typeLabel = 'FILE';
 
-    if (lower.endsWith('.tbp') || lower.endsWith('.htmlp') || lower.endsWith('.bsttbp') || file.mimeType == 'application/x-bst-tbp-folder') {
+    if (lower.endsWith('.tbp') ||
+        lower.endsWith('.htmlp') ||
+        lower.endsWith('.bsttbp') ||
+        file.mimeType == 'application/x-bst-tbp-folder') {
       iconData = Icons.menu_book_rounded;
       iconColor = const Color(0xFF00F5D4);
       badgeColor = const Color(0xFF00F5D4).withValues(alpha: 0.15);
@@ -837,7 +1094,10 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
       iconColor = const Color(0xFFFF8906);
       badgeColor = const Color(0xFFFF8906).withValues(alpha: 0.15);
       typeLabel = 'PPT';
-    } else if (lower.endsWith('.hwp') || lower.endsWith('.hwpx') || lower.endsWith('.doc') || lower.endsWith('.docx')) {
+    } else if (lower.endsWith('.hwp') ||
+        lower.endsWith('.hwpx') ||
+        lower.endsWith('.doc') ||
+        lower.endsWith('.docx')) {
       iconData = Icons.article_rounded;
       iconColor = const Color(0xFF3B82F6);
       badgeColor = const Color(0xFF3B82F6).withValues(alpha: 0.15);
@@ -857,22 +1117,29 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
       color: Colors.transparent,
       child: InkWell(
         onTap: () => _openFile(file),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         hoverColor: const Color(0xFF00F5D4).withValues(alpha: 0.08),
         child: Container(
           decoration: BoxDecoration(
             color: const Color(0xFF0F172A),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: const Color(0xFF1E293B),
               width: 1.2,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 상단 아이콘 및 뱃지
+              // 상단 아이콘 및 뱃지 + 우측 더보기 메뉴
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -885,20 +1152,73 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
                     ),
                     child: Icon(iconData, color: iconColor, size: 24),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      typeLabel,
-                      style: GoogleFonts.outfit(
-                        color: iconColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          typeLabel,
+                          style: GoogleFonts.outfit(
+                            color: iconColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
-                    ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF64748B), size: 18),
+                        color: const Color(0xFF1E293B),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        onSelected: (val) {
+                          if (val == 'open') {
+                            _openFile(file);
+                          } else if (val == 'drive') {
+                            launchUrl(
+                              Uri.parse('https://drive.google.com/file/d/${file.id}/view'),
+                              mode: LaunchMode.externalApplication,
+                            );
+                          } else if (val == 'delete') {
+                            _confirmDeleteFile(file);
+                          }
+                        },
+                        itemBuilder: (ctx) => [
+                          const PopupMenuItem(
+                            value: 'open',
+                            child: Row(
+                              children: [
+                                Icon(Icons.play_circle_fill_rounded, color: Color(0xFF00F5D4), size: 16),
+                                SizedBox(width: 8),
+                                Text('열기', style: TextStyle(color: Colors.white, fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'drive',
+                            child: Row(
+                              children: [
+                                Icon(Icons.open_in_new_rounded, color: Color(0xFF94A3B8), size: 16),
+                                SizedBox(width: 8),
+                                Text('Google Drive에서 보기', style: TextStyle(color: Colors.white, fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4565), size: 16),
+                                SizedBox(width: 8),
+                                Text('삭제', style: TextStyle(color: Color(0xFFEF4565), fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -974,18 +1294,18 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
               color: const Color(0xFF1E293B),
               shape: BoxShape.circle,
             ),
             child: const Icon(
-              Icons.folder_open_rounded,
+              Icons.cloud_off_rounded,
               color: Color(0xFF64748B),
-              size: 48,
+              size: 52,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           Text(
             '클라우드 폴더(bst-save)에 수업 자료가 없습니다.',
             style: GoogleFonts.notoSansKr(
@@ -996,23 +1316,40 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
           ),
           const SizedBox(height: 6),
           Text(
-            '스마트폰 또는 교사용 앱에서 수업자료를 업로드하면 실시간으로 표시됩니다.',
+            '상단 [자료 올리기] 버튼이나 스마트폰에서 수업자료를 추가해보세요.',
             style: GoogleFonts.notoSansKr(
               color: const Color(0xFF64748B),
               fontSize: 13,
             ),
           ),
           const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: _loadFiles,
-            icon: const Icon(Icons.refresh_rounded, size: 16),
-            label: const Text('새로고침'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00F5D4),
-              foregroundColor: Colors.black87,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ElevatedButton.icon(
+                onPressed: _uploadDirectFile,
+                icon: const Icon(Icons.cloud_upload_rounded, size: 16),
+                label: const Text('자료 올리기'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00F5D4),
+                  foregroundColor: Colors.black87,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: _loadFiles,
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('새로고침'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white70,
+                  side: const BorderSide(color: Color(0xFF334155)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
           ),
         ],
       ),

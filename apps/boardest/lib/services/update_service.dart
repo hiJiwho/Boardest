@@ -24,7 +24,7 @@ enum UpdateState {
 /// 3. 다운로드 완료 후 수업시간이면 보류, 쉬는시간에 급식 대신 [업데이트 필요함!!] 카드 노출
 /// 4. 안드로이드는 수동 설치 안내 후 패키지 인스톨러 열기, 윈도우는 Add-AppxPackage 실행 후 재실행
 class UpdateService {
-  static const String defaultVersion = '5.0.13';
+  static const String defaultVersion = '5.1.0';
   static const String _releaseApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String downloadPage = 'https://boardest-downloads.web.app';

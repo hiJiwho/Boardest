@@ -2,7 +2,7 @@ name: boardest_teacher
 description: "Boardest Teacher PC App"
 publish_to: 'none'
 
-version: 5.0.13+5013
+version: 5.1.0+5100
 
 environment:
   sdk: ^3.11.5
@@ -21,6 +21,7 @@ dependencies:
   path_provider: ^2.1.5
   path: ^1.9.1
   pdfrx: ^2.4.7
+  pdf: ^3.10.0
   system_tray: ^2.0.3
   window_manager: ^0.5.2
   http: ^1.2.0

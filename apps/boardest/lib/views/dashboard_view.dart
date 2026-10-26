@@ -12943,84 +12943,40 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         ? _settings.classNickname
         : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
 
-    // 1. 가장 최근에 작성된 판서가 있다면 즉시 로드 (사용자 요구사항)
-    final recentPenPath = await BoardStorageService.instance.getMostRecentBoardPath(classroomId: classroomId);
-    if (recentPenPath != null && recentPenPath.isNotEmpty) {
-      _pushBoardRoute(
-        BoardestPenView(
-          filePath: recentPenPath,
-          scaleFactor: _settings.scaleFactor,
-          teacher: BstCloudService.instance.activeTeacherName ?? '교사',
-          subject: '판서',
-        ),
-      );
-      return;
-    }
-
-    final now = DateTime.now();
-    final timeStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
-    final defaultPenName = '[$classroomId]$timeStr.pen';
-
-    if (kIsWeb) {
-      _pushBoardRoute(
-        BoardestPenView(
-          filePath: defaultPenName,
-          scaleFactor: _settings.scaleFactor,
-          teacher: BstCloudService.instance.activeTeacherName ?? '교사',
-          subject: '판서',
-        ),
-      );
-      return;
-    }
-    await BstSaveService.instance.ensureStructure();
-
-    String? teacher;
-    String? subject;
-    String targetPath;
-
     final period = _currentPeriod;
     final lesson = _currentLesson;
-    final isBreakTime =
-        period == null ||
+    final isBreakTime = period == null ||
         !period.isClass ||
         period.label.contains('쉬는') ||
-        period.label.contains('점심');
+        period.label.contains('점심') ||
+        period.label.contains('아침') ||
+        period.label.contains('방과후');
 
+    // 쉬는시간 및 과목별 판서 연결:
+    // 국어시간 판서 -> 다음 국어시간에 판서 들어가면 복원
+    // 쉬는시간 판서 -> 쉬는시간에 들어가면 복원
+    // Cloud 연동 시 Cloud Drive bst-pen 폴더 자동 실시간 동기화
+    final String activeSubject = isBreakTime
+        ? '쉬는시간'
+        : (lesson != null && lesson.subject.isNotEmpty
+            ? lesson.subject
+            : (period != null && period.label.isNotEmpty ? period.label : '수업'));
+
+    final teacher = BstCloudService.instance.activeTeacherName ?? lesson?.teacher ?? '선생님';
     final isCloud = BstCloudService.instance.activeToken != null;
 
-    if (isCloud) {
-      // 3) 전자칠판이지만 Cloud(OTP) 로그인 했을 때 -> [교실ID] {날짜_시간}.pen
-      targetPath = await BoardStorageService.instance.resolveBoardPathForLesson(
-        teacher: 'Teacher',
-        subject: '수업',
-        isCloud: true,
-        classroomId: classroomId,
-      );
-    } else if (lesson != null && lesson.teacher.isNotEmpty) {
-      // 2) 전자칠판 로컬 저장: 시간표 기준 교사의 최근 화이트보드 ([교사ID] *.pen) 불러오기
-      teacher = lesson.teacher;
-      subject = lesson.subject;
-      targetPath = await BoardStorageService.instance.resolveBoardPathForLesson(
-        teacher: lesson.teacher,
-        subject: lesson.subject,
-        isCloud: false,
-      );
-    } else {
-      teacher = '교사';
-      subject = isBreakTime ? '자율판서' : '수업';
-      targetPath = await BoardStorageService.instance.resolveBoardPathForLesson(
-        teacher: teacher,
-        subject: subject,
-        isCloud: false,
-      );
-    }
+    final targetPath = await BoardStorageService.instance.resolveSubjectBoardPath(
+      classroomId: classroomId,
+      subject: activeSubject,
+      isCloud: isCloud,
+    );
 
     _pushBoardRoute(
       BoardestPenView(
         filePath: targetPath,
         scaleFactor: _settings.scaleFactor,
         teacher: teacher,
-        subject: subject,
+        subject: activeSubject,
       ),
     );
   }

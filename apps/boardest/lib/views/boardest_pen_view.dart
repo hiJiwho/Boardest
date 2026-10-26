@@ -350,7 +350,10 @@ class _BoardestPenViewState extends State<BoardestPenView>
 
       // Ensure _activeFilePath ends with .pen if it had .iwb
       if (_activeFilePath.endsWith('.iwb')) {
-        _activeFilePath = p.setExtension(_activeFilePath, '.pen');
+        _activeFilePath = p.setExtension(_activeFilePath, '.pen.bst');
+      }
+      if (!_activeFilePath.endsWith('.pen.bst')) {
+        _activeFilePath = '$_activeFilePath.pen.bst';
       }
 
       final payload = json.encode({
@@ -364,7 +367,7 @@ class _BoardestPenViewState extends State<BoardestPenView>
       if (BstCloudService.instance.activeToken != null) {
         final cloudPenName = _boardFileBaseName.endsWith('.pen')
             ? _boardFileBaseName
-            : '$_boardFileBaseName.pen';
+            : '$_boardFileBaseName.pen.bst';
         unawaited(
           BstCloudService.instance.uploadPenBytesDirectly(
             fileName: cloudPenName,
@@ -400,7 +403,7 @@ class _BoardestPenViewState extends State<BoardestPenView>
       if (_isBstSaveBoard ||
           (widget.teacher != null && widget.subject != null)) {
         final dir = await BstSaveService.instance.directoryFor(BstSaveService.subBoard);
-        final penPath = p.join(dir.path, '$_boardFileBaseName.pen');
+        final penPath = p.join(dir.path, '$_boardFileBaseName.pen.bst');
         await PenArchiveService.instance.saveLocalPenFile(penPath, penDoc);
 
         final metadata = <String, dynamic>{

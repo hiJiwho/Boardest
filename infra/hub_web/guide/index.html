@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boardest 선생님 교실 활용 & 독학 마스터 가이드 (v5.1.0)</title>
+  <link rel="icon" type="image/png" href="https://boardest-teacher.web.app/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0A0E14;
+      --card-bg: rgba(18, 24, 34, 0.85);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #00F5D4;
+      --secondary: #7F5AF0;
+      --accent-blue: #00BAF2;
+      --accent-orange: #FF8906;
+      --text: #FFFFFF;
+      --text-sub: #94A1B2;
+      --font-brand: 'Outfit', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Noto Sans KR', sans-serif; }
+    html { scroll-behavior: smooth; }
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(127, 90, 240, 0.18) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(0, 245, 212, 0.14) 0px, transparent 50%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 20px 80px;
+    }
+    .container { max-width: 980px; width: 100%; margin: 0 auto; }
+    .top-nav {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 32px; padding: 14px 22px; border-radius: 16px;
+      background: rgba(14, 19, 28, 0.85); border: 1px solid var(--card-border);
+      backdrop-filter: blur(16px); position: sticky; top: 14px; z-index: 100;
+    }
+    .nav-brand { display: flex; align-items: baseline; gap: 8px; text-decoration: none; }
+    .nav-brand-title { font-family: var(--font-brand); font-size: 24px; font-weight: 900; color: #FFF; }
+    .nav-brand-sub { font-family: var(--font-brand); font-size: 13px; font-weight: 800; color: var(--primary); }
+    .nav-back { color: var(--primary); text-decoration: none; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+    
+    .hero { text-align: center; margin-bottom: 40px; padding: 20px 0; }
+    .hero h1 { font-size: 34px; font-weight: 900; line-height: 1.3; margin-bottom: 12px; }
+    .hero h1 span { color: var(--primary); }
+    .hero p { color: var(--text-sub); font-size: 16px; line-height: 1.6; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; background: rgba(0, 245, 212, 0.15); color: var(--primary); border: 1px solid rgba(0, 245, 212, 0.3); margin-bottom: 14px; }
+    
+    .guide-card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 18px; padding: 28px; margin-bottom: 24px;
+      backdrop-filter: blur(10px); transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .guide-card:hover { border-color: rgba(0, 245, 212, 0.3); }
+    .step-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 8px; background: var(--secondary);
+      color: #FFF; font-weight: 900; font-family: var(--font-brand); margin-bottom: 14px;
+    }
+    .card-title { font-size: 20px; font-weight: 800; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+    .card-title svg { width: 24px; height: 24px; fill: var(--primary); }
+    .card-body { color: #CCD6E0; font-size: 15px; line-height: 1.7; }
+    .card-body ul { margin-left: 20px; margin-top: 10px; }
+    .card-body li { margin-bottom: 8px; }
+    .highlight-box {
+      background: rgba(0, 245, 212, 0.06); border-left: 4px solid var(--primary);
+      padding: 14px 18px; border-radius: 0 10px 10px 0; margin: 16px 0;
+      color: #E2E8F0; font-size: 14px;
+    }
+    .code-box {
+      background: #06090E; border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 12px 16px; border-radius: 8px; font-family: monospace;
+      color: #00F5D4; font-size: 13px; margin: 12px 0; overflow-x: auto;
+    }
+    footer { text-align: center; color: var(--text-sub); font-size: 13px; margin-top: 50px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav class="top-nav">
+      <a href="/" class="nav-brand">
+        <span class="nav-brand-title">BOARDEST</span>
+        <span class="nav-brand-sub">GUIDE v5.1.0</span>
+      </a>
+      <a href="/" class="nav-back">← 메인 허브로 돌아가기</a>
+    </nav>
+
+    <header class="hero">
+      <div class="badge">선생님 전용 교실 실전 & 독학 매뉴얼</div>
+      <h1>수업 준비는 <span>3초</span>만에,<br>판서는 <span>과목별로 자동 기억</span>됩니다</h1>
+      <p>Boardest v5.1.0의 스마트 기능들을 수업 시간에 가장 유용하게 200% 활용하는 비법을 소개합니다.</p>
+    </header>
+
+    <!-- Section 1 -->
+    <div class="guide-card">
+      <div class="step-num">01</div>
+      <h2 class="card-title">📱 스마트폰 QR 1초 로그인 (학교 인증/OTP 걱정 끝!)</h2>
+      <div class="card-body">
+        교실 전자칠판에 복잡한 구글 계정이나 비밀번호를 입력할 필요가 없습니다. 학교 보안 방화벽에서도 터치 한 번으로 열립니다.
+        <ul>
+          <li><strong>어떻게 하나요?</strong> 교실 전자칠판의 <strong>Cloud</strong> 아이콘을 누르면 대형 QR 코드가 뜹니다.</li>
+          <li><strong>선생님 폰으로 스캔:</strong> 스마트폰 기본 카메라로 QR을 비추면 바로 선생님의 교안과 판서가 전자칠판에 로드됩니다!</li>
+          <li><strong>보안 안심:</strong> 수업이 끝나거나 자리를 비우면 일정 시간 후 자동으로 세션이 안전하게 종료됩니다.</li>
+        </ul>
+        <div class="highlight-box">
+          💡 <strong>꿀팁:</strong> 모바일 전용 <code>bcld.web.app</code>을 열면 터치에 최적화된 초간단 4글자 전용 화면으로 바로 연결됩니다!
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2 -->
+    <div class="guide-card">
+      <div class="step-num">02</div>
+      <h2 class="card-title">🧠 과목별 판서 자동 기억 & 쉬는시간 분리 관리</h2>
+      <div class="card-body">
+        "지난 시간 국어 판서 어디 갔지?" 더 이상 판서 파일을 일일이 찾거나 날짜별로 정리할 필요가 없습니다!
+        <ul>
+          <li><strong>국어시간 판서 ➔ 다음 국어시간에 자동 복원:</strong> 국어 수업에 들어가서 판서를 켜면, 지난주/어제 국어 시간에 판서했던 내용이 그대로 이어서 열립니다!</li>
+          <li><strong>쉬는시간 낙서 분리:</strong> 수업이 끝나고 쉬는시간이나 점심시간에 화이트보드를 열면, 과목 판서를 덮어쓰지 않고 <strong>'쉬는시간' 전용 보드</strong>가 열려 학생들의 낙서와 분리됩니다.</li>
+          <li><strong>클라우드 실시간 백업:</strong> Cloud가 연결되어 있으면 판서 내용이 선생님 구글 드라이브(<code>bst-pen</code>)에 <code>.pen.bst</code> 형식으로 즉시 자동 저장됩니다.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Section 3 -->
+    <div class="guide-card">
+      <div class="step-num">03</div>
+      <h2 class="card-title">🎯 캔바(Canva) & 디지털교과서 완벽 수업 (.web.bst)</h2>
+      <div class="card-body">
+        캔바, 미리캔버스, 구글 슬라이드, 에듀넷 디지털교과서를 판서와 함께 한 화면에서 제어하세요.
+        <ul>
+          <li><strong>프리젠터 리모컨(클리커) 버그 완전 해결:</strong> 캔바에서 무선 클리커의 <code>PgUp/PgDn</code>을 누르면 첫/마지막 장으로 순간이동하던 문제를 BoardBook 전용 엔진으로 완벽 해결했습니다. 이제 한 장씩 부드럽게 넘어갑니다!</li>
+          <li><strong>페이지별 자동 판서 기억:</strong> 슬라이드를 넘기면 그 페이지에 썼던 판서만 쏙 나타납니다 (256-bit dHash 화면 인식 기술).</li>
+          <li><strong>우클릭 & 스마트 판서:</strong> 페이지 위 어디서든 터치하거나 펜으로 바로 판서하고 도구를 활용할 수 있습니다.</li>
+        </ul>
+        <div class="highlight-box">
+          ✨ <strong>새 규격 안내:</strong> v5.1.0부터 HTMLp와 TBP가 통일되어 모든 웹 교안은 <code>.web.bst</code> 규격으로 손쉽게 관리됩니다.
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 4 -->
+    <div class="guide-card">
+      <div class="step-num">04</div>
+      <h2 class="card-title">📦 판서 보관함 & 4가지 포맷 자유 추출</h2>
+      <div class="card-body">
+        작성한 판서를 판서 보관함에서 원하는 형식으로 언제든지 내려받거나 타 프로그램과 공유할 수 있습니다.
+        <ul>
+          <li><strong>1. .pen.save.bst (Boardest 원본 보관):</strong> 파일 관리에서 드라이브에 업로드하기만 하면 보관함에 자동으로 쏙 등록되는 마법 포맷!</li>
+          <li><strong>2. .iwb (전자칠판 공용 규격):</strong> 타사 전자칠판 기기나 다른 소프트웨어로 판서를 가져갈 때 사용합니다. (일부 펜 스타일 손실 주의 경고창 제공)</li>
+          <li><strong>3. .pdf (인쇄/배포용):</strong> 학생들에게 유인물로 주거나 인쇄할 때 사용 (더 이상 수정 불가).</li>
+          <li><strong>4. .svg (페이지별 고화질 벡터):</strong> 확대해도 절대 깨지지 않는 무손실 벡터 일러스트로 각 페이지를 저장합니다.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Section 5 -->
+    <div class="guide-card">
+      <div class="step-num">05</div>
+      <h2 class="card-title">⚡ 2999년 영구 인증서 1줄 초간단 설치 (Windows / 전자칠판)</h2>
+      <div class="card-body">
+        교실 전자칠판이나 학교 PC에 설치할 때 관리자 권한으로 고생하지 마세요. 파워쉘 1줄이면 2999년까지 영구 인증서가 자동 설치됩니다.
+        <div class="code-box">
+          powershell -ExecutionPolicy Bypass -Command "irm https://boardest.web.app/install/cert.ps1 | iex"
+        </div>
+        <ul>
+          <li><strong>USB 설치:</strong> USB에 복사된 <code>boardest.appx</code> (Windows 전자칠판용) 및 <code>boardest.apk</code> (안드로이드 칠판용)를 더블클릭하면 끝!</li>
+          <li><strong>시작 시 자동 실행 없음:</strong> Cloud 버전은 가벼운 순수 앱으로만 실행되며 부팅 속도를 전혀 늦추지 않습니다.</li>
+        </ul>
+      </div>
+    </div>
+
+    <footer>
+      <p>© 2026 Boardest by jiwho. 대한민국 선생님들의 즐겁고 편리한 스마트 수업을 응원합니다.</p>
+    </footer>
+  </div>
+</body>
+</html>

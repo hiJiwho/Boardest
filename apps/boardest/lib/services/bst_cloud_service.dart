@@ -2448,12 +2448,12 @@ class BstCloudService {
     final token = activeToken;
     if (token == null || token.isEmpty) return false;
     try {
-      final url = Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId');
+      final url = Uri.parse('https://www.googleapis.com/drive/v3/files/$fileId?supportsAllDrives=true');
       final res = await http.delete(
         url,
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 8));
-      return res.statusCode == 204 || res.statusCode == 200;
+      return res.statusCode == 204 || res.statusCode == 200 || res.statusCode == 404;
     } catch (e) {
       debugPrint('[BstCloudService] deleteDriveFile error: $e');
       return false;

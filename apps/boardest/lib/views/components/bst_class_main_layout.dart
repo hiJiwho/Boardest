@@ -676,23 +676,23 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    // 우측: 교과서 사진 썸네일 (컴팩트 사이즈 축소)
+                    // 우측: 교과서 사진 썸네일 (확대된 시인성)
                     Center(
                       child: SizedBox(
-                        width: 24,
-                        height: 33,
+                        width: 34,
+                        height: 47,
                         child: Container(
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: BorderRadius.circular(5),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.35),
-                                blurRadius: 3,
-                                offset: const Offset(1, 1),
+                                blurRadius: 4,
+                                offset: const Offset(1, 2),
                               ),
                             ],
                           ),
-                          child: _buildBookCoverWidget(p.subject, radius: 4, isMini: true),
+                          child: _buildBookCoverWidget(p.subject, radius: 5, isMini: true),
                         ),
                       ),
                     ),
@@ -783,7 +783,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(color: const Color(0xFF00F5D4), width: 0.8),
                       ),
-                      child: Text('V.5.0.12', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
+                      child: Text('v5.1.0', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
                     ),
                     if (!kIsWeb) ...[
                       const SizedBox(width: 3),
@@ -1053,32 +1053,29 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
             ),
             const SizedBox(height: 16),
 
-            // 2. 중앙: 축소된 아담한 교과서 + 그 옆에 대형 시계 (HH:mm) 나란히 배치!
+            // 2. 중앙: 시원하게 키운 교과서 표지 + 그 옆에 대형 시계 (HH:mm) 나란히 배치!
             Expanded(
               flex: 5,
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // 아담하게 줄인 교과서 표지 (가로폭 160px 제한)
-                  SizedBox(
-                    width: 160,
-                    child: AspectRatio(
-                      aspectRatio: 0.72,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.4),
-                              blurRadius: 12,
-                              offset: const Offset(2, 5),
-                            ),
-                          ],
-                        ),
-                        child: hasSpecial
-                            ? _buildSpecialPeriodCover(special)
-                            : _buildBookCoverWidget(p.subject, radius: 12),
+                  // 시원하게 키운 교과서 표지 (높이에 맞추어 비율 유지)
+                  AspectRatio(
+                    aspectRatio: 0.72,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.4),
+                            blurRadius: 14,
+                            offset: const Offset(2, 6),
+                          ),
+                        ],
                       ),
+                      child: hasSpecial
+                          ? _buildSpecialPeriodCover(special)
+                          : _buildBookCoverWidget(p.subject, radius: 14),
                     ),
                   ),
                   const SizedBox(width: 24),
@@ -1279,9 +1276,9 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
           Opacity(
             opacity: isPast ? 0.45 : 0.95,
             child: SizedBox(
-              width: 34,
-              height: 46,
-              child: _buildBookCoverWidget(p.subject, radius: 6, isMini: true),
+              width: 48,
+              height: 66,
+              child: _buildBookCoverWidget(p.subject, radius: 7, isMini: true),
             ),
           ),
           const SizedBox(width: 12),

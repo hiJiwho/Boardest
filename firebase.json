@@ -294,7 +294,7 @@
       ]
     },
     {
-      "target": "b-c",
+      "target": "bcld",
       "public": "apps/boardest/build/web",
       "ignore": [
         "firebase.json",

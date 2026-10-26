@@ -335,6 +335,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
       await _winWebview.initialize();
       await _winWebview.setBackgroundColor(Colors.transparent);
       await _winWebview.loadUrl(url);
+      await _winWebview.executeScript(_clickerInterceptorJs);
 
       _winWebview.webMessage.listen((message) {
         try {
@@ -437,46 +438,34 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
   }
 
   void _sendVirtualKey(String key, int keyCode) {
+    // Canva 및 웹 프레젠테이션 호환: PageDown/PageUp을 한 장씩 넘기는 ArrowRight/ArrowLeft로 완전 매핑
+    final effectiveKey = (key == 'PageDown')
+        ? 'ArrowRight'
+        : (key == 'PageUp')
+            ? 'ArrowLeft'
+            : key;
+    final effectiveCode = (key == 'PageDown')
+        ? 39
+        : (key == 'PageUp')
+            ? 37
+            : keyCode;
+
     final script = '''
       (function() {
         const target = document.activeElement || document.body;
-        const downEvt = new KeyboardEvent('keydown', {
-          key: '$key',
-          code: '$key',
-          keyCode: $keyCode,
-          which: $keyCode,
-          bubbles: true,
-          cancelable: true
-        });
-        target.dispatchEvent(downEvt);
-        window.dispatchEvent(downEvt);
-
-        const upEvt = new KeyboardEvent('keyup', {
-          key: '$key',
-          code: '$key',
-          keyCode: $keyCode,
-          which: $keyCode,
-          bubbles: true,
-          cancelable: true
-        });
-        target.dispatchEvent(upEvt);
-        window.dispatchEvent(upEvt);
-
-        // Fallback arrow keys for presentation frameworks (HTML Present, Slides, etc)
-        if ('$key' === 'PageDown' || '$key' === 'PageUp') {
-          const arrowKey = '$key' === 'PageDown' ? 'ArrowRight' : 'ArrowLeft';
-          const arrowCode = '$key' === 'PageDown' ? 39 : 37;
-          const aEvt = new KeyboardEvent('keydown', {
-            key: arrowKey,
-            code: arrowKey,
-            keyCode: arrowCode,
-            which: arrowCode,
+        ['keydown', 'keyup'].forEach(function(type) {
+          const evt = new KeyboardEvent(type, {
+            key: '$effectiveKey',
+            code: '$effectiveKey',
+            keyCode: $effectiveCode,
+            which: $effectiveCode,
             bubbles: true,
             cancelable: true
           });
-          target.dispatchEvent(aEvt);
-          window.dispatchEvent(aEvt);
-        }
+          target.dispatchEvent(evt);
+          window.dispatchEvent(evt);
+          document.dispatchEvent(evt);
+        });
       })();
     ''';
     if (!kIsWeb && Platform.isWindows && _winWebviewInitialized) {
@@ -485,6 +474,65 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
       _androidWebview.runJavaScript(script);
     }
   }
+
+  void _navigatePage({required bool isNext}) {
+    _sendVirtualKey(isNext ? 'PageDown' : 'PageUp', isNext ? 34 : 33);
+    _dhashEngine.navigatePage(isNext: isNext);
+  }
+
+  static const String _clickerInterceptorJs = '''
+    (function() {
+      if (window.__boardbook_clicker_hooked) return;
+      window.__boardbook_clicker_hooked = true;
+
+      function interceptClicker(e) {
+        if (e.key === 'PageDown' || e.keyCode === 34) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          if (e.type === 'keydown') {
+            const target = document.activeElement || document.body;
+            ['keydown', 'keyup'].forEach(function(type) {
+              const evt = new KeyboardEvent(type, {
+                key: 'ArrowRight',
+                code: 'ArrowRight',
+                keyCode: 39,
+                which: 39,
+                bubbles: true,
+                cancelable: true
+              });
+              target.dispatchEvent(evt);
+              window.dispatchEvent(evt);
+            });
+          }
+        } else if (e.key === 'PageUp' || e.keyCode === 33) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          if (e.type === 'keydown') {
+            const target = document.activeElement || document.body;
+            ['keydown', 'keyup'].forEach(function(type) {
+              const evt = new KeyboardEvent(type, {
+                key: 'ArrowLeft',
+                code: 'ArrowLeft',
+                keyCode: 37,
+                which: 37,
+                bubbles: true,
+                cancelable: true
+              });
+              target.dispatchEvent(evt);
+              window.dispatchEvent(evt);
+            });
+          }
+        }
+      }
+
+      window.addEventListener('keydown', interceptClicker, true);
+      window.addEventListener('keyup', interceptClicker, true);
+      document.addEventListener('keydown', interceptClicker, true);
+      document.addEventListener('keyup', interceptClicker, true);
+    })();
+  ''';
 
   void _onPointerDown(PointerDownEvent event) {
     _touchDhashTimer?.cancel();
