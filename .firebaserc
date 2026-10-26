@@ -14,9 +14,6 @@
         "boardest-class-lite": [
           "boardest-class-lite"
         ],
-        "boardest-tools": [
-          "boardest-tools"
-        ],
         "boardest-class-pro": [
           "boardest-class-pro"
         ],
@@ -46,9 +43,6 @@
         ],
         "boardest-cloud-connect": [
           "boardest-cloud-connect"
-        ],
-        "boardest-cloud-web": [
-          "boardest-cloud-web"
         ],
         "bcld": [
           "bcld"
