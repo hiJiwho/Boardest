@@ -78,6 +78,9 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
   bool _eraseEntireStroke = false;
   double _eraserSize = 30.0;
   bool _showPenSettings = false;
+  bool _isHighlighter = false;
+  String _pageFeedback = '';
+  Timer? _feedbackTimer;
 
   // ─── Smart 모드 꾹 누르기 상태 ──────────────────────────
   bool _longPressActive = false;
@@ -368,8 +371,28 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
     }
   }
 
+  void _showFeedback(String msg) {
+    _feedbackTimer?.cancel();
+    if (mounted) setState(() => _pageFeedback = msg);
+    _feedbackTimer = Timer(const Duration(milliseconds: 1400), () {
+      if (mounted) setState(() => _pageFeedback = '');
+    });
+  }
+
   void _navigatePage(bool isNext) {
     _dhashEngine.navigatePage(isNext: isNext);
+    _showFeedback(isNext ? '다음 슬라이드 ▶' : '◀ 이전 슬라이드');
+  }
+
+  Future<void> _saveCurrentBoard() async {
+    if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty) {
+      await TbpStorageService.instance.savePenStrokes(
+        _tbpFolderPath,
+        _currentDhash,
+        _annotationController.strokes,
+      );
+      _showFeedback('💾 판서가 저장되었습니다');
+    }
   }
 
   bool get _isAnnotationEnabled {
@@ -400,11 +423,26 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     if (event is KeyDownEvent) {
-      if (event.logicalKey == LogicalKeyboardKey.arrowRight || event.logicalKey == LogicalKeyboardKey.pageDown) {
+      final isCtrl = HardwareKeyboard.instance.isControlPressed;
+      if (isCtrl && event.logicalKey == LogicalKeyboardKey.keyZ) {
+        setState(() => _annotationController.undo());
+        _showFeedback('↩️ 실행 취소');
+        return KeyEventResult.handled;
+      }
+      if (isCtrl && event.logicalKey == LogicalKeyboardKey.keyS) {
+        _saveCurrentBoard();
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.arrowRight ||
+          event.logicalKey == LogicalKeyboardKey.pageDown ||
+          event.logicalKey == LogicalKeyboardKey.space ||
+          event.logicalKey == LogicalKeyboardKey.enter) {
         _navigatePage(true);
         return KeyEventResult.handled;
       }
-      if (event.logicalKey == LogicalKeyboardKey.arrowLeft || event.logicalKey == LogicalKeyboardKey.pageUp) {
+      if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+          event.logicalKey == LogicalKeyboardKey.pageUp ||
+          event.logicalKey == LogicalKeyboardKey.backspace) {
         _navigatePage(false);
         return KeyEventResult.handled;
       }
@@ -428,6 +466,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
 
   @override
   void dispose() {
+    _feedbackTimer?.cancel();
     _touchDhashTimer?.cancel();
     _dhashEngine.dispose();
     _annotationController.dispose();
@@ -573,6 +612,38 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                     child: _buildFloatingPenBar(s),
                   ),
                 ),
+
+              // ── 페이지 넘김 / 상태 안내 토스트 ──────────────────────
+              if (_pageFeedback.isNotEmpty)
+                Positioned(
+                  bottom: 30 * s,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 18 * s, vertical: 9 * s),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF16161A).withOpacity(0.92),
+                        borderRadius: BorderRadius.circular(20 * s),
+                        border: Border.all(color: const Color(0xFF00F5D4), width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF00F5D4).withOpacity(0.2),
+                            blurRadius: 12,
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        _pageFeedback,
+                        style: GoogleFonts.notoSansKr(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13 * s,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -715,14 +786,14 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
     ];
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 12 * s),
+      padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 10 * s),
       decoration: BoxDecoration(
-        color: const Color(0xFF16161A).withOpacity(0.92),
+        color: const Color(0xFF16161A).withOpacity(0.94),
         borderRadius: BorderRadius.circular(24 * s),
-        border: Border.all(color: Colors.white.withOpacity(0.15)),
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
+            color: Colors.black.withOpacity(0.45),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -731,28 +802,46 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // 1. 일반 펜
           IconButton(
-            icon: Icon(Icons.edit_rounded, color: _tool == ToolMode.pen ? _penColor : Colors.white54, size: 20 * s),
-            tooltip: '펜',
+            icon: Icon(Icons.edit_rounded, color: (_tool == ToolMode.pen && !_isHighlighter) ? _penColor : Colors.white54, size: 20 * s),
+            tooltip: '펜 (일반)',
             onPressed: () {
               setState(() {
+                _isHighlighter = false;
                 _tool = ToolMode.pen;
                 _annotationController.toolMode = ToolMode.pen;
+                _annotationController.activeColor = _penColor;
+                _annotationController.activeWidth = _strokeWidth;
               });
             },
           ),
-          SizedBox(height: 4 * s),
+          // 2. 형광펜 (반투명 하이라이터)
+          IconButton(
+            icon: Icon(Icons.border_color_rounded, color: (_tool == ToolMode.pen && _isHighlighter) ? const Color(0xFFFFD166) : Colors.white54, size: 19 * s),
+            tooltip: '형광펜 (반투명)',
+            onPressed: () {
+              setState(() {
+                _isHighlighter = true;
+                _tool = ToolMode.pen;
+                _annotationController.toolMode = ToolMode.pen;
+                _annotationController.activeColor = _penColor.withOpacity(0.35);
+                _annotationController.activeWidth = 24.0;
+              });
+            },
+          ),
+          SizedBox(height: 3 * s),
           ...colors.map((c) => GestureDetector(
             onTap: () {
               setState(() {
                 _penColor = c;
-                _annotationController.activeColor = c;
+                _annotationController.activeColor = _isHighlighter ? c.withOpacity(0.35) : c;
                 _tool = ToolMode.pen;
                 _annotationController.toolMode = ToolMode.pen;
               });
             },
             child: Container(
-              margin: EdgeInsets.symmetric(vertical: 4 * s),
+              margin: EdgeInsets.symmetric(vertical: 3.5 * s),
               width: 18 * s,
               height: 18 * s,
               decoration: BoxDecoration(
@@ -760,17 +849,27 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: _penColor == c ? Colors.white : Colors.transparent,
-                  width: 2,
+                  width: 2.2,
                 ),
               ),
             ),
           )),
           Container(
-            margin: EdgeInsets.symmetric(vertical: 8 * s),
+            margin: EdgeInsets.symmetric(vertical: 6 * s),
             width: 20 * s,
             height: 1,
             color: Colors.white24,
           ),
+          // 3. 실행 취소 (Undo)
+          IconButton(
+            icon: Icon(Icons.undo_rounded, color: Colors.white, size: 20 * s),
+            tooltip: '실행 취소 (Ctrl+Z)',
+            onPressed: () {
+              setState(() => _annotationController.undo());
+              _showFeedback('↩️ 실행 취소');
+            },
+          ),
+          // 4. 지우개
           IconButton(
             icon: Icon(Icons.cleaning_services_rounded, color: _tool == ToolMode.eraser ? const Color(0xFFFF8906) : Colors.white54, size: 20 * s),
             tooltip: '지우개',
@@ -781,14 +880,28 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
               });
             },
           ),
+          // 5. 모두 지우기
           IconButton(
             icon: Icon(Icons.delete_sweep_rounded, color: Colors.white54, size: 20 * s),
             tooltip: '모두 지우기',
             onPressed: () {
               setState(() {
-                _annotationController.strokes.clear();
+                _annotationController.clear();
               });
+              _showFeedback('🗑️ 판서 초기화');
             },
+          ),
+          Container(
+            margin: EdgeInsets.symmetric(vertical: 6 * s),
+            width: 20 * s,
+            height: 1,
+            color: Colors.white24,
+          ),
+          // 6. 판서 즉시 저장
+          IconButton(
+            icon: Icon(Icons.save_rounded, color: const Color(0xFF00F5D4), size: 20 * s),
+            tooltip: '판서 저장 (Ctrl+S)',
+            onPressed: _saveCurrentBoard,
           ),
         ],
       ),

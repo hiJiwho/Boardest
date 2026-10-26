@@ -2746,28 +2746,20 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           _checkAutoLessonFlow(active, _currentLesson);
         } else {
           _currentLesson = null;
-          final isLunchTime = active.label.contains('점심');
-          final lunchRemainingSec = isLunchTime ? active.end.difference(now).inSeconds : 9999;
-          final isLunchLast10Min = isLunchTime && lunchRemainingSec <= 10 * 60;
-
-          if (isLunchTime && !isLunchLast10Min) {
-            _nextLesson = null;
-          } else {
-            final nextClassRanges = ranges.where(
-              (r) => r.isClass && (r.start.isAfter(now) || r.start.isAtSameMomentAs(active.end)),
+          final nextClassRanges = ranges.where(
+            (r) => r.isClass && (r.start.isAfter(now) || r.start.isAtSameMomentAs(active.end)),
+          );
+          final nextClassRange = nextClassRanges.isNotEmpty
+              ? nextClassRanges.first
+              : null;
+          if (nextClassRange != null) {
+            final nextMatches = lessons.where(
+              (l) =>
+                  l.classTime >= nextClassRange.period && l.subject.isNotEmpty,
             );
-            final nextClassRange = nextClassRanges.isNotEmpty
-                ? nextClassRanges.first
-                : null;
-            if (nextClassRange != null) {
-              final nextMatches = lessons.where(
-                (l) =>
-                    l.classTime >= nextClassRange.period && l.subject.isNotEmpty,
-              );
-              _nextLesson = nextMatches.isNotEmpty ? nextMatches.first : null;
-            } else {
-              _nextLesson = null;
-            }
+            _nextLesson = nextMatches.isNotEmpty ? nextMatches.first : null;
+          } else {
+            _nextLesson = null;
           }
         }
       } else {
@@ -5008,6 +5000,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                     period: l.classTime,
                     subject: l.subject,
                     isCurrent: _currentLesson?.classTime == l.classTime,
+                    isUpcoming: _nextLesson?.classTime == l.classTime,
                     targetClass: (_settings.specialClassroomMode && l.grade > 0 && l.classNum > 0)
                         ? '${l.grade}-${l.classNum}반'
                         : (l.subject.isNotEmpty ? l.subject : null),
@@ -6354,8 +6347,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         statusBadge = '종례 시간';
         defaultTitle = '종례 및 하루 마무리';
       } else if (_currentPeriod!.label == '점심 시간') {
-        activeLesson = null;
-        statusBadge = '점심 시간';
+        activeLesson = _nextLesson;
+        statusBadge = activeLesson != null ? '점심 시간 (${activeLesson.classTime}교시 준비)' : '점심 시간';
         defaultTitle = '맛있는 점심 시간';
       } else {
         // 쉬는 시간

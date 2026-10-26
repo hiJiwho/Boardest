@@ -6,6 +6,7 @@ class TimetablePeriodItem {
   final int period;
   final String subject;
   final bool isCurrent;
+  final bool isUpcoming;
   final String? targetClass;
   final String? startTime;
   final String? endTime;
@@ -14,6 +15,7 @@ class TimetablePeriodItem {
     required this.period,
     required this.subject,
     this.isCurrent = false,
+    this.isUpcoming = false,
     this.targetClass,
     this.startTime,
     this.endTime,

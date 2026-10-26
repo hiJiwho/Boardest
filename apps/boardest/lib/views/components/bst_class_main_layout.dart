@@ -363,7 +363,12 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     if (idx != -1) {
       _curIndex = idx;
     } else {
-      _curIndex = -1;
+      final nextIdx = ep.indexWhere((p) => p.isUpcoming);
+      if (nextIdx != -1) {
+        _curIndex = nextIdx;
+      } else {
+        _curIndex = -1;
+      }
     }
   }
 
@@ -421,9 +426,9 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. 좌측 시간표 (더 얇고 세로 전체 채움: 200px)
+                    // 1. 좌측 시간표 (세로 전체 채움: 220px 와이드)
                     SizedBox(
-                      width: 200,
+                      width: 220,
                       child: _leftWheelArea(),
                     ),
                     const SizedBox(width: 14),
@@ -460,12 +465,33 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     if (_curIndex >= 0 && _curIndex < ep.length) {
       return ep[_curIndex];
     }
+    // 1. 현재 수업 중인 교시가 있으면 반환
     final cur = ep.indexWhere((p) => p.isCurrent);
     if (cur != -1) {
       return ep[cur];
     }
+    // 2. 쉬는 시간/점심 시간: 다음 예정 수업(isUpcoming)이 있으면 반환
+    final up = ep.indexWhere((p) => p.isUpcoming);
+    if (up != -1) {
+      return ep[up];
+    }
+    // 3. 만약 둘 다 없으면, 현재 시간 이후 시작하는 가장 빠른 교시 찾기
+    final now = widget.currentTime ?? DateTime.now();
+    for (final p in ep) {
+      final times = _getTimesForPeriod(p);
+      final parts = times.$1.split(':');
+      if (parts.length >= 2) {
+        final h = int.tryParse(parts[0]) ?? 0;
+        final m = int.tryParse(parts[1]) ?? 0;
+        final pStart = DateTime(now.year, now.month, now.day, h, m);
+        if (pStart.isAfter(now)) {
+          return p;
+        }
+      }
+    }
+    // 4. 모든 수업이 끝났다면 마지막 교시 반환 (1교시로 리셋 방지)
     if (ep.isNotEmpty) {
-      return ep.first;
+      return ep.last;
     }
     return TimetablePeriodItem(
       period: 1,
@@ -498,7 +524,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
         items.add(_compactSpecialPeriodCard(special));
       }
       final p = ep[i];
-      final isSelected = (i == _curIndex) || (_curIndex == -1 && p.isCurrent);
+      final isSelected = (i == _curIndex) || (_curIndex == -1 && (p.isCurrent || (ep.every((x) => !x.isCurrent) && p.isUpcoming)));
       items.add(_compactTimetableItem(p, i, isSelected));
     }
     if (hasSpecial && specialInsertIndex >= n) {
@@ -676,23 +702,23 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    // 우측: 교과서 사진 썸네일 (확대된 시인성)
+                    // 우측: 교과서 사진 썸네일 (더 크게 확대된 시인성)
                     Center(
                       child: SizedBox(
-                        width: 34,
-                        height: 47,
+                        width: 44,
+                        height: 60,
                         child: Container(
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(5),
+                            borderRadius: BorderRadius.circular(6),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.35),
-                                blurRadius: 4,
+                                color: Colors.black.withOpacity(0.45),
+                                blurRadius: 5,
                                 offset: const Offset(1, 2),
                               ),
                             ],
                           ),
-                          child: _buildBookCoverWidget(p.subject, radius: 5, isMini: true),
+                          child: _buildBookCoverWidget(p.subject, radius: 6, isMini: true),
                         ),
                       ),
                     ),
@@ -783,7 +809,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(color: const Color(0xFF00F5D4), width: 0.8),
                       ),
-                      child: Text('v5.1.0', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
+                      child: Text('v5.1.1', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
                     ),
                     if (!kIsWeb) ...[
                       const SizedBox(width: 3),
@@ -1424,10 +1450,20 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(radius),
           gradient: LinearGradient(colors: [grad1, grad2], begin: Alignment.topLeft, end: Alignment.bottomRight),
-          border: Border.all(color: isDemoCover ? const Color(0xFF00F5D4).withOpacity(0.55) : Colors.white.withOpacity(0.2)),
+          border: Border.all(color: isDemoCover ? const Color(0xFF00F5D4).withOpacity(0.55) : Colors.white.withOpacity(0.25)),
         ),
         alignment: Alignment.center,
-        child: Text(icon, style: TextStyle(fontSize: isDemoCover ? 14 : 15)),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(icon, style: TextStyle(fontSize: isDemoCover ? 16 : 18)),
+            const SizedBox(height: 2),
+            Text(
+              subject.length > 2 ? subject.substring(0, 2) : subject,
+              style: _ts(9.5, w: FontWeight.w800, c: Colors.white, h: 1.0),
+            ),
+          ],
+        ),
       );
     }
 
