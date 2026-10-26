@@ -169,6 +169,16 @@ if (-not $SkipApk) {
   Build-Apk (Join-Path $RootDir 'apps\boardest') 'boardest.apk'
   Build-Apk (Join-Path $RootDir 'apps\boardest_class_lite') 'bst-class-lite.apk'
   Copy-Item (Join-Path $OutDir 'bst-class-lite.apk') (Join-Path $OutDir 'boardest-class-lite.apk') -Force
+} else {
+  $boardestFreshApk = Join-Path $RootDir 'apps\boardest\build\app\outputs\flutter-apk\app-release.apk'
+  if (Test-Path $boardestFreshApk) {
+    Copy-Item $boardestFreshApk (Join-Path $OutDir 'boardest.apk') -Force
+  }
+  $classLiteFreshApk = Join-Path $RootDir 'apps\boardest_class_lite\build\app\outputs\flutter-apk\app-release.apk'
+  if (Test-Path $classLiteFreshApk) {
+    Copy-Item $classLiteFreshApk (Join-Path $OutDir 'bst-class-lite.apk') -Force
+    Copy-Item $classLiteFreshApk (Join-Path $OutDir 'boardest-class-lite.apk') -Force
+  }
 }
 
 if (-not (Test-Path (Join-Path $PackageDir 'boardest-class-lite\Boardest-Class-Lite.exe'))) {
@@ -201,10 +211,12 @@ if ($LASTEXITCODE -ne 0) { throw 'PowerPoint helper compilation failed.' }
 foreach ($name in @('boardest', 'bst-overlay-panser', 'boardest-class-lite')) { Pack-Signed $name }
 Pack-TeacherMsi $AppVersion
 Copy-Item $CerFile (Join-Path $OutDir 'BoardestCert.cer') -Force
+Copy-Item (Join-Path $RootDir 'certs\install_certificate.bat') (Join-Path $OutDir 'install_certificate.bat') -Force
+Copy-Item (Join-Path $RootDir 'certs\install_certificate.ps1') (Join-Path $OutDir 'install_certificate.ps1') -Force
 
 $DownloadDir = Join-Path $RootDir 'infra\download_web'
 New-Item -ItemType Directory -Force -Path $DownloadDir | Out-Null
-foreach ($file in @('boardest.appx', 'bst-teacher.msi', 'bst-overlay-panser.appx', 'boardest-class-lite.appx', 'boardest.apk', 'bst-teacher.apk', 'bst-teacher-lite.apk', 'bst-class-lite.apk', 'boardest-class-lite.apk', 'BoardestCert.cer')) {
+foreach ($file in @('boardest.appx', 'bst-teacher.msi', 'bst-overlay-panser.appx', 'boardest-class-lite.appx', 'boardest.apk', 'bst-teacher.apk', 'bst-teacher-lite.apk', 'bst-class-lite.apk', 'boardest-class-lite.apk', 'BoardestCert.cer', 'install_certificate.bat', 'install_certificate.ps1')) {
   $source = Join-Path $OutDir $file
   if (Test-Path $source) { Copy-Item $source (Join-Path $DownloadDir $file) -Force }
 }

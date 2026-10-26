@@ -39,6 +39,8 @@ android {
             keyPassword = "Boardest2026!"
             storeFile = file("boardest_release.keystore")
             storePassword = "Boardest2026!"
+            enableV1Signing = true
+            enableV2Signing = true
         }
     }
 

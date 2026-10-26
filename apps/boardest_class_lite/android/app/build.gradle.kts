@@ -22,9 +22,20 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            keyAlias = "boardest"
+            keyPassword = "Boardest2026!"
+            storeFile = file("boardest_release.keystore")
+            storePassword = "Boardest2026!"
+            enableV1Signing = true
+            enableV2Signing = true
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
