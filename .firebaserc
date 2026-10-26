@@ -46,6 +46,9 @@
         ],
         "boardest-cloud-connect": [
           "boardest-cloud-connect"
+        ],
+        "boardest-cloud-web": [
+          "boardest-cloud-web"
         ]
       }
     },

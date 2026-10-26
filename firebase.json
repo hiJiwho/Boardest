@@ -330,6 +330,40 @@
       ]
     },
     {
+      "target": "boardest-cloud-web",
+      "public": "apps/boardest/build/web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**",
+        "**/*.apk",
+        "**/*.exe",
+        "**/*.msi",
+        "**/*.appx",
+        "**/*.msix",
+        "**/*.bat",
+        "**/*.cmd"
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
+          ]
+        }
+      ],
+      "cleanUrls": true,
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    },
+    {
       "target": "boardest-class-pro",
       "public": "infra/class_pro_launcher_web",
       "ignore": [

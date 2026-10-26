@@ -22,6 +22,7 @@ import 'config/app_config.dart';
 import 'views/setup_wizard_view.dart';
 import 'views/dashboard_view.dart';
 import 'views/boardest_tools_view.dart';
+import 'views/boardest_cloud_view.dart';
 import 'services/demo_class_allocator_service.dart';
 import 'helpers/startup_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -95,7 +96,7 @@ void main(List<String> args) async {
     }
   } catch (_) {}
   AppConfig.initLiteMode(args);
-  AppConfig.initToolsMode(args);
+  AppConfig.initCloudMode(args);
   try {
     pdfrxFlutterInitialize();
   } catch (e) {
@@ -236,8 +237,8 @@ void main(List<String> args) async {
   final authService = AuthService();
   var currentUser = await authService.getCurrentUser();
 
-  // 로그인 검증 및 미로그인 시 샌드박스 정리 & 로그인 요구 (데모 및 툴즈 모드 시 우회)
-  if (currentUser == null && !AppConfig.isDemoMode && !AppConfig.isToolsMode) {
+  // 로그인 검증 및 미로그인 시 샌드박스 정리 & 로그인 요구 (데모 및 클라우드/툴즈 모드 시 우회)
+  if (currentUser == null && !AppConfig.isDemoMode && !AppConfig.isToolsMode && !AppConfig.isCloudMode) {
     if (settings.isSetupComplete && settings.selectedSchool != null) {
       try {
         final err = await authService.loginOrSignupClass(
@@ -261,7 +262,7 @@ void main(List<String> args) async {
     }
 
     // 여전히 로그인이 안 되어있으면 샌드박스 내부 임시 데이터 소거 및 로그인 요구창 진입
-    if (currentUser == null && !AppConfig.isDemoMode && !AppConfig.isToolsMode) {
+    if (currentUser == null && !AppConfig.isDemoMode && !AppConfig.isToolsMode && !AppConfig.isCloudMode) {
       debugPrint('[Boardest Startup] Not logged in. Purging sandbox data and prompting login...');
       try {
         final tempDir = Directory(AppPaths.bstCldTempDirSync);
@@ -370,8 +371,8 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget home;
-    if (AppConfig.isToolsMode) {
-      home = const BoardestToolsView();
+    if (AppConfig.isCloudMode || AppConfig.isToolsMode) {
+      home = const BoardestCloudView();
     } else if (AppConfig.isDemoMode) {
       home = DashboardView(initialTool: initialTool, pptFullscreen: pptFullscreen);
     } else if (!settings.isSetupComplete) {
