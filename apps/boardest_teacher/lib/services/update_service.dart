@@ -117,20 +117,63 @@ class UpdateService {
 
   /// 앱 삭제 (안드로이드 OS 제거 / 윈도우 앱 및 기능 설정 실행)
   static Future<void> uninstallApp([BuildContext? context]) async {
+    if (context != null && context.mounted) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF16161A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: Color(0xFFEF4565), width: 1.5),
+          ),
+          title: Row(
+            children: const [
+              Icon(Icons.delete_forever_rounded, color: Color(0xFFEF4565), size: 26),
+              SizedBox(width: 10),
+              Text('앱 삭제 확인', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+            ],
+          ),
+          content: const Text(
+            '기기에서 Boardest Teacher 앱을 완전히 삭제(제거)하시겠습니까?\n삭제 후에는 필요 시 다운로드 사이트에서 다시 설치하셔야 합니다.',
+            style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('취소', style: TextStyle(color: Colors.white54)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4565),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('삭제 진행', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
     if (!kIsWeb && Platform.isAndroid) {
       try {
         const channel = MethodChannel('com.boardest/launch_args');
         await channel.invokeMethod('uninstallApp');
       } catch (_) {
-        final uri = Uri.parse('package:jiwho.boardest.teacher');
-        await launchUrl(uri);
+        try {
+          await Process.run('am', ['start', '-a', 'android.intent.action.DELETE', '-d', 'package:jiwho.boardest.teacher']);
+        } catch (_) {}
       }
     } else if (!kIsWeb && Platform.isWindows) {
       try {
-        await Process.start('explorer.exe', ['ms-settings:appsfeatures']);
+        await Process.start('cmd.exe', ['/c', 'start', 'ms-settings:appsfeatures']);
       } catch (_) {
-        await Process.start('control.exe', ['appwiz.cpl']);
+        try {
+          await Process.start('control.exe', ['appwiz.cpl']);
+        } catch (_) {}
       }
+      exit(0);
     }
   }
 
