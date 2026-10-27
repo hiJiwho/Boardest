@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show rootBundle, MethodChannel;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -18,6 +19,9 @@ class UpdateInfo {
   final bool hasUpdate;
   final bool isWindows;
   final bool isAndroid;
+  final bool isBlocked;
+  final bool isCloudBlocked;
+  final int lagCount;
 
   const UpdateInfo({
     required this.latestVersion,
@@ -27,27 +31,32 @@ class UpdateInfo {
     required this.hasUpdate,
     required this.isWindows,
     required this.isAndroid,
+    this.isBlocked = false,
+    this.isCloudBlocked = false,
+    this.lagCount = 0,
   });
 }
 
-/// 교사용 앱 인앱 업데이트 안내 및 다운로드 서비스
-/// 1. 최신 버전 확인
-/// 2. 독촉 없는 친절한 선택형 안내 대화상자 (닫기/나중에 가능)
-/// 3. 다운로드 시 AhnLab V3 등 보안 앱 오탐 방지:
-///    - PowerShell Start-Process 드로퍼 패턴 완전 배제
-///    - Windows 표준 Installer인 msiexec.exe /i 직접 실행
-///    - 앱 강제 종료(exit(0))를 독촉하지 않고 사용자에게 친절히 안내
+/// 교사용 앱 인앱 업데이트 안내, 보안 잠금 및 알람 서비스
+/// 1. 최신 버전 확인 (4번째 자리 무시: 5.2.1.1과 5.2.1.2는 1개 업데이트로 간주)
+/// 2. 버전보다 큰 버전 있으면 업데이트 알람만 제공 (누르면 사이트 열려 직접 다운로드)
+/// 3. 맨 앞자리(Major) 변경 또는 6차례 업데이트 지연 시:
+///    [업데이트 필수] "이 버전은 안전하지 않습니다. 새 버전의 msi 를 다운받아주시기 바랍니다. [다운로드 사이트 이동]" 팝업 표시 후 20초 뒤 자동 삭제/종료!
+/// 4. 3차례 업데이트 지연 시 Cloud 기능 제한
 class UpdateService {
   UpdateService._internal();
   static final instance = UpdateService._internal();
 
-  static const String defaultVersion = '5.1.2.1';
-  static const String _api =
-      'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
+  static const String defaultVersion = '5.3.0';
+  static const String _releasesApi =
+      'https://api.github.com/repos/hiJiwho/Boardest/releases?per_page=30';
   static const String downloadPage = 'https://boardest-downloads.web.app';
   static bool _checking = false;
   static DateTime? _lastSilentCheckTime;
   static String? _resolvedVersion;
+
+  static final ValueNotifier<bool> isBlockedNotifier = ValueNotifier(false);
+  static final ValueNotifier<bool> isCloudBlockedNotifier = ValueNotifier(false);
 
   static String get currentVersion {
     if (_resolvedVersion != null) return _resolvedVersion!;
@@ -71,33 +80,65 @@ class UpdateService {
   }
 
   static Future<void> initVersion() async {
-    // 설치된 바이너리에 컴파일된 버전(defaultVersion)이 유일한 기준.
-    // (SharedPreferences 캐시는 다운로드만 하고 설치 안 한 경우에도 새 버전으로 보이게 하는 원인이었음)
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('bst_installed_version');
     } catch (_) {}
-    if (_resolvedVersion == null || _isNewerVersion(defaultVersion, _resolvedVersion!)) {
-      _resolvedVersion = null;
-    }
+    try {
+      final jsonStr = await rootBundle.loadString('version.json');
+      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final v = data['version'] as String?;
+      if (v != null && v.isNotEmpty) {
+        _resolvedVersion = v.trim();
+      }
+    } catch (_) {}
   }
 
-  static bool _isNewerVersion(String a, String b) {
-    final pa = a.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-    final pb = b.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-    for (var i = 0; i < 3; i++) {
-      final x = i < pa.length ? pa[i] : 0;
-      final y = i < pb.length ? pb[i] : 0;
-      if (x != y) return x > y;
+  /// 4번째 자리를 제거하고 앞 3자리만 반환
+  static String normalizeVersion(String v) {
+    final clean = v.replaceFirst(RegExp(r'^v'), '').trim();
+    final parts = clean.split('.');
+    if (parts.length >= 3) {
+      return '${parts[0]}.${parts[1]}.${parts[2]}';
+    }
+    return clean;
+  }
+
+  static bool _isNewer(String target, String current) {
+    final t = target.split('.').map((v) => int.tryParse(v) ?? 0).toList();
+    final c = current.split('.').map((v) => int.tryParse(v) ?? 0).toList();
+    for (var i = 0; i < (t.length > c.length ? t.length : c.length); i++) {
+      final tv = i < t.length ? t[i] : 0;
+      final cv = i < c.length ? c[i] : 0;
+      if (tv != cv) return tv > cv;
     }
     return false;
+  }
+
+  /// 앱 삭제 (안드로이드 OS 제거 / 윈도우 앱 및 기능 설정 실행)
+  static Future<void> uninstallApp([BuildContext? context]) async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        const channel = MethodChannel('com.boardest/launch_args');
+        await channel.invokeMethod('uninstallApp');
+      } catch (_) {
+        final uri = Uri.parse('package:jiwho.boardest.teacher');
+        await launchUrl(uri);
+      }
+    } else if (!kIsWeb && Platform.isWindows) {
+      try {
+        await Process.start('explorer.exe', ['ms-settings:appsfeatures']);
+      } catch (_) {
+        await Process.start('control.exe', ['appwiz.cpl']);
+      }
+    }
   }
 
   Future<UpdateInfo?> checkForUpdate({
     bool force = false,
     String channel = 'stable',
   }) async {
-    if (kDebugMode || kIsWeb || _checking) return null;
+    if (kIsWeb || _checking) return null;
     if (!force &&
         _lastSilentCheckTime != null &&
         DateTime.now().difference(_lastSilentCheckTime!) <
@@ -111,24 +152,60 @@ class UpdateService {
     _lastSilentCheckTime = DateTime.now();
 
     try {
-      final response = await http.get(Uri.parse(_api), headers: {
+      final response = await http.get(Uri.parse(_releasesApi), headers: {
         'User-Agent': 'Boardest-Teacher/$currentVersion',
         'Accept': 'application/vnd.github+json',
       }).timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) return null;
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final latest = (data['tag_name'] as String? ?? '')
-          .replaceFirst(RegExp(r'^v'), '')
-          .trim();
-      if (latest.isEmpty) return null;
+      final releases = jsonDecode(response.body) as List<dynamic>;
+      if (releases.isEmpty) return null;
+
+      // 4번째 자리를 무시한 유니크 릴리즈 목록 구성
+      final List<String> distinctNormalized = [];
+      String? latestFullTag;
+      Map<String, dynamic>? latestReleaseData;
+
+      for (final r in releases) {
+        final tag = (r['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^v'), '').trim();
+        if (tag.isEmpty) continue;
+        latestFullTag ??= tag;
+        latestReleaseData ??= r as Map<String, dynamic>;
+
+        final norm = normalizeVersion(tag);
+        if (!distinctNormalized.contains(norm)) {
+          distinctNormalized.add(norm);
+        }
+      }
+
+      if (latestFullTag == null || latestReleaseData == null) return null;
+
+      final currentNorm = normalizeVersion(currentVersion);
+
+      // 메이저 버전 변경 판별
+      final currentMajor = int.tryParse(currentNorm.split('.').first) ?? 5;
+      final latestMajor = int.tryParse(distinctNormalized.first.split('.').first) ?? 5;
+      final bool isMajorBehind = latestMajor > currentMajor;
+
+      // 지연 횟수(Lag) 계산
+      int lagCount = 0;
+      for (final rel in distinctNormalized) {
+        if (_isNewer(rel, currentNorm)) {
+          lagCount++;
+        }
+      }
+
+      final isBlocked = isMajorBehind || lagCount >= 6;
+      final isCloudBlocked = lagCount >= 3 || isMajorBehind;
+
+      isBlockedNotifier.value = isBlocked;
+      isCloudBlockedNotifier.value = isCloudBlocked;
 
       final isWindows = !kIsWeb && Platform.isWindows;
       final isAndroid = !kIsWeb && Platform.isAndroid;
 
-      final assets = (data['assets'] as List<dynamic>? ?? []);
+      final assets = (latestReleaseData['assets'] as List<dynamic>? ?? []);
       String? msiUrl;
-      String? appxUrl;
       String? apkUrl;
 
       for (final a in assets) {
@@ -138,29 +215,25 @@ class UpdateService {
 
         if (name.contains('teacher') && name.endsWith('.msi')) {
           msiUrl ??= url;
-        } else if (name.contains('teacher') &&
-            (name.endsWith('.appx') || name.endsWith('.msix'))) {
-          appxUrl ??= url;
         } else if (name.contains('teacher') && name.endsWith('.apk')) {
           apkUrl ??= url;
         }
       }
 
-      msiUrl ??=
-          'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi';
-      apkUrl ??=
-          'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.apk';
-
-      final targetUrl = isWindows ? msiUrl : apkUrl;
+      msiUrl ??= 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi';
+      apkUrl ??= 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.apk';
 
       return UpdateInfo(
-        latestVersion: latest,
+        latestVersion: latestFullTag,
         currentVersion: currentVersion,
-        downloadUrl: targetUrl,
-        releaseNotes: (data['body'] as String? ?? '').trim(),
-        hasUpdate: _isNewer(latest, currentVersion),
+        downloadUrl: isWindows ? msiUrl : apkUrl,
+        releaseNotes: (latestReleaseData['body'] as String? ?? '').trim(),
+        hasUpdate: _isNewer(distinctNormalized.first, currentNorm),
         isWindows: isWindows,
         isAndroid: isAndroid,
+        isBlocked: isBlocked,
+        isCloudBlocked: isCloudBlocked,
+        lagCount: lagCount,
       );
     } catch (e) {
       debugPrint('[UpdateService] Update check failed: $e');
@@ -170,441 +243,289 @@ class UpdateService {
     }
   }
 
-  bool _isNewer(String latest, String current) {
-    final l = latest.split('.').map((v) => int.tryParse(v) ?? 0).toList();
-    final c = current.split('.').map((v) => int.tryParse(v) ?? 0).toList();
-    for (var i = 0; i < (l.length > c.length ? l.length : c.length); i++) {
-      final lv = i < l.length ? l[i] : 0;
-      final cv = i < c.length ? c[i] : 0;
-      if (lv != cv) return lv > cv;
-    }
-    return false;
-  }
-
+  /// 교사용 앱 업데이트 다이얼로그 노출
+  /// - 차단 상태(isBlocked): 20초 카운트다운 후 앱 삭제/종료 모달 강제 렌더링
+  /// - 일반 업데이트 상태: 다운로드 사이트 이동 버튼이 포함된 안내 모달
   void showUpdateDialog(BuildContext context, UpdateInfo info) {
     if (!context.mounted) return;
-    showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierColor: Colors.black.withValues(alpha: 0.65),
-      builder: (dialogContext) => PopScope(
-        canPop: true,
-        child: _TeacherOptionalUpdateDialog(info: info),
-      ),
-    );
+    if (info.isBlocked) {
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black.withOpacity(0.8),
+        builder: (dialogContext) => PopScope(
+          canPop: false,
+          child: _TeacherMandatoryLockoutDialog(info: info),
+        ),
+      );
+    } else {
+      showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        barrierColor: Colors.black.withOpacity(0.65),
+        builder: (dialogContext) => PopScope(
+          canPop: true,
+          child: _TeacherOptionalUpdateDialog(info: info),
+        ),
+      );
+    }
   }
 }
 
-class _TeacherOptionalUpdateDialog extends StatefulWidget {
+/// 6차례 지연 또는 메이저 버전 변경 시 20초 카운트다운 후 자동 삭제/종료 강제 잠금 다이얼로그
+class _TeacherMandatoryLockoutDialog extends StatefulWidget {
   final UpdateInfo info;
-
-  const _TeacherOptionalUpdateDialog({required this.info});
+  const _TeacherMandatoryLockoutDialog({required this.info});
 
   @override
-  State<_TeacherOptionalUpdateDialog> createState() =>
-      _TeacherOptionalUpdateDialogState();
+  State<_TeacherMandatoryLockoutDialog> createState() =>
+      _TeacherMandatoryLockoutDialogState();
 }
 
-class _TeacherOptionalUpdateDialogState
-    extends State<_TeacherOptionalUpdateDialog> {
-  double _progress = 0.0;
-  int _downloadedBytes = 0;
-  int _totalBytes = 0;
-  bool _isDownloading = false;
-  bool _isDone = false;
-  bool _installerLaunched = false;
-  String? _downloadedFilePath;
-  String? _errorMessage;
-  String _statusText = '최신 업데이트 패키지 다운로드를 준비하는 중입니다...';
+class _TeacherMandatoryLockoutDialogState
+    extends State<_TeacherMandatoryLockoutDialog> {
+  int _secondsLeft = 20;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startDownloadAndInstall();
-    });
-  }
-
-  Future<void> _startDownloadAndInstall() async {
-    if (!mounted) return;
-    setState(() {
-      _isDownloading = true;
-      _isDone = false;
-      _installerLaunched = false;
-      _errorMessage = null;
-      _progress = 0.0;
-      _downloadedBytes = 0;
-      _totalBytes = 0;
-      _statusText = '업데이트 파일을 다운로드하는 중...';
-    });
-
-    try {
-      final tempDir = await getTemporaryDirectory();
-      final ext = widget.info.isWindows ? 'msi' : 'apk';
-      final fileName =
-          'boardest_teacher_setup_${widget.info.latestVersion}.$ext';
-      final savePath = p.join(tempDir.path, fileName);
-
-      final client = http.Client();
-      final request = http.Request('GET', Uri.parse(widget.info.downloadUrl));
-      request.headers['User-Agent'] =
-          'Boardest-Teacher-Updater/${widget.info.currentVersion}';
-      final response = await client.send(request);
-
-      if (response.statusCode != 200) {
-        throw Exception('다운로드 서버 오류 (응답 코드: ${response.statusCode})');
-      }
-
-      final total = response.contentLength ?? 0;
-      if (mounted) {
-        setState(() {
-          _totalBytes = total;
-        });
-      }
-
-      final file = File(savePath);
-      final sink = file.openWrite();
-      int received = 0;
-
-      await for (final chunk in response.stream) {
-        sink.add(chunk);
-        received += chunk.length;
-        if (mounted) {
-          setState(() {
-            _downloadedBytes = received;
-            if (total > 0) {
-              _progress = (received / total).clamp(0.0, 1.0);
-            }
-          });
-        }
-      }
-
-      await sink.flush();
-      await sink.close();
-      client.close();
-
-      _downloadedFilePath = savePath;
-
-      if (!mounted) return;
-
-      setState(() {
-        _isDownloading = false;
-        _isDone = true;
-        _progress = 1.0;
-        _statusText = widget.info.isWindows
-            ? '다운로드 완료! 준비가 되셨을 때 아래 [설치 프로그램(MSI) 실행]을 눌러주세요.\n'
-                'Windows Installer가 실행되며, 원하실 때 현재 앱을 종료하시면 됩니다.'
-            : '다운로드 완료! 아래 버튼을 눌러 업데이트를 설치해 주세요.';
-      });
-    } catch (e) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) async {
       if (!mounted) return;
       setState(() {
-        _isDownloading = false;
-        _errorMessage = '다운로드 중 오류가 발생했습니다:\n$e';
-        _statusText = '업데이트 파일을 다운로드하지 못했습니다.';
-      });
-    }
-  }
-
-  Future<void> _executeInstall() async {
-    final savePath = _downloadedFilePath;
-    if (savePath == null || !File(savePath).existsSync()) {
-      return;
-    }
-
-    if (widget.info.isWindows) {
-      try {
-        final isMsi = savePath.toLowerCase().endsWith('.msi');
-        if (isMsi) {
-          // MajorUpgrade(같은 UpgradeCode)로 기존 버전을 덮어씀. 파일 잠금 방지를 위해 앱을 먼저 종료하고
-          // 설치 완료 후 자동 재실행. (msiexec 가 UAC 권한 상승 요청)
-          final exePath = Platform.resolvedExecutable;
-          final script = 'timeout /t 2 /nobreak >nul & '
-              'msiexec.exe /i "$savePath" /passive /norestart REINSTALLMODE=vomus & '
-              'if exist "$exePath" start "" "$exePath"';
-          await Process.start('cmd.exe', ['/c', script], mode: ProcessStartMode.detached);
-          await Future.delayed(const Duration(milliseconds: 600));
-          exit(0);
-        } else {
-          await Process.start('msiexec.exe', ['/i', savePath]);
+        if (_secondsLeft > 0) {
+          _secondsLeft--;
         }
-      } catch (e) {
-        debugPrint('[UpdateService] installer launch failed: $e');
-        try {
-          await Process.start('cmd.exe', ['/c', 'start', '', savePath]);
-        } catch (_) {}
+      });
+      if (_secondsLeft <= 0) {
+        t.cancel();
+        // 20초 만료 시 앱 삭제 실행 후 종료!
+        await UpdateService.uninstallApp(context);
+        exit(0);
       }
-    } else if (widget.info.isAndroid) {
-      try {
-        await launchUrl(Uri.file(savePath));
-      } catch (_) {}
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _installerLaunched = true;
-      _statusText = '설치 관리자(MSI)가 실행되었습니다.\n'
-          '화면에 나타난 설치 마법사의 안내에 따라 설치를 완료해 주세요.\n'
-          '(새 버전을 적용하려면 설치 진행 중 교사용 앱을 종료해 주시면 됩니다.)';
     });
   }
 
   @override
-  Widget build(BuildContext context) {
-    final downloadedMb = (_downloadedBytes / (1024 * 1024)).toStringAsFixed(1);
-    final totalMb = _totalBytes > 0
-        ? (_totalBytes / (1024 * 1024)).toStringAsFixed(1)
-        : null;
-    final percent = (_progress * 100).toStringAsFixed(1);
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
-    return AlertDialog(
-      backgroundColor: const Color(0xFF0F0E17),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: Color(0xFF00F5D4), width: 1.6),
-      ),
-      titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-      title: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00F5D4).withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        width: 520,
+        padding: const EdgeInsets.all(30),
+        decoration: BoxDecoration(
+          color: const Color(0xFF16161A),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFEF4565), width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFEF4565).withOpacity(0.3),
+              blurRadius: 40,
+              spreadRadius: 6,
             ),
-            child: const Icon(
-              Icons.system_update_rounded,
-              color: Color(0xFF00F5D4),
-              size: 26,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '교사용 앱 업데이트 안내',
-                  style: GoogleFonts.notoSansKr(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-                Text(
-                  'v${widget.info.currentVersion} ➔ v${widget.info.latestVersion}',
-                  style: GoogleFonts.notoSansKr(
-                    color: const Color(0xFF00F5D4),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      content: SingleChildScrollView(
+          ],
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              '교사용 앱의 최신 버전이 준비되었습니다.\n'
-              '수업과 업무에 방해되지 않도록 원하시는 시간에 편리하게 업데이트하실 수 있습니다.',
-              style: GoogleFonts.notoSansKr(
-                color: Colors.white70,
-                fontSize: 13,
-                height: 1.45,
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4565).withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                color: Color(0xFFEF4565),
+                size: 46,
               ),
             ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white12),
+            const SizedBox(height: 18),
+            Text(
+              '[업데이트 필수]',
+              style: GoogleFonts.notoSansKr(
+                color: const Color(0xFFEF4565),
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '이 버전은 안전하지 않습니다.\n새 버전의 msi 를 다운받아주시기 바랍니다.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.notoSansKr(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _installerLaunched
-                            ? '🚀 설치 관리자 실행됨'
-                            : _isDone
-                                ? '✅ 준비 완료'
-                                : _isDownloading
-                                    ? '다운로드 진행 중'
-                                    : '대기 중',
-                        style: GoogleFonts.notoSansKr(
-                          color: (_installerLaunched || _isDone)
-                              ? const Color(0xFF00F5D4)
-                              : Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (_isDownloading && totalMb != null)
-                        Text(
-                          '$percent% ($downloadedMb MB / $totalMb MB)',
-                          style: GoogleFonts.notoSansKr(
-                            color: const Color(0xFF00F5D4),
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        )
-                      else if (_isDownloading)
-                        Text(
-                          '$downloadedMb MB 수신 중...',
-                          style: GoogleFonts.notoSansKr(
-                            color: const Color(0xFF00F5D4),
-                            fontSize: 12,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  LinearProgressIndicator(
-                    value: _totalBytes > 0 ? _progress : null,
-                    minHeight: 8,
-                    borderRadius: BorderRadius.circular(4),
-                    backgroundColor: Colors.white12,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Color(0xFF00F5D4),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+                  const Icon(Icons.timer_outlined, color: Colors.orangeAccent, size: 20),
+                  const SizedBox(width: 8),
                   Text(
-                    _statusText,
+                    '$_secondsLeft초 뒤 앱이 종료 및 삭제됩니다.',
                     style: GoogleFonts.notoSansKr(
-                      color: (_installerLaunched || _isDone)
-                          ? const Color(0xFF00F5D4)
-                          : Colors.white60,
-                      fontSize: 12,
-                      height: 1.4,
+                      color: Colors.orangeAccent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],
               ),
             ),
-            if (_errorMessage != null) ...[
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.redAccent.withValues(alpha: 0.4)),
-                ),
-                child: Text(
-                  _errorMessage!,
-                  style: GoogleFonts.notoSansKr(
-                    color: const Color(0xFFFF8A80),
-                    fontSize: 12,
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00F5D4),
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      launchUrl(Uri.parse(UpdateService.downloadPage), mode: LaunchMode.externalApplication);
+                    },
+                    icon: const Icon(Icons.open_in_browser_rounded, color: Colors.black),
+                    label: Text(
+                      '다운로드 사이트 이동',
+                      style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900, fontSize: 14),
+                    ),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white10,
+                    foregroundColor: Colors.white70,
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () async {
+                    await UpdateService.uninstallApp(context);
+                    exit(0);
+                  },
+                  child: const Text('지금 삭제'),
+                ),
+              ],
+            ),
           ],
         ),
       ),
-      actions: [
-        if (_installerLaunched) ...[
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF00F5D4),
-              foregroundColor: Colors.black,
+    );
+  }
+}
+
+/// 일반적인 업데이트 알람 대화상자 (사용자가 직접 수동 다운로드 사이트로 이동)
+class _TeacherOptionalUpdateDialog extends StatelessWidget {
+  final UpdateInfo info;
+  const _TeacherOptionalUpdateDialog({required this.info});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        width: 480,
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: const Color(0xFF16161A),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.3), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF00F5D4).withOpacity(0.12),
+              blurRadius: 36,
             ),
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.check_rounded, size: 18),
-            label: const Text('확인 (교사용 앱 계속 사용)'),
-          ),
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white70,
-              side: const BorderSide(color: Colors.white24),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00F5D4).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.system_update_rounded, color: Color(0xFF00F5D4), size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '새 버전 출시 알림',
+                        style: GoogleFonts.notoSansKr(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        '현재 버전: v${info.currentVersion} ➔ 최신 버전: v${info.latestVersion}',
+                        style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            onPressed: () => exit(0),
-            child: const Text('앱 종료'),
-          ),
-        ] else if (_isDone) ...[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              '나중에 설치',
-              style: GoogleFonts.notoSansKr(
-                color: Colors.white54,
-                fontSize: 13,
-              ),
+            const SizedBox(height: 18),
+            Text(
+              '더 안정적인 교과서 동기화와 원격 제어 기능을 위해 최신 버전 설치를 권장합니다.\n버튼을 누르면 공식 다운로드 센터로 연결됩니다.',
+              style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13, height: 1.5),
             ),
-          ),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF00F5D4),
-              foregroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('나중에', style: TextStyle(color: Colors.white54)),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00F5D4),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    launchUrl(Uri.parse(UpdateService.downloadPage), mode: LaunchMode.externalApplication);
+                  },
+                  icon: const Icon(Icons.download_rounded, color: Colors.black, size: 18),
+                  label: Text('다운로드 사이트 이동', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold)),
+                ),
+              ],
             ),
-            onPressed: _executeInstall,
-            icon: const Icon(Icons.install_desktop_rounded, size: 18),
-            label: Text(
-              widget.info.isWindows ? '설치 프로그램(MSI) 실행' : '설치 실행',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ] else if (_errorMessage != null) ...[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              '닫기',
-              style: GoogleFonts.notoSansKr(
-                color: Colors.white54,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-              await launchUrl(
-                Uri.parse(UpdateService.downloadPage),
-                mode: LaunchMode.externalApplication,
-              );
-            },
-            child: Text(
-              '웹에서 수동 다운로드',
-              style: GoogleFonts.notoSansKr(
-                color: const Color(0xFF00F5D4),
-                fontSize: 12,
-              ),
-            ),
-          ),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF00F5D4),
-              foregroundColor: Colors.black,
-            ),
-            onPressed: _startDownloadAndInstall,
-            icon: const Icon(Icons.refresh_rounded, size: 16),
-            label: const Text('다시 시도'),
-          ),
-        ] else ...[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              '닫기 (백그라운드 유지)',
-              style: GoogleFonts.notoSansKr(
-                color: Colors.white54,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ],
-      ],
+          ],
+        ),
+      ),
     );
   }
 }

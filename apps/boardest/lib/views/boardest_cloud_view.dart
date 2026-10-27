@@ -6,8 +6,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../config/app_config.dart';
 import '../services/bst_cloud_service.dart';
 import '../services/passkey_service.dart';
+import '../services/storage_service.dart';
 import 'boardest_pen_view.dart';
 import 'pdf_board_view.dart';
 import 'tbp/tbp_viewer_route.dart';
@@ -104,9 +106,32 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
     }
 
     try {
+      final isCloudMode = AppConfig.isCloudMode;
+      String schoolName = 'Boardest Class Cloud (BCLD)';
+      String roomName = '교실 전자칠판';
+      String? schoolId;
+
+      if (!isCloudMode) {
+        try {
+          final settings = await StorageService().getSettings();
+          if (settings.selectedSchool != null && settings.selectedSchool!.name.isNotEmpty) {
+            schoolName = settings.selectedSchool!.name;
+          }
+          if (settings.classNickname.isNotEmpty) {
+            roomName = settings.classNickname;
+          } else if (settings.selectedGrade > 0 && settings.selectedClass > 0) {
+            roomName = '${settings.selectedGrade}학년 ${settings.selectedClass}반';
+          }
+          if (settings.schoolId.trim().isNotEmpty) {
+            schoolId = settings.schoolId.trim().toLowerCase();
+          }
+        } catch (_) {}
+      }
+
       final res = await PasskeyService.instance.createChallengeSession(
-        schoolName: 'Boardest Class Cloud (BCLD)',
-        roomName: '교실 전자칠판',
+        schoolName: schoolName,
+        roomName: roomName,
+        schoolId: schoolId,
       );
 
       if (!mounted) return;
@@ -117,7 +142,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
       });
 
       _approvalSubscription = PasskeyService.instance
-          .listenForApproval(res.sessionId)
+          .listenForApproval(res.sessionId, expectedSchoolId: schoolId)
           .listen((event) async {
         if (!mounted) return;
         if (event.approved && event.accessToken != null) {
@@ -210,17 +235,6 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
       }
 
       if (mounted) {
-        if (BstCloudService.instance.hasAuthError || BstCloudService.instance.activeToken == null) {
-          BstCloudService.instance.disconnect();
-          setState(() {
-            _isConnected = false;
-            _teacherName = null;
-            _isLoadingFiles = false;
-          });
-          _startQrSession();
-          return;
-        }
-
         setState(() {
           _allFiles = fileMap.values.toList();
           _applyFilter();
@@ -228,14 +242,17 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
         });
       }
     } catch (e) {
+      debugPrint('[BoardestCloudView] _loadFiles error: $e');
       if (mounted) {
-        BstCloudService.instance.disconnect();
         setState(() {
-          _isConnected = false;
-          _teacherName = null;
           _isLoadingFiles = false;
         });
-        _startQrSession();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ 파일 목록을 불러오는 중 오류가 발생했습니다: $e'),
+            backgroundColor: Colors.orangeAccent,
+          ),
+        );
       }
     }
   }
@@ -360,7 +377,35 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
     if (lower.endsWith('.tbp') ||
         lower.endsWith('.htmlp') ||
         lower.endsWith('.bsttbp') ||
+        lower.endsWith('.tbp.bst') ||
         file.mimeType == 'application/x-bst-tbp-folder') {
+      if (kIsWeb) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF141721),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: const [
+                Icon(Icons.block_rounded, color: Colors.orangeAccent),
+                SizedBox(width: 8),
+                Text('TBP 웹 실행 제한', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: const Text(
+              'TBP 전자교과서는 보안 및 고성능 판서·엔진 구동을 위해 Windows/Android 앱에서만 지원됩니다.\n웹 브라우저에서는 이용하실 수 없습니다.',
+              style: TextStyle(color: Colors.white70, height: 1.5),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('확인', style: TextStyle(color: Color(0xFF00F5D4))),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
       final isHtmlp = lower.endsWith('.htmlp');
       Navigator.push(
         context,

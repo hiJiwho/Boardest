@@ -1665,11 +1665,40 @@ class _TeacherViewState extends State<TeacherView> {
       return;
     }
 
-    // 3. 교과서 (.tbp, .bsttbp, 또는 Drive/Web TBP 폴더): Boardest TBP 뷰어로 열기
+    // 3. 교과서 (.tbp, .bsttbp, .tbp.bst, 또는 Drive/Web TBP 폴더): Boardest TBP 뷰어로 열기
     if (lower.endsWith('.tbp') ||
         lower.endsWith('.bsttbp') ||
+        lower.endsWith('.tbp.bst') ||
+        lower.endsWith('.tbp.save') ||
         path.startsWith('drive://tbp/') ||
         path.startsWith('web://tbp/')) {
+      if (kIsWeb) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF141721),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: const [
+                Icon(Icons.block_rounded, color: Colors.orangeAccent),
+                SizedBox(width: 8),
+                Text('TBP 웹 실행 제한', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: const Text(
+              'TBP 전자교과서는 보안 및 고성능 판서·엔진 구동을 위해 Windows/Android 앱에서만 지원됩니다.\n웹 브라우저에서는 이용하실 수 없습니다.',
+              style: TextStyle(color: Colors.white70, height: 1.5),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('확인', style: TextStyle(color: Color(0xFF00F5D4))),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => TbpViewerRoute(
@@ -2200,13 +2229,13 @@ class _TeacherViewState extends State<TeacherView> {
               mainAxisSpacing: 16,
               childAspectRatio: 1.8,
               children: [
-                // 1. TBP 교안 생성기
+                // 1. TBP & HTML Present 통합 교안 생성기
                 _buildCreateActionCard(
                   icon: Icons.auto_stories_rounded,
                   iconColor: const Color(0xFF00F5D4),
-                  title: 'TBP 인터랙티브 교안 생성',
-                  desc: '문제, 활동지, 타이머가 결합된 전자칠판 전용 수업 패키지를 만듭니다.',
-                  buttonLabel: 'TBP 만들기',
+                  title: 'TBP & HTML Present 통합 교안 생성',
+                  desc: 'Canva, 슬라이드, 웹 링크 교안과 인터랙티브 핫스팟이 결합된 전자칠판 전용 수업 패키지를 만듭니다.',
+                  buttonLabel: '교안 생성기 열기',
                   onTap: () async {
                     final createdPath = await showDialog<String>(
                       context: context,
@@ -2218,14 +2247,23 @@ class _TeacherViewState extends State<TeacherView> {
                     }
                   },
                 ),
-                // 2. HTML Present 생성
+                // 2. 기존 교안 패키지 복원 & 열기
                 _buildCreateActionCard(
                   icon: Icons.slideshow_rounded,
                   iconColor: const Color(0xFF7F5AF0),
-                  title: 'HTML Present (.HTMLP) 등록 & 열기',
-                  desc: 'Canva, 구글 슬라이드, 미리캔버스 등 웹 발표 자료를 자동 임베딩하여 판서합니다.',
-                  buttonLabel: 'HTML Present 열기',
-                  onTap: _openCanvaWithUrlPrompt,
+                  title: '기존 교안 파일(.TBP, .HTMLP) 복원 & 열기',
+                  desc: '저장해 둔 .tbp, .htmlp, .save 패키지를 불러와 클라우드에 등록하고 수업을 시작합니다.',
+                  buttonLabel: '교안 패키지 열기',
+                  onTap: () async {
+                    final createdPath = await showDialog<String>(
+                      context: context,
+                      builder: (ctx) => TbpCreatorDialog(scaleFactor: scale),
+                    );
+                    if (createdPath != null && createdPath.isNotEmpty && mounted) {
+                      unawaited(_refreshDriveFiles());
+                      _openFile(createdPath);
+                    }
+                  },
                 ),
                 // 3. 파일 클라우드 업로드
                 _buildCreateActionCard(
@@ -5742,12 +5780,12 @@ class _TeacherViewState extends State<TeacherView> {
       {'name': 'BST Cloud 자료', 'icon': Icons.cloud_rounded, 'color': const Color(0xFF2EC4B6), 'action': () { Navigator.of(context).pop(); _openBstCloud(); }},
       {'name': '인증 관리 (OTP)', 'icon': Icons.security_rounded, 'color': const Color(0xFF00F5D4), 'action': () { Navigator.of(context).pop(); _openAuthManagement(); }},
       {'name': '문서 판서', 'icon': Icons.picture_as_pdf_rounded, 'color': const Color(0xFFEF4565), 'action': () { Navigator.of(context).pop(); _openPdfBoard(); }},
-      {'name': 'HTML Present (.HTMLP)', 'icon': Icons.slideshow_rounded, 'color': const Color(0xFF00F5D4), 'action': () { Navigator.of(context).pop(); _openCanvaBoard(); }},
+      {'name': 'TBP / HTML Present', 'icon': Icons.auto_stories_rounded, 'color': const Color(0xFF00F5D4), 'action': () { Navigator.of(context).pop(); _openBoardBookEditor(); }},
       {'name': '급식 지도 & 문자', 'icon': Icons.restaurant_menu_rounded, 'color': const Color(0xFF2EC4B6), 'action': () { Navigator.of(context).pop(); Navigator.of(context).push(MaterialPageRoute(builder: (_) => MealView(scaleFactor: s))); }},
       {'name': '학급 쪽지', 'icon': Icons.mail_rounded, 'color': const Color(0xFFFF8906), 'action': () { Navigator.of(context).pop(); Navigator.of(context).push(MaterialPageRoute(builder: (_) => MessageView(scaleFactor: s))); }},
       {'name': '학사 일정', 'icon': Icons.calendar_month_rounded, 'color': const Color(0xFF00F5D4), 'action': () { Navigator.of(context).pop(); showDialog(context: context, builder: (_) => SchoolCalendarDialog(scaleFactor: s, apiScheduleEvents: const [])); }},
       {'name': '웹 브라우저', 'icon': Icons.language_rounded, 'color': const Color(0xFF3B82F6), 'action': () { Navigator.of(context).pop(); launchUrl(Uri.parse('https://www.google.com')); }},
-      {'name': 'TBP 교과서 (.TBP)', 'icon': Icons.menu_book_rounded, 'color': const Color(0xFF7F5AF0), 'action': () { Navigator.of(context).pop(); _openBoardBookEditor(); }},
+      {'name': '웹 발표 (Canva 등)', 'icon': Icons.slideshow_rounded, 'color': const Color(0xFF7F5AF0), 'action': () { Navigator.of(context).pop(); _openCanvaBoard(); }},
       {'name': 'GitHub 계정/릴리즈 설정', 'icon': Icons.account_circle_rounded, 'color': const Color(0xFF00F5D4), 'action': () { Navigator.of(context).pop(); _showGithubAuthDialog(); }},
       {'name': '시스템 업데이트 확인', 'icon': Icons.system_update_rounded, 'color': const Color(0xFF2EC4B6), 'action': () { Navigator.of(context).pop(); _checkForAppUpdates(silent: false); }},
       {'name': '판서 저장 보기', 'icon': Icons.border_color_rounded, 'color': const Color(0xFF00F5D4), 'action': () { Navigator.of(context).pop(); Navigator.of(context).push(MaterialPageRoute(builder: (_) => SavedInkView(scaleFactor: s))); }},
@@ -9260,13 +9298,14 @@ class _AuthManagementDialogState extends State<_AuthManagementDialog> {
                       );
                       bool ok = false;
                       try {
+                        await cloud.ensureValidAccessToken();
                         final token = cloud.accessToken ?? cloud.refreshToken ?? '';
                         if (token.isNotEmpty) {
                           ok = await PasskeyService.instance.approveBoardSession(
                             sessionId: docId,
                             accessToken: token,
                             refreshToken: cloud.refreshToken,
-                            teacherName: (cloud.userName != null && cloud.userName!.isNotEmpty) ? cloud.userName! : '김보데',
+                            teacherName: (cloud.userName != null && cloud.userName!.isNotEmpty) ? cloud.userName! : '선생님',
                             email: cloud.userEmail ?? '',
                             schoolId: _settings.schoolId,
                             schoolName: _settings.selectedSchool?.name,

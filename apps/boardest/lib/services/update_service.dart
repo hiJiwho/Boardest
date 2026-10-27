@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show rootBundle, MethodChannel;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
@@ -10,6 +10,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_io/io.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'system_app_scanner.dart';
 
 enum UpdateState {
   idle,
@@ -18,14 +20,18 @@ enum UpdateState {
   installing,
 }
 
-/// 백그라운드 무인 자동 업데이트 서비스 (Windows AppX & Android APK)
-/// 1. 앱 시작 시 승인 팝업 없이 백그라운드에서 즉시 최신 패키지 다운로드 시작
-/// 2. 상단에 [업데이트 다운로드 중 (XX%)] 슬림 프로그레스 바 표시
-/// 3. 다운로드 완료 후 수업시간이면 보류, 쉬는시간에 급식 대신 [업데이트 필요함!!] 카드 노출
-/// 4. 안드로이드는 수동 설치 안내 후 패키지 인스톨러 열기, 윈도우는 Add-AppxPackage 실행 후 재실행
+/// 백그라운드 무인 자동 업데이트 및 버전 보안 잠금(Lockout) 서비스
+/// 1. 최신 버전 확인 및 4번째 자리 무시(5.2.1.1과 5.2.1.2는 1개 업데이트로 간주)
+/// 2. 맨 앞자리(Major) 변경 시 즉시 앱 잠금 (실행 차단)
+/// 3. 6차례 업데이트 지연 시 앱 잠금 (실행 차단)
+/// 4. 3차례 업데이트 지연 시 Cloud 기능 사용 제한
+/// 5. 잠금 화면 필수 4대 버튼: [업데이트 다운 / 수동 설치 / 앱 런처 / 앱 삭제]
+/// 6. 윈도우: AppData에 다운로드 후 종료하지 않고 윈도우 패키지 설치 관리자(AppX) 구동 -> 새 앱 실행 시 이전 AppX 자동 삭제
 class UpdateService {
-  static const String defaultVersion = '5.1.2.1';
-  static const String _releaseApi =
+  static const String defaultVersion = '5.3.0';
+  static const String _releasesApi =
+      'https://api.github.com/repos/hiJiwho/Boardest/releases?per_page=30';
+  static const String _latestApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String downloadPage = 'https://boardest-downloads.web.app';
 
@@ -35,6 +41,10 @@ class UpdateService {
       ValueNotifier(0.0);
   static final ValueNotifier<double> installProgressNotifier =
       ValueNotifier(0.0);
+
+  static final ValueNotifier<bool> isBlockedNotifier = ValueNotifier(false);
+  static final ValueNotifier<bool> isCloudBlockedNotifier = ValueNotifier(false);
+  static String? blockReason;
 
   static String? latestVersion;
   static String? downloadedPackagePath;
@@ -78,18 +88,48 @@ class UpdateService {
     } catch (_) {}
   }
 
-  /// 백그라운드 업데이트 확인 및 다운로드 시작
+  /// 4번째 자리를 제거하고 앞 3자리(Major.Minor.Patch)만 반환
+  static String normalizeVersion(String v) {
+    final clean = v.replaceFirst(RegExp(r'^v'), '').trim();
+    final parts = clean.split('.');
+    if (parts.length >= 3) {
+      return '${parts[0]}.${parts[1]}.${parts[2]}';
+    }
+    return clean;
+  }
+
+  /// 이전 다운로드된 임시 AppX / APK 설치 파일 자동 삭제 (새 앱 실행 시 자동 정리)
+  static Future<void> cleanupOldUpdates() async {
+    if (kIsWeb) return;
+    try {
+      final appSupport = await getApplicationSupportDirectory();
+      final updatesDir = Directory(p.join(appSupport.path, 'Updates'));
+      if (updatesDir.existsSync()) {
+        for (final entity in updatesDir.listSync()) {
+          if (entity is File) {
+            final ext = p.extension(entity.path).toLowerCase();
+            if (ext == '.appx' || ext == '.msix' || ext == '.apk') {
+              try {
+                entity.deleteSync();
+                debugPrint('[UpdateService] 🧹 Old installer package removed: ${entity.path}');
+              } catch (_) {}
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[UpdateService] cleanupOldUpdates error: $e');
+    }
+  }
+
+  /// 백그라운드 업데이트 확인, 버전 차이 계산 및 잠금 여부 판별
   static Future<void> checkAndUpdate(
     BuildContext context, {
     bool silent = true,
     bool force = false,
     String? channel,
   }) async {
-    // 웹, 디버그, 교사용 앱, 지원하지 않는 OS는 건너뜀
     if (kIsWeb || (!Platform.isWindows && !Platform.isAndroid) || _isChecking) {
-      return;
-    }
-    if (stateNotifier.value != UpdateState.idle) {
       return;
     }
     if (silent &&
@@ -101,12 +141,13 @@ class UpdateService {
     }
 
     await initVersion();
+    await cleanupOldUpdates();
 
     _isChecking = true;
     _lastSilentCheckTime = DateTime.now();
 
     try {
-      final response = await http.get(Uri.parse(_releaseApi), headers: {
+      final response = await http.get(Uri.parse(_releasesApi), headers: {
         'User-Agent': 'Boardest-Client/$currentVersion',
         'Accept': 'application/vnd.github+json',
       }).timeout(const Duration(seconds: 8));
@@ -115,13 +156,67 @@ class UpdateService {
         throw Exception('Release server returned ${response.statusCode}');
       }
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final latest = (data['tag_name'] as String? ?? '')
-          .replaceFirst(RegExp(r'^v'), '')
-          .trim();
-      if (latest.isEmpty) throw Exception('Release version tag is missing');
+      final releases = jsonDecode(response.body) as List<dynamic>;
+      if (releases.isEmpty) return;
 
-      final assets = (data['assets'] as List<dynamic>? ?? []);
+      // 1. 4번째 자리를 무시한 유니크 릴리즈 목록 추출
+      final List<String> distinctNormalizedReleases = [];
+      String? latestFullTag;
+      Map<String, dynamic>? latestReleaseData;
+
+      for (final r in releases) {
+        final tag = (r['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^v'), '').trim();
+        if (tag.isEmpty) continue;
+        latestFullTag ??= tag;
+        latestReleaseData ??= r as Map<String, dynamic>;
+
+        final normalized = normalizeVersion(tag);
+        if (!distinctNormalizedReleases.contains(normalized)) {
+          distinctNormalizedReleases.add(normalized);
+        }
+      }
+
+      if (latestFullTag == null || latestReleaseData == null) return;
+      latestVersion = latestFullTag;
+
+      final currentNorm = normalizeVersion(currentVersion);
+
+      // 2. 맨 앞자리(Major) 버전 변경 확인
+      final currentMajor = int.tryParse(currentNorm.split('.').first) ?? 5;
+      final latestMajor = int.tryParse(distinctNormalizedReleases.first.split('.').first) ?? 5;
+      final bool isMajorBehind = latestMajor > currentMajor;
+
+      // 3. 지연 횟수(Lag) 계산 (현재 버전보다 높은 릴리즈 개수 카운트)
+      int lagCount = 0;
+      for (final rel in distinctNormalizedReleases) {
+        if (_isNewerVersion(rel, currentNorm)) {
+          lagCount++;
+        }
+      }
+
+      debugPrint('[UpdateService] Current: $currentVersion ($currentNorm), Latest: $latestFullTag, Distinct Releases: $distinctNormalizedReleases, Lag: $lagCount, MajorBehind: $isMajorBehind');
+
+      // 4. Cloud 차단 (3회 지연 시)
+      if (lagCount >= 3 || isMajorBehind) {
+        isCloudBlockedNotifier.value = true;
+      } else {
+        isCloudBlockedNotifier.value = false;
+      }
+
+      // 5. 앱 실행 차단 (Major 변경 또는 6회 지연 시)
+      if (isMajorBehind || lagCount >= 6) {
+        isBlockedNotifier.value = true;
+        blockReason = isMajorBehind
+            ? '주요 대규모 메이저 업데이트($latestMajor.x.x)가 배포되었습니다.'
+            : '보안 기준(6차례 업데이트 지연)을 초과하여 현재 버전을 사용할 수 없습니다.';
+        if (context.mounted) {
+          showLockoutDialog(context);
+        }
+        return;
+      }
+
+      // 6. 정상 업데이트 다운로드 처리
+      final assets = (latestReleaseData['assets'] as List<dynamic>? ?? []);
       String? apkDownloadUrl;
       String? appxDownloadUrl;
 
@@ -130,29 +225,20 @@ class UpdateService {
         final url = a['browser_download_url'] as String?;
         if (url == null || url.isEmpty) continue;
 
-        if (name.endsWith('.apk') &&
-            !name.contains('teacher') &&
-            !name.contains('lite')) {
+        if (name.endsWith('.apk') && !name.contains('teacher') && !name.contains('lite')) {
           apkDownloadUrl ??= url;
-        } else if ((name.endsWith('.appx') || name.endsWith('.msix')) &&
-            !name.contains('teacher') &&
-            !name.contains('lite')) {
+        } else if ((name.endsWith('.appx') || name.endsWith('.msix')) && !name.contains('teacher') && !name.contains('lite')) {
           appxDownloadUrl ??= url;
         }
       }
 
-      apkDownloadUrl ??=
-          'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk';
-      appxDownloadUrl ??=
-          'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx';
+      apkDownloadUrl ??= 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk';
+      appxDownloadUrl ??= 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx';
 
-      if (_isNewerVersion(currentVersion, latest)) {
-        latestVersion = latest;
+      if (_isNewerVersion(distinctNormalizedReleases.first, currentNorm)) {
         final isWindows = !kIsWeb && Platform.isWindows;
         final targetUrl = isWindows ? appxDownloadUrl : apkDownloadUrl;
-
-        // 승인 없이 바로 백그라운드 다운로드 개시!
-        unawaited(_startSilentDownload(targetUrl, latest, isWindows));
+        unawaited(_startSilentDownload(targetUrl, latestFullTag, isWindows));
       }
     } catch (e) {
       debugPrint('[UpdateService] Update check failed: $e');
@@ -161,18 +247,18 @@ class UpdateService {
     }
   }
 
-  static bool _isNewerVersion(String current, String latest) {
+  static bool _isNewerVersion(String target, String current) {
+    final t = target.split('.').map((v) => int.tryParse(v) ?? 0).toList();
     final c = current.split('.').map((v) => int.tryParse(v) ?? 0).toList();
-    final l = latest.split('.').map((v) => int.tryParse(v) ?? 0).toList();
-    for (var i = 0; i < (c.length > l.length ? c.length : l.length); i++) {
+    for (var i = 0; i < (t.length > c.length ? t.length : c.length); i++) {
+      final tv = i < t.length ? t[i] : 0;
       final cv = i < c.length ? c[i] : 0;
-      final lv = i < l.length ? l[i] : 0;
-      if (lv != cv) return lv > cv;
+      if (tv != cv) return tv > cv;
     }
     return false;
   }
 
-  /// 백그라운드 자동 다운로드 실행
+  /// AppData/Updates 폴더에 백그라운드 다운로드
   static Future<void> _startSilentDownload(
     String downloadUrl,
     String version,
@@ -182,12 +268,16 @@ class UpdateService {
       stateNotifier.value = UpdateState.downloading;
       downloadProgressNotifier.value = 0.0;
 
-      final tempDir = await getTemporaryDirectory();
+      final appSupport = await getApplicationSupportDirectory();
+      final updatesDir = Directory(p.join(appSupport.path, 'Updates'));
+      if (!updatesDir.existsSync()) {
+        updatesDir.createSync(recursive: true);
+      }
+
       final ext = isWindows ? 'appx' : 'apk';
       final fileName = 'boardest_update_$version.$ext';
-      final savePath = p.join(tempDir.path, fileName);
+      final savePath = p.join(updatesDir.path, fileName);
 
-      // 이미 완전한 파일이 존재하는 경우
       final existingFile = File(savePath);
       if (existingFile.existsSync() && existingFile.lengthSync() > 10 * 1024 * 1024) {
         downloadedPackagePath = savePath;
@@ -225,30 +315,23 @@ class UpdateService {
       downloadedPackagePath = savePath;
       downloadProgressNotifier.value = 1.0;
       stateNotifier.value = UpdateState.downloaded;
-      debugPrint('[UpdateService] Download complete: $savePath');
+      debugPrint('[UpdateService] Update package downloaded: $savePath');
     } catch (e) {
       debugPrint('[UpdateService] Silent download failed: $e');
       stateNotifier.value = UpdateState.idle;
     }
   }
 
-  /// 다운로드된 패키지 설치 실행
+  /// 다운로드된 패키지 설치 실행 (윈도우: 윈도우 패키지 설치 관리자 호출, 앱 종료 안 함)
   static Future<void> executeInstall(BuildContext context) async {
     final savePath = downloadedPackagePath;
     if (savePath == null || !File(savePath).existsSync()) {
+      // 다운로드된 파일이 없으면 바로 다운로드 사이트 열기
+      await launchUrl(Uri.parse(downloadPage), mode: LaunchMode.externalApplication);
       return;
     }
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (latestVersion != null && latestVersion!.isNotEmpty) {
-        await prefs.setString('bst_installed_version', latestVersion!);
-        _resolvedVersion = latestVersion;
-      }
-    } catch (_) {}
-
     if (!kIsWeb && Platform.isAndroid) {
-      // 안드로이드: 수동 설치 안내 다이얼로그 표시
       await showDialog(
         context: context,
         barrierDismissible: true,
@@ -263,7 +346,7 @@ class UpdateService {
             ],
           ),
           content: const Text(
-            '잠시 후 시스템 패키지 설치 프로그램이 실행됩니다.\n화면에 나타나는 [설치] 또는 [업데이트] 버튼을 눌러 수동 설치를 완료해 주세요.',
+            '시스템 패키지 설치 프로그램이 실행됩니다.\n화면에 나타나는 [설치] 또는 [업데이트] 버튼을 눌러 설치를 완료해 주세요.',
             style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
           ),
           actions: [
@@ -272,7 +355,6 @@ class UpdateService {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00F5D4),
                 foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               child: const Text('설치 화면 열기', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
@@ -288,110 +370,314 @@ class UpdateService {
     }
 
     if (!kIsWeb && Platform.isWindows) {
-      // 윈도우: Add-AppxPackage 실행 및 퍼센트 게이지 표시 후 재실행
-      stateNotifier.value = UpdateState.installing;
-      installProgressNotifier.value = 0.05;
+      // 윈도우: 앱을 종료하지 않고 공식 Windows 패키지 설치 관리자(App Installer) GUI 실행
+      try {
+        await Process.start('explorer.exe', [savePath]);
+      } catch (_) {
+        await OpenFilex.open(savePath);
+      }
 
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => PopScope(
-          canPop: false,
-          child: ValueListenableBuilder<double>(
-            valueListenable: installProgressNotifier,
-            builder: (c, progress, _) {
-              final pct = (progress * 100).toInt();
-              return AlertDialog(
-                backgroundColor: const Color(0xFF0D111A),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: const BorderSide(color: Color(0xFF00F5D4), width: 1.5),
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('📦 Windows 패키지 설치 관리자가 실행되었습니다. 나타난 창에서 [업데이트]를 눌러주세요.'),
+            backgroundColor: Color(0xFF00F5D4),
+            duration: Duration(seconds: 8),
+          ),
+        );
+      }
+    }
+  }
+
+  /// 앱 삭제 (안드로이드 OS 패키지 제거 인텐트 / 윈도우 앱 및 기능 설정창)
+  static Future<void> uninstallApp([BuildContext? context]) async {
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        const channel = MethodChannel('com.boardest/launch_args');
+        await channel.invokeMethod('uninstallApp');
+      } catch (_) {
+        final uri = Uri.parse('package:jiwho.boardest.board');
+        await launchUrl(uri);
+      }
+    } else if (!kIsWeb && Platform.isWindows) {
+      try {
+        await Process.start('explorer.exe', ['ms-settings:appsfeatures']);
+      } catch (_) {
+        await Process.start('control.exe', ['appwiz.cpl']);
+      }
+    }
+  }
+
+  /// 보안 잠금 화면 (업데이트 다운 / 수동 설치 / 앱 런처 / 앱 삭제)
+  static void showLockoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            width: 580,
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141721),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFFEF4565), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFEF4565).withOpacity(0.25),
+                  blurRadius: 40,
+                  spreadRadius: 6,
                 ),
-                contentPadding: const EdgeInsets.all(28),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4565).withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.security_update_warning_rounded,
+                    color: Color(0xFFEF4565),
+                    size: 48,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  '[업데이트 필수]',
+                  style: GoogleFonts.notoSansKr(
+                    color: const Color(0xFFEF4565),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '이 버전은 안전하지 않습니다.\n다운로드 버튼을 눌러 다운받고 새로운 버전을 다운받으세요.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.notoSansKr(
+                    color: Colors.white,
+                    fontSize: 15,
+                    height: 1.5,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (blockReason != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    blockReason!,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.notoSansKr(
+                      color: Colors.white54,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 26),
+
+                // 4대 필수 작업 버튼
+                Column(
                   children: [
-                    const Icon(Icons.autorenew_rounded, color: Color(0xFF00F5D4), size: 48),
-                    const SizedBox(height: 16),
-                    Text(
-                      '업데이트 설치 중...',
-                      style: GoogleFonts.notoSansKr(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
+                    // 1. 업데이트 다운
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00F5D4),
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () async {
+                          if (downloadedPackagePath != null && File(downloadedPackagePath!).existsSync()) {
+                            await executeInstall(context);
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('⚡ 최신 버전을 다운로드하는 중입니다. 잠시만 기다려주세요...')),
+                            );
+                            await checkAndUpdate(context, force: true);
+                            if (downloadedPackagePath != null) {
+                              await executeInstall(context);
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.download_rounded, color: Colors.black),
+                        label: Text(
+                          '1. 업데이트 다운 및 설치',
+                          style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900, fontSize: 15),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Text(
-                      '새 버전을 등록하고 앱을 자동으로 다시 시작합니다.\n잠시만 기다려주세요. ($pct%)',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.notoSansKr(
-                        color: Colors.white70,
-                        fontSize: 13,
-                        height: 1.4,
+
+                    // 2. 수동 설치
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF00BAF2)),
+                          foregroundColor: const Color(0xFF00BAF2),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          launchUrl(Uri.parse(downloadPage), mode: LaunchMode.externalApplication);
+                        },
+                        icon: const Icon(Icons.open_in_browser_rounded),
+                        label: Text('2. 수동 설치 (다운로드 사이트 열기)', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold)),
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: LinearProgressIndicator(
-                        value: progress > 0 ? progress : null,
-                        minHeight: 10,
-                        backgroundColor: Colors.white.withOpacity(0.1),
-                        valueColor: const AlwaysStoppedAnimation(Color(0xFF00F5D4)),
+                    const SizedBox(height: 10),
+
+                    // 3. 앱 런처 (시스템 앱 실행 허용)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF7F5AF0)),
+                          foregroundColor: const Color(0xFF7F5AF0),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () {
+                          _showSystemAppsLauncherModal(context);
+                        },
+                        icon: const Icon(Icons.apps_rounded),
+                        label: Text('3. 앱 런처 (기기 내 설치된 앱 실행)', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // 4. 앱 삭제
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.withOpacity(0.2),
+                          foregroundColor: const Color(0xFFEF4565),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(color: Color(0xFFEF4565)),
+                          ),
+                        ),
+                        onPressed: () => uninstallApp(context),
+                        icon: const Icon(Icons.delete_forever_rounded),
+                        label: Text('4. 앱 삭제 (기기에서 제거)', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold)),
                       ),
                     ),
                   ],
                 ),
-              );
-            },
+              ],
+            ),
           ),
         ),
-      );
+      ),
+    );
+  }
 
-      // 타이머로 퍼센트 점진적 증가
-      Timer? progressTimer;
-      progressTimer = Timer.periodic(const Duration(milliseconds: 150), (t) {
-        if (installProgressNotifier.value < 0.85) {
-          installProgressNotifier.value += 0.05;
-        }
-      });
-
-      try {
-        // 백그라운드 PowerShell Add-AppxPackage 실행
-        final proc = await Process.start('powershell.exe', [
-          '-NoProfile',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-Command',
-          'Add-AppxPackage -Path "$savePath" -ForceApplicationShutdown',
-        ]);
-
-        final exitCode = await proc.exitCode;
-        progressTimer.cancel();
-        installProgressNotifier.value = 1.0;
-
-        if (exitCode == 0) {
-          await Future.delayed(const Duration(milliseconds: 800));
-          exit(0);
-        } else {
-          // 실패 시 fallback: Start-Process 실행
-          await Process.start('powershell.exe', [
-            '-NoProfile',
-            '-Command',
-            'Start-Process',
-            '"$savePath"',
-          ]);
-          await Future.delayed(const Duration(milliseconds: 800));
-          exit(0);
-        }
-      } catch (e) {
-        progressTimer.cancel();
-        debugPrint('[UpdateService] AppX install error: $e');
-        // 수동 열기 시도
-        await OpenFilex.open(savePath);
-        exit(0);
-      }
-    }
+  /// 기기 내 설치된 시스템 앱 런처 다이얼로그 (앱 차단 상태에서도 외부 앱 실행 가능)
+  static void _showSystemAppsLauncherModal(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xFF161922),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          width: 540,
+          height: 520,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: const [
+                      Icon(Icons.apps_rounded, color: Color(0xFF00F5D4), size: 24),
+                      SizedBox(width: 8),
+                      Text('시스템 앱 런처', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white54),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '앱이 업데이트를 위해 잠긴 상태에서도 기기에 설치된 기본 앱들을 실행할 수 있습니다.',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: FutureBuilder<List<ScannedApp>>(
+                  future: SystemAppScanner.scanInstalledApps(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)));
+                    }
+                    final apps = snapshot.data ?? [];
+                    if (apps.isEmpty) {
+                      return const Center(
+                        child: Text('실행 가능한 시스템 앱이 없습니다.', style: TextStyle(color: Colors.white38)),
+                      );
+                    }
+                    return GridView.builder(
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: 1.1,
+                      ),
+                      itemCount: apps.length,
+                      itemBuilder: (context, index) {
+                        final app = apps[index];
+                        return InkWell(
+                          onTap: () {
+                            SystemAppScanner.launchApp(app.appId);
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white10),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.touch_app_rounded, color: Color(0xFF00F5D4), size: 28),
+                                const SizedBox(height: 8),
+                                Text(
+                                  app.name,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

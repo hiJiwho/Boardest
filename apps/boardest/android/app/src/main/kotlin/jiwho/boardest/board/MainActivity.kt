@@ -237,6 +237,27 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                 }
+                "uninstallApp" -> {
+                    try {
+                        val intent = Intent(Intent.ACTION_DELETE).apply {
+                            data = android.net.Uri.parse("package:$packageName")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        try {
+                            val intent = Intent(Intent.ACTION_UNINSTALL_PACKAGE).apply {
+                                data = android.net.Uri.parse("package:$packageName")
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e2: Exception) {
+                            result.error("ERR_UNINSTALL", e2.message, null)
+                        }
+                    }
+                }
                 else -> result.notImplemented()
             }
         }

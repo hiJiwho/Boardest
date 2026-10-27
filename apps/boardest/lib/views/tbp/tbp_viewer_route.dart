@@ -175,6 +175,15 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
   }
 
   Future<void> _loadPackageOrUrl() async {
+    if (kIsWeb) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'TBP 전자교과서는 보안 및 고성능 엔진 구동을 위해 Windows/Android 전용 앱에서만 지원됩니다.\n웹 브라우저에서는 지원되지 않습니다.';
+        });
+      }
+      return;
+    }
     try {
       final rawPath = (widget.tbpFilePath ?? widget.filePath ?? widget.initialUrl ?? widget.embedUrl ?? '').trim();
 

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../services/app_paths.dart';
 import '../services/system_app_scanner.dart';
+import '../config/app_config.dart';
 
 class NativeStartupHelper {
   static void writeCrashLog(String error, String stackTrace) {
@@ -34,6 +35,7 @@ $stackTrace
 
   static void runWindowsStartupTasks() {
     if (kDebugMode || kIsWeb || !Platform.isWindows) return;
+    if (AppConfig.isCloudMode || AppConfig.isToolsMode) return; // bcld: 부팅 시 자동 실행 안 함
     SystemAppScanner.createWindowsShortcuts();
     SystemAppScanner.ensureWindowsRunAtStartup();
   }

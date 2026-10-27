@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '5.1.2.1',
+  [string]$AppVersion = '5.3.0',
   [switch]$SkipApk,
   [switch]$SkipWindowsBuild
 )
@@ -57,9 +57,17 @@ function Build-Windows([string]$Directory) {
   try { & flutter build windows --release --no-tree-shake-icons --obfuscate --split-debug-info=build/debug-info; if ($LASTEXITCODE -ne 0) { throw "Windows build failed: $Directory" } }
   finally { Pop-Location }
 }
-function Build-Apk([string]$Directory, [string]$Name) {
+function Build-Apk([string]$Directory, [string]$Name, [string]$ExtraArgs = '') {
   Push-Location $Directory
-  try { & flutter build apk --release --no-tree-shake-icons --obfuscate --split-debug-info=build/debug-info; if ($LASTEXITCODE -ne 0) { throw "Android APK build failed: $Directory" } }
+  try {
+    if ($ExtraArgs) {
+      $argList = @('build', 'apk', '--release', '--no-tree-shake-icons') + ($ExtraArgs -split ' ')
+      & flutter @argList
+    } else {
+      & flutter build apk --release --no-tree-shake-icons
+    }
+    if ($LASTEXITCODE -ne 0) { throw "Android APK build failed: $Directory ($Name)" }
+  }
   finally { Pop-Location }
   Copy-Item (Join-Path $Directory 'build\app\outputs\flutter-apk\app-release.apk') (Join-Path $OutDir $Name) -Force
 }
@@ -156,6 +164,10 @@ $BoardestRelease = Join-Path $RootDir 'apps\boardest\build\windows\x64\runner\Re
 $TeacherRelease = Join-Path $RootDir 'apps\boardest_teacher\build\windows\x64\runner\Release'
 $ClassLiteRelease = Join-Path $RootDir 'apps\boardest_class_lite\build\windows\x64\runner\Release'
 Copy-Item "$BoardestRelease\*" (Join-Path $PackageDir 'boardest') -Recurse -Force
+Copy-Item "$BoardestRelease\*" (Join-Path $PackageDir 'boardest-class-cloud') -Recurse -Force
+if (Test-Path (Join-Path $PackageDir 'boardest-class-cloud\boardest.exe')) {
+  Copy-Item (Join-Path $PackageDir 'boardest-class-cloud\boardest.exe') (Join-Path $PackageDir 'boardest-class-cloud\Boardest-Class-Cloud.exe') -Force
+}
 Copy-Item "$TeacherRelease\*" (Join-Path $PackageDir 'bst-teacher') -Recurse -Force
 Copy-Item "$ClassLiteRelease\*" (Join-Path $PackageDir 'boardest-class-lite') -Recurse -Force
 if (Test-Path (Join-Path $PackageDir 'boardest-class-lite\boardest_class_lite.exe')) {
@@ -167,10 +179,11 @@ Copy-Item (Join-Path $RootDir 'infra\class_lite_web\index.html') (Join-Path $Pac
 
 if (-not $SkipApk) {
   Build-Apk (Join-Path $RootDir 'apps\boardest') 'boardest.apk'
+  Build-Apk (Join-Path $RootDir 'apps\boardest') 'bcld.apk' '--dart-define=BC_CLOUD_MODE=true -PisCloud=true'
+  Copy-Item (Join-Path $OutDir 'bcld.apk') (Join-Path $OutDir 'boardest-class-cloud.apk') -Force
+  Build-Apk (Join-Path $RootDir 'apps\boardest_teacher') 'bst-teacher.apk'
   Build-Apk (Join-Path $RootDir 'apps\boardest_class_lite') 'bst-class-lite.apk'
   Copy-Item (Join-Path $OutDir 'bst-class-lite.apk') (Join-Path $OutDir 'boardest-class-lite.apk') -Force
-  Build-Apk (Join-Path $RootDir 'apps\boardest_class_cloud') 'bcld.apk'
-  Copy-Item (Join-Path $OutDir 'bcld.apk') (Join-Path $OutDir 'boardest-class-cloud.apk') -Force
 } else {
   $boardestFreshApk = Join-Path $RootDir 'apps\boardest\build\app\outputs\flutter-apk\app-release.apk'
   if (Test-Path $boardestFreshApk) {
@@ -181,23 +194,12 @@ if (-not $SkipApk) {
     Copy-Item $classLiteFreshApk (Join-Path $OutDir 'bst-class-lite.apk') -Force
     Copy-Item $classLiteFreshApk (Join-Path $OutDir 'boardest-class-lite.apk') -Force
   }
-  $classCloudFreshApk = Join-Path $RootDir 'apps\boardest_class_cloud\build\app\outputs\flutter-apk\app-release.apk'
-  if (Test-Path $classCloudFreshApk) {
-    Copy-Item $classCloudFreshApk (Join-Path $OutDir 'bcld.apk') -Force
-    Copy-Item $classCloudFreshApk (Join-Path $OutDir 'boardest-class-cloud.apk') -Force
-  }
 }
 
 if (-not (Test-Path (Join-Path $PackageDir 'boardest-class-lite\Boardest-Class-Lite.exe'))) {
   $ClassLiteExe = Join-Path $PackageDir 'boardest-class-lite\Boardest-Class-Lite.exe'
   & $CSharpCompiler /nologo /target:winexe "/out:$ClassLiteExe" (Join-Path $RootDir 'infra\class_lite_win\Boardest-Class-Lite.cs')
   if ($LASTEXITCODE -ne 0) { throw 'Class Lite Windows launcher compilation failed.' }
-}
-
-if (-not (Test-Path (Join-Path $PackageDir 'boardest-class-cloud\Boardest-Class-Cloud.exe'))) {
-  $ClassCloudExe = Join-Path $PackageDir 'boardest-class-cloud\Boardest-Class-Cloud.exe'
-  & $CSharpCompiler /nologo /target:winexe "/out:$ClassCloudExe" (Join-Path $RootDir 'infra\class_cloud_win\Boardest-Class-Cloud.cs')
-  if ($LASTEXITCODE -ne 0) { throw 'Class Cloud Windows launcher compilation failed.' }
 }
 
 $OverlayPackage = Join-Path $PackageDir 'bst-overlay-panser'

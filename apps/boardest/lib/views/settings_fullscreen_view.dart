@@ -1027,6 +1027,18 @@ class _SettingsFullscreenViewState extends State<SettingsFullscreenView> {
                   child: const Text('초기화', style: TextStyle(color: Color(0xFFEF4565))),
                 ),
               ),
+              const Divider(color: Colors.white12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.delete_outline_rounded, color: Colors.orangeAccent),
+                title: Text('앱 삭제 (기기에서 제거)', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
+                subtitle: Text('기기에 설치된 Boardest 앱을 완전히 삭제(제거)합니다.', style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 12)),
+                trailing: OutlinedButton(
+                  onPressed: () => UpdateService.uninstallApp(context),
+                  style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.orangeAccent)),
+                  child: const Text('앱 삭제', style: TextStyle(color: Colors.orangeAccent)),
+                ),
+              ),
             ],
           ),
         ),

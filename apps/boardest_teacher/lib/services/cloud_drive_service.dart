@@ -1033,12 +1033,8 @@ class CloudDriveService with ChangeNotifier {
             return true;
           }
         } else {
-          debugPrint('[CloudDriveService] ⚠️ Google token refresh failed (${response.statusCode})');
-          if (response.statusCode == 400) {
-            // Invalid/revoked refresh_token: clear stale local refresh_token
-            _refreshToken = null;
-            await prefs.remove(_refreshTokenKey);
-          }
+          debugPrint('[CloudDriveService] ⚠️ Google token refresh failed (${response.statusCode}): ${response.body}');
+          // Do NOT delete _refreshToken on temporary 400 or network issues to avoid locking the teacher out!
         }
       }
 
@@ -1870,20 +1866,12 @@ class CloudDriveService with ChangeNotifier {
       String source = 'cloud';
 
       if (folderIdToQuery == null) {
-        if (category == 'Canva' || category == 'HTML Present') {
-          folderIdToQuery = await getOrCreateCanvaFolder();
-          sourceLabel = '🌐 HTML Present';
-          source = 'canva';
-        } else if (category == 'TBP') {
-          folderIdToQuery = await getOrCreateTextbookProFolder();
-          sourceLabel = '📐 TBP';
-          source = 'tbp';
-        } else if (category == '판서') {
+        if (category == '판서') {
           folderIdToQuery = await getOrCreatePenFolder();
           sourceLabel = '📝 판서';
           source = 'pen';
         } else {
-          // 수업자료 기본: bst-save
+          // 수업자료 기본: bst-save (모든 교안 포인터 및 수업자료 보관)
           folderIdToQuery = await getOrCreateConnectFolder();
           sourceLabel = '☁️ 수업자료';
           source = 'cloud';
@@ -1894,11 +1882,33 @@ class CloudDriveService with ChangeNotifier {
         final files = await fetchDriveFiles(folderId: folderIdToQuery, includeFolders: true);
         for (final f in files) {
           if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json') continue;
+          final lower = f.name.toLowerCase();
+
+          String itemSource = source;
+          String itemLabel = sourceLabel;
+          if (lower.endsWith('.tbp') || lower.endsWith('.tbp.bst') || lower.endsWith('.bsttbp')) {
+            itemSource = 'tbp';
+            itemLabel = '📐 TBP';
+          } else if (lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva')) {
+            itemSource = 'canva';
+            itemLabel = '🌐 HTML Present';
+          } else if (lower.endsWith('.pen')) {
+            itemSource = 'pen';
+            itemLabel = '📝 판서';
+          } else if (f.isFolder) {
+            itemSource = 'folder';
+            itemLabel = '📁 폴더';
+          }
+
+          if (category == 'TBP' && itemSource != 'tbp' && !f.isFolder) continue;
+          if ((category == 'Canva' || category == 'HTML Present') && itemSource != 'canva' && !f.isFolder) continue;
+          if (category == '판서' && itemSource != 'pen' && !f.isFolder) continue;
+
           if (seenIds.add(f.id)) {
             merged.add({
               'file': f,
-              'source': source,
-              'sourceLabel': sourceLabel,
+              'source': itemSource,
+              'sourceLabel': itemLabel,
               'folderId': folderIdToQuery,
             });
           }
@@ -1907,11 +1917,32 @@ class CloudDriveService with ChangeNotifier {
 
       // 로컬 업로드된 최신 파일도 실시간 병합
       for (final f in _localUploadedFiles) {
+        final lower = f.name.toLowerCase();
+        String itemSource = source;
+        String itemLabel = sourceLabel;
+        if (lower.endsWith('.tbp') || lower.endsWith('.tbp.bst') || lower.endsWith('.bsttbp')) {
+          itemSource = 'tbp';
+          itemLabel = '📐 TBP';
+        } else if (lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva')) {
+          itemSource = 'canva';
+          itemLabel = '🌐 HTML Present';
+        } else if (lower.endsWith('.pen')) {
+          itemSource = 'pen';
+          itemLabel = '📝 판서';
+        } else if (f.isFolder) {
+          itemSource = 'folder';
+          itemLabel = '📁 폴더';
+        }
+
+        if (category == 'TBP' && itemSource != 'tbp' && !f.isFolder) continue;
+        if ((category == 'Canva' || category == 'HTML Present') && itemSource != 'canva' && !f.isFolder) continue;
+        if (category == '판서' && itemSource != 'pen' && !f.isFolder) continue;
+
         if (seenIds.add(f.id)) {
           merged.add({
             'file': f,
-            'source': source,
-            'sourceLabel': sourceLabel,
+            'source': itemSource,
+            'sourceLabel': itemLabel,
             'folderId': folderIdToQuery ?? 'local_folder',
           });
         }
@@ -2929,10 +2960,26 @@ class CloudDriveService with ChangeNotifier {
         );
 
         if (response.statusCode == 200 || response.statusCode == 201) {
-          final localId = 'drive_${DateTime.now().millisecondsSinceEpoch}';
-          _localUploadedBytesCache[localId] = bytes;
+          String fileId = 'drive_${DateTime.now().millisecondsSinceEpoch}';
+          try {
+            final resData = jsonDecode(response.body);
+            if (resData is Map && resData['id'] != null) {
+              fileId = resData['id'].toString();
+            }
+          } catch (_) {}
+          _localUploadedBytesCache[fileId] = bytes;
           _localUploadedBytesCache[fileName] = bytes;
           webMemoryFiles[fileName] = bytes;
+
+          final fileItem = CloudDriveFile(
+            id: fileId,
+            name: fileName,
+            mimeType: _guessMimeType(fileName),
+            size: bytes.length,
+            modifiedTime: DateTime.now(),
+          );
+          _localUploadedFiles.removeWhere((f) => f.name == fileName);
+          _localUploadedFiles.insert(0, fileItem);
           // bst-pen 에도 동일 파일명으로 판서 저장 폴더 자동 생성
           try {
             final penFolderId = await getOrCreatePenFolder();
@@ -3465,7 +3512,7 @@ class CloudDriveService with ChangeNotifier {
     try {
       final safeTitle = title.trim().isNotEmpty ? title.trim().replaceAll(RegExp(r'[\\/:*?"<>|]'), '_') : '제목 없음';
       final new32Id = generate32DigitId();
-      final ext = type.toUpperCase() == 'HTMLP' ? 'htmlp' : 'tbp';
+      final ext = type.toUpperCase() == 'HTMLP' ? 'htmlp.bst' : 'tbp.bst';
       final shellFileName = '$safeTitle.$ext';
 
       // 1. bst-tbp 루트 폴더 획득

@@ -1010,6 +1010,7 @@ class BstCloudService {
   }
 
   Future<String?> _executeTokenExchange(String refreshToken) async {
+    // 1. Direct Google OAuth2 refresh_token exchange
     try {
       final res = await http.post(
         Uri.parse('https://oauth2.googleapis.com/token'),
@@ -1024,10 +1025,31 @@ class BstCloudService {
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body) as Map<String, dynamic>;
-        return data['access_token'] as String?;
+        final token = data['access_token'] as String?;
+        if (token != null && token.isNotEmpty) return token;
       }
     } catch (e) {
       debugPrint('[BstCloudService] Direct token exchange failed: $e');
+    }
+
+    // 2. Fallback: Query fresh token from Firestore teacher_cloud_tokens (bypasses browser CORS on Web)
+    try {
+      final targetId = activeTeacherName ?? '';
+      if (targetId.isNotEmpty) {
+        final uid = targetId.replaceAll('.', '_').replaceAll('@', '_').replaceAll('+', '_');
+        final firestoreUrl = '$_firestoreBase/teacher_cloud_tokens/$uid?key=$_apiKey';
+        final fsRes = await http.get(Uri.parse(firestoreUrl)).timeout(const Duration(seconds: 4));
+        if (fsRes.statusCode == 200) {
+          final fsData = jsonDecode(fsRes.body);
+          final fsFields = fsData['fields'] as Map<String, dynamic>?;
+          final fsAccess = fsFields?['accessToken']?['stringValue'] as String?;
+          if (fsAccess != null && fsAccess.isNotEmpty) {
+            return fsAccess;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[BstCloudService] Firestore token fallback failed: $e');
     }
 
     return null;

@@ -19,8 +19,12 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+    val isCloud = (project.hasProperty("isCloud") && project.property("isCloud") == "true") ||
+                  (project.hasProperty("dart-defines") && (project.property("dart-defines") as String).contains("BC_CLOUD_MODE%3Dtrue"))
+
     defaultConfig {
-        applicationId = "jiwho.boardest.board"
+        applicationId = if (isCloud) "jiwho.boardest.cloud" else "jiwho.boardest.board"
+        manifestPlaceholders["appLabel"] = if (isCloud) "Boardest Cloud" else "Boardest Class"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

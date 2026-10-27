@@ -6,6 +6,7 @@ import '../models/school.dart';
 import '../services/storage_service.dart';
 import '../services/comcigan_service.dart';
 import '../services/cloud_drive_service.dart';
+import '../services/update_service.dart';
 import 'components/oauth_iframe_view.dart';
 
 /// Boardest Teacher 전역 설정 모던 다이얼로그 (Class 스타일 2-패널 + OAuth iframe 연동)
@@ -884,6 +885,38 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
                     }
                   },
                   child: const Text('연결 해제'),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141A29),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.red.withOpacity(0.3)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('앱 삭제 (기기에서 제거)', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 4),
+                    Text('현재 기기에서 Boardest Teacher 앱을 완전히 삭제(제거)합니다.', style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 12)),
+                  ],
+                ),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFEF4565),
+                    side: const BorderSide(color: Color(0xFFEF4565)),
+                  ),
+                  onPressed: () => UpdateService.uninstallApp(context),
+                  icon: const Icon(Icons.delete_forever_rounded, size: 18),
+                  label: const Text('앱 삭제'),
                 ),
               ],
             ),
