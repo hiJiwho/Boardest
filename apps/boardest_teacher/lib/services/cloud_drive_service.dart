@@ -1965,10 +1965,10 @@ class CloudDriveService with ChangeNotifier {
         String src = 'cloud';
         String label = '☁️ 교안';
         final lower = f.name.toLowerCase();
-        if (lower.endsWith('.htmlp') || lower.endsWith('.canva')) {
+        if (lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva') || lower.endsWith('.canva.bst')) {
           src = 'htmlp';
           label = '🌐 HTMLP';
-        } else if (lower.endsWith('.tbp') || lower.endsWith('.bsttbp')) {
+        } else if (lower.endsWith('.tbp') || lower.endsWith('.tbp.bst') || lower.endsWith('.bsttbp')) {
           src = 'tbp';
           label = '📐 TBP';
         } else if (f.isFolder) {
@@ -1999,10 +1999,10 @@ class CloudDriveService with ChangeNotifier {
             String src = 'cloud';
             String label = '☁️ 교안';
             final lower = f.name.toLowerCase();
-            if (lower.endsWith('.htmlp') || lower.endsWith('.canva')) {
+            if (lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva') || lower.endsWith('.canva.bst')) {
               src = 'htmlp';
               label = '🌐 HTMLP';
-            } else if (lower.endsWith('.tbp') || lower.endsWith('.bsttbp')) {
+            } else if (lower.endsWith('.tbp') || lower.endsWith('.tbp.bst') || lower.endsWith('.bsttbp')) {
               src = 'tbp';
               label = '📐 TBP';
             } else if (f.isFolder) {
@@ -3541,8 +3541,9 @@ class CloudDriveService with ChangeNotifier {
         'type': type.toUpperCase(),
         'id': new32Id,
         'title': safeTitle,
+        'webUrl': webUrl.trim(),
         'createdAt': DateTime.now().millisecondsSinceEpoch,
-        'version': '1.0.0',
+        'version': '5.3.1',
       });
       final shellSuccess = await uploadBytesToDrive(
         Uint8List.fromList(utf8.encode(shellJson)),
@@ -3676,9 +3677,10 @@ class CloudDriveService with ChangeNotifier {
       final archive = decoder.decodeBytes(packageBytes, password: TbpStorageService.packagePassword);
       if (archive.isEmpty) return false;
 
-      // 2. manifest.json 확인 및 제목/타입 추출
+      // 2. manifest.json 확인 및 제목/타입/URL 추출
       String title = originalFileName.replaceAll(RegExp(r'\.(tbp|htmlp)\.save$', caseSensitive: false), '');
       String type = originalFileName.toLowerCase().contains('htmlp') ? 'HTMLP' : 'TBP';
+      String webUrl = '';
 
       for (final f in archive) {
         if (f.name == 'manifest.json' || f.name == 'info.json') {
@@ -3689,6 +3691,9 @@ class CloudDriveService with ChangeNotifier {
             }
             if (manifest['type'] != null && manifest['type'].toString().isNotEmpty) {
               type = manifest['type'].toString().toUpperCase();
+            }
+            if (manifest['webUrl'] != null && manifest['webUrl'].toString().isNotEmpty) {
+              webUrl = manifest['webUrl'].toString();
             }
           } catch (_) {}
         }
@@ -3724,7 +3729,7 @@ class CloudDriveService with ChangeNotifier {
       // 6. bst-save 대상 폴더에 껍데기 JSON 파일 생성
       final saveRootId = await getOrCreateConnectFolder();
       final destinationFolder = targetFolderId ?? saveRootId;
-      final ext = type == 'HTMLP' ? 'htmlp' : 'tbp';
+      final ext = type == 'HTMLP' ? 'htmlp.bst' : 'tbp.bst';
       final safeTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
       final shellFileName = '$safeTitle.$ext';
 
@@ -3732,8 +3737,9 @@ class CloudDriveService with ChangeNotifier {
         'type': type,
         'id': new32Id,
         'title': safeTitle,
+        'webUrl': webUrl,
         'createdAt': DateTime.now().millisecondsSinceEpoch,
-        'version': '1.0.0',
+        'version': '5.3.1',
       });
 
       return await uploadBytesToDrive(

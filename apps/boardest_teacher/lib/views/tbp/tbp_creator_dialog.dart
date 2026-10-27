@@ -154,7 +154,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
       final shellFileName = '$safeTitle.tbp.bst';
 
       final fullMeta = <String, dynamic>{
-        'version': '5.3.0',
+        'version': '5.3.1',
         'id': new32Id,
         'title': safeTitle,
         'type': 'TBP',
@@ -167,10 +167,11 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
       // 1. Google Drive 연동 상태일 때:
       // (1) 찐 데이터: bst-tbp에 32자리 ID 폴더 생성 + manifest.json 저장
       // (2) 더미 데이터: bst-save에 .tbp.bst 포인터 파일 업로드 -> 파일 관리에 즉시 노출!
+      String? realFolderId;
       if (cloud.isLoggedIn) {
         final tbpRootId = await cloud.getOrCreateTextbookProFolder();
         if (tbpRootId != null) {
-          final realFolderId = await cloud.createFolderInDrive(new32Id, parentFolderId: tbpRootId);
+          realFolderId = await cloud.createFolderInDrive(new32Id, parentFolderId: tbpRootId);
           if (realFolderId != null) {
             await cloud.uploadBytesToDrive(
               Uint8List.fromList(utf8.encode(metaJsonStr)),
@@ -193,7 +194,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
           'title': safeTitle,
           'webUrl': webUrl,
           'createdAt': DateTime.now().millisecondsSinceEpoch,
-          'version': '5.3.0',
+          'version': '5.3.1',
         });
         await cloud.uploadBytesToDrive(
           Uint8List.fromList(utf8.encode(shellJson)),
@@ -219,7 +220,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
           'title': safeTitle,
           'webUrl': webUrl,
           'createdAt': DateTime.now().millisecondsSinceEpoch,
-          'version': '5.3.0',
+          'version': '5.3.1',
         }));
         localDummyPath = dummyFile.path;
       }
@@ -227,7 +228,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
       // 3. TbpStorageService에 등록
       final resultPath = await TbpStorageService.instance.registerCreatedTbpProject(
         meta: fullMeta,
-        driveFolderId: new32Id,
+        driveFolderId: realFolderId ?? new32Id,
         localDirPath: localDummyPath,
       );
 

@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_io/io.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../config/app_config.dart';
 import 'system_app_scanner.dart';
 
 enum UpdateState {
@@ -28,7 +29,7 @@ enum UpdateState {
 /// 5. 잠금 화면 필수 4대 버튼: [업데이트 다운 / 수동 설치 / 앱 런처 / 앱 삭제]
 /// 6. 윈도우: AppData에 다운로드 후 종료하지 않고 윈도우 패키지 설치 관리자(AppX) 구동 -> 새 앱 실행 시 이전 AppX 자동 삭제
 class UpdateService {
-  static const String defaultVersion = '5.3.0';
+  static const String defaultVersion = '5.3.1';
   static const String _releasesApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases?per_page=30';
   static const String _latestApi =
@@ -56,7 +57,7 @@ class UpdateService {
     if (_resolvedVersion != null) return _resolvedVersion!;
     if (!kIsWeb && Platform.isWindows) {
       final match = RegExp(
-        r'jiwho\.boardest\.(?:bst|teacher|class-lite|overlay-panser)_([0-9.]+)_',
+        r'jiwho\.boardest\.(?:bst|cloud|board|class|teacher|class-lite|overlay-panser)_([0-9.]+)_',
         caseSensitive: false,
       ).firstMatch(Platform.resolvedExecutable);
       if (match?.group(1) != null) {
@@ -219,21 +220,46 @@ class UpdateService {
       final assets = (latestReleaseData['assets'] as List<dynamic>? ?? []);
       String? apkDownloadUrl;
       String? appxDownloadUrl;
+      final isCloud = AppConfig.isCloudMode;
 
       for (final a in assets) {
         final name = (a['name'] as String? ?? '').trim().toLowerCase();
         final url = a['browser_download_url'] as String?;
         if (url == null || url.isEmpty) continue;
 
-        if (name.endsWith('.apk') && !name.contains('teacher') && !name.contains('lite')) {
-          apkDownloadUrl ??= url;
-        } else if ((name.endsWith('.appx') || name.endsWith('.msix')) && !name.contains('teacher') && !name.contains('lite')) {
-          appxDownloadUrl ??= url;
+        if (isCloud) {
+          if (name.endsWith('.apk') &&
+              (name.contains('boardest-cloud') || name.contains('bcld') || name.contains('class-cloud'))) {
+            apkDownloadUrl ??= url;
+          } else if ((name.endsWith('.appx') || name.endsWith('.msix')) &&
+              (name.contains('boardest-cloud') || name.contains('bcld') || name.contains('class-cloud'))) {
+            appxDownloadUrl ??= url;
+          }
+        } else {
+          if (name.endsWith('.apk') &&
+              !name.contains('teacher') &&
+              !name.contains('lite') &&
+              !name.contains('cloud') &&
+              !name.contains('bcld') &&
+              !name.contains('overlay')) {
+            apkDownloadUrl ??= url;
+          } else if ((name.endsWith('.appx') || name.endsWith('.msix')) &&
+              !name.contains('teacher') &&
+              !name.contains('lite') &&
+              !name.contains('cloud') &&
+              !name.contains('bcld') &&
+              !name.contains('overlay')) {
+            appxDownloadUrl ??= url;
+          }
         }
       }
 
-      apkDownloadUrl ??= 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk';
-      appxDownloadUrl ??= 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx';
+      apkDownloadUrl ??= isCloud
+          ? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.apk'
+          : 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk';
+      appxDownloadUrl ??= isCloud
+          ? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx'
+          : 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx';
 
       if (_isNewerVersion(distinctNormalizedReleases.first, currentNorm)) {
         final isWindows = !kIsWeb && Platform.isWindows;
@@ -275,7 +301,8 @@ class UpdateService {
       }
 
       final ext = isWindows ? 'appx' : 'apk';
-      final fileName = 'boardest_update_$version.$ext';
+      final prefix = AppConfig.isCloudMode ? 'boardest_cloud_update' : 'boardest_update';
+      final fileName = '${prefix}_$version.$ext';
       final savePath = p.join(updatesDir.path, fileName);
 
       final existingFile = File(savePath);
@@ -396,7 +423,8 @@ class UpdateService {
         const channel = MethodChannel('com.boardest/launch_args');
         await channel.invokeMethod('uninstallApp');
       } catch (_) {
-        final uri = Uri.parse('package:jiwho.boardest.board');
+        final pkg = AppConfig.isCloudMode ? 'jiwho.boardest.cloud' : 'jiwho.boardest.board';
+        final uri = Uri.parse('package:$pkg');
         await launchUrl(uri);
       }
     } else if (!kIsWeb && Platform.isWindows) {
@@ -406,6 +434,56 @@ class UpdateService {
         await Process.start('control.exe', ['appwiz.cpl']);
       }
     }
+  }
+
+  /// Cloud 기능 3회 지연 제한 안내 모달
+  static void showCloudBlockedDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF141721),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: Color(0xFFEF4565), width: 1.5),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.cloud_off_rounded, color: Color(0xFFEF4565), size: 26),
+            SizedBox(width: 10),
+            Text(
+              'Cloud 기능 제한 안내',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Cloud 기능을 사용하시려면 업데이트를 하시기 바랍니다.',
+          style: TextStyle(color: Colors.white, fontSize: 15, height: 1.5, fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('닫기', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00F5D4),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              if (downloadedPackagePath != null && File(downloadedPackagePath!).existsSync()) {
+                await executeInstall(context);
+              } else {
+                await launchUrl(Uri.parse(downloadPage), mode: LaunchMode.externalApplication);
+              }
+            },
+            icon: const Icon(Icons.system_update_alt_rounded, color: Colors.black, size: 18),
+            label: const Text('업데이트 설치', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   /// 보안 잠금 화면 (업데이트 다운 / 수동 설치 / 앱 런처 / 앱 삭제)

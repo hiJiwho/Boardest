@@ -19,8 +19,10 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+    val dartDefinesStr = if (project.hasProperty("dart-defines")) project.property("dart-defines").toString() else ""
     val isCloud = (project.hasProperty("isCloud") && project.property("isCloud") == "true") ||
-                  (project.hasProperty("dart-defines") && (project.property("dart-defines") as String).contains("BC_CLOUD_MODE%3Dtrue"))
+                  dartDefinesStr.contains("BC_CLOUD_MODE") ||
+                  dartDefinesStr.contains("QkNfQ0xPVURfTU9ERT10cnVl")
 
     defaultConfig {
         applicationId = if (isCloud) "jiwho.boardest.cloud" else "jiwho.boardest.board"

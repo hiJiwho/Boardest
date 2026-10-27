@@ -47,7 +47,7 @@ class UpdateService {
   UpdateService._internal();
   static final instance = UpdateService._internal();
 
-  static const String defaultVersion = '5.3.0';
+  static const String defaultVersion = '5.3.1';
   static const String _releasesApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases?per_page=30';
   static const String downloadPage = 'https://boardest-downloads.web.app';
@@ -241,6 +241,52 @@ class UpdateService {
     } finally {
       _checking = false;
     }
+  }
+
+  /// Cloud 기능 3회 지연 제한 안내 모달
+  static void showCloudBlockedDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16161A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: Color(0xFFEF4565), width: 1.5),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.cloud_off_rounded, color: Color(0xFFEF4565), size: 26),
+            SizedBox(width: 10),
+            Text(
+              'Cloud 기능 제한 안내',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Cloud 기능을 사용하시려면 업데이트를 하시기 바랍니다.',
+          style: TextStyle(color: Colors.white, fontSize: 15, height: 1.5, fontWeight: FontWeight.bold),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('닫기', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00F5D4),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              launchUrl(Uri.parse(downloadPage), mode: LaunchMode.externalApplication);
+            },
+            icon: const Icon(Icons.download_rounded, color: Colors.black, size: 18),
+            label: const Text('다운로드 사이트 이동', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   /// 교사용 앱 업데이트 다이얼로그 노출

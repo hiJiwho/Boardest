@@ -405,9 +405,9 @@ class _SettingsFullscreenViewState extends State<SettingsFullscreenView> {
                       ),
                     ],
                   ),
-                  const Text(
-                    'by jiwho • v5.1.0',
-                    style: TextStyle(
+                  Text(
+                    'by jiwho • v${UpdateService.currentVersion}',
+                    style: const TextStyle(
                       color: Color(0xFF94A1B2),
                       fontSize: 11,
                       fontWeight: FontWeight.w600,

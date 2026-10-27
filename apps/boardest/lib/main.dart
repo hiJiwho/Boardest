@@ -24,7 +24,9 @@ import 'views/dashboard_view.dart';
 import 'views/boardest_tools_view.dart';
 import 'views/boardest_cloud_view.dart';
 import 'services/demo_class_allocator_service.dart';
+import 'services/update_service.dart';
 import 'helpers/startup_helper.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -109,6 +111,17 @@ void main(List<String> args) async {
       } catch (_) {}
     }
     await AppPaths.init();
+    if (Platform.isAndroid) {
+      try {
+        final supportPath = (await getApplicationSupportDirectory()).path.toLowerCase();
+        if (supportPath.contains('jiwho.boardest.cloud') || supportPath.contains('boardest.cloud')) {
+          AppConfig.isCloudMode = true;
+          AppConfig.isToolsMode = true;
+        }
+      } catch (_) {}
+    }
+    await UpdateService.initVersion();
+    unawaited(UpdateService.cleanupOldUpdates());
     await BstSaveService.instance.ensureStructure();
     NativeStartupHelper.runWindowsStartupTasks();
   }
@@ -316,9 +329,9 @@ void main(List<String> args) async {
       initialTool = 'file_explorer';
     } else if (!arg.startsWith('-')) {
       final lower = arg.toLowerCase();
-      if (lower.endsWith('.bsttbp') || lower.endsWith('.tbp')) {
+      if (lower.endsWith('.bsttbp') || lower.endsWith('.tbp') || lower.endsWith('.tbp.bst')) {
         initialTool = 'tbp_viewer';
-      } else if (lower.endsWith('.bstcanva')) {
+      } else if (lower.endsWith('.bstcanva') || lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva.bst')) {
         initialTool = 'canva_board';
       }
     }

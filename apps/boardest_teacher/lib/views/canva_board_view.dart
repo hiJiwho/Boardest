@@ -263,30 +263,53 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
     try {
       var rawUrl = (widget.embedUrl ?? widget.initialUrl ?? '').trim();
 
-      // 파일 경로 또는 Web 메모리 파일에서 URL 읽기 지원
+      // 파일 경로 또는 Web 메모리 파일에서 URL 및 32자리 포인터(bst-tbp) 읽기 지원
+      String? resolvedPointerFolderPath;
       if (rawUrl.isEmpty && widget.filePath != null && widget.filePath!.isNotEmpty) {
         final fp = widget.filePath!.trim();
         if (fp.startsWith('http://') || fp.startsWith('https://') || fp.contains('<iframe')) {
           rawUrl = fp;
-        } else if (kIsWeb && CloudDriveService.webMemoryFiles.containsKey(fp)) {
-          try {
-            final content = utf8.decode(CloudDriveService.webMemoryFiles[fp]!);
-            rawUrl = _extractUrlFromRawContent(content);
-          } catch (_) {}
-        } else if (!kIsWeb) {
-          try {
-            final f = File(fp);
-            if (await f.exists()) {
-              final content = await f.readAsString();
+        } else {
+          String? content;
+          if (kIsWeb && CloudDriveService.webMemoryFiles.containsKey(fp)) {
+            try {
+              content = utf8.decode(CloudDriveService.webMemoryFiles[fp]!);
+            } catch (_) {}
+          } else if (!kIsWeb) {
+            try {
+              final f = File(fp);
+              if (await f.exists()) {
+                content = await f.readAsString();
+              }
+            } catch (_) {}
+          }
+
+          if (content != null && content.isNotEmpty) {
+            final shell = TbpStorageService.parsePointerShell(content);
+            if (shell != null) {
+              final meta = await TbpStorageService.instance.loadTbpFile(fp);
+              if (meta != null) {
+                if (meta.title.isNotEmpty && widget.title == null) {
+                  _displayTitle = meta.title;
+                }
+                final infoJson = await TbpStorageService.instance.loadInfoJson('drive://tbp/${meta.folderId}');
+                final mUrl = (infoJson?['webUrl'] ?? infoJson?['targetUrl'] ?? shell['webUrl'] ?? '').toString().trim();
+                if (mUrl.isNotEmpty) {
+                  rawUrl = mUrl;
+                }
+                resolvedPointerFolderPath = TbpStorageService.instance.getTbpFolderPath(fp, meta.folderId);
+              }
+            }
+            if (rawUrl.isEmpty) {
               rawUrl = _extractUrlFromRawContent(content);
             }
-          } catch (_) {}
+          }
         }
       }
 
       if (rawUrl.isEmpty) {
         setState(() {
-          _errorMessage = '프레젠테이션 URL을 찾을 수 없습니다. 올바른 .HTMLP 파일 또는 URL을 열어주세요.';
+          _errorMessage = '프레젠테이션 URL을 찾을 수 없습니다. 올바른 .tbp.bst / .htmlp.bst 파일 또는 URL을 열어주세요.';
           _isLoading = false;
         });
         return;
@@ -294,21 +317,25 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
 
       _targetUrl = HtmlPresentView.formatPresentUrl(rawUrl);
 
-      // 프로젝트 고유 식별키 생성 (URL 해시 기반)
-      final safeUrlKey = _targetUrl.replaceAll(RegExp(r'[^\w-]'), '_');
-      _projectKey = 'html_present_${safeUrlKey.length > 32 ? safeUrlKey.substring(0, 32) : safeUrlKey}';
+      if (resolvedPointerFolderPath != null && resolvedPointerFolderPath.isNotEmpty) {
+        _tbpFolderPath = resolvedPointerFolderPath;
+      } else {
+        // 프로젝트 고유 식별키 생성 (URL 해시 기반)
+        final safeUrlKey = _targetUrl.replaceAll(RegExp(r'[^\w-]'), '_');
+        _projectKey = 'html_present_${safeUrlKey.length > 32 ? safeUrlKey.substring(0, 32) : safeUrlKey}';
 
-      // TBP 가상 프로젝트 등록 (Dhash별 판서 및 핫스팟 보관용)
-      _tbpFolderPath = await TbpStorageService.instance.registerCreatedTbpProject(
-        meta: {
-          'title': _displayTitle,
-          'folderId': _projectKey,
-          'webUrl': _targetUrl,
-          'scopeKey': 'HTMLP',
-          'createdAt': DateTime.now().toIso8601String(),
-        },
-        localDirPath: kIsWeb ? 'web://tbp/$_projectKey' : null,
-      );
+        // TBP 가상 프로젝트 등록 (Dhash별 판서 및 핫스팟 보관용)
+        _tbpFolderPath = await TbpStorageService.instance.registerCreatedTbpProject(
+          meta: {
+            'title': _displayTitle,
+            'folderId': _projectKey,
+            'webUrl': _targetUrl,
+            'scopeKey': 'HTMLP',
+            'createdAt': DateTime.now().toIso8601String(),
+          },
+          localDirPath: kIsWeb ? 'web://tbp/$_projectKey' : null,
+        );
+      }
 
       final knownHashes = await TbpStorageService.instance.getKnownPageHashes(_tbpFolderPath);
       _dhashEngine.registerKnownHashes(knownHashes);

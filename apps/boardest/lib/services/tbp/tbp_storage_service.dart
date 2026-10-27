@@ -127,7 +127,14 @@ class TbpStorageService {
     if (pathStr.startsWith('http://') || pathStr.startsWith('https://')) return false;
     if (pathStr.contains('/') || pathStr.contains('\\')) return false;
     final lower = pathStr.toLowerCase();
-    if (lower.endsWith('.bsttbp') || lower.endsWith('.tbp') || lower.endsWith('.json')) return false;
+    if (lower.endsWith('.bsttbp') ||
+        lower.endsWith('.tbp') ||
+        lower.endsWith('.bst') ||
+        lower.endsWith('.htmlp') ||
+        lower.endsWith('.save') ||
+        lower.endsWith('.json')) {
+      return false;
+    }
     return pathStr.trim().isNotEmpty;
   }
 
@@ -219,7 +226,8 @@ class TbpStorageService {
       final shell = TbpStorageService.parsePointerShell(content);
       if (shell != null) {
         final targetId = shell['id'].toString();
-        return await loadTbpFile('drive://tbp/' + targetId);
+        final resolved = await _loadFromDriveTbpFolder('drive://tbp/$targetId', targetId, fallbackShell: shell);
+        if (resolved != null) return resolved;
       }
       final json = jsonDecode(content) as Map<String, dynamic>;
       return TbpMetadata.fromJson(json);
@@ -229,7 +237,7 @@ class TbpStorageService {
     }
   }
 
-  Future<TbpMetadata?> _loadFromDriveTbpFolder(String rawKey, String driveFolderId) async {
+  Future<TbpMetadata?> _loadFromDriveTbpFolder(String rawKey, String driveFolderId, {Map<String, dynamic>? fallbackShell}) async {
     try {
       final token = BstCloudService.instance.activeToken ?? '';
       String actualFolderId = driveFolderId;
@@ -239,7 +247,8 @@ class TbpStorageService {
       // 1. 만약 driveFolderId가 32자리 고유 ID(Hex) 형태인 경우 실체 Google Drive 폴더 검색
       if (rawJson == null && RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(driveFolderId)) {
         if (token.isNotEmpty) {
-          final realFolder = await BstCloudService.instance.findDriveFolderByName(driveFolderId, '', token);
+          var realFolder = await BstCloudService.instance.findDriveFolderByName(driveFolderId, '', token);
+          realFolder ??= await BstCloudService.instance.findDriveFolderByName(driveFolderId, 'appDataFolder', token);
           if (realFolder != null && realFolder.isNotEmpty) {
             actualFolderId = realFolder;
           }
@@ -263,7 +272,8 @@ class TbpStorageService {
             if (parsed is Map<String, dynamic>) {
               final target32Id = (parsed['id'] ?? parsed['ID'] ?? '').toString().trim();
               if (target32Id.isNotEmpty) {
-                final realFolder = await BstCloudService.instance.findDriveFolderByName(target32Id, '', token);
+                var realFolder = await BstCloudService.instance.findDriveFolderByName(target32Id, '', token);
+                realFolder ??= await BstCloudService.instance.findDriveFolderByName(target32Id, 'appDataFolder', token);
                 if (realFolder != null && realFolder.isNotEmpty) {
                   actualFolderId = realFolder;
                   for (final fileName in ['manifest.json', 'meta.bstsave', 'info.json']) {
@@ -282,7 +292,7 @@ class TbpStorageService {
                     'title': parsed['title'] ?? parsed['name'] ?? 'TBP/HTMLP 교재',
                     'webUrl': directUrl,
                     'type': parsed['type'] ?? 'TBP',
-                    'version': parsed['version'] ?? '1.0.0',
+                    'version': parsed['version'] ?? '5.3.1',
                   });
                 }
               }
@@ -291,6 +301,18 @@ class TbpStorageService {
         } catch (e) {
           debugPrint('[TbpStorageService] Shell pointer resolution error: $e');
         }
+      }
+
+      if ((rawJson == null || rawJson.trim().isEmpty) && fallbackShell != null) {
+        final directUrl = (fallbackShell['webUrl'] ?? fallbackShell['targetUrl'] ?? fallbackShell['url'] ?? fallbackShell['embedUrl'] ?? '').toString().trim();
+        rawJson = jsonEncode({
+          'id': driveFolderId,
+          'folderId': actualFolderId,
+          'title': fallbackShell['title'] ?? fallbackShell['name'] ?? 'TBP/HTMLP 교재',
+          'webUrl': directUrl,
+          'type': fallbackShell['type'] ?? 'TBP',
+          'version': fallbackShell['version'] ?? '5.3.1',
+        });
       }
 
       if (rawJson == null || rawJson.trim().isEmpty) return null;

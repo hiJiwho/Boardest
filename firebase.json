@@ -70,6 +70,26 @@
           "source": "/bst.appx",
           "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
           "type": 302
+        },
+        {
+          "source": "/boardest-cloud.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.apk",
+          "type": 302
+        },
+        {
+          "source": "/boardest-cloud.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx",
+          "type": 302
+        },
+        {
+          "source": "/bcld.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.apk",
+          "type": 302
+        },
+        {
+          "source": "/bcld.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx",
+          "type": 302
         }
       ],
       "rewrites": [
@@ -162,6 +182,26 @@
         {
           "source": "/bst.appx",
           "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
+          "type": 302
+        },
+        {
+          "source": "/boardest-cloud.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.apk",
+          "type": 302
+        },
+        {
+          "source": "/boardest-cloud.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx",
+          "type": 302
+        },
+        {
+          "source": "/bcld.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.apk",
+          "type": 302
+        },
+        {
+          "source": "/bcld.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx",
           "type": 302
         }
       ],
@@ -763,6 +803,26 @@
         {
           "source": "/teacher.apk",
           "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.apk",
+          "type": 302
+        },
+        {
+          "source": "/boardest-cloud.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.apk",
+          "type": 302
+        },
+        {
+          "source": "/boardest-cloud.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx",
+          "type": 302
+        },
+        {
+          "source": "/bcld.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.apk",
+          "type": 302
+        },
+        {
+          "source": "/bcld.appx",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx",
           "type": 302
         },
         {

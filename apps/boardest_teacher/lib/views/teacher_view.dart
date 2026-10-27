@@ -1441,6 +1441,10 @@ class _TeacherViewState extends State<TeacherView> {
     void _openFolderOptionsDialog({int initialTab = 0}) async {}
 
   Future<void> _openBoardBookEditor() async {
+    if (UpdateService.isCloudBlockedNotifier.value) {
+      UpdateService.showCloudBlockedDialog(context);
+      return;
+    }
     final createdPath = await showDialog<String>(
       context: context,
       builder: (_) => TbpCreatorDialog(scaleFactor: _settings.scaleFactor),
@@ -1458,11 +1462,8 @@ class _TeacherViewState extends State<TeacherView> {
         force: !silent,
         channel: _settings.updateChannel,
       );
-      if (updateInfo != null && updateInfo.hasUpdate && mounted) {
-        // 교사용 앱은 업데이트 독촉 차단: 사용자가 직접 '버전 & 업데이트'를 눌렀을 때만 모달 안내
-        if (!silent) {
-          UpdateService.instance.showUpdateDialog(context, updateInfo);
-        }
+      if (updateInfo != null && (updateInfo.hasUpdate || updateInfo.isBlocked) && mounted) {
+        UpdateService.instance.showUpdateDialog(context, updateInfo);
       } else if (!silent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1504,7 +1505,12 @@ class _TeacherViewState extends State<TeacherView> {
       }
     }
   }
-  void _showCloudRequiredDialog(String type) {}
+  void _showCloudRequiredDialog(String type) {
+    if (UpdateService.isCloudBlockedNotifier.value) {
+      UpdateService.showCloudBlockedDialog(context);
+      return;
+    }
+  }
   void _toggleMiniTimer() {}
   void _pauseMiniTimer() {}
   void _startMiniTimer() {}
@@ -2095,11 +2101,56 @@ class _TeacherViewState extends State<TeacherView> {
   }
 
   void _openCanvaWithUrlPrompt() {
-    _showCanvaUrlInputDialog();
+    _openBoardBookEditor();
   }
 
   Widget _buildCloudOpenWorkspace(double scale) {
-    return BstCloudDriveViewer(
+    return ValueListenableBuilder<bool>(
+      valueListenable: UpdateService.isCloudBlockedNotifier,
+      builder: (context, isCloudBlocked, _) {
+        if (isCloudBlocked) {
+          return Center(
+            child: Container(
+              width: 480 * scale,
+              padding: EdgeInsets.all(28 * scale),
+              decoration: BoxDecoration(
+                color: const Color(0xFF16161A),
+                borderRadius: BorderRadius.circular(20 * scale),
+                border: Border.all(color: const Color(0xFFEF4565), width: 1.5),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cloud_off_rounded, color: Color(0xFFEF4565), size: 48),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Cloud 기능을 사용하시려면 업데이트를 하시기 바랍니다.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.notoSansKr(
+                      color: Colors.white,
+                      fontSize: 16 * scale,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00F5D4),
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    ),
+                    onPressed: () {
+                      launchUrl(Uri.parse(UpdateService.downloadPage), mode: LaunchMode.externalApplication);
+                    },
+                    icon: const Icon(Icons.download_rounded, color: Colors.black),
+                    label: const Text('다운로드 사이트 이동', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return BstCloudDriveViewer(
       scale: scale,
       onOpenFile: (fileData) async {
         final id = fileData['id'] as String? ?? '';
@@ -2108,10 +2159,13 @@ class _TeacherViewState extends State<TeacherView> {
         final source = fileData['source'] as String? ?? '';
         final lowerName = name.toLowerCase();
 
-        final isTbpFolder = source == 'tbp' ||
-            mimeType == 'application/x-bst-tbp-folder' ||
-            (mimeType == 'application/vnd.google-apps.folder' &&
-                (lowerName.endsWith('.tbp') || lowerName.endsWith('.bsttbp')));
+        final isPointerFile = lowerName.endsWith('.tbp.bst') ||
+            lowerName.endsWith('.htmlp.bst') ||
+            lowerName.endsWith('.canva.bst');
+        final isTbpFolder = !isPointerFile &&
+            (mimeType == 'application/x-bst-tbp-folder' ||
+                (mimeType == 'application/vnd.google-apps.folder' &&
+                    (source == 'tbp' || lowerName.endsWith('.tbp') || lowerName.endsWith('.bsttbp'))));
         if (isTbpFolder) {
           _openFile('drive://tbp/$id');
           return;
@@ -2164,8 +2218,8 @@ class _TeacherViewState extends State<TeacherView> {
                   final room = classrooms[idx];
                   return ListTile(
                     leading: const Icon(Icons.meeting_room_rounded, color: Colors.white70, size: 20),
-                    title: Text(room, style: const TextStyle(color: Colors.white, fontSize: 14)),
                     trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white30, size: 14),
+                    title: Text(room, style: const TextStyle(color: Colors.white, fontSize: 14)),
                     onTap: () => Navigator.pop(ctx, room),
                   );
                 },
@@ -2184,7 +2238,9 @@ class _TeacherViewState extends State<TeacherView> {
         }
       },
       onUploadTap: _uploadLocalFileToDrive,
-      onCanvaTap: _showCanvaUrlInputDialog,
+      onCanvaTap: _openBoardBookEditor,
+    );
+      },
     );
   }
 
@@ -3139,8 +3195,8 @@ class _TeacherViewState extends State<TeacherView> {
       }
       if (_cloudCategoryFilter == 'PDF' && !name.endsWith('.pdf')) return false;
       if (_cloudCategoryFilter == '한글' && !name.endsWith('.hwp') && !name.endsWith('.hwpx')) return false;
-      if ((_cloudCategoryFilter == 'Canva' || _cloudCategoryFilter == 'HTML Present') && !name.endsWith('.htmlp') && !name.endsWith('.canva.bst') && !name.endsWith('.canva') && !name.endsWith('.bstcanva')) return false;
-      if (_cloudCategoryFilter == 'TBP' && !name.endsWith('.tbp') && !name.endsWith('.bsttbp')) return false;
+      if ((_cloudCategoryFilter == 'Canva' || _cloudCategoryFilter == 'HTML Present') && !name.endsWith('.htmlp') && !name.endsWith('.htmlp.bst') && !name.endsWith('.canva.bst') && !name.endsWith('.canva') && !name.endsWith('.bstcanva')) return false;
+      if (_cloudCategoryFilter == 'TBP' && !name.endsWith('.tbp') && !name.endsWith('.tbp.bst') && !name.endsWith('.bsttbp')) return false;
       if (_cloudCategoryFilter == 'PPT' && !name.endsWith('.ppt') && !name.endsWith('.pptx')) return false;
       if (_cloudCategoryFilter == '판서' && !name.endsWith('.pen') && !name.endsWith('.iwb')) return false;
       return true;
@@ -3207,6 +3263,10 @@ class _TeacherViewState extends State<TeacherView> {
 
   /// Google Drive로 로컬 파일 즉시 업로드 (진행 바 다이얼로그 표시)
   Future<void> _uploadLocalFileToDrive() async {
+    if (UpdateService.isCloudBlockedNotifier.value) {
+      UpdateService.showCloudBlockedDialog(context);
+      return;
+    }
     try {
       final result = await FilePicker.pickFiles(
         allowMultiple: true,
@@ -3328,7 +3388,7 @@ class _TeacherViewState extends State<TeacherView> {
 
   /// HTML Present (.HTMLP) 등록 다이얼로그
   void _showRegisterCanvaDialog() {
-    _showCanvaUrlInputDialog();
+    _openBoardBookEditor();
   }
 
   /// Google Drive 파일 이름 변경 다이얼로그
@@ -3468,6 +3528,10 @@ class _TeacherViewState extends State<TeacherView> {
 
   /// Drive 파일 열기 / 다운로드
   Future<void> _openDriveFile(Map<String, dynamic> file) async {
+    if (UpdateService.isCloudBlockedNotifier.value) {
+      UpdateService.showCloudBlockedDialog(context);
+      return;
+    }
     final fileId = file['id']?.toString() ?? '';
     final name = file['name']?.toString() ?? 'downloaded_file';
     if (fileId.isEmpty) return;
@@ -3476,14 +3540,20 @@ class _TeacherViewState extends State<TeacherView> {
       final lower = name.toLowerCase();
 
       // Boardest 지원 포맷 확인:
-      // PDF, 판서(.pen, .bstpen, .iwb), 교과서(.tbp, .bsttbp), Canva(.canva, .canva.bst)
+      // PDF, 판서(.pen, .bstpen, .iwb), 교과서(.tbp, .tbp.bst, .bsttbp), HTMLP/Canva(.htmlp, .htmlp.bst, .canva, .canva.bst, .bstcanva)
       final isBoardestNativeFormat = lower.endsWith('.pdf') ||
           lower.endsWith('.pen') ||
           lower.endsWith('.bstpen') ||
           lower.endsWith('.iwb') ||
           lower.endsWith('.tbp') ||
+          lower.endsWith('.tbp.bst') ||
+          lower.endsWith('.tbp.save') ||
           lower.endsWith('.bsttbp') ||
+          lower.endsWith('.htmlp') ||
+          lower.endsWith('.htmlp.bst') ||
+          lower.endsWith('.htmlp.save') ||
           lower.endsWith('.canva') ||
+          lower.endsWith('.bstcanva') ||
           lower.endsWith('.canva.bst');
 
       final isWindowsOffice = (lower.endsWith('.pptx') || lower.endsWith('.ppt') || lower.endsWith('.hwpx') || lower.endsWith('.hwp')) &&
@@ -6014,11 +6084,15 @@ class _TeacherViewState extends State<TeacherView> {
   }
 
   void _openCanvaBoard({String? url, String? filePath}) {
-    if (!CloudDriveService.instance.isLoggedIn) {
-      _showCloudRequiredDialog('HTML Present');
+    if (UpdateService.isCloudBlockedNotifier.value) {
+      UpdateService.showCloudBlockedDialog(context);
       return;
     }
-    _showCanvaActionDialog(initialUrl: url, filePath: filePath);
+    if (filePath != null && filePath.isNotEmpty) {
+      _openFile(filePath);
+      return;
+    }
+    _openBoardBookEditor();
   }
 
   void _showCanvaActionDialog({String? initialUrl, String? filePath}) {

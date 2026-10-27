@@ -1038,7 +1038,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         await _openNextUsbFile(usbId, filePath);
       }
       setState(() {});
-    } else if (ext == '.tbp') {
+    } else if (ext == '.tbp' || filePath.toLowerCase().endsWith('.tbp.bst') || ext == '.bsttbp') {
       await _pushBoardRoute(
         TbpViewerRoute(
           tbpFilePath: filePath,
@@ -1048,7 +1048,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       setState(() {});
     } else if (ext == '.yt') {
       _openYoutubeBoard(filePath: filePath);
-    } else if (ext == '.canva') {
+    } else if (ext == '.canva' || ext == '.htmlp' || filePath.toLowerCase().endsWith('.htmlp.bst') || filePath.toLowerCase().endsWith('.canva.bst')) {
       _openCanvaBoard(filePath: filePath);
     }
   }
@@ -1317,7 +1317,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
     final timeParts = ts.firstPeriodStart.split(':');
     final startH = int.tryParse(timeParts[0]) ?? 8;
-    final startM = int.tryParse(timeParts[1]) ?? 40;
+    final startM = int.tryParse(timeParts.length > 1 ? timeParts[1] : '40') ?? 40;
     int currentMinutes = startH * 60 + startM;
 
     for (int p = 1; p <= 8; p++) {
@@ -2849,7 +2849,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           // Parse dynamic class start time
           final startParts = ts.firstPeriodStart.split(':');
           final targetH = int.tryParse(startParts[0]) ?? 8;
-          final targetM = int.tryParse(startParts[1]) ?? 40;
+          final targetM = int.tryParse(startParts.length > 1 ? startParts[1] : '40') ?? 40;
           final nextSchoolStart = DateTime(
             nextSchoolDate.year,
             nextSchoolDate.month,
@@ -5369,7 +5369,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 ),
               ),
             );
-          } else if (lower.endsWith('.tbp') || lower.endsWith('.bsttbp')) {
+          } else if (lower.endsWith('.tbp') || lower.endsWith('.tbp.bst') || lower.endsWith('.bsttbp')) {
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => TbpViewerRoute(
@@ -5378,7 +5378,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 ),
               ),
             );
-          } else if (lower.endsWith('.canva') || lower.endsWith('.bstcanva')) {
+          } else if (lower.endsWith('.canva') || lower.endsWith('.bstcanva') || lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva.bst')) {
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => CanvaBoardView(
@@ -7707,6 +7707,10 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   }
 
   Future<void> _openCloudPairingModal() async {
+    if (UpdateService.isCloudBlockedNotifier.value) {
+      UpdateService.showCloudBlockedDialog(context);
+      return;
+    }
     if (BstCloudService.instance.activeToken != null) {
       setState(() {
         _hideCloudPanel = !_hideCloudPanel;
@@ -9501,6 +9505,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                     final f = filteredFiles[idx];
                     final name = f.name.toLowerCase();
                     final isCanva = name.endsWith('.htmlp') ||
+                        name.endsWith('.htmlp.bst') ||
                         name.endsWith('.canva') ||
                         name.endsWith('.canva.bst') ||
                         name.endsWith('.bstcanva') ||
@@ -9508,6 +9513,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                         name.contains('htmlp');
                     final isTbp = name.endsWith('.bsttbp') ||
                         name.endsWith('.tbp') ||
+                        name.endsWith('.tbp.bst') ||
                         f.mimeType == 'application/x-bst-tbp-folder' ||
                         (f.mimeType == 'application/vnd.google-apps.folder' && (name.contains('tbp') || name.contains('교과서')));
                     final isPen = name.endsWith('.pen') || name.endsWith('.bstpen');
@@ -9663,9 +9669,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
       final isTbp = name.endsWith('.bsttbp') ||
           name.endsWith('.tbp') ||
+          name.endsWith('.tbp.bst') ||
           f.mimeType == 'application/x-bst-tbp-folder' ||
           (f.mimeType == 'application/vnd.google-apps.folder' && (name.contains('tbp') || name.contains('교과서')));
       final isCanva = name.endsWith('.htmlp') ||
+          name.endsWith('.htmlp.bst') ||
           name.endsWith('.canva') ||
           name.endsWith('.canva.bst') ||
           name.endsWith('.bstcanva') ||
@@ -10022,10 +10030,12 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       );
     } else if (lower.endsWith('.bsttbp') ||
         lower.endsWith('.tbp') ||
+        lower.endsWith('.tbp.bst') ||
         lower.endsWith('.htmlp') ||
+        lower.endsWith('.htmlp.bst') ||
         lower.endsWith('.canva.bst') ||
         file.mimeType == 'application/x-bst-tbp-folder') {
-      final isHtmlp = lower.endsWith('.htmlp') || lower.endsWith('.canva.bst');
+      final isHtmlp = lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva.bst');
       _pushBoardRoute(
         TbpViewerRoute(
           tbpFilePath: 'drive://tbp/${file.id}',
@@ -11681,7 +11691,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 if (!seenIds.add(f.id)) return false;
                 final name = f.name.toLowerCase();
                 return name.endsWith('.tbp') ||
+                    name.endsWith('.tbp.bst') ||
                     name.endsWith('.htmlp') ||
+                    name.endsWith('.htmlp.bst') ||
                     name.endsWith('.bsttbp') ||
                     name.endsWith('.canva.bst');
               }).toList();
@@ -11713,7 +11725,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 itemBuilder: (context, index) {
                   final file = pointerFiles[index];
                   final lower = file.name.toLowerCase();
-                  final isHtmlp = lower.endsWith('.htmlp') || lower.endsWith('.canva.bst');
+                  final isHtmlp = lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva.bst');
 
                   return Container(
                     decoration: BoxDecoration(
@@ -13199,6 +13211,10 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   }
 
   void _openBstCloud() {
+    if (UpdateService.isCloudBlockedNotifier.value) {
+      UpdateService.showCloudBlockedDialog(context);
+      return;
+    }
     if (BstCloudService.isCloudFeatureDisabled) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -15560,15 +15576,16 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     try {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'pptx', 'ppt', 'tbp', 'bsttbp', 'TBP', 'bstTBP', 'iwb'],
+        allowedExtensions: ['pdf', 'pptx', 'ppt', 'tbp', 'bsttbp', 'bst', 'htmlp', 'TBP', 'bstTBP', 'iwb'],
         allowMultiple: false,
       );
       if (result != null && result.files.single.path != null) {
         final path = result.files.single.path!;
         if (!mounted) return;
         final ext = p.extension(path).toLowerCase();
+        final lowerPath = path.toLowerCase();
 
-        if (ext == '.tbp' || ext == '.bsttbp') {
+        if (ext == '.tbp' || ext == '.bsttbp' || lowerPath.endsWith('.tbp.bst') || lowerPath.endsWith('.htmlp.bst') || ext == '.htmlp') {
           _pushBoardRoute(
             TbpViewerRoute(
               tbpFilePath: path,

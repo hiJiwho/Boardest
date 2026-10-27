@@ -10,6 +10,7 @@ import '../config/app_config.dart';
 import '../services/bst_cloud_service.dart';
 import '../services/passkey_service.dart';
 import '../services/storage_service.dart';
+import '../services/update_service.dart';
 import 'boardest_pen_view.dart';
 import 'pdf_board_view.dart';
 import 'tbp/tbp_viewer_route.dart';
@@ -53,6 +54,11 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
   void initState() {
     super.initState();
     _checkInitialConnection();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        UpdateService.checkAndUpdate(context, silent: true);
+      }
+    });
   }
 
   @override
@@ -265,9 +271,13 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
       list = list.where((f) {
         final l = f.name.toLowerCase();
         return l.endsWith('.tbp') ||
+            l.endsWith('.tbp.bst') ||
             l.endsWith('.htmlp') ||
+            l.endsWith('.htmlp.bst') ||
             l.endsWith('.bsttbp') ||
             l.endsWith('.canva.bst') ||
+            l.endsWith('.canva') ||
+            l.endsWith('.bstcanva') ||
             f.mimeType == 'application/x-bst-tbp-folder';
       }).toList();
     } else if (_selectedCategory == 'pdf') {
@@ -375,11 +385,20 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
 
     // 1. TBP / HTMLP 스마트교과서
     if (lower.endsWith('.tbp') ||
-        lower.endsWith('.htmlp') ||
-        lower.endsWith('.bsttbp') ||
         lower.endsWith('.tbp.bst') ||
+        lower.endsWith('.htmlp') ||
+        lower.endsWith('.htmlp.bst') ||
+        lower.endsWith('.bsttbp') ||
+        lower.endsWith('.canva.bst') ||
+        lower.endsWith('.canva') ||
+        lower.endsWith('.bstcanva') ||
         file.mimeType == 'application/x-bst-tbp-folder') {
-      if (kIsWeb) {
+      final isHtmlp = lower.endsWith('.htmlp') ||
+          lower.endsWith('.htmlp.bst') ||
+          lower.endsWith('.canva.bst') ||
+          lower.endsWith('.canva') ||
+          lower.endsWith('.bstcanva');
+      if (kIsWeb && !isHtmlp) {
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -406,7 +425,6 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
         );
         return;
       }
-      final isHtmlp = lower.endsWith('.htmlp');
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -584,7 +602,69 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
     return Scaffold(
       backgroundColor: const Color(0xFF070B14),
       body: SafeArea(
-        child: _isConnected ? _buildCloudBrowser() : _buildQrLoginView(),
+        child: ValueListenableBuilder<bool>(
+          valueListenable: UpdateService.isCloudBlockedNotifier,
+          builder: (context, isCloudBlocked, _) {
+            if (isCloudBlocked) {
+              return Center(
+                child: Container(
+                  width: 520,
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141721),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: const Color(0xFFEF4565), width: 2),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.cloud_off_rounded, color: Color(0xFFEF4565), size: 54),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Cloud 기능을 사용하시려면 업데이트를 하시기 바랍니다.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.notoSansKr(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 46,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00F5D4),
+                            foregroundColor: Colors.black,
+                          ),
+                          onPressed: () => UpdateService.executeInstall(context),
+                          icon: const Icon(Icons.download_rounded, color: Colors.black),
+                          label: const Text('업데이트 설치', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFEF4565),
+                            side: const BorderSide(color: Color(0xFFEF4565)),
+                          ),
+                          onPressed: () => UpdateService.uninstallApp(context),
+                          icon: const Icon(Icons.delete_forever_rounded),
+                          label: const Text('앱 삭제'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+            return _isConnected ? _buildCloudBrowser() : _buildQrLoginView();
+          },
+        ),
       ),
     );
   }
@@ -773,19 +853,41 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
               const SizedBox(height: 18),
 
               // 새로고침 버튼
-              OutlinedButton.icon(
-                onPressed: _startQrSession,
-                icon: const Icon(Icons.refresh_rounded, size: 16),
-                label: Text(
-                  'QR 코드 새로고침',
-                  style: GoogleFonts.notoSansKr(fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF00F5D4),
-                  side: const BorderSide(color: Color(0xFF00F5D4)),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _startQrSession,
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: Text(
+                      'QR 코드 새로고침',
+                      style: GoogleFonts.notoSansKr(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF00F5D4),
+                      side: const BorderSide(color: Color(0xFF00F5D4)),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  if (!kIsWeb) ...[
+                    const SizedBox(width: 10),
+                    OutlinedButton.icon(
+                      onPressed: () => UpdateService.uninstallApp(context),
+                      icon: const Icon(Icons.delete_forever_rounded, size: 16),
+                      label: Text(
+                        '앱 삭제',
+                        style: GoogleFonts.notoSansKr(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFEF4565),
+                        side: const BorderSide(color: Color(0xFFEF4565)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),
@@ -1126,13 +1228,23 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
     String typeLabel = 'FILE';
 
     if (lower.endsWith('.tbp') ||
+        lower.endsWith('.tbp.bst') ||
         lower.endsWith('.htmlp') ||
+        lower.endsWith('.htmlp.bst') ||
         lower.endsWith('.bsttbp') ||
+        lower.endsWith('.canva.bst') ||
+        lower.endsWith('.canva') ||
+        lower.endsWith('.bstcanva') ||
         file.mimeType == 'application/x-bst-tbp-folder') {
-      iconData = Icons.menu_book_rounded;
+      final isHtmlp = lower.endsWith('.htmlp') ||
+          lower.endsWith('.htmlp.bst') ||
+          lower.endsWith('.canva.bst') ||
+          lower.endsWith('.canva') ||
+          lower.endsWith('.bstcanva');
+      iconData = isHtmlp ? Icons.co_present_rounded : Icons.menu_book_rounded;
       iconColor = const Color(0xFF00F5D4);
       badgeColor = const Color(0xFF00F5D4).withValues(alpha: 0.15);
-      typeLabel = 'TBP';
+      typeLabel = isHtmlp ? 'HTMLP' : 'TBP';
     } else if (lower.endsWith('.pdf')) {
       iconData = Icons.picture_as_pdf_rounded;
       iconColor = const Color(0xFFEF4565);

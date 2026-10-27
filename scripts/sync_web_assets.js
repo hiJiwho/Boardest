@@ -121,12 +121,15 @@ for (const file of classStaticFiles) {
   copyFileSafe(path.join(classWeb, file), path.join(classBuildWeb, file));
 }
 fs.mkdirSync(classAssets, { recursive: true });
-if (fs.existsSync(path.join(ROOT, 'infra', 'demo_web', 'class', 'assets', 'FontManifest.json'))) {
+if (!fs.existsSync(path.join(classAssets, 'FontManifest.json')) && fs.existsSync(path.join(ROOT, 'infra', 'demo_web', 'class', 'assets', 'FontManifest.json'))) {
   copyFileSafe(path.join(ROOT, 'infra', 'demo_web', 'class', 'assets', 'FontManifest.json'), path.join(classAssets, 'FontManifest.json'));
 }
-if (fs.existsSync(path.join(ROOT, 'infra', 'demo_web', 'class', 'assets', 'AssetManifest.bin'))) {
+if (!fs.existsSync(path.join(classAssets, 'AssetManifest.bin')) && fs.existsSync(path.join(ROOT, 'infra', 'demo_web', 'class', 'assets', 'AssetManifest.bin'))) {
   copyFileSafe(path.join(ROOT, 'infra', 'demo_web', 'class', 'assets', 'AssetManifest.bin'), path.join(classAssets, 'AssetManifest.bin'));
   const binBuf = fs.readFileSync(path.join(ROOT, 'infra', 'demo_web', 'class', 'assets', 'AssetManifest.bin'));
+  fs.writeFileSync(path.join(classAssets, 'AssetManifest.bin.json'), JSON.stringify(binBuf.toString('base64')), 'utf8');
+} else if (fs.existsSync(path.join(classAssets, 'AssetManifest.bin')) && !fs.existsSync(path.join(classAssets, 'AssetManifest.bin.json'))) {
+  const binBuf = fs.readFileSync(path.join(classAssets, 'AssetManifest.bin'));
   fs.writeFileSync(path.join(classAssets, 'AssetManifest.bin.json'), JSON.stringify(binBuf.toString('base64')), 'utf8');
 }
 copyDirSafe(classBuildWeb, path.join(ROOT, 'infra', 'demo_web', 'class'));

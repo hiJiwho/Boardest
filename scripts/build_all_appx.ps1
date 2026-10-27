@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '5.3.0',
+  [string]$AppVersion = '5.3.1',
   [switch]$SkipApk,
   [switch]$SkipWindowsBuild
 )
@@ -45,9 +45,11 @@ New-Item -ItemType Directory -Force -Path (Join-Path $PackageDir 'bst-teacher') 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
 function Set-PackageVersion([string]$Manifest) {
+  $apxVer = $AppVersion
+  if (($apxVer -split '\.').Count -eq 3) { $apxVer = "$apxVer.0" }
   $xml = Get-Content $Manifest -Raw -Encoding UTF8
-  $xml = [regex]::Replace($xml, '(<Identity\b[^>]*\bVersion=")[0-9.]+', ('${1}' + $AppVersion))
-  if ($xml -notmatch ('<Identity\b[^>]*\bVersion="' + [regex]::Escape($AppVersion) + '"')) {
+  $xml = [regex]::Replace($xml, '(<Identity\b[^>]*\bVersion=")[0-9.]+', ('${1}' + $apxVer))
+  if ($xml -notmatch ('<Identity\b[^>]*\bVersion="' + [regex]::Escape($apxVer) + '"')) {
     throw "Could not set AppX version in manifest: $Manifest"
   }
   [System.IO.File]::WriteAllText($Manifest, $xml, [System.Text.UTF8Encoding]::new($false))
@@ -125,9 +127,10 @@ function Pack-TeacherMsi([string]$Version) {
   if ($LASTEXITCODE -ne 0) { throw "WiX heat failed for bst-teacher" }
 
   # 3. Compile
+  $msiVer = (($Version -split '\.')[0..2]) -join '.'
   $WixExt = Join-Path $WixDir 'WixUIExtension.dll'
   & "$WixDir\candle.exe" -nologo -arch x64 `
-    "-dVersion=$Version" `
+    "-dVersion=$msiVer" `
     "-dSourceDir=$TeacherSource" `
     "-dIconPath=$IconPath" `
     "-dLicenseRtf=$LicenseRtf" `
@@ -179,18 +182,18 @@ Copy-Item (Join-Path $RootDir 'infra\class_lite_web\index.html') (Join-Path $Pac
 
 if (-not $SkipApk) {
   Build-Apk (Join-Path $RootDir 'apps\boardest') 'boardest.apk'
-  Build-Apk (Join-Path $RootDir 'apps\boardest') 'bcld.apk' '--dart-define=BC_CLOUD_MODE=true -PisCloud=true'
-  Copy-Item (Join-Path $OutDir 'bcld.apk') (Join-Path $OutDir 'boardest-class-cloud.apk') -Force
+  Build-Apk (Join-Path $RootDir 'apps\boardest') 'boardest-cloud.apk' '--dart-define=BC_CLOUD_MODE=true'
+  Copy-Item (Join-Path $OutDir 'boardest-cloud.apk') (Join-Path $OutDir 'boardest-class-cloud.apk') -Force
   Build-Apk (Join-Path $RootDir 'apps\boardest_teacher') 'bst-teacher.apk'
   Build-Apk (Join-Path $RootDir 'apps\boardest_class_lite') 'bst-class-lite.apk'
   Copy-Item (Join-Path $OutDir 'bst-class-lite.apk') (Join-Path $OutDir 'boardest-class-lite.apk') -Force
 } else {
   $boardestFreshApk = Join-Path $RootDir 'apps\boardest\build\app\outputs\flutter-apk\app-release.apk'
-  if (Test-Path $boardestFreshApk) {
+  if ((Test-Path $boardestFreshApk) -and (-not (Test-Path (Join-Path $OutDir 'boardest.apk')))) {
     Copy-Item $boardestFreshApk (Join-Path $OutDir 'boardest.apk') -Force
   }
   $classLiteFreshApk = Join-Path $RootDir 'apps\boardest_class_lite\build\app\outputs\flutter-apk\app-release.apk'
-  if (Test-Path $classLiteFreshApk) {
+  if ((Test-Path $classLiteFreshApk) -and (-not (Test-Path (Join-Path $OutDir 'bst-class-lite.apk')))) {
     Copy-Item $classLiteFreshApk (Join-Path $OutDir 'bst-class-lite.apk') -Force
     Copy-Item $classLiteFreshApk (Join-Path $OutDir 'boardest-class-lite.apk') -Force
   }
@@ -225,7 +228,7 @@ if ($LASTEXITCODE -ne 0) { throw 'PowerPoint helper compilation failed.' }
 
 foreach ($name in @('boardest', 'bst-overlay-panser', 'boardest-class-lite', 'boardest-class-cloud')) { Pack-Signed $name }
 if (Test-Path (Join-Path $OutDir 'boardest-class-cloud.appx')) {
-  Copy-Item (Join-Path $OutDir 'boardest-class-cloud.appx') (Join-Path $OutDir 'bcld.appx') -Force
+  Copy-Item (Join-Path $OutDir 'boardest-class-cloud.appx') (Join-Path $OutDir 'boardest-cloud.appx') -Force
 }
 Pack-TeacherMsi $AppVersion
 Copy-Item $CerFile (Join-Path $OutDir 'BoardestCert.cer') -Force
@@ -234,7 +237,7 @@ Copy-Item (Join-Path $RootDir 'certs\install_certificate.ps1') (Join-Path $OutDi
 
 $DownloadDir = Join-Path $RootDir 'infra\download_web'
 New-Item -ItemType Directory -Force -Path $DownloadDir | Out-Null
-foreach ($file in @('boardest.appx', 'bst-teacher.msi', 'bst-overlay-panser.appx', 'boardest-class-lite.appx', 'boardest-class-cloud.appx', 'bcld.appx', 'boardest.apk', 'bst-teacher.apk', 'bst-teacher-lite.apk', 'bst-class-lite.apk', 'boardest-class-lite.apk', 'bcld.apk', 'BoardestCert.cer', 'install_certificate.bat', 'install_certificate.ps1')) {
+foreach ($file in @('boardest.appx', 'bst-teacher.msi', 'bst-overlay-panser.appx', 'boardest-class-lite.appx', 'boardest-class-cloud.appx', 'boardest-cloud.appx', 'boardest.apk', 'bst-teacher.apk', 'bst-teacher-lite.apk', 'bst-class-lite.apk', 'boardest-class-lite.apk', 'boardest-cloud.apk', 'BoardestCert.cer', 'install_certificate.bat', 'install_certificate.ps1')) {
   $source = Join-Path $OutDir $file
   if (Test-Path $source) { Copy-Item $source (Join-Path $DownloadDir $file) -Force }
 }

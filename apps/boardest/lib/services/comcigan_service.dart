@@ -454,7 +454,7 @@ class ComciganService {
     for (int g = 1; g <= classCounts.length; g++) {
       homeroomTeachers[g] = {};
       if (g - 1 < rawHomeroom.length) {
-        final List<dynamic> gradeHomeroom = (rawHomeroom[g - 1] as List<dynamic>?) ?? [];
+        final List<dynamic> gradeHomeroom = (rawHomeroom[g - 1] is List ? rawHomeroom[g - 1] as List<dynamic> : (g < rawHomeroom.length && rawHomeroom[g] is List ? rawHomeroom[g] as List<dynamic> : []));
         for (int c = 1; c <= (classCounts[g] ?? 0); c++) {
           if (c - 1 < gradeHomeroom.length) {
             final int teacherIdx = (gradeHomeroom[c - 1] as num?)?.toInt() ?? 0;

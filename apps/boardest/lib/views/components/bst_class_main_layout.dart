@@ -406,7 +406,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                           ),
                           const SizedBox(width: 10),
                           Text(
-                            '🚀 새 버전(${UpdateService.latestVersion ?? '5.0.6'}) 백그라운드 다운로드 중... ($pct%)',
+                            '🚀 새 버전(${UpdateService.latestVersion ?? '5.3.1'}) 백그라운드 다운로드 중... ($pct%)',
                             style: _ts(12, w: FontWeight.w900, c: Colors.black),
                           ),
                           const Spacer(),
@@ -2423,7 +2423,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
   /// [쉬는 시간용] 급식 대신 노출되는 대형 업데이트 필요 알림 카드
   Widget _updateRequiredCard() {
     final isWin = !kIsWeb && Platform.isWindows;
-    final ver = UpdateService.latestVersion ?? '5.0.6';
+    final ver = UpdateService.latestVersion ?? '5.3.1';
 
     return _glassSurface(
       padding: const EdgeInsets.all(28),

@@ -14,7 +14,7 @@ import '../views/ppt_overlay_view.dart';
 import '../views/hwp_overlay_view.dart';
 import '../views/tbp/tbp_viewer_route.dart';
 import '../views/boardest_pen_view.dart';
-import '../services/tbp/tbp_crx_bridge.dart';
+import '../services/update_service.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 /// 전자칠판용 클라우드 파일 탐색기 & 터치 키패드 모달 (BstCloudModal)
@@ -193,9 +193,13 @@ class _BstCloudModalState extends State<BstCloudModal> {
       list = list.where((f) {
         final l = f.name.toLowerCase();
         return l.endsWith('.tbp') ||
+            l.endsWith('.tbp.bst') ||
             l.endsWith('.htmlp') ||
+            l.endsWith('.htmlp.bst') ||
             l.endsWith('.bsttbp') ||
             l.endsWith('.canva.bst') ||
+            l.endsWith('.canva') ||
+            l.endsWith('.bstcanva') ||
             f.mimeType == 'application/x-bst-tbp-folder';
       }).toList();
     } else if (_folderTab == 2) {
@@ -215,10 +219,13 @@ class _BstCloudModalState extends State<BstCloudModal> {
     } else if (_categoryFilter == 'canva' || _categoryFilter == 'htmlp') {
       list = list.where((f) {
         final l = f.name.toLowerCase();
-        return l.endsWith('.htmlp') || l.endsWith('.canva.bst') || l.endsWith('.canva') || l.endsWith('.bstcanva');
+        return l.endsWith('.htmlp') || l.endsWith('.htmlp.bst') || l.endsWith('.canva.bst') || l.endsWith('.canva') || l.endsWith('.bstcanva');
       }).toList();
     } else if (_categoryFilter == 'tbp') {
-      list = list.where((f) => f.name.toLowerCase().endsWith('.tbp') || f.name.toLowerCase().endsWith('.bsttbp') || f.mimeType == 'application/x-bst-tbp-folder').toList();
+      list = list.where((f) {
+        final l = f.name.toLowerCase();
+        return l.endsWith('.tbp') || l.endsWith('.tbp.bst') || l.endsWith('.bsttbp') || f.mimeType == 'application/x-bst-tbp-folder';
+      }).toList();
     } else if (_categoryFilter == 'ppt') {
       list = list.where((f) => f.name.toLowerCase().endsWith('.ppt') || f.name.toLowerCase().endsWith('.pptx')).toList();
     } else if (_categoryFilter == 'hwp') {
@@ -333,23 +340,45 @@ class _BstCloudModalState extends State<BstCloudModal> {
 
     // 1. TBP 스마트 교과서 또는 HTMLP 프레젠터 열기 (통합 TbpViewerRoute)
     if (lower.endsWith('.tbp') ||
+        lower.endsWith('.tbp.bst') ||
         lower.endsWith('.bsttbp') ||
         lower.endsWith('.htmlp') ||
+        lower.endsWith('.htmlp.bst') ||
         lower.endsWith('.canva.bst') ||
         lower.endsWith('.canva') ||
         lower.endsWith('.bstcanva') ||
         file.mimeType == 'application/x-bst-tbp-folder') {
-      final isHtmlp = lower.endsWith('.htmlp') || lower.endsWith('.canva.bst') || lower.endsWith('.canva') || lower.endsWith('.bstcanva');
+      final isHtmlp = lower.endsWith('.htmlp') ||
+          lower.endsWith('.htmlp.bst') ||
+          lower.endsWith('.canva.bst') ||
+          lower.endsWith('.canva') ||
+          lower.endsWith('.bstcanva');
       if (kIsWeb) {
-        // 웹 브라우저 환경: BoardBook 크롬 익스텐션 우선 시도 (안내 팝업 및 다운로드 옵션 포함)
-        TbpCrxBridge.instance.launchBoardBookExtension(
+        showDialog(
           context: context,
-          title: file.name,
-          fileUrl: 'https://docs.google.com/uc?id=${file.id}&export=download',
-          type: isHtmlp ? 'HTMLP' : 'TBP',
-          driveToken: token,
-          pointerId: file.id,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF141721),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: const [
+                Icon(Icons.block_rounded, color: Colors.orangeAccent),
+                SizedBox(width: 8),
+                Text('TBP 웹 실행 제한', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: const Text(
+              'TBP 전자교과서는 보안 및 고성능 판서·엔진 구동을 위해 Windows/Android 앱에서만 지원됩니다.\n웹 브라우저에서는 이용하실 수 없습니다.',
+              style: TextStyle(color: Colors.white70, height: 1.5),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('확인', style: TextStyle(color: Color(0xFF00F5D4))),
+              ),
+            ],
+          ),
         );
+        return;
       }
       if (mounted) {
         Navigator.push(
@@ -480,7 +509,9 @@ class _BstCloudModalState extends State<BstCloudModal> {
   Future<void> _deleteFile(BstCloudFile file) async {
     final lower = file.name.toLowerCase();
     final isTbpOrHtmlp = lower.endsWith('.tbp') ||
+        lower.endsWith('.tbp.bst') ||
         lower.endsWith('.htmlp') ||
+        lower.endsWith('.htmlp.bst') ||
         lower.endsWith('.bsttbp') ||
         lower.endsWith('.canva.bst') ||
         file.mimeType == 'application/x-bst-tbp-folder';
@@ -1375,8 +1406,8 @@ class _BstCloudModalState extends State<BstCloudModal> {
 
   Widget _buildFileCard(BstCloudFile file, double s) {
     final lower = file.name.toLowerCase();
-    final isTbp = lower.endsWith('.tbp') || lower.endsWith('.bsttbp') || file.mimeType == 'application/x-bst-tbp-folder';
-    final isHtmlp = lower.endsWith('.htmlp') || lower.endsWith('.canva.bst') || lower.endsWith('.canva') || lower.endsWith('.bstcanva');
+    final isTbp = lower.endsWith('.tbp') || lower.endsWith('.tbp.bst') || lower.endsWith('.bsttbp') || file.mimeType == 'application/x-bst-tbp-folder';
+    final isHtmlp = lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva.bst') || lower.endsWith('.canva') || lower.endsWith('.bstcanva');
     final isPdf = lower.endsWith('.pdf');
     final isPpt = lower.endsWith('.ppt') || lower.endsWith('.pptx');
     final isHwp = lower.endsWith('.hwp') || lower.endsWith('.hwpx');

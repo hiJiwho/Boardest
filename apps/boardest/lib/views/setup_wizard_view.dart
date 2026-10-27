@@ -23,6 +23,7 @@ import 'timetable_view.dart';
 import 'dashboard_view.dart';
 import '../services/demo_class_allocator_service.dart';
 import '../services/bst_cloud_service.dart';
+import '../services/update_service.dart';
 
 class SetupWizardView extends StatefulWidget {
   final bool startWithStepList;
@@ -166,6 +167,11 @@ class _SetupWizardViewState extends State<SetupWizardView> {
       }
     }
     _loadExistingSettings();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        UpdateService.checkAndUpdate(context, silent: true);
+      }
+    });
   }
 
   HttpServer? _classTeacherLoopbackServer;

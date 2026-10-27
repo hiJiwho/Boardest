@@ -395,7 +395,7 @@
     <nav class="top-nav">
       <a href="https://boardest.web.app" class="nav-brand">
         <span class="nav-brand-title">Boardest</span>
-        <span class="nav-brand-sub version-display">v5.3.0</span>
+        <span class="nav-brand-sub version-display">v5.3.1</span>
       </a>
       <div class="nav-menu">
         <a href="/install" class="nav-item" style="color: #00F5D4; font-weight: 800; border: 1.5px solid rgba(0,245,212,0.4); background: rgba(0,245,212,0.12);">🚀 도입 및 설치 안내</a>
@@ -412,7 +412,7 @@
     <header>
       <div class="brand-title">
         Boardest
-        <span class="brand-sub">스마트 교실 플랫폼 <span class="version-display" style="font-size: 16px; opacity: 0.85;">v5.3.0</span></span>
+        <span class="brand-sub">스마트 교실 플랫폼 <span class="version-display" style="font-size: 16px; opacity: 0.85;">v5.3.1</span></span>
       </div>
       <p class="hero-desc">
         전자칠판 대시보드, 교사용 원격 수업 제어, 교실 클라우드 칠판(bcld)과 초경량 시간표까지.<br>
@@ -457,7 +457,7 @@
       <div class="platform-card card-class">
         <div class="card-header">
           <div class="card-icon">🖥️</div>
-          <span class="card-badge version-display" style="background: rgba(0,245,212,0.2); color: #00F5D4; border-color: rgba(0,245,212,0.4);">v5.3.0</span>
+          <span class="card-badge version-display" style="background: rgba(0,245,212,0.2); color: #00F5D4; border-color: rgba(0,245,212,0.4);">v5.3.1</span>
         </div>
         <div class="card-title">Class PRO (Windows, APK)</div>
         <div class="card-desc">
@@ -533,7 +533,7 @@
       <div class="platform-card card-teacher">
         <div class="card-header">
           <div class="card-icon">💼</div>
-          <span class="card-badge version-display" style="background: rgba(127,90,240,0.25); color: #E0B0FF; border-color: rgba(127,90,240,0.5);">v5.3.0</span>
+          <span class="card-badge version-display" style="background: rgba(127,90,240,0.25); color: #E0B0FF; border-color: rgba(127,90,240,0.5);">v5.3.1</span>
         </div>
         <div class="card-title">Teacher PRO (Windows, APK)</div>
         <div class="card-desc">
@@ -553,7 +553,7 @@
       <div class="platform-card card-tools">
         <div class="card-header">
           <div class="card-icon">☁️</div>
-          <span class="card-badge version-display" style="background: rgba(0,186,242,0.18); color: #00BAF2; border-color: rgba(0,186,242,0.4);">v5.3.0</span>
+          <span class="card-badge version-display" style="background: rgba(0,186,242,0.18); color: #00BAF2; border-color: rgba(0,186,242,0.4);">v5.3.1</span>
         </div>
         <div class="card-title">Boardest Class Cloud (bcld)</div>
         <div class="card-desc">
@@ -563,11 +563,11 @@
           <a href="https://bcld.web.app" class="btn-card btn-blue" target="_blank">
             🌐 bcld 웹 바로 열기 ➔
           </a>
-          <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/bcld.appx" class="btn-card btn-outline" target="_blank">
-            📥 🪟 bcld Windows (AppX) 다운로드
+          <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx" class="btn-card btn-outline" target="_blank">
+            📥 🪟 Class Cloud Windows (AppX) 다운로드
           </a>
-          <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/bcld.apk" class="btn-card btn-outline" target="_blank">
-            📥 🤖 bcld Android (APK) 다운로드
+          <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.apk" class="btn-card btn-outline" target="_blank">
+            📥 🤖 Class Cloud Android (APK) 다운로드
           </a>
         </div>
       </div>
@@ -605,7 +605,7 @@
         const res = await fetch('https://api.github.com/repos/hiJiwho/Boardest/releases/latest');
         if (res.ok) {
           const data = await res.json();
-          const ver = data.tag_name ? data.tag_name.replace(/^v/, '') : '5.3.0';
+          const ver = data.tag_name ? data.tag_name.replace(/^v/, '') : '5.3.1';
           document.querySelectorAll('.version-display').forEach(el => {
             el.textContent = 'v' + ver;
           });
