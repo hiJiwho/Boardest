@@ -810,7 +810,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(color: const Color(0xFF00F5D4), width: 0.8),
                       ),
-                      child: Text('v5.1.1', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
+                      child: Text('v${UpdateService.currentVersion}', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
                     ),
                     if (!kIsWeb) ...[
                       const SizedBox(width: 3),

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Boardest BoardBook",
-  "version": "5.1.2",
+  "version": "5.1.2.1",
   "description": "Boardest TBP 전자교과서 및 HTMLP 스마트교안 전용 Flutter 기반 BoardBook 캡처 & 우측 판서 엔진",
   "icons": {
     "128": "icons/icon128.png"

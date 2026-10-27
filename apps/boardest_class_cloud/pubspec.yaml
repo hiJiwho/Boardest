@@ -1,0 +1,26 @@
+name: boardest_class_cloud
+description: "Boardest Class Cloud (BCLD Classroom Cloud App)"
+publish_to: 'none'
+version: 5.1.2+5121
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: ^4.10.0
+  webview_flutter_android: ^4.10.0
+  webview_windows: ^0.4.0
+  window_manager: ^0.4.3
+  win32: ^5.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icons/app_logo.png

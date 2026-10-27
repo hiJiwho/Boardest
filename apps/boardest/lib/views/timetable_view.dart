@@ -74,7 +74,7 @@ class _TimetableViewState extends State<TimetableView>
 
     try {
       final settings = await _storageService.getSettings();
-      if (widget.school.code == 0 && widget.initialTimetableResult != null) {
+      if (widget.initialTimetableResult != null) {
         setState(() {
           _timetableResult = widget.initialTimetableResult;
           _appSettings = settings;
@@ -932,8 +932,8 @@ class _TimetableViewState extends State<TimetableView>
                             ),
                           ),
                         ),
-                        // Days cell (Mon - Fri)
-                        ...List.generate(5, (dayIndex) {
+                        // Days cell (Mon - Fri or Mon - Sun)
+                        ...List.generate(maxDays, (dayIndex) {
                           final day = dayIndex + 1;
                           final lessons = dayLessons[day] ?? [];
                           final lesson = lessons.firstWhere(

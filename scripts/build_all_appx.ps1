@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '5.0.9.0',
+  [string]$AppVersion = '5.1.2.1',
   [switch]$SkipApk,
   [switch]$SkipWindowsBuild
 )
@@ -34,7 +34,7 @@ if ($UseCertificateStore) {
     throw 'Set BOARDEST_CERT_PASSWORD or install the matching Boardest signing certificate with its private key.'
   }
 }
-foreach ($name in @('boardest', 'bst-overlay-panser', 'boardest-class-lite')) {
+foreach ($name in @('boardest', 'bst-overlay-panser', 'boardest-class-lite', 'boardest-class-cloud')) {
   $template = Join-Path $TemplateDir $name
   if (-not (Test-Path (Join-Path $template 'AppxManifest.xml'))) { throw "AppX template not found: $template" }
   $package = Join-Path $PackageDir $name
@@ -169,6 +169,8 @@ if (-not $SkipApk) {
   Build-Apk (Join-Path $RootDir 'apps\boardest') 'boardest.apk'
   Build-Apk (Join-Path $RootDir 'apps\boardest_class_lite') 'bst-class-lite.apk'
   Copy-Item (Join-Path $OutDir 'bst-class-lite.apk') (Join-Path $OutDir 'boardest-class-lite.apk') -Force
+  Build-Apk (Join-Path $RootDir 'apps\boardest_class_cloud') 'bcld.apk'
+  Copy-Item (Join-Path $OutDir 'bcld.apk') (Join-Path $OutDir 'boardest-class-cloud.apk') -Force
 } else {
   $boardestFreshApk = Join-Path $RootDir 'apps\boardest\build\app\outputs\flutter-apk\app-release.apk'
   if (Test-Path $boardestFreshApk) {
@@ -179,12 +181,23 @@ if (-not $SkipApk) {
     Copy-Item $classLiteFreshApk (Join-Path $OutDir 'bst-class-lite.apk') -Force
     Copy-Item $classLiteFreshApk (Join-Path $OutDir 'boardest-class-lite.apk') -Force
   }
+  $classCloudFreshApk = Join-Path $RootDir 'apps\boardest_class_cloud\build\app\outputs\flutter-apk\app-release.apk'
+  if (Test-Path $classCloudFreshApk) {
+    Copy-Item $classCloudFreshApk (Join-Path $OutDir 'bcld.apk') -Force
+    Copy-Item $classCloudFreshApk (Join-Path $OutDir 'boardest-class-cloud.apk') -Force
+  }
 }
 
 if (-not (Test-Path (Join-Path $PackageDir 'boardest-class-lite\Boardest-Class-Lite.exe'))) {
   $ClassLiteExe = Join-Path $PackageDir 'boardest-class-lite\Boardest-Class-Lite.exe'
   & $CSharpCompiler /nologo /target:winexe "/out:$ClassLiteExe" (Join-Path $RootDir 'infra\class_lite_win\Boardest-Class-Lite.cs')
   if ($LASTEXITCODE -ne 0) { throw 'Class Lite Windows launcher compilation failed.' }
+}
+
+if (-not (Test-Path (Join-Path $PackageDir 'boardest-class-cloud\Boardest-Class-Cloud.exe'))) {
+  $ClassCloudExe = Join-Path $PackageDir 'boardest-class-cloud\Boardest-Class-Cloud.exe'
+  & $CSharpCompiler /nologo /target:winexe "/out:$ClassCloudExe" (Join-Path $RootDir 'infra\class_cloud_win\Boardest-Class-Cloud.cs')
+  if ($LASTEXITCODE -ne 0) { throw 'Class Cloud Windows launcher compilation failed.' }
 }
 
 $OverlayPackage = Join-Path $PackageDir 'bst-overlay-panser'
@@ -208,7 +221,10 @@ foreach ($overlay in @('boardest_ppt_overlay', 'boardest_hwp_overlay')) {
   (Join-Path $OverlaySource 'boardest_ppt_helper.cs')
 if ($LASTEXITCODE -ne 0) { throw 'PowerPoint helper compilation failed.' }
 
-foreach ($name in @('boardest', 'bst-overlay-panser', 'boardest-class-lite')) { Pack-Signed $name }
+foreach ($name in @('boardest', 'bst-overlay-panser', 'boardest-class-lite', 'boardest-class-cloud')) { Pack-Signed $name }
+if (Test-Path (Join-Path $OutDir 'boardest-class-cloud.appx')) {
+  Copy-Item (Join-Path $OutDir 'boardest-class-cloud.appx') (Join-Path $OutDir 'bcld.appx') -Force
+}
 Pack-TeacherMsi $AppVersion
 Copy-Item $CerFile (Join-Path $OutDir 'BoardestCert.cer') -Force
 Copy-Item (Join-Path $RootDir 'certs\install_certificate.bat') (Join-Path $OutDir 'install_certificate.bat') -Force
@@ -216,7 +232,7 @@ Copy-Item (Join-Path $RootDir 'certs\install_certificate.ps1') (Join-Path $OutDi
 
 $DownloadDir = Join-Path $RootDir 'infra\download_web'
 New-Item -ItemType Directory -Force -Path $DownloadDir | Out-Null
-foreach ($file in @('boardest.appx', 'bst-teacher.msi', 'bst-overlay-panser.appx', 'boardest-class-lite.appx', 'boardest.apk', 'bst-teacher.apk', 'bst-teacher-lite.apk', 'bst-class-lite.apk', 'boardest-class-lite.apk', 'BoardestCert.cer', 'install_certificate.bat', 'install_certificate.ps1')) {
+foreach ($file in @('boardest.appx', 'bst-teacher.msi', 'bst-overlay-panser.appx', 'boardest-class-lite.appx', 'boardest-class-cloud.appx', 'bcld.appx', 'boardest.apk', 'bst-teacher.apk', 'bst-teacher-lite.apk', 'bst-class-lite.apk', 'boardest-class-lite.apk', 'bcld.apk', 'BoardestCert.cer', 'install_certificate.bat', 'install_certificate.ps1')) {
   $source = Join-Path $OutDir $file
   if (Test-Path $source) { Copy-Item $source (Join-Path $DownloadDir $file) -Force }
 }
