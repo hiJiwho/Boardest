@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_io/io.dart';
@@ -1729,11 +1730,10 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
 
   // ───────── 2. 우측 콘텐츠 영역 ─────────
   Widget _rightContentArea() {
-    final inClass = _isClassTime;
     final activePeriod = _currentOrSelectedPeriod();
 
-    if (inClass) {
-      // ─── [수업 중 모드: 좌측 절반(상단 시계, 하단 교과서+과목명) + 우측 통째로 도구함] ───
+    // [Cloud 연결 시]: 지금처럼 급식 식단표 빼고 우측 통째로 Cloud 패널 노출!
+    if (widget.isCloudActive && widget.showCloudFiles && widget.cloudFilesWidget != null) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1756,60 +1756,76 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
             ),
           ),
           const SizedBox(width: 14),
-          // 우측: 통째로 도구 패널 (급식/Cloud 누르면 해당 패널로 오버레이 전환)
+          // 우측 절반: 급식 식단표 대신 우측 전체에 Cloud 파일 목록 노출
           Expanded(
             flex: 1,
-            child: _buildInClassRightPanel(),
-          ),
-        ],
-      );
-    } else {
-      // ─── [쉬는 시간 / 방과 후 모드] ───
-      // 상단: 시계 조금 좌측 + 우측 원형 쉬는시간 얼마 남았는지 띄움 (시계 높이 확대: 280)
-      // 하단: 지금 수업과 급식 (2열 그대로)
-      // 그 아래: BST 도구 1열
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: 280,
-            child: _recessTimeLargeClock(),
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Stack(
               children: [
-                Expanded(
-                  flex: 1,
-                  child: _currentPeriodCard(activePeriod),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 1,
-                  child: (widget.isCloudActive && widget.showCloudFiles && widget.cloudFilesWidget != null)
-                      ? _recessCloudPanel()
-                      : ValueListenableBuilder<UpdateState>(
-                          valueListenable: UpdateService.stateNotifier,
-                          builder: (ctx, updateState, _) {
-                            if (updateState == UpdateState.downloaded) {
-                              return _updateRequiredCard();
-                            }
-                            return _mealTableFull();
-                          },
-                        ),
+                Positioned.fill(child: widget.cloudFilesWidget!),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: InkWell(
+                    onTap: () => widget.onCloudToggle?.call(),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.55),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 64,
-            child: _buildHorizontalToolsRow(inClass: false),
-          ),
         ],
       );
     }
+
+    // [Cloud 미연결 시]: 수업시간에도 쉬는시간과 동일하게 상단 대형 시계 + 하단 (지금 수업 | 급식 식단표) + 도구함 노출!
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 280,
+          child: _recessTimeLargeClock(),
+        ),
+        const SizedBox(height: 10),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                flex: 1,
+                child: _currentPeriodCard(activePeriod),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 1,
+                child: ValueListenableBuilder<UpdateState>(
+                  valueListenable: UpdateService.stateNotifier,
+                  builder: (ctx, updateState, _) {
+                    if (updateState == UpdateState.downloaded) {
+                      return _updateRequiredCard();
+                    }
+                    return _mealTableFull();
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 64,
+          child: _buildHorizontalToolsRow(inClass: _isClassTime),
+        ),
+      ],
+    );
   }
 
   /// [수업 중 우측 패널]: 수업 도구 기본 노출, 급식이나 Cloud를 누르면 해당 패널로 가려지고 교체
@@ -2162,19 +2178,25 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 ],
               ),
             ),
-            // 쉬는 시간 안내 문구
+            // 쉬는 시간 / 수업 진행 안내 문구
             Row(
               children: [
-                const Icon(Icons.coffee_rounded, color: Color(0xFF00F5D4), size: 19),
+                Icon(
+                  _isClassTime ? Icons.school_rounded : Icons.coffee_rounded,
+                  color: const Color(0xFF00F5D4),
+                  size: 19,
+                ),
                 const SizedBox(width: 7),
                 Text(
-                  widget.clockRemainingDetailText ?? '쉬는 시간 (수업 준비 중)',
+                  widget.clockRemainingDetailText ?? (_isClassTime ? '수업 진행 중' : '쉬는 시간 (수업 준비 중)'),
                   style: _ts(16, c: Colors.white, w: FontWeight.w800),
                 ),
                 const Spacer(),
                 if (widget.nextSubject.isNotEmpty)
-                  Text('다음 수업: ${widget.nextSubject}',
-                      style: _ts(15, c: const Color(0xFF00F5D4), w: FontWeight.w800)),
+                  Text(
+                    _isClassTime ? '다음 교시: ${widget.nextSubject}' : '다음 수업: ${widget.nextSubject}',
+                    style: _ts(15, c: const Color(0xFF00F5D4), w: FontWeight.w800),
+                  ),
               ],
             ),
           ],
@@ -2193,12 +2215,18 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
 
     final detail = widget.clockRemainingDetailText ?? '';
     if (detail.contains('남음')) {
-      final clean = detail.replaceAll('남음', '').replaceAll('쉬는시간', '').replaceAll('쉬는 시간', '').trim();
+      final clean = detail
+          .replaceAll('남음', '')
+          .replaceAll('수업시간', '')
+          .replaceAll('수업 시간', '')
+          .replaceAll('쉬는시간', '')
+          .replaceAll('쉬는 시간', '')
+          .trim();
       timeMain = clean;
     } else if (detail.isNotEmpty) {
       timeMain = detail;
     } else {
-      timeMain = '휴식 중';
+      timeMain = _isClassTime ? '수업 중' : '휴식 중';
     }
 
     return Container(
@@ -2707,132 +2735,174 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              // 1) 사용자가 직접 등록한 시스템 앱 슬롯 우선 표시
-              for (int i = 0; i < customSlots.length; i++) ...[
-                if (i > 0) const SizedBox(width: 8),
-                Expanded(
-                  child: InkWell(
-                    onTap: () {
-                      if (widget.onLaunchApp != null) {
-                        widget.onLaunchApp!(customSlots[i]);
-                      } else {
-                        SystemAppScanner.launchApp(customSlots[i].id);
-                      }
-                    },
-                    onLongPress: () => widget.onRemoveApp?.call(i),
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      height: 52,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00F5D4).withOpacity(0.10),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.35)),
-                      ),
-                      child: Row(
-                        children: [
-                          if (customSlots[i].iconPath != null &&
-                              customSlots[i].iconPath!.isNotEmpty &&
-                              File(customSlots[i].iconPath!).existsSync())
-                            Image.file(File(customSlots[i].iconPath!), width: 24, height: 24)
-                          else
-                            const Icon(Icons.apps_rounded, size: 22, color: Color(0xFF00F5D4)),
-                          const SizedBox(width: 7),
-                          Expanded(
-                            child: Text(
-                              customSlots[i].name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: _ts(13, w: FontWeight.w800, c: Colors.white),
-                            ),
-                          ),
-                          if (widget.onRemoveApp != null)
-                            InkWell(
-                              onTap: () => widget.onRemoveApp?.call(i),
-                              child: const Icon(Icons.close_rounded, size: 15, color: Colors.white54),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-              // 2) 사용자 슬롯이 비어있을 경우 기본 추천 시스템 앱 노출
-              if (customSlots.isEmpty)
-                for (int i = 0; i < fallbackApps.length && i < 3; i++) ...[
-                  if (i > 0) const SizedBox(width: 8),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => SystemAppScanner.launchApp(fallbackApps[i].appId),
+          Builder(
+            builder: (context) {
+              Widget buildSlotItem(LauncherSlot slot, int i, {bool isExpanded = true}) {
+                final item = InkWell(
+                  onTap: () {
+                    if (widget.onLaunchApp != null) {
+                      widget.onLaunchApp!(slot);
+                    } else {
+                      SystemAppScanner.launchApp(slot.id);
+                    }
+                  },
+                  onLongPress: () => widget.onRemoveApp?.call(i),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00F5D4).withOpacity(0.10),
                       borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        height: 52,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.white.withOpacity(0.1)),
-                        ),
-                        child: Row(
-                          children: [
-                            if (fallbackApps[i].iconPath != null &&
-                                fallbackApps[i].iconPath!.isNotEmpty &&
-                                File(fallbackApps[i].iconPath!).existsSync())
-                              Image.file(File(fallbackApps[i].iconPath!), width: 24, height: 24)
-                            else
-                              const Icon(Icons.apps_rounded, size: 22, color: Color(0xFF00F5D4)),
-                            const SizedBox(width: 7),
-                            Expanded(
-                              child: Text(
-                                fallbackApps[i].name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: _ts(13, w: FontWeight.w800, c: Colors.white),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.35)),
                     ),
-                  ),
-                ],
-              // 3) 시스템 앱 추가 슬롯 카드 (최대 4개 미만일 때 표시)
-              if (widget.onAddAppTap != null && customSlots.length < 4) ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  child: InkWell(
-                    onTap: widget.onAddAppTap,
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      height: 52,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00F5D4).withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.35)),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.add_circle_outline_rounded, size: 20, color: Color(0xFF00F5D4)),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              '앱 추가',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: _ts(13, w: FontWeight.w800, c: const Color(0xFF00F5D4)),
-                            ),
+                    child: Row(
+                      children: [
+                        if (slot.iconPath != null &&
+                            slot.iconPath!.isNotEmpty &&
+                            File(slot.iconPath!).existsSync())
+                          Image.file(File(slot.iconPath!), width: 24, height: 24)
+                        else
+                          const Icon(Icons.apps_rounded, size: 22, color: Color(0xFF00F5D4)),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            slot.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _ts(13, w: FontWeight.w800, c: Colors.white),
                           ),
-                        ],
-                      ),
+                        ),
+                        if (widget.onRemoveApp != null)
+                          InkWell(
+                            onTap: () => widget.onRemoveApp?.call(i),
+                            child: const Icon(Icons.close_rounded, size: 15, color: Colors.white54),
+                          ),
+                      ],
                     ),
                   ),
-                ),
-              ],
-            ],
+                );
+                if (isExpanded) return Expanded(child: item);
+                return SizedBox(width: 175, child: item);
+              }
+
+              Widget buildAddItem({bool isExpanded = true}) {
+                final item = InkWell(
+                  onTap: widget.onAddAppTap,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00F5D4).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.35)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.add_circle_outline_rounded, size: 20, color: Color(0xFF00F5D4)),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            '앱 추가',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _ts(13, w: FontWeight.w800, c: const Color(0xFF00F5D4)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+                if (isExpanded) return Expanded(child: item);
+                return SizedBox(width: 125, child: item);
+              }
+
+              Widget buildFallbackItem(ScannedApp app, {bool isExpanded = true}) {
+                final item = InkWell(
+                  onTap: () => SystemAppScanner.launchApp(app.appId),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                    ),
+                    child: Row(
+                      children: [
+                        if (app.iconPath != null &&
+                            app.iconPath!.isNotEmpty &&
+                            File(app.iconPath!).existsSync())
+                          Image.file(File(app.iconPath!), width: 24, height: 24)
+                        else
+                          const Icon(Icons.apps_rounded, size: 22, color: Color(0xFF00F5D4)),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(
+                            app.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _ts(13, w: FontWeight.w800, c: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+                if (isExpanded) return Expanded(child: item);
+                return SizedBox(width: 175, child: item);
+              }
+
+              if (customSlots.length >= 4) {
+                return ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context).copyWith(
+                    dragDevices: {
+                      PointerDeviceKind.touch,
+                      PointerDeviceKind.mouse,
+                      PointerDeviceKind.trackpad,
+                      PointerDeviceKind.stylus,
+                    },
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: [
+                        for (int i = 0; i < customSlots.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 8),
+                          buildSlotItem(customSlots[i], i, isExpanded: false),
+                        ],
+                        if (widget.onAddAppTap != null) ...[
+                          const SizedBox(width: 8),
+                          buildAddItem(isExpanded: false),
+                        ],
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              return Row(
+                children: [
+                  for (int i = 0; i < customSlots.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    buildSlotItem(customSlots[i], i, isExpanded: true),
+                  ],
+                  if (customSlots.isEmpty)
+                    for (int i = 0; i < fallbackApps.length && i < 3; i++) ...[
+                      if (i > 0) const SizedBox(width: 8),
+                      buildFallbackItem(fallbackApps[i], isExpanded: true),
+                    ],
+                  if (widget.onAddAppTap != null) ...[
+                    const SizedBox(width: 8),
+                    buildAddItem(isExpanded: true),
+                  ],
+                ],
+              );
+            },
           ),
         ],
       ),

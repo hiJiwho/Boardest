@@ -17,7 +17,7 @@
   const bgCtx = bgCanvas.getContext('2d');
   const penCtx = penCanvas.getContext('2d');
 
-  // 1. 보안 세션 토큰 검증 (무단 직접 접속 완벽 차단)
+  // 1. 보안 세션 토큰 검증
   if (!sessionToken) {
     showAuthBlocked('세션 토큰이 전달되지 않았습니다.');
     return;
@@ -78,7 +78,7 @@
     });
   }
 
-  // 5. 캡처 루프 (초고속 화면 동기화)
+  // 5. 캡처 루프 (화면 동기화)
   let isCapturing = false;
   function startCaptureLoop() {
     setInterval(async () => {
@@ -107,21 +107,28 @@
       } catch (_) {
         isCapturing = false;
       }
-    }, 800); // 0.8초 주기 캡처 동기화
+    }, 800);
   }
 
   // 6. 우측 판서 엔진 (Smooth Bezier 2D Annotation)
-  let currentTool = 'pen'; // 'pen', 'eraser'
+  let currentTool = 'pen'; // 'pen', 'highlighter', 'eraser'
   let currentColor = '#00F5D4';
-  let strokeWidth = 4;
   let isDrawing = false;
-  let strokes = []; // { tool, color, width, points: [{x,y}] }
+  let strokes = []; // { tool, color, width, opacity, points: [{x,y}] }
   let currentStroke = null;
   let isInteractionPassThrough = false;
 
+  function getStrokeParams() {
+    if (currentTool === 'eraser') {
+      return { width: 26, opacity: 1.0 };
+    } else if (currentTool === 'highlighter') {
+      return { width: 18, opacity: 0.35 };
+    }
+    return { width: 4, opacity: 1.0 };
+  }
+
   penCanvas.addEventListener('pointerdown', (e) => {
     if (isInteractionPassThrough) {
-      // 사이트 조작 통과 모드 시 대상 탭으로 이벤트 전달
       chrome.runtime.sendMessage({
         action: 'DISPATCH_EVENT_TO_TAB',
         targetTabId,
@@ -134,10 +141,12 @@
 
     isDrawing = true;
     penCanvas.setPointerCapture(e.pointerId);
+    const params = getStrokeParams();
     currentStroke = {
       tool: currentTool,
       color: currentColor,
-      width: currentTool === 'eraser' ? 24 : strokeWidth,
+      width: params.width,
+      opacity: params.opacity,
       points: [{ x: e.offsetX, y: e.offsetY }],
     };
     strokes.push(currentStroke);
@@ -148,22 +157,33 @@
     const pt = { x: e.offsetX, y: e.offsetY };
     currentStroke.points.push(pt);
 
-    // 증분 드로잉
     const pts = currentStroke.points;
     if (pts.length > 1) {
       penCtx.lineWidth = currentStroke.width;
       penCtx.lineCap = 'round';
       penCtx.lineJoin = 'round';
+
       if (currentStroke.tool === 'eraser') {
         penCtx.globalCompositeOperation = 'destination-out';
       } else {
         penCtx.globalCompositeOperation = 'source-over';
         penCtx.strokeStyle = currentStroke.color;
+        penCtx.globalAlpha = currentStroke.opacity;
       }
+
       penCtx.beginPath();
-      penCtx.moveTo(pts[pts.length - 2].x, pts[pts.length - 2].y);
-      penCtx.lineTo(pt.x, pt.y);
+      // Smooth quadratic curves
+      if (pts.length > 2) {
+        const xc = (pts[pts.length - 2].x + pt.x) / 2;
+        const yc = (pts[pts.length - 2].y + pt.y) / 2;
+        penCtx.moveTo(pts[pts.length - 2].x, pts[pts.length - 2].y);
+        penCtx.quadraticCurveTo(xc, yc, pt.x, pt.y);
+      } else {
+        penCtx.moveTo(pts[0].x, pts[0].y);
+        penCtx.lineTo(pt.x, pt.y);
+      }
       penCtx.stroke();
+      penCtx.globalAlpha = 1.0;
     }
   });
 
@@ -179,40 +199,62 @@
       penCtx.lineWidth = s.width;
       penCtx.lineCap = 'round';
       penCtx.lineJoin = 'round';
+
       if (s.tool === 'eraser') {
         penCtx.globalCompositeOperation = 'destination-out';
       } else {
         penCtx.globalCompositeOperation = 'source-over';
         penCtx.strokeStyle = s.color;
+        penCtx.globalAlpha = s.opacity || 1.0;
       }
+
       penCtx.beginPath();
       penCtx.moveTo(s.points[0].x, s.points[0].y);
-      for (let i = 1; i < s.points.length; i++) {
-        penCtx.lineTo(s.points[i].x, s.points[i].y);
+      for (let i = 1; i < s.points.length - 1; i++) {
+        const xc = (s.points[i].x + s.points[i + 1].x) / 2;
+        const yc = (s.points[i].y + s.points[i + 1].y) / 2;
+        penCtx.quadraticCurveTo(s.points[i].x, s.points[i].y, xc, yc);
       }
+      penCtx.lineTo(s.points[s.points.length - 1].x, s.points[s.points.length - 1].y);
       penCtx.stroke();
+      penCtx.globalAlpha = 1.0;
     }
     penCtx.globalCompositeOperation = 'source-over';
   }
 
+  function undoLastStroke() {
+    if (strokes.length > 0) {
+      strokes.pop();
+      redrawStrokes();
+    }
+  }
+
   // 7. 우측 툴바 이벤트 연결
   const toolPenBtn = document.getElementById('tool-pen');
+  const toolHighlighterBtn = document.getElementById('tool-highlighter');
   const toolEraserBtn = document.getElementById('tool-eraser');
+  const toolUndoBtn = document.getElementById('tool-undo');
   const toolClearBtn = document.getElementById('tool-clear-all');
+  const toolHelpBtn = document.getElementById('tool-help');
   const colorDots = document.querySelectorAll('.color-dot');
+  const shortcutsModal = document.getElementById('shortcuts-modal');
+  const btnCloseModal = document.getElementById('btn-close-modal');
 
-  toolPenBtn.addEventListener('click', () => {
-    currentTool = 'pen';
-    toolPenBtn.classList.add('active');
-    toolEraserBtn.classList.remove('active');
-  });
+  function setActiveTool(tool) {
+    currentTool = tool;
+    toolPenBtn.classList.toggle('active', tool === 'pen');
+    if (toolHighlighterBtn) toolHighlighterBtn.classList.toggle('active', tool === 'highlighter');
+    toolEraserBtn.classList.toggle('active', tool === 'eraser');
+  }
 
-  toolEraserBtn.addEventListener('click', () => {
-    currentTool = 'eraser';
-    toolEraserBtn.classList.add('active');
-    toolPenBtn.classList.remove('active');
-  });
-
+  toolPenBtn.addEventListener('click', () => setActiveTool('pen'));
+  if (toolHighlighterBtn) {
+    toolHighlighterBtn.addEventListener('click', () => setActiveTool('highlighter'));
+  }
+  toolEraserBtn.addEventListener('click', () => setActiveTool('eraser'));
+  if (toolUndoBtn) {
+    toolUndoBtn.addEventListener('click', undoLastStroke);
+  }
   toolClearBtn.addEventListener('click', () => {
     strokes = [];
     penCtx.clearRect(0, 0, penCanvas.width, penCanvas.height);
@@ -223,14 +265,14 @@
       colorDots.forEach((d) => d.classList.remove('active'));
       dot.classList.add('active');
       currentColor = dot.dataset.color;
-      currentTool = 'pen';
-      toolPenBtn.classList.add('active');
-      toolEraserBtn.classList.remove('active');
+      if (currentTool === 'eraser') {
+        setActiveTool('pen');
+      }
     });
   });
 
   // 8. 사이트 조작 / 판서 모드 토글
-  modeBtn.addEventListener('click', () => {
+  function toggleInteractionMode() {
     isInteractionPassThrough = !isInteractionPassThrough;
     if (isInteractionPassThrough) {
       modeBtn.classList.remove('active');
@@ -249,10 +291,69 @@
       modeText.textContent = '판서 모드';
       penCanvas.style.cursor = 'crosshair';
     }
-  });
+  }
+  modeBtn.addEventListener('click', toggleInteractionMode);
+
+  // 9. 페이지 이동
+  function navigatePage(direction) {
+    if (targetTabId) {
+      chrome.runtime.sendMessage({
+        action: 'NAVIGATE_TAB',
+        targetTabId,
+        direction,
+      });
+    }
+  }
+
+  document.getElementById('btn-prev-page').addEventListener('click', () => navigatePage('prev'));
+  document.getElementById('btn-next-page').addEventListener('click', () => navigatePage('next'));
 
   // 뒤로가기
   document.getElementById('btn-back').addEventListener('click', () => {
     window.close();
+  });
+
+  // 10. 단축키 모달
+  function toggleShortcutsModal() {
+    shortcutsModal.classList.toggle('hidden');
+  }
+  if (toolHelpBtn) toolHelpBtn.addEventListener('click', toggleShortcutsModal);
+  if (btnCloseModal) btnCloseModal.addEventListener('click', () => shortcutsModal.classList.add('hidden'));
+  shortcutsModal.addEventListener('click', (e) => {
+    if (e.target === shortcutsModal) shortcutsModal.classList.add('hidden');
+  });
+
+  // 11. 전역 단축키 핸들러
+  window.addEventListener('keydown', (e) => {
+    // 텍스트 필드 포커스 중 제외
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      undoLastStroke();
+      return;
+    }
+
+    if (e.key === 'p' || e.key === 'P') {
+      setActiveTool('pen');
+    } else if (e.key === 'h' || e.key === 'H') {
+      setActiveTool('highlighter');
+    } else if (e.key === 'e' || e.key === 'E') {
+      setActiveTool('eraser');
+    } else if (e.key === 'c' || e.key === 'C') {
+      strokes = [];
+      penCtx.clearRect(0, 0, penCanvas.width, penCanvas.height);
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      toggleInteractionMode();
+    } else if (e.key === 'ArrowLeft') {
+      navigatePage('prev');
+    } else if (e.key === 'ArrowRight') {
+      navigatePage('next');
+    } else if (e.key === '?' || e.key === 'F1') {
+      toggleShortcutsModal();
+    } else if (e.key === 'Escape') {
+      shortcutsModal.classList.add('hidden');
+    }
   });
 })();

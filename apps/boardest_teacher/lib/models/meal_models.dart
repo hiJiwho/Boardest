@@ -48,6 +48,26 @@ class MealDayInfo {
     this.calories = '',
   });
 
+  Map<String, dynamic> toJson() => {
+        'date': date.toIso8601String(),
+        'dishes': dishes.map((d) => d.toJson()).toList(),
+        'footnotes': footnotes,
+        'calories': calories,
+      };
+
+  factory MealDayInfo.fromJson(Map<String, dynamic> json) => MealDayInfo(
+        date: DateTime.tryParse(json['date']?.toString() ?? '') ?? DateTime.now(),
+        dishes: (json['dishes'] as List<dynamic>?)
+                ?.map((e) => MealDishItem.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            [],
+        footnotes: (json['footnotes'] as List<dynamic>?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            [],
+        calories: json['calories']?.toString() ?? '',
+      );
+
   Set<int> get allAllergyIndexes {
     final res = <int>{};
     for (final dish in dishes) {

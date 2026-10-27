@@ -116,6 +116,8 @@ class PasskeyService {
     String? refreshToken,
     required String teacherName,
     required String email,
+    String? schoolId,
+    String? schoolName,
   }) async {
     try {
       final raw = '$sessionId:$challenge:$accessToken:bst_passkey_v2_hmac_guard';
@@ -129,6 +131,8 @@ class PasskeyService {
           if (refreshToken != null) 'refreshToken': refreshToken,
           'teacherName': teacherName,
           'email': email,
+          if (schoolId != null && schoolId.isNotEmpty) 'schoolId': schoolId,
+          if (schoolName != null && schoolName.isNotEmpty) 'schoolName': schoolName,
           'proof': proof,
           'approvedAt': DateTime.now().millisecondsSinceEpoch,
         }),

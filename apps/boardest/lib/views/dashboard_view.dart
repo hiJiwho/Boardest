@@ -1349,6 +1349,35 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     return ('09:00', '09:50');
   }
 
+  void _applySchoolPeriodTimes(List<String> periodTimes) {
+    if (periodTimes.isEmpty) return;
+    try {
+      final schoolTimeSettings = ComciganService.parseTimeSettingsFromPeriodTimes(
+        periodTimes,
+        currentSettings: _settings.timeSettings,
+      );
+      if (schoolTimeSettings != null) {
+        final oldTs = _settings.timeSettings;
+        if (oldTs.firstPeriodStart != schoolTimeSettings.firstPeriodStart ||
+            oldTs.lessonDuration != schoolTimeSettings.lessonDuration ||
+            oldTs.lunchAfterPeriod != schoolTimeSettings.lunchAfterPeriod ||
+            oldTs.lunchDuration != schoolTimeSettings.lunchDuration ||
+            oldTs.periodStartTimes.join(',') != schoolTimeSettings.periodStartTimes.join(',')) {
+          debugPrint('[Boardest] 🕒 Auto-synced school period times from Comcigan: '
+              '1st=${schoolTimeSettings.firstPeriodStart}, lesson=${schoolTimeSettings.lessonDuration}m, '
+              'lunchAfter=${schoolTimeSettings.lunchAfterPeriod}P (${schoolTimeSettings.lunchDuration}m)');
+          final newSettings = _settings.copyWith(timeSettings: schoolTimeSettings);
+          setState(() {
+            _settings = newSettings;
+          });
+          _storageService.saveSettings(newSettings);
+        }
+      }
+    } catch (e) {
+      debugPrint('[Boardest] Error applying school period times: $e');
+    }
+  }
+
   Future<bool> _fetchTimetableWithRetry(
     int schoolCode,
     DateTime targetDate,
@@ -1391,6 +1420,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         setState(() {
           _timetableResult = result;
         });
+        _applySchoolPeriodTimes(result.periodTimes);
         _updateLiveSchedule();
       }
       return true;
@@ -1485,6 +1515,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         setState(() {
           _timetableResult = result;
         });
+        _applySchoolPeriodTimes(result.periodTimes);
         _updateLiveSchedule();
       } catch (_) {}
     }
@@ -7690,6 +7721,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       gradeClass: _settings.specialClassroomMode
           ? (_settings.selectedSubject.isNotEmpty ? '${_settings.selectedSubject} 전용교실' : '전용교실')
           : '${_settings.selectedGrade}학년 ${_settings.selectedClass}반',
+      schoolId: _settings.schoolId,
       onUnlocked: () {
         if (mounted) {
           setState(() {
@@ -11894,6 +11926,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           setState(() {
             _timetableResult = result;
           });
+          _applySchoolPeriodTimes(result.periodTimes);
           _updateLiveSchedule();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -12304,9 +12337,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   List<LauncherSlot> _getProCustomSlots() {
     final slots = _settings.launcherSlots;
     final List<LauncherSlot> result = [];
-    for (int i = 14; i <= 17; i++) {
-      if (i < slots.length &&
-          slots[i].type == LauncherSlotType.systemApp &&
+    for (int i = 14; i < slots.length; i++) {
+      if (slots[i].type == LauncherSlotType.systemApp &&
           slots[i].name.isNotEmpty) {
         result.add(slots[i]);
       }
@@ -12325,27 +12357,25 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   int _getProSlotIndex(int customIdx) {
     final slots = _settings.launcherSlots;
     int foundCount = 0;
-    for (int i = 14; i <= 17; i++) {
-      if (i < slots.length &&
-          slots[i].type == LauncherSlotType.systemApp &&
+    for (int i = 14; i < slots.length; i++) {
+      if (slots[i].type == LauncherSlotType.systemApp &&
           slots[i].name.isNotEmpty) {
         if (foundCount == customIdx) return i;
         foundCount++;
       }
     }
-    return (14 + customIdx).clamp(14, 18);
+    return 14 + customIdx;
   }
 
   int _getNextAvailableProSlotIndex() {
     final slots = _settings.launcherSlots;
-    for (int i = 14; i <= 17; i++) {
-      if (i >= slots.length ||
-          slots[i].type == LauncherSlotType.empty ||
+    for (int i = 14; i < slots.length; i++) {
+      if (slots[i].type == LauncherSlotType.empty ||
           slots[i].name.isEmpty) {
         return i;
       }
     }
-    return 14;
+    return slots.length < 14 ? 14 : slots.length;
   }
 
   void _showAddUrlAppDialog(int slotIndex) {
@@ -12886,14 +12916,21 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
     if (confirmed == true) {
       final updatedSlots = List<LauncherSlot>.from(_settings.launcherSlots);
-      while (updatedSlots.length <= slotIndex) {
-        updatedSlots.add(LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''));
+      if (slotIndex >= 14 && slotIndex < updatedSlots.length) {
+        updatedSlots.removeAt(slotIndex);
+        while (updatedSlots.length < 18) {
+          updatedSlots.add(LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''));
+        }
+      } else {
+        while (updatedSlots.length <= slotIndex) {
+          updatedSlots.add(LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''));
+        }
+        updatedSlots[slotIndex] = LauncherSlot(
+          type: LauncherSlotType.empty,
+          name: '',
+          id: '',
+        );
       }
-      updatedSlots[slotIndex] = LauncherSlot(
-        type: LauncherSlotType.empty,
-        name: '',
-        id: '',
-      );
       final newSettings = _settings.copyWith(launcherSlots: updatedSlots);
       await _storageService.saveSettings(newSettings);
       setState(() {

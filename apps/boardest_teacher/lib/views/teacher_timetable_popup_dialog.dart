@@ -128,6 +128,10 @@ class _TeacherTimetablePopupDialogState
     DateTime? lastClassEnd;
 
     for (int p = 1; p <= 7; p++) {
+      if (p - 1 < ts.periodStartTimes.length && ts.periodStartTimes[p - 1].contains(':')) {
+        final parts = ts.periodStartTimes[p - 1].split(':');
+        pStart = DateTime(_now.year, _now.month, _now.day, int.tryParse(parts[0]) ?? pStart.hour, int.tryParse(parts[1]) ?? pStart.minute);
+      }
       final pEnd = pStart.add(lessonDur);
       if (_now.isAfter(pStart) && _now.isBefore(pEnd)) {
         return {
@@ -142,7 +146,41 @@ class _TeacherTimetablePopupDialogState
         lastClassEnd = pEnd;
       }
 
-      if (p == ts.lunchAfterPeriod) {
+      if (p < ts.periodStartTimes.length && ts.periodStartTimes[p].contains(':')) {
+        final nextParts = ts.periodStartTimes[p].split(':');
+        final nextStart = DateTime(_now.year, _now.month, _now.day, int.tryParse(nextParts[0]) ?? 0, int.tryParse(nextParts[1]) ?? 0);
+        if (nextStart.isAfter(pEnd)) {
+          final gap = nextStart.difference(pEnd).inMinutes;
+          if (gap >= 35 || p == ts.lunchAfterPeriod) {
+            final pureEnd = pEnd.add(Duration(minutes: (gap - 10).clamp(1, 180)));
+            if (_now.isAfter(pEnd) && _now.isBefore(pureEnd)) {
+              return {
+                'period': 0,
+                'isClass': false,
+                'status': '🍱 점심시간',
+                'remaining': pureEnd.difference(_now),
+              };
+            } else if (_now.isAfter(pureEnd) && _now.isBefore(nextStart)) {
+              return {
+                'period': 0,
+                'isClass': false,
+                'status': '☕ 쉬는시간 (다음: ${p + 1}교시)',
+                'remaining': nextStart.difference(_now),
+              };
+            }
+          } else {
+            if (_now.isAfter(pEnd) && _now.isBefore(nextStart)) {
+              return {
+                'period': 0,
+                'isClass': false,
+                'status': '☕ 쉬는시간 (다음: ${p + 1}교시)',
+                'remaining': nextStart.difference(_now),
+              };
+            }
+          }
+        }
+        pStart = nextStart;
+      } else if (p == ts.lunchAfterPeriod) {
         final pureEnd = pEnd.add(pureLunchDur);
         final totalEnd = pEnd.add(lunchDur);
         if (_now.isAfter(pEnd) && _now.isBefore(pureEnd)) {
@@ -447,14 +485,21 @@ class _TeacherTimetablePopupDialogState
             ),
 
             // Period Rows (1 ~ 7교시)
-            for (int p = 1; p <= 7; p++)
-              Row(
-                children: [
-                  _buildHeaderCell('$p교시', 50 * s, s),
-                  for (int d = 1; d <= 5; d++)
-                    _buildLessonCell(d, p, 120 * s, s),
-                ],
-              ),
+            for (int p = 1; p <= 7; p++) ...[
+              Builder(builder: (ctx) {
+                final timeLabel = (p - 1 < (_settings?.timeSettings.periodStartTimes.length ?? 0))
+                    ? _settings!.timeSettings.periodStartTimes[p - 1]
+                    : '';
+                final pLabel = timeLabel.isNotEmpty ? '$p교시\n$timeLabel' : '$p교시';
+                return Row(
+                  children: [
+                    _buildHeaderCell(pLabel, 50 * s, s),
+                    for (int d = 1; d <= 5; d++)
+                      _buildLessonCell(d, p, 120 * s, s),
+                  ],
+                );
+              }),
+            ],
           ],
         ),
       ),

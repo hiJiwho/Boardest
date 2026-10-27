@@ -99,35 +99,36 @@ body, html {
 .icon-btn {
   background: none;
   border: none;
-  color: #FFFFFE;
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   padding: 6px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s;
+  transition: all 0.15s;
 }
 
 .icon-btn:hover {
   background: rgba(255, 255, 255, 0.1);
+  color: #FFFFFE;
 }
 
 .type-badge {
-  padding: 3px 8px;
-  background: rgba(127, 90, 240, 0.2);
-  border: 1px solid rgba(127, 90, 240, 0.5);
-  color: #7F5AF0;
-  border-radius: 6px;
   font-size: 11px;
   font-weight: bold;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(127, 90, 240, 0.2);
+  color: #7F5AF0;
+  border: 1px solid rgba(127, 90, 240, 0.5);
 }
 
 .doc-title {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   color: #FFFFFE;
-  max-width: 320px;
+  max-width: 380px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -140,43 +141,47 @@ body, html {
   padding: 6px 14px;
   border-radius: 8px;
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .nav-btn:hover {
   background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .page-indicator {
-  font-size: 13px;
-  font-weight: bold;
-  color: #94A1B2;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  min-width: 60px;
+  text-align: center;
 }
 
 .mode-toggle-btn {
-  background: rgba(0, 245, 212, 0.15);
-  border: 1px solid rgba(0, 245, 212, 0.4);
-  color: #00F5D4;
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: bold;
-  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 6px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  background: rgba(0, 245, 212, 0.15);
+  border: 1px solid rgba(0, 245, 212, 0.4);
+  color: #00F5D4;
+  transition: all 0.2s;
 }
 
-/* 중앙 캔버스 스테이지 */
+/* 뷰포트 스테이지 */
 .canvas-stage {
   flex: 1;
+  width: 100%;
+  height: calc(100vh - 56px);
   position: relative;
   overflow: hidden;
   background: #000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 #bg-canvas, #pen-canvas {
@@ -187,13 +192,23 @@ body, html {
   height: 100%;
 }
 
+#bg-canvas {
+  z-index: 10;
+}
+
 #pen-canvas {
+  z-index: 20;
   cursor: crosshair;
+  touch-action: none;
 }
 
 .hotspot-layer {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 30;
   pointer-events: none;
 }
 
@@ -211,7 +226,7 @@ body, html {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   z-index: 150;
 }
@@ -243,7 +258,7 @@ body, html {
 .color-palette {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   padding: 4px 0;
 }
 
@@ -257,17 +272,89 @@ body, html {
 }
 
 .color-dot:hover {
-  transform: scale(1.15);
+  transform: scale(1.18);
 }
 
 .color-dot.active {
   border-color: #FFFFFE;
-  transform: scale(1.15);
+  transform: scale(1.18);
 }
 
 .divider {
   width: 20px;
   height: 1px;
   background: rgba(255, 255, 255, 0.15);
-  margin: 4px 0;
+  margin: 3px 0;
+}
+
+/* 4. 단축키 모달 */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.modal-card {
+  background: #16161A;
+  border: 1px solid rgba(0, 245, 212, 0.3);
+  border-radius: 20px;
+  padding: 24px 28px;
+  width: 380px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.modal-header h3 {
+  font-size: 16px;
+  color: #00F5D4;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.modal-close:hover {
+  color: #FFFFFE;
+}
+
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #94A1B2;
+}
+
+kbd {
+  display: inline-block;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #FFFFFE;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
 }

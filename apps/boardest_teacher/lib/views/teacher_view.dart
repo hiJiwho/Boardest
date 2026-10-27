@@ -409,6 +409,7 @@ class _TeacherViewState extends State<TeacherView> {
                 _timetableResult = result;
                 _isLoading = false;
               });
+              _applySchoolPeriodTimes(result.periodTimes);
             }
           } catch (_) {}
         }
@@ -480,6 +481,7 @@ class _TeacherViewState extends State<TeacherView> {
             _timetableResult = result;
             _isLoading = false;
           });
+          _applySchoolPeriodTimes(result.periodTimes);
         }
       } else {
         if (mounted) setState(() => _isLoading = false);
@@ -509,6 +511,35 @@ class _TeacherViewState extends State<TeacherView> {
     }
   }
 
+  void _applySchoolPeriodTimes(List<String> periodTimes) {
+    if (periodTimes.isEmpty) return;
+    try {
+      final schoolTimeSettings = ComciganService.parseTimeSettingsFromPeriodTimes(
+        periodTimes,
+        currentSettings: _settings.timeSettings,
+      );
+      if (schoolTimeSettings != null) {
+        final oldTs = _settings.timeSettings;
+        if (oldTs.firstPeriodStart != schoolTimeSettings.firstPeriodStart ||
+            oldTs.lessonDuration != schoolTimeSettings.lessonDuration ||
+            oldTs.lunchAfterPeriod != schoolTimeSettings.lunchAfterPeriod ||
+            oldTs.lunchDuration != schoolTimeSettings.lunchDuration ||
+            oldTs.periodStartTimes.join(',') != schoolTimeSettings.periodStartTimes.join(',')) {
+          debugPrint('[Boardest Teacher] 🕒 Auto-synced school period times from Comcigan: '
+              '1st=${schoolTimeSettings.firstPeriodStart}, lesson=${schoolTimeSettings.lessonDuration}m, '
+              'lunchAfter=${schoolTimeSettings.lunchAfterPeriod}P (${schoolTimeSettings.lunchDuration}m)');
+          final newSettings = _settings.copyWith(timeSettings: schoolTimeSettings);
+          setState(() {
+            _settings = newSettings;
+          });
+          _storageService.saveSettings(newSettings);
+        }
+      }
+    } catch (e) {
+      debugPrint('[Boardest Teacher] Error applying school period times: $e');
+    }
+  }
+
   void _updateCurrentPeriod() {
     final weekday = _now.weekday;
     final isWeekend = weekday == 6 || weekday == 7;
@@ -531,14 +562,21 @@ class _TeacherViewState extends State<TeacherView> {
     int? found;
     int? next;
     for (int p = 1; p <= 8; p++) {
-      final start = curMin;
+      int start = curMin;
+      if (p - 1 < ts.periodStartTimes.length && ts.periodStartTimes[p - 1].contains(':')) {
+        final parts = ts.periodStartTimes[p - 1].split(':');
+        start = (int.tryParse(parts[0]) ?? (curMin ~/ 60)) * 60 + (int.tryParse(parts[1]) ?? (curMin % 60));
+      }
       final end = start + ts.lessonDuration;
       if (nowMin >= start && nowMin < end) {
         found = p;
         next = p + 1;
         break;
       }
-      if (p == ts.lunchAfterPeriod) {
+      if (p < ts.periodStartTimes.length && ts.periodStartTimes[p].contains(':')) {
+        final nextParts = ts.periodStartTimes[p].split(':');
+        curMin = (int.tryParse(nextParts[0]) ?? 0) * 60 + (int.tryParse(nextParts[1]) ?? 0);
+      } else if (p == ts.lunchAfterPeriod) {
         curMin = end + ts.lunchDuration;
       } else {
         curMin = end + ts.breakDuration;
@@ -597,7 +635,11 @@ class _TeacherViewState extends State<TeacherView> {
     }
 
     for (int p = 1; p <= 8; p++) {
-      final start = curMin;
+      int start = curMin;
+      if (p - 1 < ts.periodStartTimes.length && ts.periodStartTimes[p - 1].contains(':')) {
+        final parts = ts.periodStartTimes[p - 1].split(':');
+        start = (int.tryParse(parts[0]) ?? (curMin ~/ 60)) * 60 + (int.tryParse(parts[1]) ?? (curMin % 60));
+      }
       final end = start + ts.lessonDuration;
 
       // In class?
@@ -609,11 +651,16 @@ class _TeacherViewState extends State<TeacherView> {
         );
       }
 
-      // Break/Lunch time?
-      final breakDuration = (p == ts.lunchAfterPeriod)
-          ? ts.lunchDuration
-          : ts.breakDuration;
-      final nextStart = end + breakDuration;
+      int nextStart;
+      if (p < ts.periodStartTimes.length && ts.periodStartTimes[p].contains(':')) {
+        final nextParts = ts.periodStartTimes[p].split(':');
+        nextStart = (int.tryParse(nextParts[0]) ?? 0) * 60 + (int.tryParse(nextParts[1]) ?? 0);
+      } else {
+        final breakDuration = (p == ts.lunchAfterPeriod)
+            ? ts.lunchDuration
+            : ts.breakDuration;
+        nextStart = end + breakDuration;
+      }
 
       if (nowMin >= end && nowMin < nextStart) {
         return PeriodTimeStatus(
@@ -1635,7 +1682,7 @@ class _TeacherViewState extends State<TeacherView> {
     }
 
     // 4. HTML Present (.htmlp, .canva, .bstcanva, .canva.bst, .canvaboard): Boardest HTML Present 뷰어로 열기
-    if (lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva') || lower.endsWith('.bstcanva') || lower.endsWith('.canva.bst') || lower.endsWith('.canvaboard')) {
+    if (lower.endsWith('.web.bst') || lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva') || lower.endsWith('.bstcanva') || lower.endsWith('.canva.bst') || lower.endsWith('.canvaboard')) {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => CanvaBoardView(
@@ -4448,13 +4495,28 @@ class _TeacherViewState extends State<TeacherView> {
                                       ? Colors.white.withOpacity(0.02)
                                       : Colors.black.withOpacity(0.015),
                                   child: Center(
-                                    child: Text(
-                                      '$period',
-                                      style: GoogleFonts.outfit(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 11 * s,
-                                      ),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          '$period',
+                                          style: GoogleFonts.outfit(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 11 * s,
+                                          ),
+                                        ),
+                                        if (periodIdx < _settings.timeSettings.periodStartTimes.length &&
+                                            _settings.timeSettings.periodStartTimes[periodIdx].isNotEmpty)
+                                          Text(
+                                            _settings.timeSettings.periodStartTimes[periodIdx],
+                                            style: GoogleFonts.outfit(
+                                              color: Colors.white38,
+                                              fontSize: 8 * s,
+                                              height: 1.0,
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -5665,6 +5727,7 @@ class _TeacherViewState extends State<TeacherView> {
       context: context,
       builder: (context) => _AuthManagementDialog(
         scaleFactor: _settings.scaleFactor,
+        settings: _settings,
       ),
     );
   }
@@ -8797,7 +8860,8 @@ class _SyncPairPreview {
 
 class _AuthManagementDialog extends StatefulWidget {
   final double scaleFactor;
-  const _AuthManagementDialog({required this.scaleFactor});
+  final AppSettings? settings;
+  const _AuthManagementDialog({required this.scaleFactor, this.settings});
 
   @override
   State<_AuthManagementDialog> createState() => _AuthManagementDialogState();
@@ -8806,6 +8870,7 @@ class _AuthManagementDialog extends StatefulWidget {
 class _AuthManagementDialogState extends State<_AuthManagementDialog> {
   Timer? _ticker;
   int _currentSubTab = 0; // 0: 계정 & OTP, 1: 등록된 기기, 2: 다른 기기 OTP 주기
+  AppSettings get _settings => widget.settings ?? AppSettings();
 
   @override
   void initState() {
@@ -9203,6 +9268,8 @@ class _AuthManagementDialogState extends State<_AuthManagementDialog> {
                             refreshToken: cloud.refreshToken,
                             teacherName: (cloud.userName != null && cloud.userName!.isNotEmpty) ? cloud.userName! : '김보데',
                             email: cloud.userEmail ?? '',
+                            schoolId: _settings.schoolId,
+                            schoolName: _settings.selectedSchool?.name,
                           );
                         }
                       } catch (_) {

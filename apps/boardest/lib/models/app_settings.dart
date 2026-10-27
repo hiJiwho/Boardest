@@ -16,6 +16,8 @@ class TimeSettings {
   final int afternoonAssemblyDuration;
   // 조회: 1교시 시작 전 n분 전 시작
   final int? morningAssemblyBeforeMinutes;
+  // 컴시간 학교 일과시간표에서 추출된 교시별 시작 시간 목록 (예: ['08:40', '09:35', ...])
+  final List<String> periodStartTimes;
 
   TimeSettings({
     this.lessonDuration = 45,
@@ -30,6 +32,7 @@ class TimeSettings {
     this.afternoonAssemblyAfterMinutes = 10,
     this.afternoonAssemblyDuration = 20,
     this.morningAssemblyBeforeMinutes,
+    this.periodStartTimes = const [],
   });
 
   Map<String, dynamic> toJson() {
@@ -46,6 +49,7 @@ class TimeSettings {
       'afternoonAssemblyAfterMinutes': afternoonAssemblyAfterMinutes,
       'afternoonAssemblyDuration': afternoonAssemblyDuration,
       'morningAssemblyBeforeMinutes': morningAssemblyBeforeMinutes,
+      'periodStartTimes': periodStartTimes,
     };
   }
 
@@ -67,6 +71,42 @@ class TimeSettings {
           json['afternoonAssemblyDuration'] as int? ?? 20,
       morningAssemblyBeforeMinutes:
           json['morningAssemblyBeforeMinutes'] as int?,
+      periodStartTimes: (json['periodStartTimes'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+    );
+  }
+
+  TimeSettings copyWith({
+    int? lessonDuration,
+    int? breakDuration,
+    int? lunchDuration,
+    int? lunchAfterPeriod,
+    String? firstPeriodStart,
+    String? morningAssemblyStart,
+    String? morningAssemblyEnd,
+    String? afternoonAssemblyStart,
+    String? afternoonAssemblyEnd,
+    int? afternoonAssemblyAfterMinutes,
+    int? afternoonAssemblyDuration,
+    int? morningAssemblyBeforeMinutes,
+    List<String>? periodStartTimes,
+  }) {
+    return TimeSettings(
+      lessonDuration: lessonDuration ?? this.lessonDuration,
+      breakDuration: breakDuration ?? this.breakDuration,
+      lunchDuration: lunchDuration ?? this.lunchDuration,
+      lunchAfterPeriod: lunchAfterPeriod ?? this.lunchAfterPeriod,
+      firstPeriodStart: firstPeriodStart ?? this.firstPeriodStart,
+      morningAssemblyStart: morningAssemblyStart ?? this.morningAssemblyStart,
+      morningAssemblyEnd: morningAssemblyEnd ?? this.morningAssemblyEnd,
+      afternoonAssemblyStart: afternoonAssemblyStart ?? this.afternoonAssemblyStart,
+      afternoonAssemblyEnd: afternoonAssemblyEnd ?? this.afternoonAssemblyEnd,
+      afternoonAssemblyAfterMinutes: afternoonAssemblyAfterMinutes ?? this.afternoonAssemblyAfterMinutes,
+      afternoonAssemblyDuration: afternoonAssemblyDuration ?? this.afternoonAssemblyDuration,
+      morningAssemblyBeforeMinutes: morningAssemblyBeforeMinutes ?? this.morningAssemblyBeforeMinutes,
+      periodStartTimes: periodStartTimes ?? this.periodStartTimes,
     );
   }
 }
@@ -251,73 +291,27 @@ class AppSettings {
 
   static List<LauncherSlot> _getDefaultLauncherSlots(List<SystemApp>? sysApps) {
     final defaults = <LauncherSlot>[
-      // 1행: 기본 도구 4개 + 빈 슬롯 2개 (메모장, 파일 탐색기 제거) + 시스템 앱 자유 슬롯 (7 slots)
-      LauncherSlot(
-        type: LauncherSlotType.boardestTool,
-        name: '타이머',
-        id: 'timer',
-      ),
-      LauncherSlot(
-        type: LauncherSlotType.boardestTool,
-        name: '계산기',
-        id: 'calculator',
-      ),
-      LauncherSlot(
-        type: LauncherSlotType.boardestTool,
-        name: '발표자',
-        id: 'picker',
-      ),
-            LauncherSlot(
-        type: LauncherSlotType.boardestTool,
-        name: '학사달력',
-        id: 'school_calendar',
-      ),
-      LauncherSlot(
-        type: LauncherSlotType.empty,
-        name: '',
-        id: '',
-      ), // 빈칸 1 (기존 메모장 제거)
-      LauncherSlot(
-        type: LauncherSlotType.empty,
-        name: '',
-        id: '',
-      ), // 빈칸 2 (기존 파일 탐색기 제거)
-      // 2행: 판서 3개 + 설정 1개 + 빈 슬롯 2개 + 전체앱 (7 slots)
-      LauncherSlot(
-        type: LauncherSlotType.boardestTool,
-        name: '기본판서',
-        id: 'whiteboard',
-      ),
-      LauncherSlot(
-        type: LauncherSlotType.boardestTool,
-        name: '문서판서',
-        id: 'document_board',
-      ),
-      LauncherSlot(
-        type: LauncherSlotType.boardestTool,
-        name: '사이트 판서',
-        id: 'website_board',
-      ),
-      LauncherSlot(
-        type: LauncherSlotType.boardestTool,
-        name: '설정',
-        id: 'settings',
-      ),
-      LauncherSlot(
-        type: LauncherSlotType.empty,
-        name: '',
-        id: '',
-      ), // 빈칸 3 (기존 전체시간표 제거 - 학사달력과 통합됨)
-      LauncherSlot(
-        type: LauncherSlotType.empty,
-        name: '',
-        id: '',
-      ), // 빈칸 4 (맨 끝 빈칸 추가로 14개 맞춤)
-      LauncherSlot(
-        type: LauncherSlotType.boardestTool,
-        name: '전체앱',
-        id: 'app_drawer',
-      ), // 기본 시스템 앱 3
+      // 1행: 기본 도구 4개 + 빈 슬롯 3개 (7 slots, index 0~6)
+      LauncherSlot(type: LauncherSlotType.boardestTool, name: '타이머', id: 'timer'),
+      LauncherSlot(type: LauncherSlotType.boardestTool, name: '계산기', id: 'calculator'),
+      LauncherSlot(type: LauncherSlotType.boardestTool, name: '발표자', id: 'picker'),
+      LauncherSlot(type: LauncherSlotType.boardestTool, name: '학사달력', id: 'school_calendar'),
+      LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''),
+      LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''),
+      LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''),
+      // 2행: 판서 3개 + 설정 1개 + 빈 슬롯 2개 + 전체앱 (7 slots, index 7~13)
+      LauncherSlot(type: LauncherSlotType.boardestTool, name: '기본판서', id: 'whiteboard'),
+      LauncherSlot(type: LauncherSlotType.boardestTool, name: '문서판서', id: 'document_board'),
+      LauncherSlot(type: LauncherSlotType.boardestTool, name: '사이트 판서', id: 'website_board'),
+      LauncherSlot(type: LauncherSlotType.boardestTool, name: '설정', id: 'settings'),
+      LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''),
+      LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''),
+      LauncherSlot(type: LauncherSlotType.boardestTool, name: '전체앱', id: 'app_drawer'),
+      // 3행: Class Pro 독 커스텀 등록 앱 슬롯 4개 (index 14~17)
+      LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''),
+      LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''),
+      LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''),
+      LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''),
     ];
     return defaults;
   }
@@ -568,34 +562,15 @@ class AppSettings {
         : null;
 
     if (loadedSlots != null) {
-      final oldDefaultIds = {
-        'explorer.exe',
-        'com.android.documentsui',
-        'powerpnt.exe',
-        'com.microsoft.office.powerpoint',
-        'mspaint.exe',
-        'com.sec.android.app.writeonpdf',
-        'https://www.youtube.com',
-      };
-      bool hasOldDefaults = loadedSlots.any(
-        (slot) =>
-            slot.type == LauncherSlotType.systemApp &&
-            oldDefaultIds.contains(slot.id),
-      );
-      if (hasOldDefaults) {
-        loadedSlots = _getDefaultLauncherSlots(sysApps);
-      } else {
-        if (loadedSlots.length < 14) {
-          while (loadedSlots.length < 14) {
-            loadedSlots.add(
-              LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''),
-            );
-          }
-        } else if (loadedSlots.length > 14) {
-          loadedSlots = loadedSlots.sublist(0, 14);
+      if (loadedSlots.length < 18) {
+        while (loadedSlots.length < 18) {
+          loadedSlots.add(
+            LauncherSlot(type: LauncherSlotType.empty, name: '', id: ''),
+          );
         }
-        // Force migration for removed built-in tools to empty slots
-        loadedSlots = loadedSlots.map((slot) {
+      }
+      // Force migration for removed built-in tools to empty slots
+      loadedSlots = loadedSlots.map((slot) {
           if (slot.type == LauncherSlotType.boardestTool &&
               (slot.id == 'notepad' ||
                   slot.id == 'file_explorer' ||
@@ -636,7 +611,6 @@ class AppSettings {
           }
           return slot;
         }).toList();
-      }
     }
 
     return AppSettings(

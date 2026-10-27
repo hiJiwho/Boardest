@@ -294,21 +294,32 @@ class TimetableScheduleCalculator {
     DateTime? lastPeriodEndTime;
 
     for (int p = 1; p <= maxPeriod; p++) {
-      final classStart = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        currentMinutes ~/ 60,
-        currentMinutes % 60,
-      );
-      currentMinutes += ts.lessonDuration;
-      final classEnd = DateTime(
-        now.year,
-        now.month,
-        now.day,
-        currentMinutes ~/ 60,
-        currentMinutes % 60,
-      );
+      DateTime classStart;
+      DateTime classEnd;
+      if (p - 1 < ts.periodStartTimes.length && ts.periodStartTimes[p - 1].contains(':')) {
+        final parts = ts.periodStartTimes[p - 1].split(':');
+        final ph = int.tryParse(parts[0]) ?? (currentMinutes ~/ 60);
+        final pm = int.tryParse(parts[1]) ?? (currentMinutes % 60);
+        classStart = DateTime(now.year, now.month, now.day, ph, pm);
+        classEnd = classStart.add(Duration(minutes: ts.lessonDuration));
+        currentMinutes = ph * 60 + pm + ts.lessonDuration;
+      } else {
+        classStart = DateTime(
+          now.year,
+          now.month,
+          now.day,
+          currentMinutes ~/ 60,
+          currentMinutes % 60,
+        );
+        currentMinutes += ts.lessonDuration;
+        classEnd = DateTime(
+          now.year,
+          now.month,
+          now.day,
+          currentMinutes ~/ 60,
+          currentMinutes % 60,
+        );
+      }
 
       ranges.add(
         PeriodTimeRange(
@@ -324,8 +335,53 @@ class TimetableScheduleCalculator {
         lastPeriodEndTime = classEnd;
       }
 
+      // Check if next period has an exact start time configured
+      if (p < maxPeriod && p < ts.periodStartTimes.length && ts.periodStartTimes[p].contains(':')) {
+        final nextParts = ts.periodStartTimes[p].split(':');
+        final nH = int.tryParse(nextParts[0]) ?? 0;
+        final nM = int.tryParse(nextParts[1]) ?? 0;
+        final nextStart = DateTime(now.year, now.month, now.day, nH, nM);
+        if (nextStart.isAfter(classEnd)) {
+          final gap = nextStart.difference(classEnd).inMinutes;
+          if (gap >= 35 || p == ts.lunchAfterPeriod) {
+            final pureLunch = (gap - 10).clamp(1, 180);
+            final pureLunchEnd = classEnd.add(Duration(minutes: pureLunch));
+            ranges.add(
+              PeriodTimeRange(
+                period: 0,
+                label: '점심 시간',
+                start: classEnd,
+                end: pureLunchEnd,
+                isClass: false,
+              ),
+            );
+            ranges.add(
+              PeriodTimeRange(
+                period: 0,
+                label: '쉬는 시간',
+                start: pureLunchEnd,
+                end: nextStart,
+                isClass: false,
+              ),
+            );
+          } else {
+            ranges.add(
+              PeriodTimeRange(
+                period: 0,
+                label: '쉬는 시간',
+                start: classEnd,
+                end: nextStart,
+                isClass: false,
+              ),
+            );
+          }
+          currentMinutes = nH * 60 + nM;
+          continue;
+        }
+      }
+
       if (p == ts.lunchAfterPeriod) {
-        // 점심시간 10분 전부터는 다음 교시(5교시) 준비 쉬는시간으로 취급
+        // 점심시간 10분 전부터는 다음 교시 준비 쉬는시간으로 취급
         final pureLunchMinutes = (ts.lunchDuration - 10).clamp(1, 180);
         final lunchStart = classEnd;
         final pureLunchEnd = lunchStart.add(Duration(minutes: pureLunchMinutes));

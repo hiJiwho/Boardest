@@ -38,6 +38,7 @@ class PasskeyService {
   Future<({String sessionId, String challenge, String qrPayload})> createChallengeSession({
     String schoolName = '보데스트 중학교',
     String roomName = '1학년 7반',
+    String? schoolId,
   }) async {
     final rand = Random.secure();
     final sessionBytes = List<int>.generate(12, (_) => rand.nextInt(256));
@@ -54,6 +55,7 @@ class PasskeyService {
       'createdAt': now,
       'expiresAt': now + 120000, // 2분 유효
       'school': schoolName,
+      'schoolId': schoolId ?? '',
       'room': roomName,
       'status': 'waiting',
     };
@@ -68,8 +70,11 @@ class PasskeyService {
       debugPrint('[PasskeyService] Failed to create challenge on RTDB: $e');
     }
 
-    // QR 코드에만 원본 챌린지(c) 탑재 -> 물리적으로 칠판 QR을 스캔한 기기만 챌린지 서명 생성 가능
-    final qrPayload = 'https://boardest-cloud-connect.web.app/?key=$sessionId&c=$challenge&school=${Uri.encodeComponent(schoolName)}&device=${Uri.encodeComponent(roomName)}&t=$now';
+    // QR 코드에 원본 챌린지 및 학교 ID 탑재
+    var qrPayload = 'https://boardest-cloud-connect.web.app/?key=$sessionId&c=$challenge&school=${Uri.encodeComponent(schoolName)}&device=${Uri.encodeComponent(roomName)}&t=$now';
+    if (schoolId != null && schoolId.isNotEmpty) {
+      qrPayload += '&schoolId=${Uri.encodeComponent(schoolId)}';
+    }
 
     return (
       sessionId: sessionId,
@@ -79,8 +84,16 @@ class PasskeyService {
   }
 
   /// 칠판: 세션 승인 여부 폴링/대기 (최대 120초, Challenge-Response 서명 및 실제 토큰 검증 필수)
-  Stream<({bool approved, String? accessToken, String? refreshToken, String? teacherName, String? email, String? errorMessage})>
-      listenForApproval(String sessionId) async* {
+  Stream<({
+    bool approved,
+    String? accessToken,
+    String? refreshToken,
+    String? teacherName,
+    String? email,
+    String? schoolId,
+    String? schoolName,
+    String? errorMessage,
+  })> listenForApproval(String sessionId, {String? expectedSchoolId}) async* {
     final startTime = DateTime.now();
     final expectedChallenge = _sessionChallenges[sessionId] ?? '';
 
@@ -108,6 +121,8 @@ class PasskeyService {
                 refreshToken: null,
                 teacherName: null,
                 email: null,
+                schoolId: null,
+                schoolName: null,
                 errorMessage: '유효한 교사 인증 토큰이 없습니다. 먼저 교사용 앱에서 패스키 기기를 등록해주세요.',
               );
               return;
@@ -129,10 +144,35 @@ class PasskeyService {
                   refreshToken: null,
                   teacherName: null,
                   email: null,
+                  schoolId: null,
+                  schoolName: null,
                   errorMessage: '보안 서명 검증에 실패했습니다 (위조된 승인 요청 차단됨).',
                 );
                 return;
               }
+            }
+
+            // 3. 학교 ID 불일치 검증 (Class 앱: 학교 ID 다르면 즉시 차단)
+            final teacherSchoolId = data['schoolId']?.toString() ?? '';
+            final approvedSchoolName = data['schoolName']?.toString() ?? data['school']?.toString() ?? '';
+
+            if (expectedSchoolId != null &&
+                expectedSchoolId.isNotEmpty &&
+                teacherSchoolId.isNotEmpty &&
+                expectedSchoolId != teacherSchoolId) {
+              debugPrint('[PasskeyService] 🚨 School ID Mismatch: Expected $expectedSchoolId but received $teacherSchoolId. Blocking.');
+              unawaited(deleteSession(sessionId));
+              yield (
+                approved: false,
+                accessToken: null,
+                refreshToken: null,
+                teacherName: null,
+                email: null,
+                schoolId: null,
+                schoolName: null,
+                errorMessage: '소속 학교가 일치하지 않습니다. 다른 학교의 패스키는 연결할 수 없습니다.',
+              );
+              return;
             }
 
             // 승인 및 검증 완료! 즉시 세션 노드 파기 (One-time burn)
@@ -145,6 +185,8 @@ class PasskeyService {
               refreshToken: data['refreshToken'] as String?,
               teacherName: (data['teacherName'] ?? data['teacher']) as String?,
               email: data['email'] as String?,
+              schoolId: teacherSchoolId.isNotEmpty ? teacherSchoolId : null,
+              schoolName: approvedSchoolName.isNotEmpty ? approvedSchoolName : null,
               errorMessage: null,
             );
             return;
@@ -157,6 +199,8 @@ class PasskeyService {
               refreshToken: null,
               teacherName: null,
               email: null,
+              schoolId: null,
+              schoolName: null,
               errorMessage: '선생님이 패스키 잠금해제 요청을 거절했습니다.',
             );
             return;
@@ -174,6 +218,8 @@ class PasskeyService {
       refreshToken: null,
       teacherName: null,
       email: null,
+      schoolId: null,
+      schoolName: null,
       errorMessage: '인증 시간이 만료되었습니다. 다시 시도해 주세요.',
     );
   }

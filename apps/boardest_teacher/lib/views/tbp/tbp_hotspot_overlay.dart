@@ -1,27 +1,138 @@
-import 'package:flutter/foundation.dart';
+import 'dart:async';
+import 'package:universal_io/io.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
-import 'package:universal_io/io.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../services/cloud_drive_service.dart';
+import '../../models/board_tools.dart';
 import '../../services/tbp/tbp_download_interceptor.dart';
 import '../../services/tbp/tbp_storage_service.dart';
 
-/// 핫스팟 오버레이 핀 렌더링 & 우클릭/길게누르기 모달 에디터 위젯
-/// - 페이지 Dhash 변경 시 해당 페이지의 핫스팟 핀만 정확히 따라와 렌더링됨
-/// - 핀을 드래그하여 위치를 자유롭게 이동 및 자동 저장 가능
+/// 핫스팟 종류 (8종)
+enum HotspotType {
+  url, // 🌐 웹 링크
+  doc, // 📄 문서 (PDF/HWP/PPT)
+  video, // 🎬 동영상
+  image, // 🖼️ 이미지
+  memo, // 📝 메모
+  timer, // ⏱️ 타이머
+  audio, // 🔊 오디오
+}
+
+extension HotspotTypeExt on HotspotType {
+  String get emoji {
+    switch (this) {
+      case HotspotType.url:
+        return '🌐';
+      case HotspotType.doc:
+        return '📄';
+      case HotspotType.video:
+        return '🎬';
+      case HotspotType.image:
+        return '🖼️';
+      case HotspotType.memo:
+        return '📝';
+      case HotspotType.timer:
+        return '⏱️';
+      case HotspotType.audio:
+        return '🔊';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case HotspotType.url:
+        return '웹 링크';
+      case HotspotType.doc:
+        return '문서 (PDF/HWP/PPT)';
+      case HotspotType.video:
+        return '동영상';
+      case HotspotType.image:
+        return '이미지 팝업';
+      case HotspotType.memo:
+        return '메모';
+      case HotspotType.timer:
+        return '타이머';
+      case HotspotType.audio:
+        return '오디오';
+    }
+  }
+
+  String get hint {
+    switch (this) {
+      case HotspotType.url:
+        return 'https://...';
+      case HotspotType.doc:
+        return 'PDF/HWP/PPT 파일 경로 또는 우측 파일 선택';
+      case HotspotType.video:
+        return 'MP4 파일 경로 또는 YouTube 링크';
+      case HotspotType.image:
+        return '이미지 파일 경로 또는 URL';
+      case HotspotType.memo:
+        return '클릭 시 표시할 수업 핵심 질문/메모 입력';
+      case HotspotType.timer:
+        return '타이머 시간(초) — 예: 180 (3분)';
+      case HotspotType.audio:
+        return '오디오 파일 경로 또는 음원 URL';
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case HotspotType.url:
+        return const Color(0xFF2EC4B6);
+      case HotspotType.doc:
+        return const Color(0xFF7F5AF0);
+      case HotspotType.video:
+        return const Color(0xFFFF6B6B);
+      case HotspotType.image:
+        return const Color(0xFF06D6A0);
+      case HotspotType.memo:
+        return const Color(0xFFFFD166);
+      case HotspotType.timer:
+        return const Color(0xFFFF8906);
+      case HotspotType.audio:
+        return const Color(0xFF118AB2);
+    }
+  }
+
+  static HotspotType fromString(String? s) {
+    switch (s) {
+      case 'url':
+        return HotspotType.url;
+      case 'doc':
+      case 'pdf':
+      case 'hwp':
+      case 'ppt':
+        return HotspotType.doc;
+      case 'video':
+      case 'vid':
+        return HotspotType.video;
+      case 'image':
+        return HotspotType.image;
+      case 'memo':
+        return HotspotType.memo;
+      case 'timer':
+        return HotspotType.timer;
+      case 'audio':
+        return HotspotType.audio;
+      default:
+        return HotspotType.url;
+    }
+  }
+}
+
+/// 핫스팟 오버레이 (8종 핫스팟 + 우클릭 생성/편집 + Pen/Touch/Smart 모드 대응)
 class TbpHotspotOverlay extends StatefulWidget {
   final List<Map<String, dynamic>> hotspots;
   final String tbpFolderPath;
   final String currentDhash;
   final double scaleFactor;
-  final bool isTeacherApp;
+  final TbpInputMode inputMode;
+  final bool longPressActive;
   final Function(List<Map<String, dynamic>> updatedHotspots)? onHotspotsUpdated;
-  final void Function(Map<String, dynamic> spot)? onTriggerHotspot;
 
   const TbpHotspotOverlay({
     super.key,
@@ -29,39 +140,12 @@ class TbpHotspotOverlay extends StatefulWidget {
     required this.tbpFolderPath,
     required this.currentDhash,
     required this.scaleFactor,
-    this.isTeacherApp = true,
+    required this.inputMode,
+    required this.longPressActive,
     this.onHotspotsUpdated,
-    this.onTriggerHotspot,
   });
 
-  static Map<String, dynamic> _typeMeta(String type) {
-    switch (type) {
-      case 'url':
-        return {'label': '🌐 외부 웹사이트 URL', 'emoji': '🔗', 'color': 0xFF0084FF, 'icon': Icons.language_rounded, 'hint': 'https://...'};
-      case 'pdf':
-      case 'doc':
-        return {'label': '📄 문서 자료 (PDF/HWP/PPT)', 'emoji': '📄', 'color': 0xFFFF595E, 'icon': Icons.description_rounded, 'hint': '문서 파일 경로 또는 우측 폴더 아이콘 클릭'};
-      case 'hwp':
-        return {'label': '📝 HWP 한글 문서', 'emoji': '📝', 'color': 0xFF38BDF8, 'icon': Icons.article_rounded, 'hint': 'HWP 파일 경로 또는 우측 폴더 아이콘 클릭'};
-      case 'ppt':
-        return {'label': '📊 PPT 발표 자료', 'emoji': '📊', 'color': 0xFFFF9F1C, 'icon': Icons.slideshow_rounded, 'hint': 'PPT 파일 경로 또는 우측 폴더 아이콘 클릭'};
-      case 'vid':
-      case 'video':
-        return {'label': '🎬 동영상 (MP4 / YouTube)', 'emoji': '🎬', 'color': 0xFFFF007F, 'icon': Icons.play_circle_fill_rounded, 'hint': '동영상 파일 경로 또는 YouTube 링크'};
-      case 'image':
-        return {'label': '🖼️ 이미지 팝업 (확대 보기)', 'emoji': '🖼️', 'color': 0xFF9B5DE5, 'icon': Icons.image_rounded, 'hint': '이미지 파일 경로 또는 이미지 URL'};
-      case 'memo':
-        return {'label': '📌 텍스트 메모 / 판서 팁', 'emoji': '📌', 'color': 0xFFFEE440, 'icon': Icons.sticky_note_2_rounded, 'hint': '클릭 시 표시할 수업 핵심 질문/메모 입력'};
-      case 'timer':
-        return {'label': '⏱️ 활동 타이머 (초 단위)', 'emoji': '⏱️', 'color': 0xFF00F5D4, 'icon': Icons.timer_rounded, 'hint': '타이머 시간(초) 입력 — 예: 180 (3분)'};
-      case 'audio':
-        return {'label': '🔊 오디오 / 듣기 음원', 'emoji': '🔊', 'color': 0xFFFF9F1C, 'icon': Icons.volume_up_rounded, 'hint': '오디오 파일 경로 또는 음원 URL'};
-      default:
-        return {'label': '🔗 웹 링크', 'emoji': '🔗', 'color': 0xFF2EC4B6, 'icon': Icons.link_rounded, 'hint': 'https://...'};
-    }
-  }
-
-  /// 우클릭 또는 길게 누르기로 새 핫스팟 핀 추가 / 기존 핫스팟 수정 모달
+  /// 우클릭 또는 상단 버튼으로 핫스팟 핀 추가 / 편집 모달
   static Future<void> showAddHotspotModal(
     BuildContext context,
     double rx,
@@ -79,247 +163,198 @@ class TbpHotspotOverlay extends StatefulWidget {
     final valCtrl = TextEditingController(
       text: (existingSpot?['value'] ?? '').toString(),
     );
-    String type = (existingSpot?['type'] ?? 'url').toString();
-    if (type == 'vid') type = 'video';
-
-    const supportedTypes = [
-      'url',
-      'doc',
-      'pdf',
-      'hwp',
-      'ppt',
-      'video',
-      'image',
-      'memo',
-      'timer',
-      'audio',
-    ];
-    if (!supportedTypes.contains(type)) {
-      type = 'url';
-    }
+    HotspotType selectedType = HotspotTypeExt.fromString(existingSpot?['type']?.toString());
 
     final res = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) {
-          final meta = _typeMeta(type);
-          final needsFilePicker = type == 'doc' ||
-              type == 'pdf' ||
-              type == 'hwp' ||
-              type == 'ppt' ||
-              type == 'video' ||
-              type == 'image' ||
-              type == 'audio';
+          final needsFilePicker = selectedType == HotspotType.doc ||
+              selectedType == HotspotType.video ||
+              selectedType == HotspotType.image ||
+              selectedType == HotspotType.audio;
 
-          return PointerInterceptor(
-            child: AlertDialog(
-              backgroundColor: const Color(0xFF16161A),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-                side: BorderSide(color: Color(meta['color'] as int).withOpacity(0.5), width: 1.5),
-              ),
-              title: Row(
-                children: [
-                  Text(meta['emoji'] as String, style: const TextStyle(fontSize: 20)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      isEdit ? '핫스팟 핀 편집' : '✨ 핫스팟 핀 추가',
-                      style: GoogleFonts.notoSansKr(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+          return AlertDialog(
+            backgroundColor: const Color(0xFF16161A),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: BorderSide(color: selectedType.color.withValues(alpha: 0.55), width: 1.5),
+            ),
+            title: Row(
+              children: [
+                Text(selectedType.emoji, style: const TextStyle(fontSize: 20)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isEdit ? '핫스팟 핀 편집' : '✨ 우클릭 핫스팟 핀 추가',
+                    style: GoogleFonts.notoSansKr(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      'X ${(rx * 100).toStringAsFixed(0)}% · Y ${(ry * 100).toStringAsFixed(0)}%',
-                      style: const TextStyle(color: Colors.white54, fontSize: 11),
-                    ),
-                  ),
-                ],
-              ),
-              content: SizedBox(
-                width: 440,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: titleCtrl,
-                        style: const TextStyle(color: Colors.white, fontSize: 13.5),
-                        decoration: InputDecoration(
-                          labelText: '핫스팟 표시 제목 (교과서 화면 위 뱃지 이름)',
-                          hintText: '예: 탐구 영상 보기 / 활동지 PDF / 3분 모둠 토의',
-                          hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
-                          labelStyle: const TextStyle(color: Colors.white70, fontSize: 12.5),
-                          filled: true,
-                          fillColor: Colors.white.withOpacity(0.04),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      DropdownButtonFormField<String>(
-                        dropdownColor: const Color(0xFF242629),
-                        value: type,
-                        style: const TextStyle(color: Colors.white, fontSize: 13.5),
-                        decoration: InputDecoration(
-                          labelText: '핫스팟 동작 유형',
-                          labelStyle: const TextStyle(color: Colors.white70, fontSize: 12.5),
-                          filled: true,
-                          fillColor: Colors.white.withOpacity(0.04),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'url', child: Text('🌐 외부 웹사이트 URL')),
-                          DropdownMenuItem(value: 'doc', child: Text('📄 통합 문서 (PDF/HWP/PPT)')),
-                          DropdownMenuItem(value: 'pdf', child: Text('📕 PDF 문서 자료')),
-                          DropdownMenuItem(value: 'hwp', child: Text('📝 HWP 한글 문서')),
-                          DropdownMenuItem(value: 'ppt', child: Text('📊 PPT 발표 자료')),
-                          DropdownMenuItem(value: 'video', child: Text('🎬 동영상 (MP4 / YouTube)')),
-                          DropdownMenuItem(value: 'image', child: Text('🖼️ 이미지 팝업 (확대 보기)')),
-                          DropdownMenuItem(value: 'memo', child: Text('📌 텍스트 메모 / 판서 팁')),
-                          DropdownMenuItem(value: 'timer', child: Text('⏱️ 활동 타이머 (초 단위)')),
-                          DropdownMenuItem(value: 'audio', child: Text('🔊 오디오 / 듣기 음원')),
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            setModalState(() {
-                              type = v;
-                              if (v == 'timer' && valCtrl.text.trim().isEmpty) {
-                                valCtrl.text = '180';
-                              }
-                            });
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: valCtrl,
-                              maxLines: type == 'memo' ? 3 : 1,
-                              style: const TextStyle(color: Colors.white, fontSize: 13.5),
-                              decoration: InputDecoration(
-                                labelText: meta['hint'] as String,
-                                labelStyle: const TextStyle(color: Colors.white70, fontSize: 12),
-                                filled: true,
-                                fillColor: Colors.white.withOpacity(0.04),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                            ),
-                          ),
-                          if (needsFilePicker) ...[
-                            const SizedBox(width: 8),
-                            Tooltip(
-                              message: '내 PC/기기에서 파일 선택',
-                              child: ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF2EC4B6).withOpacity(0.18),
-                                  foregroundColor: const Color(0xFF2EC4B6),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
-                                icon: const Icon(Icons.folder_open_rounded, size: 18),
-                                label: const Text('파일 선택', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                onPressed: () async {
-                                  final pick = await FilePicker.pickFiles(withData: kIsWeb);
-                                  if (pick != null && pick.files.isNotEmpty) {
-                                    final single = pick.files.single;
-                                    String resolvedPath = single.path ?? single.name;
-                                    if (kIsWeb && single.bytes != null) {
-                                      resolvedPath = 'web://hotspot_file/${DateTime.now().millisecondsSinceEpoch}_${single.name}';
-                                      CloudDriveService.webMemoryFiles[resolvedPath] = single.bytes!;
-                                    }
-                                    valCtrl.text = resolvedPath;
-                                    if (titleCtrl.text.trim().isEmpty) {
-                                      titleCtrl.text = p.basenameWithoutExtension(single.name);
-                                    }
-                                    final ext = p.extension(single.name).toLowerCase();
-                                    setModalState(() {
-                                      if (ext == '.pdf') {
-                                        type = 'pdf';
-                                      } else if (ext == '.hwp' || ext == '.hwpx') {
-                                        type = 'hwp';
-                                      } else if (ext == '.ppt' || ext == '.pptx') {
-                                        type = 'ppt';
-                                      } else if (['.mp4', '.mov', '.avi', '.mkv', '.webm'].contains(ext)) {
-                                        type = 'video';
-                                      } else if (['.png', '.jpg', '.jpeg', '.gif', '.webp'].contains(ext)) {
-                                        type = 'image';
-                                      }
-                                    });
-                                  }
-                                },
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
                   ),
                 ),
-              ),
-              actions: [
-                if (isEdit)
-                  TextButton.icon(
-                    onPressed: () => Navigator.pop(ctx, {'__delete__': true}),
-                    icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4565), size: 18),
-                    label: const Text('삭제', style: TextStyle(color: Color(0xFFEF4565), fontWeight: FontWeight.bold)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('취소', style: TextStyle(color: Colors.white54)),
-                ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2EC4B6),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: () {
-                    var rawVal = valCtrl.text.trim();
-                    if (rawVal.isEmpty && type == 'timer') {
-                      rawVal = '180';
-                    }
-                    if (rawVal.isEmpty) return;
-                    if (type == 'url' &&
-                        !rawVal.startsWith('http://') &&
-                        !rawVal.startsWith('https://')) {
-                      rawVal = 'https://$rawVal';
-                    }
-                    final chosenMeta = _typeMeta(type);
-                    final spotTitle = titleCtrl.text.trim().isEmpty
-                        ? (chosenMeta['label'] as String).replaceAll(RegExp(r'^[^\s]+\s'), '')
-                        : titleCtrl.text.trim();
-                    Navigator.pop(ctx, {
-                      'id': existingSpot?['id'] ?? 'H_${DateTime.now().millisecondsSinceEpoch}',
-                      'name': spotTitle,
-                      'title': spotTitle,
-                      'type': type,
-                      'value': rawVal,
-                      'icon': chosenMeta['emoji'],
-                      'color': chosenMeta['color'],
-                      'x': rx,
-                      'y': ry,
-                    });
-                  },
-                  icon: Icon(isEdit ? Icons.check_rounded : Icons.add_location_alt_rounded, size: 18),
-                  label: Text(
-                    isEdit ? '저장' : '핫스팟 꽂기',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  child: Text(
+                    'X ${(rx * 100).toStringAsFixed(0)}% · Y ${(ry * 100).toStringAsFixed(0)}%',
+                    style: const TextStyle(color: Colors.white54, fontSize: 11),
                   ),
                 ),
               ],
             ),
+            content: SizedBox(
+              width: 440,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: titleCtrl,
+                      style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                      decoration: InputDecoration(
+                        labelText: '핫스팟 표시 제목',
+                        hintText: '예: 탐구 영상 보기 / 활동지 PDF / 3분 모둠 토의',
+                        hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
+                        labelStyle: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                        filled: true,
+                        fillColor: Colors.white.withValues(alpha: 0.04),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<HotspotType>(
+                      dropdownColor: const Color(0xFF242629),
+                      initialValue: selectedType,
+                      style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                      decoration: InputDecoration(
+                        labelText: '핫스팟 동작 유형 (8종)',
+                        labelStyle: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                        filled: true,
+                        fillColor: Colors.white.withValues(alpha: 0.04),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      items: HotspotType.values
+                          .map(
+                            (t) => DropdownMenuItem(
+                              value: t,
+                              child: Text('${t.emoji} ${t.label}'),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) {
+                          setModalState(() {
+                            selectedType = v;
+                            if (v == HotspotType.timer && valCtrl.text.trim().isEmpty) {
+                              valCtrl.text = '180';
+                            }
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: valCtrl,
+                            maxLines: selectedType == HotspotType.memo ? 3 : 1,
+                            style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                            decoration: InputDecoration(
+                              labelText: selectedType.hint,
+                              labelStyle: const TextStyle(color: Colors.white70, fontSize: 12),
+                              filled: true,
+                              fillColor: Colors.white.withValues(alpha: 0.04),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                        ),
+                        if (needsFilePicker) ...[
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: selectedType.color.withValues(alpha: 0.18),
+                              foregroundColor: selectedType.color,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            icon: const Icon(Icons.folder_open_rounded, size: 18),
+                            label: const Text('파일 선택', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            onPressed: () async {
+                              final pick = await FilePicker.pickFiles();
+                              if (pick != null && pick.files.isNotEmpty) {
+                                final single = pick.files.single;
+                                final path = single.path ?? single.name;
+                                valCtrl.text = path;
+                                if (titleCtrl.text.trim().isEmpty) {
+                                  titleCtrl.text = p.basenameWithoutExtension(path);
+                                }
+                              }
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              if (isEdit)
+                TextButton.icon(
+                  onPressed: () => Navigator.pop(ctx, {'__delete__': true}),
+                  icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4565), size: 18),
+                  label: const Text('삭제', style: TextStyle(color: Color(0xFFEF4565), fontWeight: FontWeight.bold)),
+                ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('취소', style: TextStyle(color: Colors.white54)),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2EC4B6),
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () {
+                  var rawVal = valCtrl.text.trim();
+                  if (rawVal.isEmpty && selectedType == HotspotType.timer) {
+                    rawVal = '180';
+                  }
+                  if (rawVal.isEmpty) return;
+                  if (selectedType == HotspotType.url &&
+                      !rawVal.startsWith('http://') &&
+                      !rawVal.startsWith('https://')) {
+                    rawVal = 'https://$rawVal';
+                  }
+                  final spotTitle = titleCtrl.text.trim().isEmpty
+                      ? selectedType.label
+                      : titleCtrl.text.trim();
+                  Navigator.pop(ctx, {
+                    'id': existingSpot?['id'] ?? 'H_${DateTime.now().millisecondsSinceEpoch}',
+                    'name': spotTitle,
+                    'title': spotTitle,
+                    'type': selectedType.name,
+                    'value': rawVal,
+                    'icon': selectedType.emoji,
+                    'color': selectedType.color.toARGB32(),
+                    'x': rx,
+                    'y': ry,
+                  });
+                },
+                icon: Icon(isEdit ? Icons.check_rounded : Icons.add_location_alt_rounded, size: 18),
+                label: Text(
+                  isEdit ? '저장' : '핫스팟 꽂기',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -353,27 +388,166 @@ class TbpHotspotOverlay extends StatefulWidget {
 }
 
 class _TbpHotspotOverlayState extends State<TbpHotspotOverlay> {
-  final Map<String, Offset> _dragOffsets = {};
+  // 타이머 상태
+  int? _timerSeconds;
+  Timer? _activeTimer;
+  int _remaining = 0;
 
-  void _defaultExecuteSpot(BuildContext context, Map<String, dynamic> hotspot) async {
-    if (widget.onTriggerHotspot != null) {
-      widget.onTriggerHotspot!(hotspot);
-      return;
+  @override
+  void dispose() {
+    _activeTimer?.cancel();
+    super.dispose();
+  }
+
+  bool _isHotspotInteractable(Map<String, dynamic> hotspot) {
+    switch (widget.inputMode) {
+      case TbpInputMode.pen:
+        return false;
+      case TbpInputMode.touch:
+      case TbpInputMode.smart:
+        return true;
     }
-    final val = (hotspot['value'] as String? ?? '').trim();
-    if (val.isEmpty) return;
-    if (val.startsWith('http://') || val.startsWith('https://')) {
-      await launchUrl(
-        Uri.parse(val),
-        mode: LaunchMode.externalApplication,
-      );
-    } else {
-      TbpDownloadInterceptor.instance.openSupportedViewer(
-        context: context,
-        filePath: val,
-        scaleFactor: widget.scaleFactor,
-      );
+  }
+
+  Future<void> _activateHotspot(
+    BuildContext context,
+    Map<String, dynamic> hotspot,
+  ) async {
+    final type = HotspotTypeExt.fromString(hotspot['type'] as String?);
+    final value = (hotspot['value'] as String? ?? '').trim();
+
+    switch (type) {
+      case HotspotType.url:
+        if (value.isNotEmpty) {
+          final urlStr = (value.startsWith('http://') || value.startsWith('https://'))
+              ? value
+              : 'https://$value';
+          await launchUrl(
+            Uri.parse(urlStr),
+            mode: LaunchMode.externalApplication,
+          );
+        }
+        break;
+
+      case HotspotType.doc:
+      case HotspotType.video:
+      case HotspotType.audio:
+        if (value.startsWith('http://') || value.startsWith('https://')) {
+          await launchUrl(Uri.parse(value), mode: LaunchMode.externalApplication);
+        } else {
+          TbpDownloadInterceptor.instance.openSupportedViewer(
+            context: context,
+            filePath: value,
+            scaleFactor: widget.scaleFactor,
+          );
+        }
+        break;
+
+      case HotspotType.image:
+        _showImagePopup(context, value);
+        break;
+
+      case HotspotType.memo:
+        _showMemoPopup(context, (hotspot['title'] ?? hotspot['name'] ?? '메모').toString(), value);
+        break;
+
+      case HotspotType.timer:
+        final secs = int.tryParse(value) ?? 60;
+        _startTimer(context, secs);
+        break;
     }
+  }
+
+  void _showImagePopup(BuildContext context, String filePath) {
+    final isNetwork = filePath.startsWith('http://') || filePath.startsWith('https://');
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: isNetwork
+                  ? Image.network(filePath, fit: BoxFit.contain)
+                  : (File(filePath).existsSync()
+                      ? Image.file(File(filePath), fit: BoxFit.contain)
+                      : const Icon(
+                          Icons.broken_image,
+                          color: Colors.white,
+                          size: 80,
+                        )),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(
+                  Icons.close_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMemoPopup(BuildContext context, String title, String memoText) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF16161A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Text('📝 ', style: TextStyle(fontSize: 20)),
+            Expanded(
+              child: Text(
+                title,
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          memoText,
+          style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 15, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              '닫기',
+              style: GoogleFonts.notoSansKr(color: const Color(0xFF7F5AF0)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _startTimer(BuildContext context, int seconds) {
+    _activeTimer?.cancel();
+    _remaining = seconds;
+
+    _activeTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (_remaining <= 0) {
+        t.cancel();
+        if (mounted) setState(() {});
+      } else {
+        _remaining--;
+        if (mounted) setState(() {});
+      }
+    });
+
+    if (mounted) setState(() => _timerSeconds = seconds);
   }
 
   @override
@@ -385,138 +559,192 @@ class _TbpHotspotOverlayState extends State<TbpHotspotOverlay> {
         final width = constraints.maxWidth > 0 ? constraints.maxWidth : MediaQuery.of(context).size.width;
         final height = constraints.maxHeight > 0 ? constraints.maxHeight : MediaQuery.of(context).size.height;
 
-        return Stack(
-          fit: StackFit.expand,
-          clipBehavior: Clip.none,
-          children: widget.hotspots.map((hotspot) {
-            final spotId = (hotspot['id'] ?? '${hotspot['x']}_${hotspot['y']}').toString();
-            final dragPos = _dragOffsets[spotId];
-            final rx = (dragPos?.dx ?? (hotspot['x'] as num?)?.toDouble() ?? 0.5).clamp(0.02, 0.98);
-            final ry = (dragPos?.dy ?? (hotspot['y'] as num?)?.toDouble() ?? 0.5).clamp(0.02, 0.98);
-            final left = rx * width;
-            final top = ry * height;
-            final type = (hotspot['type'] ?? 'url').toString();
-            final meta = TbpHotspotOverlay._typeMeta(type);
-            final colorVal = (hotspot['color'] as int?) ?? (meta['color'] as int);
-            final spotColor = Color(colorVal);
-            final label = (hotspot['title'] ?? hotspot['name'] ?? '핫스팟').toString();
-            final emoji = (hotspot['icon'] ?? meta['emoji'] ?? '🔗').toString();
-
-            return Positioned(
-              left: (left - 22 * s).clamp(4.0, (width - 160 * s).clamp(4.0, double.infinity)),
-              top: (top - 20 * s).clamp(4.0, (height - 48 * s).clamp(4.0, double.infinity)),
-              child: PointerInterceptor(
-                child: Listener(
-                  behavior: HitTestBehavior.opaque,
-                  onPointerDown: (_) {},
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: GestureDetector(
-                      onTap: () => _defaultExecuteSpot(context, hotspot),
-                      onSecondaryTap: () {
-                        TbpHotspotOverlay.showAddHotspotModal(
-                          context,
-                          rx,
-                          ry,
-                          widget.tbpFolderPath,
-                          widget.currentDhash,
-                          widget.hotspots,
-                          widget.onHotspotsUpdated,
-                          existingSpot: hotspot,
-                        );
-                      },
-                      onLongPress: () {
-                        TbpHotspotOverlay.showAddHotspotModal(
-                          context,
-                          rx,
-                          ry,
-                          widget.tbpFolderPath,
-                          widget.currentDhash,
-                          widget.hotspots,
-                          widget.onHotspotsUpdated,
-                          existingSpot: hotspot,
-                        );
-                      },
-                      onPanUpdate: (details) {
-                        final newRx = ((rx * width + details.delta.dx) / width).clamp(0.02, 0.98);
-                        final newRy = ((ry * height + details.delta.dy) / height).clamp(0.02, 0.98);
-                        setState(() {
-                          _dragOffsets[spotId] = Offset(newRx, newRy);
-                        });
-                      },
-                      onPanEnd: (_) async {
-                        final finalPos = _dragOffsets.remove(spotId);
-                        if (finalPos == null) return;
-                        final updated = widget.hotspots.map((h) {
-                          final hId = (h['id'] ?? '${h['x']}_${h['y']}').toString();
-                          if (hId == spotId) {
-                            return {
-                              ...h,
-                              'x': finalPos.dx,
-                              'y': finalPos.dy,
-                            };
-                          }
-                          return h;
-                        }).toList();
-                        await TbpStorageService.instance.saveHotspots(
-                          widget.tbpFolderPath,
-                          widget.currentDhash,
-                          updated,
-                        );
-                        widget.onHotspotsUpdated?.call(updated);
-                      },
-                      child: Tooltip(
-                        message: '$label (클릭: 실행 / 드래그: 위치 이동 / 우클릭·길게누르기: 편집·삭제)',
-                        child: Container(
-                          padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF16161A).withOpacity(0.92),
-                            borderRadius: BorderRadius.circular(22 * s),
-                            border: Border.all(color: spotColor, width: 2 * s),
-                            boxShadow: [
-                              BoxShadow(
-                                color: spotColor.withOpacity(0.45),
-                                blurRadius: 12,
-                                spreadRadius: 1,
-                              ),
-                            ],
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onSecondaryTapDown: (details) {
+            final rx = (details.localPosition.dx / width).clamp(0.02, 0.98);
+            final ry = (details.localPosition.dy / height).clamp(0.02, 0.98);
+            TbpHotspotOverlay.showAddHotspotModal(
+              context,
+              rx,
+              ry,
+              widget.tbpFolderPath,
+              widget.currentDhash,
+              widget.hotspots,
+              widget.onHotspotsUpdated,
+            );
+          },
+          child: SizedBox.expand(
+            child: Stack(
+              fit: StackFit.expand,
+              clipBehavior: Clip.none,
+              children: [
+                // ── 타이머 오버레이 (활성 시) ──────────────────
+                if (_activeTimer != null && _timerSeconds != null)
+                  Positioned(
+                    bottom: 30 * s,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 24 * s,
+                          vertical: 12 * s,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16161A).withValues(alpha: 0.95),
+                          borderRadius: BorderRadius.circular(40 * s),
+                          border: Border.all(
+                            color: const Color(0xFFFF8906),
+                            width: 2,
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 24 * s,
-                                height: 24 * s,
-                                decoration: BoxDecoration(
-                                  color: spotColor.withOpacity(0.22),
-                                  shape: BoxShape.circle,
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(emoji, style: TextStyle(fontSize: 13 * s)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('⏱️ ', style: TextStyle(fontSize: 22 * s)),
+                            Text(
+                              '${(_remaining ~/ 60).toString().padLeft(2, '0')}:${(_remaining % 60).toString().padLeft(2, '0')}',
+                              style: GoogleFonts.notoSansKr(
+                                color: _remaining <= 10
+                                    ? const Color(0xFFFF6B6B)
+                                    : Colors.white,
+                                fontSize: 28 * s,
+                                fontWeight: FontWeight.bold,
                               ),
-                              SizedBox(width: 6 * s),
-                              ConstrainedBox(
-                                constraints: BoxConstraints(maxWidth: 130 * s),
-                                child: Text(
-                                  label,
-                                  style: GoogleFonts.notoSansKr(
-                                    color: Colors.white,
-                                    fontSize: 12 * s,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                            ),
+                            SizedBox(width: 12 * s),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.close_rounded,
+                                color: Colors.white54,
                               ),
-                            ],
-                          ),
+                              onPressed: () {
+                                _activeTimer?.cancel();
+                                setState(() {
+                                  _activeTimer = null;
+                                  _timerSeconds = null;
+                                });
+                              },
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-            );
-          }).toList(),
+
+                // ── 핫스팟 핀들 ─────────────────────────────────
+                ...widget.hotspots.map((hotspot) {
+                  final rx = ((hotspot['x'] as num?)?.toDouble() ?? 0.5).clamp(0.02, 0.98);
+                  final ry = ((hotspot['y'] as num?)?.toDouble() ?? 0.5).clamp(0.02, 0.98);
+                  final left = rx * width;
+                  final top = ry * height;
+                  final type = HotspotTypeExt.fromString(
+                    hotspot['type'] as String?,
+                  );
+                  final interactable = _isHotspotInteractable(hotspot);
+                  final label = (hotspot['title'] ?? hotspot['name'] ?? type.label).toString();
+                  final emoji = (hotspot['icon'] as String?) ?? type.emoji;
+
+                  return Positioned(
+                    left: (left - 22 * s).clamp(4.0, (width - 160 * s).clamp(4.0, double.infinity)),
+                    top: (top - 20 * s).clamp(4.0, (height - 48 * s).clamp(4.0, double.infinity)),
+                    child: Listener(
+                      behavior: HitTestBehavior.opaque,
+                      onPointerDown: (_) {},
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: interactable
+                              ? () => _activateHotspot(context, hotspot)
+                              : null,
+                          onSecondaryTap: () {
+                            TbpHotspotOverlay.showAddHotspotModal(
+                              context,
+                              rx,
+                              ry,
+                              widget.tbpFolderPath,
+                              widget.currentDhash,
+                              widget.hotspots,
+                              widget.onHotspotsUpdated,
+                              existingSpot: hotspot,
+                            );
+                          },
+                          onLongPress: () {
+                            TbpHotspotOverlay.showAddHotspotModal(
+                              context,
+                              rx,
+                              ry,
+                              widget.tbpFolderPath,
+                              widget.currentDhash,
+                              widget.hotspots,
+                              widget.onHotspotsUpdated,
+                              existingSpot: hotspot,
+                            );
+                          },
+                          child: AnimatedOpacity(
+                            duration: const Duration(milliseconds: 200),
+                            opacity: interactable ? 1.0 : 0.5,
+                            child: Tooltip(
+                              message: '$label (클릭: 실행 / 우클릭·길게누르기: 편집·삭제)',
+                              child: Container(
+                                padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF16161A).withValues(alpha: 0.92),
+                                  borderRadius: BorderRadius.circular(22 * s),
+                                  border: Border.all(
+                                    color: interactable ? type.color : Colors.white38,
+                                    width: 2 * s,
+                                  ),
+                                  boxShadow: interactable
+                                      ? [
+                                          BoxShadow(
+                                            color: type.color.withValues(alpha: 0.45),
+                                            blurRadius: 12,
+                                            spreadRadius: 1,
+                                          ),
+                                        ]
+                                      : const [],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 24 * s,
+                                      height: 24 * s,
+                                      decoration: BoxDecoration(
+                                        color: type.color.withValues(alpha: 0.22),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(emoji, style: TextStyle(fontSize: 13 * s)),
+                                    ),
+                                    SizedBox(width: 6 * s),
+                                    ConstrainedBox(
+                                      constraints: BoxConstraints(maxWidth: 130 * s),
+                                      child: Text(
+                                        label,
+                                        style: GoogleFonts.notoSansKr(
+                                          color: Colors.white,
+                                          fontSize: 12 * s,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
         );
       },
     );

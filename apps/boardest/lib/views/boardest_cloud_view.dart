@@ -27,6 +27,8 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
   bool _isConnected = false;
   String? _teacherName;
   String? _ownerEmail;
+  String? _schoolName;
+  String? _schoolId;
 
   // QR 세션 상태
   String? _sessionId;
@@ -103,8 +105,8 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
 
     try {
       final res = await PasskeyService.instance.createChallengeSession(
-        schoolName: 'Boardest Cloud (BCLD)',
-        roomName: '전자칠판',
+        schoolName: 'Boardest Class Cloud (BCLD)',
+        roomName: '교실 전자칠판',
       );
 
       if (!mounted) return;
@@ -132,6 +134,8 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
             _isConnected = true;
             _teacherName = event.teacherName ?? '선생님';
             _ownerEmail = event.email;
+            _schoolName = event.schoolName;
+            _schoolId = event.schoolId;
           });
 
           ScaffoldMessenger.of(context).showSnackBar(

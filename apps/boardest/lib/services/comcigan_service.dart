@@ -1,3 +1,4 @@
+import '../models/app_settings.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -73,6 +74,123 @@ class TimetableResult {
 
 
 class ComciganService {
+
+  /// 컴시간 '일과시간' 데이터로부터 학교 실제 교시별 시정표(TimeSettings)를 정밀 파싱합니다.
+  static TimeSettings? parseTimeSettingsFromPeriodTimes(
+    List<String> periodTimes, {
+    TimeSettings? currentSettings,
+  }) {
+    if (periodTimes.isEmpty) return null;
+
+    final parsedTimes = <int, String>{}; // period -> "HH:mm"
+    final timeMinutes = <int, int>{}; // period -> total minutes
+
+    final timeReg = RegExp(r'(0[7-9]|1[0-9]|20)\s*[:시]\s*([0-5]\d)');
+    final prefixReg = RegExp(r'^(\d{1,2})\s*[\(교시:]');
+    final parenReg = RegExp(r'[\(\[]\s*(\d{1,2})\s*[\)\]]');
+
+    for (int i = 0; i < periodTimes.length; i++) {
+      final raw = periodTimes[i].trim();
+      final timeMatch = timeReg.firstMatch(raw);
+      if (timeMatch != null) {
+        final h = int.tryParse(timeMatch.group(1)!) ?? 0;
+        final m = int.tryParse(timeMatch.group(2)!) ?? 0;
+        final timeStr = '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+
+        int period = i + 1;
+        final prefixMatch = prefixReg.firstMatch(raw);
+        if (prefixMatch != null) {
+          final p = int.tryParse(prefixMatch.group(1)!);
+          if (p != null && p >= 1 && p <= 12) period = p;
+        } else {
+          final parenMatch = parenReg.firstMatch(raw);
+          if (parenMatch != null) {
+            final p = int.tryParse(parenMatch.group(1)!);
+            if (p != null && p >= 1 && p <= 12) period = p;
+          }
+        }
+
+        parsedTimes[period] = timeStr;
+        timeMinutes[period] = h * 60 + m;
+      }
+    }
+
+    if (parsedTimes.isEmpty) return null;
+
+    final sortedPeriods = parsedTimes.keys.toList()..sort();
+    final firstP = sortedPeriods.first;
+    final firstStartStr = parsedTimes[firstP]!;
+    final firstMin = timeMinutes[firstP]!;
+
+    // 연속된 교시간의 간격(interval) 계산
+    final intervals = <int>[];
+    int lunchAfterPeriod = currentSettings?.lunchAfterPeriod ?? 4;
+    int maxGap = 0;
+
+    for (int idx = 0; idx < sortedPeriods.length - 1; idx++) {
+      final p1 = sortedPeriods[idx];
+      final p2 = sortedPeriods[idx + 1];
+      if (p2 == p1 + 1) {
+        final gap = timeMinutes[p2]! - timeMinutes[p1]!;
+        if (gap > 0 && gap < 180) {
+          intervals.add(gap);
+          if (gap > maxGap && gap >= 70) {
+            maxGap = gap;
+            lunchAfterPeriod = p1;
+          }
+        }
+      }
+    }
+
+    // 일반 수업+쉬는시간 단위 결정 (예: 50, 55, 또는 60분)
+    int standardInterval = 55;
+    if (intervals.isNotEmpty) {
+      final normalIntervals = intervals.where((g) => g < 75).toList();
+      if (normalIntervals.isNotEmpty) {
+        normalIntervals.sort();
+        standardInterval = normalIntervals[normalIntervals.length ~/ 2];
+      }
+    }
+
+    int lessonDur = (standardInterval - 10).clamp(40, 50);
+    int breakDur = 10;
+    int lunchDur = currentSettings?.lunchDuration ?? 50;
+
+    if (maxGap >= 70) {
+      lunchDur = (maxGap - lessonDur).clamp(40, 90);
+    }
+
+    // 조회: 1교시 시작 15분 전
+    final morningMin = firstMin - 15;
+    final mH = (morningMin ~/ 60).clamp(0, 23);
+    final mM = (morningMin % 60).clamp(0, 59);
+    final morningStartStr = '${mH.toString().padLeft(2, '0')}:${mM.toString().padLeft(2, '0')}';
+
+    final periodStartTimesList = <String>[];
+    for (int p = 1; p <= (sortedPeriods.last.clamp(1, 10)); p++) {
+      if (parsedTimes.containsKey(p)) {
+        periodStartTimesList.add(parsedTimes[p]!);
+      } else {
+        periodStartTimesList.add('');
+      }
+    }
+
+    return TimeSettings(
+      lessonDuration: lessonDur,
+      breakDuration: breakDur,
+      lunchDuration: lunchDur,
+      lunchAfterPeriod: lunchAfterPeriod,
+      firstPeriodStart: firstStartStr,
+      morningAssemblyStart: morningStartStr,
+      morningAssemblyEnd: firstStartStr,
+      afternoonAssemblyStart: currentSettings?.afternoonAssemblyStart ?? '16:10',
+      afternoonAssemblyEnd: currentSettings?.afternoonAssemblyEnd ?? '16:30',
+      afternoonAssemblyAfterMinutes: currentSettings?.afternoonAssemblyAfterMinutes ?? 10,
+      afternoonAssemblyDuration: currentSettings?.afternoonAssemblyDuration ?? 20,
+      periodStartTimes: periodStartTimesList,
+    );
+  }
+
   static const String _defaultUrl = 'http://xn--s39aj90b0nb2xw6xh.kr';
 
   /// schoolId(소문자)를 컴시간 숫자 코드로 변환합니다.
@@ -305,7 +423,17 @@ class ComciganService {
     }
 
     final String schoolName = _fixMojibake(data['학교명'] ?? '');
-    final List<String> periodTimes = List<String>.from(data['일과시간'] ?? []);
+    List<String> periodTimes = [];
+    if (data['일과시간'] != null && data['일과시간'] is List) {
+      periodTimes = (data['일과시간'] as List).map((e) => e.toString()).toList();
+    } else {
+      for (final entry in data.entries) {
+        if (entry.key.contains('일과시간') && entry.value is List) {
+          periodTimes = (entry.value as List).map((e) => e.toString()).toList();
+          break;
+        }
+      }
+    }
 
     // Extract class counts per grade
     final Map<int, int> classCounts = {};

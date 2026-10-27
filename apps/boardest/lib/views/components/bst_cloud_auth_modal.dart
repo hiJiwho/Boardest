@@ -14,6 +14,7 @@ class BstCloudAuthModal extends StatefulWidget {
   final double scale;
   final String schoolName;
   final String gradeClass;
+  final String? schoolId;
   final VoidCallback onUnlocked;
 
   const BstCloudAuthModal({
@@ -21,6 +22,7 @@ class BstCloudAuthModal extends StatefulWidget {
     required this.scale,
     this.schoolName = '보데스트 중학교',
     this.gradeClass = '1학년 7반',
+    this.schoolId,
     required this.onUnlocked,
   });
 
@@ -29,6 +31,7 @@ class BstCloudAuthModal extends StatefulWidget {
     double scale = 1.0,
     String schoolName = '보데스트 중학교',
     String gradeClass = '1학년 7반',
+    String? schoolId,
     required VoidCallback onUnlocked,
   }) {
     return showDialog(
@@ -38,6 +41,7 @@ class BstCloudAuthModal extends StatefulWidget {
         scale: scale,
         schoolName: schoolName,
         gradeClass: gradeClass,
+        schoolId: schoolId,
         onUnlocked: onUnlocked,
       ),
     );
@@ -107,6 +111,7 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
       final res = await PasskeyService.instance.createChallengeSession(
         schoolName: widget.schoolName,
         roomName: widget.gradeClass,
+        schoolId: widget.schoolId,
       );
 
       if (!mounted) return;
@@ -118,7 +123,7 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
 
       _approvalSubscription?.cancel();
       _approvalSubscription = PasskeyService.instance
-          .listenForApproval(res.sessionId)
+          .listenForApproval(res.sessionId, expectedSchoolId: widget.schoolId)
           .listen((event) async {
         if (!mounted) return;
         if (event.approved && event.accessToken != null) {

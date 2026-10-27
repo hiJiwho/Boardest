@@ -16,6 +16,8 @@ class TimeSettings {
   final int afternoonAssemblyDuration;
   // 조회: 1교시 시작 전 n분 전 시작
   final int? morningAssemblyBeforeMinutes;
+  // 컴시간 학교 일과시간표에서 추출된 교시별 시작 시간 목록 (예: ['08:40', '09:35', ...])
+  final List<String> periodStartTimes;
 
   TimeSettings({
     this.lessonDuration = 45,
@@ -30,6 +32,7 @@ class TimeSettings {
     this.afternoonAssemblyAfterMinutes = 10,
     this.afternoonAssemblyDuration = 20,
     this.morningAssemblyBeforeMinutes,
+    this.periodStartTimes = const [],
   });
 
   Map<String, dynamic> toJson() {
@@ -46,6 +49,7 @@ class TimeSettings {
       'afternoonAssemblyAfterMinutes': afternoonAssemblyAfterMinutes,
       'afternoonAssemblyDuration': afternoonAssemblyDuration,
       'morningAssemblyBeforeMinutes': morningAssemblyBeforeMinutes,
+      'periodStartTimes': periodStartTimes,
     };
   }
 
@@ -63,6 +67,42 @@ class TimeSettings {
       afternoonAssemblyAfterMinutes: json['afternoonAssemblyAfterMinutes'] as int? ?? 10,
       afternoonAssemblyDuration: json['afternoonAssemblyDuration'] as int? ?? 20,
       morningAssemblyBeforeMinutes: json['morningAssemblyBeforeMinutes'] as int?,
+      periodStartTimes: (json['periodStartTimes'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+    );
+  }
+
+  TimeSettings copyWith({
+    int? lessonDuration,
+    int? breakDuration,
+    int? lunchDuration,
+    int? lunchAfterPeriod,
+    String? firstPeriodStart,
+    String? morningAssemblyStart,
+    String? morningAssemblyEnd,
+    String? afternoonAssemblyStart,
+    String? afternoonAssemblyEnd,
+    int? afternoonAssemblyAfterMinutes,
+    int? afternoonAssemblyDuration,
+    int? morningAssemblyBeforeMinutes,
+    List<String>? periodStartTimes,
+  }) {
+    return TimeSettings(
+      lessonDuration: lessonDuration ?? this.lessonDuration,
+      breakDuration: breakDuration ?? this.breakDuration,
+      lunchDuration: lunchDuration ?? this.lunchDuration,
+      lunchAfterPeriod: lunchAfterPeriod ?? this.lunchAfterPeriod,
+      firstPeriodStart: firstPeriodStart ?? this.firstPeriodStart,
+      morningAssemblyStart: morningAssemblyStart ?? this.morningAssemblyStart,
+      morningAssemblyEnd: morningAssemblyEnd ?? this.morningAssemblyEnd,
+      afternoonAssemblyStart: afternoonAssemblyStart ?? this.afternoonAssemblyStart,
+      afternoonAssemblyEnd: afternoonAssemblyEnd ?? this.afternoonAssemblyEnd,
+      afternoonAssemblyAfterMinutes: afternoonAssemblyAfterMinutes ?? this.afternoonAssemblyAfterMinutes,
+      afternoonAssemblyDuration: afternoonAssemblyDuration ?? this.afternoonAssemblyDuration,
+      morningAssemblyBeforeMinutes: morningAssemblyBeforeMinutes ?? this.morningAssemblyBeforeMinutes,
+      periodStartTimes: periodStartTimes ?? this.periodStartTimes,
     );
   }
 }

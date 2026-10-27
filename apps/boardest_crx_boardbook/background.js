@@ -9,7 +9,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
   }
 
   if (request.action === 'LAUNCH_BOARDBOOK') {
-    const { driveToken, fileUrl, title, type, pointerId } = request;
+    const { driveToken, fileUrl, title, type, pointerId, hotspots } = request;
     
     // 일회성 보안 세션 토큰 발급 (무단 직접 접속 방지)
     const sessionToken = 'bst_session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
@@ -20,6 +20,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
       title: title || '스마트 교재',
       type: type || 'TBP',
       pointerId: pointerId || '',
+      hotspots: hotspots || [],
       createdAt: Date.now(),
       targetTabId: null,
     };
@@ -31,8 +32,8 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
       activeSessions.delete(sessionToken);
     }, 10 * 60 * 1000);
 
-    // BoardBook 전용 뷰어 탭 오픈
-    const viewerUrl = chrome.runtime.getURL(`boardbook.html?session=${encodeURIComponent(sessionToken)}`);
+    // BoardBook Flutter 전용 뷰어 탭 오픈
+    const viewerUrl = chrome.runtime.getURL(`boardbook_flutter.html?session=${encodeURIComponent(sessionToken)}`);
     chrome.tabs.create({ url: viewerUrl }, (tab) => {
       sendResponse({ success: true, sessionToken, tabId: tab.id });
     });
@@ -132,6 +133,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
       },
       args: [eventType, x, y],
+    }).then(() => sendResponse({ success: true })).catch((e) => sendResponse({ success: false, error: e.message }));
+    return true;
+  }
+
+  // 대상 탭 페이지 전환 (이전/다음 키보드 이벤트 전달)
+  if (request.action === 'NAVIGATE_TAB') {
+    const { targetTabId, direction } = request;
+    if (!targetTabId) {
+      sendResponse({ success: false });
+      return true;
+    }
+    chrome.scripting.executeScript({
+      target: { tabId: targetTabId },
+      func: (dir) => {
+        const key = dir === 'prev' ? 'ArrowLeft' : 'ArrowRight';
+        const keyCode = dir === 'prev' ? 37 : 39;
+        window.dispatchEvent(new KeyboardEvent('keydown', { key, keyCode, bubbles: true }));
+        window.dispatchEvent(new KeyboardEvent('keyup', { key, keyCode, bubbles: true }));
+        if (dir === 'prev') {
+          window.scrollBy({ top: -window.innerHeight * 0.8, behavior: 'smooth' });
+        } else {
+          window.scrollBy({ top: window.innerHeight * 0.8, behavior: 'smooth' });
+        }
+      },
+      args: [direction],
     }).then(() => sendResponse({ success: true })).catch((e) => sendResponse({ success: false, error: e.message }));
     return true;
   }

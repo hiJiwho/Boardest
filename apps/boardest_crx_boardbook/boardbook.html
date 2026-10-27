@@ -36,7 +36,7 @@
       </div>
 
       <div class="nav-right">
-        <button id="btn-toggle-interaction" class="mode-toggle-btn active" title="사이트 조작 / 판서 모드 전환">
+        <button id="btn-toggle-interaction" class="mode-toggle-btn active" title="사이트 조작 / 판서 모드 전환 (Space)">
           <span id="mode-icon">✏️</span> <span id="mode-text">판서 모드</span>
         </button>
       </div>
@@ -51,28 +51,62 @@
 
     <!-- 우측 세로형 판서 툴바 (Right Floating Toolbar) -->
     <aside class="right-pen-toolbar" id="pen-toolbar">
-      <button class="tool-btn active" id="tool-pen" title="펜">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+      <button class="tool-btn active" id="tool-pen" title="펜 (P)">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+      </button>
+
+      <button class="tool-btn" id="tool-highlighter" title="형광펜 (H)">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M16.5 3.5l4 4-2 2-4-4 2-2zm-3 3l-8.5 8.5V19h4l8.5-8.5-4-4zm-7.5 11l-2 3.5h7l-2-3.5h-3z"/></svg>
       </button>
 
       <div class="color-palette">
-        <div class="color-dot active" data-color="#00F5D4" style="background:#00F5D4;"></div>
-        <div class="color-dot" data-color="#FFD166" style="background:#FFD166;"></div>
-        <div class="color-dot" data-color="#EF4565" style="background:#EF4565;"></div>
-        <div class="color-dot" data-color="#7F5AF0" style="background:#7F5AF0;"></div>
-        <div class="color-dot" data-color="#FFFFFF" style="background:#FFFFFF;"></div>
+        <div class="color-dot active" data-color="#00F5D4" style="background:#00F5D4;" title="청록색"></div>
+        <div class="color-dot" data-color="#FFD166" style="background:#FFD166;" title="노란색"></div>
+        <div class="color-dot" data-color="#EF4565" style="background:#EF4565;" title="분홍색"></div>
+        <div class="color-dot" data-color="#7F5AF0" style="background:#7F5AF0;" title="보라색"></div>
+        <div class="color-dot" data-color="#FFFFFF" style="background:#FFFFFF;" title="흰색"></div>
       </div>
 
       <div class="divider"></div>
 
-      <button class="tool-btn" id="tool-eraser" title="지우개">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M15.14 3c-.4 0-.8.15-1.11.46L2.46 15.03c-.61.61-.61 1.6 0 2.22l4.29 4.29c.61.61 1.6.61 2.22 0L20.54 9.97c.61-.61.61-1.6 0-2.22l-4.29-4.29c-.31-.31-.71-.46-1.11-.46zm0 2.83l3.54 3.54-9.19 9.19-3.54-3.54 9.19-9.19z"/></svg>
+      <button class="tool-btn" id="tool-eraser" title="지우개 (E)">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M15.14 3c-.4 0-.8.15-1.11.46L2.46 15.03c-.61.61-.61 1.6 0 2.22l4.29 4.29c.61.61 1.6.61 2.22 0L20.54 9.97c.61-.61.61-1.6 0-2.22l-4.29-4.29c-.31-.31-.71-.46-1.11-.46zm0 2.83l3.54 3.54-9.19 9.19-3.54-3.54 9.19-9.19z"/></svg>
       </button>
 
-      <button class="tool-btn" id="tool-clear-all" title="전체 지우기">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M15 16h4v2h-4zm0-8h7v2h-7zm0 4h6v2h-6zM3 18c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V8H3v10zm2-8h6v8H5v-8zm5-6H6L5 5H2v2h12V5h-3z"/></svg>
+      <button class="tool-btn" id="tool-undo" title="실행 취소 (Ctrl+Z)">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+      </button>
+
+      <button class="tool-btn" id="tool-clear-all" title="전체 지우기 (C)">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M15 16h4v2h-4zm0-8h7v2h-7zm0 4h6v2h-6zM3 18c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2V8H3v10zm2-8h6v8H5v-8zm5-6H6L5 5H2v2h12V5h-3z"/></svg>
+      </button>
+
+      <div class="divider"></div>
+
+      <button class="tool-btn" id="tool-help" title="단축키 안내 (?)">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 16h-2v-2h2v2zm1.07-7.75l-.9.92C12.45 11.9 12 12.5 12 14h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H7c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.04-.42 1.99-1.07 2.66z"/></svg>
       </button>
     </aside>
+  </div>
+
+  <!-- 단축키 안내 팝업 -->
+  <div id="shortcuts-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>⌨️ BoardBook 단축키 안내</h3>
+        <button id="btn-close-modal" class="modal-close">&times;</button>
+      </div>
+      <div class="shortcuts-grid">
+        <div class="shortcut-item"><kbd>P</kbd><span>펜 도구 선택</span></div>
+        <div class="shortcut-item"><kbd>H</kbd><span>형광펜 도구 선택</span></div>
+        <div class="shortcut-item"><kbd>E</kbd><span>지우개 도구 선택</span></div>
+        <div class="shortcut-item"><kbd>Ctrl</kbd> + <kbd>Z</kbd><span>실행 취소 (Undo)</span></div>
+        <div class="shortcut-item"><kbd>C</kbd><span>판서 전체 지우기</span></div>
+        <div class="shortcut-item"><kbd>Space</kbd><span>판서 / 사이트 조작 전환</span></div>
+        <div class="shortcut-item"><kbd>←</kbd> / <kbd>→</kbd><span>이전 / 다음 페이지</span></div>
+        <div class="shortcut-item"><kbd>?</kbd><span>단축키 창 열기/닫기</span></div>
+      </div>
+    </div>
   </div>
 
   <script src="boardbook.js"></script>

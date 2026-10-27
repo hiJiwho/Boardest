@@ -849,8 +849,8 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                               tbpFolderPath: _tbpFolderPath,
                               currentDhash: _currentDhash,
                               scaleFactor: widget.scaleFactor,
-                              isTeacherApp: widget.isTeacherApp,
-                              onTriggerHotspot: _triggerHotspot,
+                              inputMode: _inputMode,
+                              longPressActive: false,
                               onHotspotsUpdated: (updated) {
                                 setState(() {
                                   _currentHotspots = updated;
