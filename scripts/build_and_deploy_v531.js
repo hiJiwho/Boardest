@@ -52,6 +52,7 @@ run(
   path.join(ROOT, 'apps', 'boardest')
 );
 copyFile(builtApkPath, path.join(ROOT, 'dist', 'appx', 'boardest.apk'));
+copyFile(builtApkPath, path.join(ROOT, 'dist', 'appx', 'boardest-class.apk'));
 copyFile(builtApkPath, path.join(ROOT, 'infra', 'download_web', 'boardest.apk'));
 copyFile(builtApkPath, path.join(ROOT, 'infra', 'downloads_hub_web', 'boardest.apk'));
 
@@ -68,6 +69,7 @@ copyFile(teacherApk, path.join(ROOT, 'infra', 'downloads_hub_web', 'bst-teacher.
 // 2. Windows 빌드 및 패키징 (AppX: boardest.appx, boardest-cloud.appx, MSI: bst-teacher.msi)
 console.log(`\n== [2/5] Building Windows AppX & MSI Packages (v${VERSION})... ==`);
 run(`powershell -ExecutionPolicy Bypass -File scripts/build_all_appx.ps1 -AppVersion ${VERSION} -SkipApk`, ROOT);
+copyFile(path.join(ROOT, 'dist', 'appx', 'boardest.appx'), path.join(ROOT, 'dist', 'appx', 'boardest-class.appx'));
 copyFile(path.join(ROOT, 'dist', 'appx', 'boardest.appx'), path.join(ROOT, 'infra', 'download_web', 'boardest.appx'));
 copyFile(path.join(ROOT, 'dist', 'appx', 'boardest.appx'), path.join(ROOT, 'infra', 'downloads_hub_web', 'boardest.appx'));
 copyFile(path.join(ROOT, 'dist', 'appx', 'boardest-cloud.appx'), path.join(ROOT, 'infra', 'download_web', 'boardest-cloud.appx'));
@@ -102,6 +104,8 @@ try {
 run('git push origin main', ROOT);
 
 const releaseAssets = [
+  path.join(ROOT, 'dist', 'appx', 'boardest-class.apk'),
+  path.join(ROOT, 'dist', 'appx', 'boardest-class.appx'),
   path.join(ROOT, 'dist', 'appx', 'boardest.apk'),
   path.join(ROOT, 'dist', 'appx', 'boardest.appx'),
   path.join(ROOT, 'dist', 'appx', 'boardest-cloud.apk'),
