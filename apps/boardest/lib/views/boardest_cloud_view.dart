@@ -42,7 +42,6 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
 
   // 파일 탐색기 상태
   bool _isLoadingFiles = false;
-  bool _isUploadingFile = false;
   List<BstCloudFile> _allFiles = [];
   List<BstCloudFile> _filteredFiles = [];
   String _searchQuery = '';
@@ -308,75 +307,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
     _filteredFiles = list;
   }
 
-  /// 📤 파일 직접 업로드 (Cloud 전문형 기능: 칠판/PC에서 내 드라이브로 바로 업로드)
-  Future<void> _uploadDirectFile() async {
-    final token = BstCloudService.instance.activeToken;
-    if (token == null || token.isEmpty) return;
 
-    try {
-      final result = await FilePicker.pickFiles(
-        allowMultiple: false,
-        withData: true,
-      );
-
-      if (result == null || result.files.isEmpty) return;
-      final file = result.files.first;
-      final bytes = file.bytes;
-      if (bytes == null || bytes.isEmpty) return;
-
-      setState(() => _isUploadingFile = true);
-
-      // MIME 타입 추정
-      String mimeType = 'application/octet-stream';
-      final lowerName = file.name.toLowerCase();
-      if (lowerName.endsWith('.pdf')) {
-        mimeType = 'application/pdf';
-      } else if (lowerName.endsWith('.ppt') || lowerName.endsWith('.pptx')) {
-        mimeType = 'application/vnd.ms-powerpoint';
-      } else if (lowerName.endsWith('.png')) {
-        mimeType = 'image/png';
-      } else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) {
-        mimeType = 'image/jpeg';
-      }
-
-      final success = await BstCloudService.instance.uploadFileToDrive(
-        fileName: file.name,
-        bytes: bytes,
-        mimeType: mimeType,
-        accessToken: token,
-      );
-
-      if (mounted) {
-        setState(() => _isUploadingFile = false);
-        if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ [${file.name}] 파일이 Cloud에 성공적으로 업로드되었습니다!'),
-              backgroundColor: const Color(0xFF10B981),
-            ),
-          );
-          await _loadFiles();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('❌ 파일 업로드에 실패했습니다. 드라이브 권한을 확인해주세요.'),
-              backgroundColor: Color(0xFFEF4565),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isUploadingFile = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('업로드 오류: $e'),
-            backgroundColor: const Color(0xFFEF4565),
-          ),
-        );
-      }
-    }
-  }
 
   /// 🚀 파일 클릭 시 원터치 뷰어 실행
   Future<void> _openFile(BstCloudFile file) async {
@@ -1110,25 +1041,28 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
 
           const Spacer(),
 
-          // 📤 자료 업로드 버튼 (Cloud 전문형)
-          ElevatedButton.icon(
-            onPressed: _isUploadingFile ? null : _uploadDirectFile,
-            icon: _isUploadingFile
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black87),
-                  )
-                : const Icon(Icons.cloud_upload_rounded, size: 16),
-            label: Text(
-              _isUploadingFile ? '업로드 중...' : '자료 올리기',
-              style: GoogleFonts.notoSansKr(fontSize: 13, fontWeight: FontWeight.w700),
+          // 👁️ 교실 열람 전용 모드 뱃지 (사용자 지시: Bcld는 업로드 제거하고 열람만 가능)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00F5D4).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.3)),
             ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00F5D4),
-              foregroundColor: Colors.black87,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.remove_red_eye_rounded, size: 14, color: Color(0xFF00F5D4)),
+                const SizedBox(width: 6),
+                Text(
+                  '교실 열람 전용 (Read Only)',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF00F5D4),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 10),
@@ -1558,7 +1492,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
           ),
           const SizedBox(height: 6),
           Text(
-            '상단 [자료 올리기] 버튼이나 스마트폰에서 수업자료를 추가해보세요.',
+            '교사용 앱(Boardest Teacher) 또는 Google Drive에 업로드된 수업 자료가 여기에 안전하게 표시됩니다.',
             style: GoogleFonts.notoSansKr(
               color: const Color(0xFF64748B),
               fontSize: 13,
@@ -1568,25 +1502,13 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ElevatedButton.icon(
-                onPressed: _uploadDirectFile,
-                icon: const Icon(Icons.cloud_upload_rounded, size: 16),
-                label: const Text('자료 올리기'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00F5D4),
-                  foregroundColor: Colors.black87,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(width: 12),
               OutlinedButton.icon(
                 onPressed: _loadFiles,
                 icon: const Icon(Icons.refresh_rounded, size: 16),
-                label: const Text('새로고침'),
+                label: const Text('수업 자료 새로고침'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white70,
-                  side: const BorderSide(color: Color(0xFF334155)),
+                  foregroundColor: const Color(0xFF00F5D4),
+                  side: const BorderSide(color: Color(0xFF00F5D4)),
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),

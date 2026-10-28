@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '5.3.3',
+  [string]$AppVersion = '5.3.5',
   [switch]$SkipApk,
   [switch]$SkipWindowsBuild
 )
@@ -153,7 +153,10 @@ function Pack-TeacherMsi([string]$Version) {
   }
   if ($LASTEXITCODE -ne 0) { throw "MSI signing failed: $MsiOut" }
 
-  Write-Host "Successfully built and signed $MsiOut" -ForegroundColor Green
+  # 사용자 요청에 맞춘 공식 배포 파일명 통일: boardest-teacher.msi
+  $UnifiedMsiOut = Join-Path $OutDir 'boardest-teacher.msi'
+  Copy-Item $MsiOut $UnifiedMsiOut -Force
+  Write-Host "Successfully built and signed $MsiOut and $UnifiedMsiOut" -ForegroundColor Green
 }
 
 Write-Host "Building Boardest official v$AppVersion AppX and APK files..." -ForegroundColor Cyan

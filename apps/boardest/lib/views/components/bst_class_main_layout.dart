@@ -4052,6 +4052,46 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 '수행평가 공지',
                 style: _ts(17, w: FontWeight.w800, c: Colors.white),
               ),
+              const SizedBox(width: 8),
+              // 실시간 수행평가 임박 알람 뱃지 (오늘/내일 수행평가 알림)
+              ValueListenableBuilder<List<AssessmentItem>>(
+                valueListenable: AssessmentService.instance.assessmentsNotifier,
+                builder: (context, items, _) {
+                  final activeItems = items.where((it) {
+                    if (it.grade != grade && it.grade != 0) return false;
+                    if (it.classNum != 0 && it.classNum != classNum) return false;
+                    return it.dday == 'D-Day' || it.dday == 'D-1';
+                  }).toList();
+                  if (activeItems.isEmpty) return const SizedBox.shrink();
+                  final hasToday = activeItems.any((it) => it.dday == 'D-Day');
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: hasToday ? Colors.redAccent.withOpacity(0.25) : Colors.amber.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: hasToday ? Colors.redAccent : Colors.amberAccent,
+                        width: 0.8,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          hasToday ? Icons.notifications_active_rounded : Icons.alarm_rounded,
+                          size: 11,
+                          color: hasToday ? Colors.redAccent : Colors.amberAccent,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          hasToday ? '오늘 수행!' : '내일 수행!',
+                          style: _ts(10.5, w: FontWeight.w800, c: hasToday ? Colors.redAccent : Colors.amberAccent),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
               const Spacer(),
               // 월간 달력 버튼
               InkWell(

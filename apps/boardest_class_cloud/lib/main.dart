@@ -213,11 +213,11 @@ class _ClassLitePageState extends State<ClassLitePage> {
       final screenW = GetSystemMetrics(SM_CXSCREEN).toDouble();
       final screenH = GetSystemMetrics(SM_CYSCREEN).toDouble();
 
+      // 사용자의 명시적 요청: Windows Class Cloud (bcld)는 항상 창틀을 띄움
       await windowManager.setTitleBarStyle(
-        TitleBarStyle.hidden,
-        windowButtonVisibility: false,
+        TitleBarStyle.normal,
+        windowButtonVisibility: true,
       );
-      await windowManager.setAsFrameless();
 
       if (dockRightThreeQuarters && screenW > 0 && screenH > 0) {
         await windowManager.setFullScreen(false);

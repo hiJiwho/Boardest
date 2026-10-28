@@ -37,13 +37,28 @@
       ],
       "redirects": [
         {
+          "source": "/boardest-teacher.msi",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.msi",
+          "type": 302
+        },
+        {
+          "source": "/boardest-teacher-lite.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-lite.apk",
+          "type": 302
+        },
+        {
+          "source": "/boardest-teacher.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.apk",
+          "type": 302
+        },
+        {
           "source": "/bst-teacher.msi",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.msi",
           "type": 302
         },
         {
           "source": "/teacher.msi",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.msi",
           "type": 302
         },
         {
@@ -158,13 +173,28 @@
       ],
       "redirects": [
         {
+          "source": "/boardest-teacher.msi",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.msi",
+          "type": 302
+        },
+        {
+          "source": "/boardest-teacher-lite.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-lite.apk",
+          "type": 302
+        },
+        {
+          "source": "/boardest-teacher.apk",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.apk",
+          "type": 302
+        },
+        {
           "source": "/bst-teacher.msi",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.msi",
           "type": 302
         },
         {
           "source": "/teacher.msi",
-          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.msi",
           "type": 302
         },
         {
