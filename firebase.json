@@ -109,6 +109,70 @@
       ],
       "rewrites": [
         {
+          "source": "/downloads",
+          "destination": "/downloads/index.html"
+        },
+        {
+          "source": "/downloads/**",
+          "destination": "/downloads/index.html"
+        },
+        {
+          "source": "/teacher-g/install",
+          "destination": "/teacher-g/install/index.html"
+        },
+        {
+          "source": "/teacher-g/install/**",
+          "destination": "/teacher-g/install/index.html"
+        },
+        {
+          "source": "/teacher-g/how-to",
+          "destination": "/teacher-g/how-to/index.html"
+        },
+        {
+          "source": "/teacher-g/how-to/**",
+          "destination": "/teacher-g/how-to/index.html"
+        },
+        {
+          "source": "/class-g/install",
+          "destination": "/class-g/install/index.html"
+        },
+        {
+          "source": "/class-g/install/**",
+          "destination": "/class-g/install/index.html"
+        },
+        {
+          "source": "/class-g/how-to",
+          "destination": "/class-g/how-to/index.html"
+        },
+        {
+          "source": "/class-g/how-to/**",
+          "destination": "/class-g/how-to/index.html"
+        },
+        {
+          "source": "/cloud-g/passkey",
+          "destination": "/cloud-g/passkey/index.html"
+        },
+        {
+          "source": "/cloud-g/passkey/**",
+          "destination": "/cloud-g/passkey/index.html"
+        },
+        {
+          "source": "/cloud-g/panser",
+          "destination": "/cloud-g/panser/index.html"
+        },
+        {
+          "source": "/cloud-g/panser/**",
+          "destination": "/cloud-g/panser/index.html"
+        },
+        {
+          "source": "/cloud-g",
+          "destination": "/cloud-g/index.html"
+        },
+        {
+          "source": "/cloud-g/**",
+          "destination": "/cloud-g/index.html"
+        },
+        {
           "source": "/install",
           "destination": "/install/index.html"
         },

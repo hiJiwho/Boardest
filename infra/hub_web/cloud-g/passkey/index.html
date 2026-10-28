@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>클라우드 패스키 등록 및 사용 가이드 — Boardest</title>
+  <link rel="icon" type="image/png" href="/assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/m3.css">
+  <style>
+    .article-header {
+      padding: 40px 0 24px;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      margin-bottom: 32px;
+    }
+    .article-tag {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--md-sys-color-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .article-title {
+      font-size: 36px;
+      font-weight: 900;
+      color: #FFF;
+      line-height: 1.25;
+      margin-bottom: 10px;
+    }
+    .article-desc {
+      font-size: 16px;
+      color: var(--md-sys-color-on-surface-variant);
+      line-height: 1.6;
+    }
+    .guide-content h3 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #FFF;
+      margin: 36px 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .guide-content p {
+      font-size: 15px;
+      color: #CBD5E1;
+      line-height: 1.75;
+      margin-bottom: 14px;
+    }
+    .guide-content ul, .guide-content ol {
+      margin-left: 24px;
+      margin-bottom: 18px;
+      color: #CBD5E1;
+      font-size: 14.5px;
+      line-height: 1.75;
+    }
+    .guide-content li {
+      margin-bottom: 6px;
+    }
+    .callout-box {
+      background: var(--md-sys-color-surface-container-high);
+      border-left: 4px solid var(--md-sys-color-primary);
+      border-radius: 0 14px 14px 0;
+      padding: 16px 20px;
+      margin: 20px 0;
+      font-size: 14.5px;
+      color: #E2E8F0;
+      line-height: 1.65;
+    }
+    .callout-box strong {
+      color: var(--md-sys-color-primary);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Nav -->
+  <header class="m3-top-app-bar">
+    <div class="m3-container m3-nav-content">
+      <a href="/" class="m3-brand-link">
+        <img src="/assets/logo.png" alt="Boardest Logo" class="m3-logo-img">
+        <span class="m3-brand-text">Boardest</span>
+      </a>
+
+      <nav class="m3-nav-actions">
+        <a href="/" class="m3-nav-button">홈</a>
+        <a href="/downloads" class="m3-nav-button">다운로드</a>
+        <a href="/teacher-g/install" class="m3-nav-button">교사 설치</a>
+        <a href="/cloud-g/passkey" class="m3-nav-button active">패스키 가이드</a>
+        <a href="/cloud-g/panser" class="m3-nav-button">판서 & TBP 가이드</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="m3-container guide-content">
+
+    <div class="article-header">
+      <p class="article-tag">Cloud Security / Passkey Guide</p>
+      <h1 class="article-title">클라우드 패스키(Passkey) 등록 및 사용 가이드</h1>
+      <p class="article-desc">전자칠판 대화면에서 비밀번호 노출 없이 스마트폰 생체인증(지문/Face ID)과 QR 코드로 1초 만에 안전하게 로그인하는 패스키 인증 매뉴얼입니다.</p>
+    </div>
+
+    <h3>1. 패스키(Passkey)란 무엇인가요?</h3>
+    <p>
+      교실 전자칠판은 학생들이 지켜보는 공개된 장소입니다. 칠판 화면에 구글 계정 비밀번호를 키보드로 입력하면 비밀번호가 노출되거나 저장될 위험이 있습니다.
+    </p>
+    <div class="callout-box">
+      <strong>🛡️ 패스키 보안의 핵심:</strong><br>
+      비밀번호를 입력하는 대신, 선생님 스마트폰의 <strong>지문, Face ID, 또는 화면 잠금 핀</strong>을 활용하여 강력한 공개키 암호화(FIDO2 / WebAuthn) 기반으로 인증합니다. 비밀번호 자체가 교실 전자칠판에 전달되지 않으므로 100% 안전합니다.
+    </div>
+
+    <h3>2. 선생님 패스키 등록 방법 (최초 1회)</h3>
+    <ol>
+      <li>선생님 연구실 PC 또는 스마트폰에서 <strong>Boardest Teacher</strong> 앱을 켭니다.</li>
+      <li>설정 메뉴의 <strong>[클라우드 보안 및 패스키 등록]</strong>으로 이동합니다.</li>
+      <li><strong>[새 패스키 등록]</strong>을 누르면 기기의 생체인증(지문 또는 얼굴 인식) 팝업이 뜹니다.</li>
+      <li>생체 인증을 완료하면 안전한 패스키 등록이 완료되며, 이제 교실 전자칠판 어디서나 이 패스키로 바로 승인할 수 있습니다.</li>
+    </ol>
+
+    <h3>3. 교실 전자칠판에서 QR 스캔 1초 로그인</h3>
+    <p>
+      수업을 위해 교실에 들어간 후 전자칠판을 켤 때 사용하는 방법입니다:
+    </p>
+    <ol>
+      <li>교실 전자칠판에서 <strong>Boardest Class</strong> 또는 <strong>BCLD (Class Cloud)</strong>를 엽니다.</li>
+      <li>화면에 표시되는 <strong>선생님 인증용 QR 코드</strong>를 확인합니다.</li>
+      <li>선생님의 스마트폰 기본 카메라로 전자칠판 QR 코드를 스캔합니다.</li>
+      <li>스마트폰 화면에 <em>"2학년 3반 전자칠판에서 수업 자료 폴더 접근을 요청합니다"</em> 메시지가 뜨면 <strong>[승인]</strong>을 터치하고 지문(패스키)을 댑니다.</li>
+      <li>전자칠판 화면이 즉시 선생님의 수업 폴더(<code>bst-save</code>, <code>bst-tbp</code>)로 열립니다.</li>
+    </ol>
+
+    <h3>4. 수업 종료 후 자동 보안 로그아웃</h3>
+    <p>
+      수업이 끝나면 전자칠판 상단의 <strong>[수업 종료 / 로그아웃]</strong> 버튼을 누르면 즉시 모든 토큰이 파기됩니다.
+      혹시 로그아웃을 잊고 교실을 나가시더라도, <strong>쉬는 시간 타이머 종료 시 자동으로 세션이 닫혀</strong> 학생들이 자료를 열람할 수 없도록 이중 보호됩니다.
+    </p>
+
+    <div style="margin-top: 40px; text-align: center;">
+      <a href="/cloud-g/panser" class="m3-btn m3-btn-filled" style="padding: 12px 28px;">다음: 클라우드 판서 & TBP 활용법 보기 →</a>
+    </div>
+
+  </main>
+
+  <footer class="m3-footer">
+    <div class="m3-container">
+      <p>© 2026 Boardest Open Source Project. All rights reserved.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>다운로드 센터 — Boardest</title>
+  <link rel="icon" type="image/png" href="/assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/m3.css">
+  <style>
+    .dl-header {
+      padding: 44px 0 28px;
+      text-align: center;
+    }
+    .dl-title {
+      font-size: 38px;
+      font-weight: 900;
+      color: #FFF;
+      margin-bottom: 8px;
+    }
+    .dl-subtitle {
+      font-size: 16px;
+      color: var(--md-sys-color-on-surface-variant);
+      max-width: 650px;
+      margin: 0 auto;
+    }
+
+    /* Device Detection Banner */
+    .device-banner {
+      background: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 16px;
+      padding: 14px 22px;
+      margin: 20px 0 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .device-banner-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #FFF;
+    }
+    .device-banner-tag {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+    }
+
+    /* Platform Sections */
+    .dl-section-title {
+      font-size: 24px;
+      font-weight: 800;
+      color: #FFF;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .dl-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+    @media (max-width: 860px) {
+      .dl-grid { grid-template-columns: 1fr; }
+    }
+
+    .dl-package-item {
+      background: var(--md-sys-color-surface-container-high);
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-top: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .package-name {
+      font-size: 14.5px;
+      font-weight: 700;
+      color: #FFF;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .package-desc {
+      font-size: 12.5px;
+      color: var(--md-sys-color-on-surface-variant);
+      margin-top: 2px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Certificate Box at bottom */
+    .cert-section {
+      background: var(--md-sys-color-surface-container);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 20px;
+      padding: 28px;
+      margin: 40px 0 60px;
+    }
+    .cert-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: #FFF;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cert-desc {
+      font-size: 13.5px;
+      color: var(--md-sys-color-on-surface-variant);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Material 3 Top App Bar -->
+  <header class="m3-top-app-bar">
+    <div class="m3-container m3-nav-content">
+      <a href="/" class="m3-brand-link">
+        <img src="/assets/logo.png" alt="Boardest Logo" class="m3-logo-img">
+        <span class="m3-brand-text">Boardest</span>
+        <span class="m3-brand-badge">Downloads</span>
+      </a>
+
+      <nav class="m3-nav-actions">
+        <a href="/" class="m3-nav-button">소개</a>
+        <a href="/downloads" class="m3-nav-button active">다운로드</a>
+        <a href="/teacher-g/install" class="m3-nav-button">교사 가이드</a>
+        <a href="/class-g/install" class="m3-nav-button">교실 설치 가이드</a>
+        <a href="/cloud-g" class="m3-nav-button">클라우드 가이드</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="m3-container">
+
+    <div class="dl-header">
+      <h1 class="dl-title">Boardest 다운로드 센터</h1>
+      <p class="dl-subtitle">선생님의 연구실 PC부터 모바일 패드, 교실 전자칠판까지 환경에 맞춤형 설치 패키지를 제공합니다.</p>
+    </div>
+
+    <!-- Device Auto-detect Banner -->
+    <div class="device-banner" id="deviceBanner">
+      <div class="device-banner-info">
+        <span class="device-banner-tag">감지된 기기</span>
+        <span id="detectedOsText">기기 환경을 분석 중입니다...</span>
+      </div>
+      <a href="#quickRecommendation" id="recommendedLink" class="m3-btn m3-btn-filled" style="padding: 6px 16px; font-size: 13px;">추천 패키지로 이동</a>
+    </div>
+
+    <!-- Section 1: Teacher (교사용) -->
+    <section>
+      <h2 class="dl-section-title">🧑‍🏫 교사용 (Boardest Teacher)</h2>
+      <div class="m3-card" style="margin-bottom: 36px;">
+        <p style="color: var(--md-sys-color-on-surface-variant); font-size: 14.5px; margin-bottom: 14px;">
+          수업 준비, 나이스/컴시간 시간표 연동, 쪽지 발송, 다중 반 수행평가 공지 및 최적 추천 기능을 제공합니다.
+        </p>
+
+        <!-- Teacher 1. 기본 (웹 링크) -->
+        <div class="dl-package-item">
+          <div>
+            <div class="package-name">🌐 기본 (Web 버전)</div>
+            <div class="package-desc">설치 없이 웹 브라우저(크롬, 엣지, 웨일 등)에서 즉시 실행</div>
+          </div>
+          <a href="https://boardest-teacher.web.app" target="_blank" class="m3-btn m3-btn-tonal">웹 바로 열기</a>
+        </div>
+
+        <!-- Teacher 2. Pro for Windows (윈도 MSI만!) -->
+        <div class="dl-package-item">
+          <div>
+            <div class="package-name">🖥️ Pro for Windows (MSI 단독 패키지)</div>
+            <div class="package-desc">교사용 PC/노트북 전용 정식 윈도우 설치 마법사 패키지 (.msi)</div>
+          </div>
+          <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.msi" class="m3-btn m3-btn-filled">Windows MSI 다운로드</a>
+        </div>
+
+        <!-- Teacher 3. Lite (웹링크 + APK) -->
+        <div class="dl-package-item">
+          <div>
+            <div class="package-name">📱 Lite (태블릿 / 모바일 전용)</div>
+            <div class="package-desc">교실 이동 및 스마트패드 전용 초경량 패키지 (시간표, 쪽지, 클라우드 OTP)</div>
+          </div>
+          <div class="btn-row">
+            <a href="https://boardest-teacher.web.app/lite/" target="_blank" class="m3-btn m3-btn-outlined">Lite 웹 바로 열기</a>
+            <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-lite.apk" class="m3-btn m3-btn-filled">Lite APK 다운로드</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2: Class & Cloud (교실용 & 클라우드) -->
+    <section>
+      <h2 class="dl-section-title">🏫 교실 전자칠판 & 교실 클라우드</h2>
+      <div class="dl-grid">
+
+        <!-- Boardest Class -->
+        <div class="m3-card">
+          <h3 style="font-size: 20px; font-weight: 800; color: #FFF; margin-bottom: 6px;">Boardest Class (교실용 메인)</h3>
+          <p style="color: var(--md-sys-color-on-surface-variant); font-size: 13.5px; margin-bottom: 14px;">
+            실시간 교시 타이머, 오늘/내일 급식 식단표, 수행평가 임박 알람, 수업 펜 판서 대시보드
+          </p>
+
+          <!-- 1. 기본 웹 -->
+          <div class="dl-package-item">
+            <div>
+              <div class="package-name">🌐 기본 (웹 링크)</div>
+              <div class="package-desc">전자칠판 브라우저 전체화면 구동</div>
+            </div>
+            <a href="https://boardest.web.app/web" target="_blank" class="m3-btn m3-btn-tonal">웹 열기</a>
+          </div>
+
+          <!-- 2. Pro for Android (APK) -->
+          <div class="dl-package-item">
+            <div>
+              <div class="package-name">📺 Pro for Android (APK)</div>
+              <div class="package-desc">안드로이드 OS 전자칠판 전용 앱</div>
+            </div>
+            <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk" class="m3-btn m3-btn-filled">APK 받기</a>
+          </div>
+
+          <!-- 3. Pro for Windows (원클릭 스크립트 복사 또는 AppX) -->
+          <div class="dl-package-item">
+            <div>
+              <div class="package-name">🖥️ Pro for Windows</div>
+              <div class="package-desc">윈도우 전자칠판 (.appx 및 원클릭 설치)</div>
+            </div>
+            <div class="btn-row">
+              <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx" class="m3-btn m3-btn-outlined">AppX 받기</a>
+              <button class="m3-btn m3-btn-tonal" onclick="copyClassPs()">원클릭 스크립트 복사</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Boardest Class Cloud (BCLD) -->
+        <div class="m3-card">
+          <h3 style="font-size: 20px; font-weight: 800; color: #FFF; margin-bottom: 6px;">Boardest Class Cloud (교실 클라우드 BCLD)</h3>
+          <p style="color: var(--md-sys-color-on-surface-variant); font-size: 13.5px; margin-bottom: 14px;">
+            교실 열람 전용 모드 (업로드/삭제 차단), 디지털 교과서(TBP) & PDF 원터치 뷰어
+          </p>
+
+          <!-- 1. 기본 웹 -->
+          <div class="dl-package-item">
+            <div>
+              <div class="package-name">🌐 기본 (웹 링크)</div>
+              <div class="package-desc">bcld.web.app 초단축 주소 접속</div>
+            </div>
+            <a href="https://bcld.web.app" target="_blank" class="m3-btn m3-btn-tonal">웹 열기</a>
+          </div>
+
+          <!-- 2. Pro for Android (APK) -->
+          <div class="dl-package-item">
+            <div>
+              <div class="package-name">📺 Pro for Android (APK)</div>
+              <div class="package-desc">안드로이드 칠판 전용 BCLD 앱</div>
+            </div>
+            <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.apk" class="m3-btn m3-btn-filled">APK 받기</a>
+          </div>
+
+          <!-- 3. Pro for Windows (원클릭 스크립트 복사 또는 AppX) -->
+          <div class="dl-package-item">
+            <div>
+              <div class="package-name">🖥️ Pro for Windows</div>
+              <div class="package-desc">일반 창틀 탑재 클라우드 전용 앱</div>
+            </div>
+            <div class="btn-row">
+              <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx" class="m3-btn m3-btn-outlined">AppX 받기</a>
+              <button class="m3-btn m3-btn-tonal" onclick="copyBcldPs()">원클릭 스크립트 복사</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Section 3: 맨 하단 인증서 설치 PowerShell 안내 -->
+    <section class="cert-section">
+      <h3 class="cert-title">🔐 Windows 자체 서명 인증서 원클릭 등록 스크립트</h3>
+      <p class="cert-desc">
+        학교 PC나 Windows 전자칠판에서 AppX 패키지 설치 시 신뢰할 수 있는 루트 인증서 오류가 발생할 경우, 
+        아래 PowerShell 명령어를 실행하시면 보데스트 공식 인증서가 시스템에 자동으로 등록됩니다.
+      </p>
+
+      <div class="m3-code-box">
+        <span id="certPsCmd">irm https://bst-ins.web.app/win-cer.ps1 | iex</span>
+        <button class="m3-copy-btn" onclick="copyCertPs()">인증서 스크립트 복사</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="m3-footer">
+    <div class="m3-container">
+      <p style="margin-bottom: 8px;">© 2026 Boardest Open Source Project. All rights reserved.</p>
+      <p>공식 GitHub Releases: <a href="https://github.com/hiJiwho/Boardest/releases/latest" target="_blank">최신 빌드 v5.3.5</a></p>
+    </div>
+  </footer>
+
+  <script>
+    // OS 및 기기 감지
+    window.addEventListener('DOMContentLoaded', () => {
+      const ua = navigator.userAgent || navigator.vendor || window.opera;
+      const isWin = navigator.platform.indexOf('Win') !== -1 || ua.includes('Windows');
+      const isAndroid = /android/i.test(ua);
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
+
+      const osText = document.getElementById('detectedOsText');
+      const link = document.getElementById('recommendedLink');
+
+      if (isWin) {
+        osText.innerText = '🖥️ Windows PC 환경 감지 — 교사용은 MSI, 교실용은 AppX / 스크립트를 추천합니다.';
+        link.href = 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.msi';
+        link.innerText = '교사용 MSI 다운로드';
+      } else if (isAndroid) {
+        osText.innerText = '📱 Android 모바일/태블릿 감지 — 모바일 현장용 Teacher Lite APK를 추천합니다.';
+        link.href = 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-lite.apk';
+        link.innerText = 'Teacher Lite APK 받기';
+      } else {
+        osText.innerText = '🌐 웹 브라우저 환경 감지 — 무설치 웹 링크로 바로 이용하실 수 있습니다.';
+        link.href = 'https://boardest-teacher.web.app';
+        link.innerText = '교사용 웹 열기';
+      }
+    });
+
+    function copyClassPs() {
+      navigator.clipboard.writeText('irm https://bst-ins.web.app/bst.ps1 | iex').then(() => {
+        alert('교실 전자칠판 원클릭 파워쉘 명령어가 복사되었습니다!\nPowerShell에 붙여넣고 엔터를 치세요.');
+      });
+    }
+
+    function copyBcldPs() {
+      navigator.clipboard.writeText('irm https://bst-ins.web.app/bcld.ps1 | iex').then(() => {
+        alert('교실 클라우드(BCLD) 원클릭 파워쉘 명령어가 복사되었습니다!\nPowerShell에 붙여넣고 엔터를 치세요.');
+      });
+    }
+
+    function copyCertPs() {
+      const text = document.getElementById('certPsCmd').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        alert('인증서 설치 파워쉘 명령어가 복사되었습니다!\nPowerShell을 관리자 권한으로 열고 붙여넣으세요.');
+      });
+    }
+  </script>
+</body>
+</html>

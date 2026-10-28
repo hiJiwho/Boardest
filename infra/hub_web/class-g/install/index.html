@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>교실 설치 가이드 — Boardest</title>
+  <link rel="icon" type="image/png" href="/assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/m3.css">
+  <style>
+    .article-header {
+      padding: 40px 0 24px;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      margin-bottom: 32px;
+    }
+    .article-tag {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--md-sys-color-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .article-title {
+      font-size: 36px;
+      font-weight: 900;
+      color: #FFF;
+      line-height: 1.25;
+      margin-bottom: 10px;
+    }
+    .article-desc {
+      font-size: 16px;
+      color: var(--md-sys-color-on-surface-variant);
+      line-height: 1.6;
+    }
+    .guide-content h3 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #FFF;
+      margin: 36px 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .guide-content p {
+      font-size: 15px;
+      color: #CBD5E1;
+      line-height: 1.75;
+      margin-bottom: 14px;
+    }
+    .guide-content ul, .guide-content ol {
+      margin-left: 24px;
+      margin-bottom: 18px;
+      color: #CBD5E1;
+      font-size: 14.5px;
+      line-height: 1.75;
+    }
+    .guide-content li {
+      margin-bottom: 6px;
+    }
+    .callout-box {
+      background: var(--md-sys-color-surface-container-high);
+      border-left: 4px solid var(--md-sys-color-primary);
+      border-radius: 0 14px 14px 0;
+      padding: 16px 20px;
+      margin: 20px 0;
+      font-size: 14.5px;
+      color: #E2E8F0;
+      line-height: 1.65;
+    }
+    .callout-box strong {
+      color: var(--md-sys-color-primary);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Nav -->
+  <header class="m3-top-app-bar">
+    <div class="m3-container m3-nav-content">
+      <a href="/" class="m3-brand-link">
+        <img src="/assets/logo.png" alt="Boardest Logo" class="m3-logo-img">
+        <span class="m3-brand-text">Boardest</span>
+      </a>
+
+      <nav class="m3-nav-actions">
+        <a href="/" class="m3-nav-button">홈</a>
+        <a href="/downloads" class="m3-nav-button">다운로드</a>
+        <a href="/teacher-g/install" class="m3-nav-button">교사 설치</a>
+        <a href="/class-g/install" class="m3-nav-button active">교실 설치 가이드</a>
+        <a href="/class-g/how-to" class="m3-nav-button">교실 도구 사용법</a>
+        <a href="/cloud-g" class="m3-nav-button">클라우드 가이드</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="m3-container guide-content">
+
+    <div class="article-header">
+      <p class="article-tag">Classroom Deployment / Setup</p>
+      <h1 class="article-title">교실 설치 & 세팅 완벽 가이드</h1>
+      <p class="article-desc">학교 생성 및 나이스 학교 코드 연동부터 전자칠판 기기 설치, 학년/반 초기 설정까지 한 번에 완료하는 교실 세팅 매뉴얼입니다.</p>
+    </div>
+
+    <h3>1. 학교 검색 및 학교 코드(나이스/컴시간) 연동</h3>
+    <p>
+      Boardest Class는 대한민국 초·중·고 교육행정정보시스템(NEIS) 및 컴시간 시간표 서버와 실시간으로 연동됩니다.
+    </p>
+    <div class="callout-box">
+      <strong>🔍 학교 설정 순서:</strong><br>
+      1. 앱을 처음 실행하면 <strong>[학교 설정 마법사]</strong>가 나타납니다.<br>
+      2. 검색창에 학교 이름을 입력합니다 (예: <code>서울중학교</code>, <code>보데스트고등학교</code>).<br>
+      3. 검색 목록에서 관할 교육청과 학교명을 확인하고 선택합니다.<br>
+      4. 선택 즉시 <strong>나이스 학교 표준코드(NEIS Code)</strong> 및 컴시간 시간표 연동 키가 시스템에 자동 등록됩니다.
+    </div>
+
+    <h3>2. 교실 전자칠판 기기 설치 (Windows & Android)</h3>
+    <p>
+      교실 전자칠판의 운영체제(Windows 또는 Android)에 맞춰 최적화된 앱을 설치합니다.
+    </p>
+
+    <ul>
+      <li>
+        <strong>Windows 전자칠판 (가장 추천):</strong><br>
+        PowerShell을 관리자 권한으로 실행하고 아래 원클릭 스크립트를 입력하시면 인증서 등록과 최신 <code>boardest.appx</code> 설치가 자동으로 완료됩니다:
+        <div class="m3-code-box" style="margin: 10px 0 14px;">
+          <span>irm https://bst-ins.web.app/bst.ps1 | iex</span>
+        </div>
+      </li>
+      <li>
+        <strong>Android 전자칠판:</strong><br>
+        전자칠판의 내장 브라우저에서 <code>boardest.apk</code> 파일을 다운로드하여 실행하고 화면의 안내에 따라 설치합니다.
+      </li>
+    </ul>
+
+    <h3>3. 교실 학년/반 및 시간표 일과 세팅</h3>
+    <p>
+      설치 완료 후 전자칠판이 배치된 교실의 학년과 반을 설정합니다.
+    </p>
+    <ol>
+      <li>우측 상단 톱니바퀴 [설정] 아이콘을 누릅니다.</li>
+      <li><strong>[학급 지정]</strong>에서 해당 교실의 <code>학년</code>(예: 2학년)과 <code>반</code>(예: 3반)을 선택합니다.</li>
+      <li><strong>[일과 시간표 동기화]</strong>를 켜면 해당 반의 오늘 요일 1~7교시 시간표, 담당 과목, 담당 선생님 성함이 자동으로 불러와집니다.</li>
+      <li><strong>급식실 연동:</strong> 설정에서 1식당 / 2식당 배식 순번을 선택해 두시면 점심시간에 맞춰 급식 순서 호출 알림이 작동합니다.</li>
+    </ol>
+
+    <div class="callout-box">
+      <strong>💡 교실 기기 잠금 및 보안 팁:</strong><br>
+      학생들이 쉬는 시간에 시스템 설정을 변경하지 못하도록 설정 메뉴에 <strong>선생님 전용 4자리 마스터 핀(PIN)</strong>을 걸어둘 수 있습니다. 기본 핀은 <code>0000</code>이며 설정에서 변경 가능합니다.
+    </div>
+
+    <div style="margin-top: 40px; text-align: center;">
+      <a href="/class-g/how-to" class="m3-btn m3-btn-filled" style="padding: 12px 28px;">다음: 교실 도구 사용법 (학생/교실용) 보기 →</a>
+    </div>
+
+  </main>
+
+  <footer class="m3-footer">
+    <div class="m3-container">
+      <p>© 2026 Boardest Open Source Project. All rights reserved.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

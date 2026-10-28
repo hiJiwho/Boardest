@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>클라우드 판서 & TBP 활용 가이드 — Boardest</title>
+  <link rel="icon" type="image/png" href="/assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/m3.css">
+  <style>
+    .article-header {
+      padding: 40px 0 24px;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      margin-bottom: 32px;
+    }
+    .article-tag {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--md-sys-color-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .article-title {
+      font-size: 36px;
+      font-weight: 900;
+      color: #FFF;
+      line-height: 1.25;
+      margin-bottom: 10px;
+    }
+    .article-desc {
+      font-size: 16px;
+      color: var(--md-sys-color-on-surface-variant);
+      line-height: 1.6;
+    }
+    .guide-content h3 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #FFF;
+      margin: 36px 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .guide-content p {
+      font-size: 15px;
+      color: #CBD5E1;
+      line-height: 1.75;
+      margin-bottom: 14px;
+    }
+    .guide-content ul, .guide-content ol {
+      margin-left: 24px;
+      margin-bottom: 18px;
+      color: #CBD5E1;
+      font-size: 14.5px;
+      line-height: 1.75;
+    }
+    .guide-content li {
+      margin-bottom: 6px;
+    }
+    .callout-box {
+      background: var(--md-sys-color-surface-container-high);
+      border-left: 4px solid var(--md-sys-color-primary);
+      border-radius: 0 14px 14px 0;
+      padding: 16px 20px;
+      margin: 20px 0;
+      font-size: 14.5px;
+      color: #E2E8F0;
+      line-height: 1.65;
+    }
+    .callout-box strong {
+      color: var(--md-sys-color-primary);
+    }
+    .warning-box {
+      background: rgba(239, 69, 101, 0.12);
+      border: 1.5px solid rgba(239, 69, 101, 0.4);
+      border-radius: 14px;
+      padding: 18px 22px;
+      margin: 24px 0;
+      color: #FFF;
+      line-height: 1.65;
+    }
+    .warning-box h4 {
+      color: #FF8BA7;
+      font-size: 16px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Nav -->
+  <header class="m3-top-app-bar">
+    <div class="m3-container m3-nav-content">
+      <a href="/" class="m3-brand-link">
+        <img src="/assets/logo.png" alt="Boardest Logo" class="m3-logo-img">
+        <span class="m3-brand-text">Boardest</span>
+      </a>
+
+      <nav class="m3-nav-actions">
+        <a href="/" class="m3-nav-button">홈</a>
+        <a href="/downloads" class="m3-nav-button">다운로드</a>
+        <a href="/cloud-g/passkey" class="m3-nav-button">패스키 가이드</a>
+        <a href="/cloud-g/panser" class="m3-nav-button active">판서 & TBP 가이드</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="m3-container guide-content">
+
+    <div class="article-header">
+      <p class="article-tag">Boardest Pen & TBP Engine / Guide</p>
+      <h1 class="article-title">클라우드 판서 기능, 저장 방식 & TBP 완벽 가이드</h1>
+      <p class="article-desc">수업 판서 도구 활용법부터 Google Drive 클라우드 자동 저장 방식, 스마트 디지털 교과서(TBP / HTMLP)의 환경별 실행 안내를 다룹니다.</p>
+    </div>
+
+    <!-- TBP Web Limitation Warning (강력 강조!) -->
+    <div class="warning-box">
+      <h4>⚠️ 중요 안내: 디지털 교과서(TBP)는 일반 웹 브라우저에서 실행되지 않습니다!</h4>
+      <p>
+        출판사 스마트 디지털 교과서(<code>.tbp</code>, <code>.htmlp</code>)는 대용량 미디어 리소스 및 네이티브 로컬 렌더링 엔진, 파일 권한 규격으로 인해 
+        <strong>일반 웹 브라우저(크롬, 사파리, 엣지 등 웹 환경)에서는 구동이 지원되지 않습니다.</strong><br>
+        TBP 디지털 교과서를 열고 수업을 진행하시려면 반드시 
+        <strong>Windows 전용 앱(<code>boardest.appx</code> / <code>boardest-teacher.msi</code>)</strong> 또는 
+        <strong>Android 전용 앱(<code>boardest.apk</code> / <code>boardest-cloud.apk</code>)</strong>을 설치하여 실행하셔야 합니다!
+      </p>
+    </div>
+
+    <h3>1. 클라우드 수업 판서 지원 기능 (Boardest Pen)</h3>
+    <p>
+      수업 중 전자칠판 위에 자유롭게 필기하고 설명할 수 있는 전문 수업 펜 도구를 기본 제공합니다:
+    </p>
+    <ul>
+      <li><strong>필압 반응형 펜:</strong> 스타일러스 펜의 압력과 속도에 반응하여 굵기가 자연스럽게 변화하는 부드러운 필기감</li>
+      <li><strong>형광펜 하이라이트:</strong> 디지털 교과서 본문이나 PDF 문제 지문의 글자를 가리지 않는 반투명 형광펜</li>
+      <li><strong>수학/과학 도형 도구:</strong> 반듯한 직선, 직사각형, 정원, 좌표 평면 화살표를 마우스/펜 드래그로 손쉽게 생성</li>
+      <li><strong>올빼미 레이저 포인터:</strong> 학생들의 시선을 집중시킬 수 있는 반짝이는 잔상 효과 포인터</li>
+      <li><strong>부분 지우개 & 올클리어:</strong> 손바닥이나 제스처를 인식하여 원하는 획만 골라 지우거나 칠판 전체를 즉시 정리</li>
+    </ul>
+
+    <h3>2. 판서 파일의 클라우드 자동 저장 방식</h3>
+    <p>
+      수업 중 필기한 소중한 판서 자료는 컴퓨터가 꺼지더라도 날아가지 않습니다.
+    </p>
+    <div class="callout-box">
+      <strong>📁 Google Drive 자동 동기화 구조:</strong><br>
+      • 선생님께서 판서 화면에서 <strong>[저장]</strong>을 누르면, 선생님의 구글 드라이브 내 <code>bst-save/판서</code> 또는 <code>bst-pen</code> 폴더에 날짜 및 교시별(예: <code>2026-10-29_2학년3반_수학판서.bstpen</code>)로 자동 백업됩니다.<br>
+      • 다음 날 다른 교실이나 연구실 PC에서 앱을 열었을 때, 이전 시간에 필기했던 판서 노트를 그대로 다시 불러와 연속해서 수업을 진행할 수 있습니다.
+    </div>
+
+    <h3>3. 스마트 디지털 교과서 (TBP / HTMLP) 활용법 (네이티브 앱 전용)</h3>
+    <p>
+      Windows 또는 Android 앱 환경에서 TBP 디지털 교과서를 수업에 연동하는 방법입니다:
+    </p>
+    <ol>
+      <li>출판사에서 제공받은 <code>.tbp</code> 파일 또는 <code>.htmlp</code> 교과서 파일을 교사용 앱(Boardest Teacher)을 통해 클라우드에 등록합니다.</li>
+      <li>교실 전자칠판 앱(Boardest Class 또는 BCLD)에서 해당 교과서를 탭하면 <strong>내장 TBP 통합 뷰어</strong>가 1초 만에 실행됩니다.</li>
+      <li>좌측 상단 목차 버튼을 눌러 원하는 단원과 페이지로 즉시 이동할 수 있습니다.</li>
+      <li>교과서 위에 바로 펜 도구를 띄워 문제 풀이를 판서하고, 필요 시 화면을 2분할하여 한쪽엔 교과서를, 다른 한쪽엔 빈 판서 연습장을 열고 수업할 수 있습니다.</li>
+    </ol>
+
+    <div style="margin-top: 40px; text-align: center;">
+      <a href="/downloads" class="m3-btn m3-btn-filled" style="padding: 12px 28px;">앱 다운로드 센터로 이동하여 전용 앱 받기 →</a>
+    </div>
+
+  </main>
+
+  <footer class="m3-footer">
+    <div class="m3-container">
+      <p>© 2026 Boardest Open Source Project. All rights reserved.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
