@@ -2078,11 +2078,6 @@ class _TeacherViewState extends State<TeacherView> {
           filePath: _activeFilePath,
         );
       case 'meal':
-        return MealView(
-          key: const ValueKey('meal_workspace'),
-          scaleFactor: scale,
-          onBack: onBack,
-        );
       case 'memo':
         return MessageView(
           key: const ValueKey('memo_workspace'),
@@ -4851,7 +4846,7 @@ class _TeacherViewState extends State<TeacherView> {
               _buildMobileNavItem(0, Icons.calendar_today_rounded, '시간표', scale),
               _buildMobileNavItem(1, Icons.cloud_rounded, 'Cloud', scale),
               _buildMobileNavItem(2, Icons.apps_rounded, '수업도구', scale),
-              _buildMobileNavItem(3, Icons.restaurant_menu_rounded, '급식/쪽지', scale),
+              _buildMobileNavItem(3, Icons.mark_email_unread_rounded, '쪽지', scale),
               _buildMobileNavItem(4, Icons.settings_rounded, '설정', scale),
             ],
           ),
@@ -4891,86 +4886,8 @@ class _TeacherViewState extends State<TeacherView> {
     );
   }
 
-  int _mealOrMessageSubTab = 0; // 0: 급식지도, 1: 학급쪽지
-
   Widget _buildMobileMealAndMessages(double s) {
-    return Column(
-      children: [
-        // Sub-tabs switch (급식 지도 vs 학급 쪽지)
-        Container(
-          margin: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 8 * s),
-          padding: EdgeInsets.all(4 * s),
-          decoration: BoxDecoration(
-            color: _surfaceColor,
-            borderRadius: BorderRadius.circular(12 * s),
-            border: Border.all(color: _borderColor),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () => setState(() => _mealOrMessageSubTab = 0),
-                  borderRadius: BorderRadius.circular(10 * s),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(vertical: 8 * s),
-                    decoration: BoxDecoration(
-                      color: _mealOrMessageSubTab == 0 ? const Color(0xFF2EC4B6).withOpacity(0.2) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10 * s),
-                      border: Border.all(
-                        color: _mealOrMessageSubTab == 0 ? const Color(0xFF2EC4B6) : Colors.transparent,
-                      ),
-                    ),
-                    child: Center(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.restaurant_menu_rounded, size: 14 * s, color: _mealOrMessageSubTab == 0 ? const Color(0xFF2EC4B6) : _textColor54),
-                          SizedBox(width: 6 * s),
-                          Text('급식 지도 & 호출', style: TextStyle(color: _mealOrMessageSubTab == 0 ? const Color(0xFF2EC4B6) : _textColor54, fontWeight: FontWeight.bold, fontSize: 11 * s)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: InkWell(
-                  onTap: () => setState(() => _mealOrMessageSubTab = 1),
-                  borderRadius: BorderRadius.circular(10 * s),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(vertical: 8 * s),
-                    decoration: BoxDecoration(
-                      color: _mealOrMessageSubTab == 1 ? const Color(0xFFFF8906).withOpacity(0.2) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10 * s),
-                      border: Border.all(
-                        color: _mealOrMessageSubTab == 1 ? const Color(0xFFFF8906) : Colors.transparent,
-                      ),
-                    ),
-                    child: Center(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.mark_email_unread_rounded, size: 14 * s, color: _mealOrMessageSubTab == 1 ? const Color(0xFFFF8906) : _textColor54),
-                          SizedBox(width: 6 * s),
-                          Text('학급 쪽지 발송', style: TextStyle(color: _mealOrMessageSubTab == 1 ? const Color(0xFFFF8906) : _textColor54, fontWeight: FontWeight.bold, fontSize: 11 * s)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Sub-tab view body
-        Expanded(
-          child: _mealOrMessageSubTab == 0
-              ? MealView(scaleFactor: s)
-              : MessageView(scaleFactor: s),
-        ),
-      ],
-    );
+    return MessageView(scaleFactor: s);
   }
 
   // ── Boardest Cloud (Google Drive & 1분 OTP & 수업자료 파일 관리) 패널 ───────

@@ -209,8 +209,8 @@
         인증서 등록이나 파워쉘 명령어 없이, 다운로드 후 더블 클릭만으로 시작 메뉴 및 바탕화면 바로가기가 자동 생성됩니다.
       </p>
       <div style="margin-top: 16px;">
-        <a href="https://bst-installer.web.app/bst-teacher.msi" class="btn btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">
-          <span>📥 bst-teacher.msi 다운로드 (v5.0.4)</span>
+        <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi" class="btn btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">
+          <span>📥 bst-teacher.msi 다운로드 (<span class="version-display">v5.3.3</span>)</span>
         </a>
       </div>
     </div>
@@ -265,6 +265,18 @@
         alert('명령어가 복사되었습니다!\nPowerShell 창에서 마우스 우클릭 후 Enter를 누르시면 자동으로 진행됩니다.');
       });
     }
+    (async function() {
+      try {
+        const res = await fetch('https://api.github.com/repos/hiJiwho/Boardest/releases/latest');
+        if (res.ok) {
+          const data = await res.json();
+          const ver = data.tag_name ? data.tag_name.replace(/^v/, '') : '5.3.3';
+          document.querySelectorAll('.version-display').forEach(el => {
+            el.textContent = 'v' + ver;
+          });
+        }
+      } catch (e) {}
+    })();
   </script>
 </body>
 </html>

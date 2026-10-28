@@ -127,13 +127,6 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
     _startClockAndPeriodTracker();
     _fetchNeisMeal();
     _fetchOnlineClassrooms();
-
-    // Auto-refresh online classrooms in same cafeteria every 4 seconds
-    _onlineRefreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (mounted && _selectedTab == 3) {
-        _fetchOnlineClassrooms();
-      }
-    });
   }
 
   @override
@@ -724,12 +717,12 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
     _isLoadingOnlineClassrooms = true;
 
     try {
-      final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls?pageSize=300&key=$_apiKey';
-      final res = await http.get(Uri.parse(firestoreUrl)).timeout(const Duration(seconds: 4));
+      const rtdbUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls.json';
+      final res = await http.get(Uri.parse(rtdbUrl)).timeout(const Duration(seconds: 4));
 
-      if (res.statusCode == 200) {
+      if (res.statusCode == 200 && res.body != 'null') {
         final data = json.decode(res.body);
-        final docs = data['documents'] as List? ?? [];
+        if (data is! Map) return;
 
         final targetConn = (_schoolId.isNotEmpty ? _schoolId : 'ydm').trim().toLowerCase();
         final targetSchool = (_schoolName.isNotEmpty ? _schoolName : targetConn).trim().toLowerCase();
@@ -759,85 +752,40 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
               targetSchool.contains(sn);
         }
 
-        final Map<int, int> counts = {for (int i = 1; i <= 9; i++) i: 0};
         final List<Map<String, dynamic>> list = [];
-        final nowUtc = DateTime.now().toUtc();
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
 
-        for (final doc in docs) {
-          final fields = doc['fields'] as Map<String, dynamic>? ?? {};
-          final name = doc['name']?.toString() ?? '';
-          final docId = name.split('/').last;
+        data.forEach((key, val) {
+          if (val is! Map) return;
+          final docId = key.toString();
+          final schoolCode = val['schoolCode']?.toString() ?? '';
+          final schoolName = val['schoolName']?.toString() ?? '';
+          if (!isSchoolMatched(docId, schoolCode, schoolName)) return;
 
-          final schoolCode = fields['schoolCode']?['stringValue']?.toString() ?? '';
-          final schoolName = fields['schoolName']?['stringValue']?.toString() ?? '';
-
-          if (!isSchoolMatched(docId, schoolCode, schoolName)) {
-            continue;
-          }
-
-          var docCaf = fields['cafeteriaNum']?['stringValue']?.toString() ??
-              fields['cafeteriaNum']?['integerValue']?.toString() ?? '';
-          if (docCaf.isEmpty && docId.contains('_')) {
-            final parts = docId.split('_');
-            if (parts.length >= 2) docCaf = parts[1];
-          }
+          var docCaf = val['cafeteriaNum']?.toString() ?? '1';
           docCaf = docCaf.replaceAll(RegExp(r'[^0-9]'), '');
           if (docCaf.isEmpty) docCaf = '1';
-          final cafInt = int.tryParse(docCaf) ?? 1;
 
-          final rawLast = docId.split('_').last;
-          // 1. 알파벳이 포함된 비정규 학급(Music1, LabA, 교수학습실, Special 등) 완전 제외!
-          if (RegExp(r'[a-zA-Z]').hasMatch(rawLast) ||
-              docId.contains('special') ||
-              docId.contains('교수학습실') ||
-              docId.contains('특별실') ||
-              docId.contains('lite') ||
-              docId.contains('local') ||
-              fields['isLite']?['booleanValue'] == true) {
-            continue;
+          final grade = int.tryParse(val['grade']?.toString() ?? '0') ?? 0;
+          final classNum = int.tryParse(val['classNum']?.toString() ?? '0') ?? 0;
+          if (grade <= 0 || classNum <= 0) return;
+
+          final lastActiveRaw = val['lastActive'];
+          int? lastActiveMs;
+          if (lastActiveRaw is int) {
+            lastActiveMs = lastActiveRaw;
+          } else if (lastActiveRaw is String) {
+            lastActiveMs = int.tryParse(lastActiveRaw) ?? DateTime.tryParse(lastActiveRaw)?.millisecondsSinceEpoch;
           }
+          final isOnline = val['isOnline'] == true &&
+              lastActiveMs != null &&
+              (nowMs - lastActiveMs).abs() <= 86400000;
+          if (!isOnline) return;
 
-          // 2. 순수 숫자 교실 ID 파싱: 105 -> 1학년 05반, 123 -> 1학년 23반
-          int grade = 0;
-          int classNum = 0;
-          final pureDigits = rawLast.replaceAll(RegExp(r'[^\d]'), '');
-          if (pureDigits.length >= 2 && RegExp(r'^\d+$').hasMatch(rawLast)) {
-            grade = int.tryParse(pureDigits.substring(0, 1)) ?? 0;
-            classNum = int.tryParse(pureDigits.substring(1)) ?? 0;
-          } else {
-            grade = int.tryParse(fields['grade']?['integerValue']?.toString() ?? fields['grade']?['stringValue']?.toString() ?? '0') ?? 0;
-            classNum = int.tryParse(fields['classNum']?['integerValue']?.toString() ?? fields['classNum']?['stringValue']?.toString() ?? '0') ?? 0;
-          }
-
-          // 정규 학급 검사 (grade > 0 && classNum > 0)
-          if (grade <= 0 || classNum <= 0) continue;
           final classFormatted = classNum.toString().padLeft(2, '0');
           final classNickname = '$grade학년 $classFormatted반';
+          final isCalled = val['called'] == true;
 
-          final isCalled = fields['called']?['booleanValue'] as bool? ?? false;
-          final lastActiveVal = fields['lastActive']?['timestampValue']?.toString() ??
-              fields['lastActive']?['stringValue']?.toString();
-
-          // 3. 실시간 온라인 기준: 지금 당장 활성(최근 2.5분 이내 하트비트)만 표시!
-          bool isOnline = false;
-          if (lastActiveVal != null && lastActiveVal.isNotEmpty) {
-            try {
-              final dt = DateTime.parse(lastActiveVal);
-              final dtUtc = dt.isUtc ? dt : dt.toUtc();
-              final diffSec = nowUtc.difference(dtUtc).inSeconds.abs();
-              isOnline = diffSec <= 150;
-            } catch (_) {}
-          }
-
-          // Count live online rooms per cafeteria (1~9)
-          if (isOnline && cafInt >= 1 && cafInt <= 9) {
-            counts[cafInt] = (counts[cafInt] ?? 0) + 1;
-          }
-
-          // 온라인 상태인 방만 엄격하게 표시
-          if (!isOnline) continue;
-
-          // Filter for selected cafeteria tab or 'all'
           if (targetCaf == 'all' || docCaf == targetCaf) {
             list.add({
               'docId': docId,
@@ -849,24 +797,15 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
               'schoolCode': schoolCode,
               'isOnline': isOnline,
               'isCalled': isCalled,
-              'lastActive': lastActiveVal,
+              'lastActive': lastActiveMs.toString(),
             });
           }
-        }
+        });
 
-        // 3. 동일 학급(2학년 8반 등) 중복 엔트리 단일 병합 (최신 활성 기준)
         final Map<String, Map<String, dynamic>> dedupMap = {};
         for (final c in list) {
           final key = '${c['grade']}-${c['classNum']}';
-          if (!dedupMap.containsKey(key)) {
-            dedupMap[key] = c;
-          } else {
-            final existingActive = dedupMap[key]!['lastActive']?.toString() ?? '';
-            final newActive = c['lastActive']?.toString() ?? '';
-            if (newActive.compareTo(existingActive) > 0) {
-              dedupMap[key] = c;
-            }
-          }
+          dedupMap[key] = c;
         }
 
         final deduplicatedList = dedupMap.values.toList()
@@ -904,38 +843,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
           ? targetDocId
           : '${connName}_${cafeteria}_${grade}_$classNum';
 
-      const updateMask = 'updateMask.fieldPaths=called&updateMask.fieldPaths=calledBy&updateMask.fieldPaths=calledAt&updateMask.fieldPaths=message&updateMask.fieldPaths=schoolCode&updateMask.fieldPaths=cafeteriaNum&updateMask.fieldPaths=grade&updateMask.fieldPaths=classNum';
-      final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls/$docId?$updateMask&key=$_apiKey';
-
-      final payload = {
-        'fields': {
-          'schoolCode': {'stringValue': connName},
-          'cafeteriaNum': {'stringValue': cafeteria},
-          'grade': {'integerValue': '$grade'},
-          'classNum': {'integerValue': '$classNum'},
-          'called': {'booleanValue': true},
-          'calledBy': {'stringValue': _teacherName.trim().endsWith('선생님') ? _teacherName.trim() : '$_teacherName 선생님'},
-          'calledAt': {'stringValue': DateTime.now().toIso8601String()},
-          'message': {'stringValue': '$grade학년 $classNum반 급식실로 이동하세요 ($label)'},
-        }
-      };
-
-      final res = await http.patch(
-        Uri.parse(firestoreUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 5));
-
-      if (res.statusCode >= 400) {
-        final createUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls?documentId=$docId&key=$_apiKey';
-        await http.post(
-          Uri.parse(createUrl),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(payload),
-        ).timeout(const Duration(seconds: 5));
-      }
-
-      // RTDB 실시간 전송 (0.1초 즉시 전달)
+      // RTDB 실시간 전송 (Firestore 쓰기 0회)
       try {
         final rtdbUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/$docId.json';
         await http.patch(
@@ -973,21 +881,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
           ? targetDocId
           : '${connName}_${cafeteria}_${grade}_$classNum';
 
-      const updateMask = 'updateMask.fieldPaths=called';
-      final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls/$docId?$updateMask&key=$_apiKey';
-      final payload = {
-        'fields': {
-          'called': {'booleanValue': false}
-        }
-      };
-
-      await http.patch(
-        Uri.parse(firestoreUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
-      );
-
-      // RTDB 호출 취소
+      // RTDB 호출 취소 (Firestore 쓰기 0회)
       try {
         final rtdbUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/$docId.json';
         await http.patch(
@@ -1079,36 +973,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
       int successCount = 0;
       for (final docId in targetDocIds) {
         try {
-          const updateMask = 'updateMask.fieldPaths=message&updateMask.fieldPaths=messageFrom&updateMask.fieldPaths=messageSentAt';
-          final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls/$docId?$updateMask&key=$_apiKey';
-
-          final payload = {
-            'fields': {
-              'message': {'stringValue': msg},
-              'messageFrom': {'stringValue': senderTitle},
-              'messageSentAt': {'stringValue': nowIso},
-            }
-          };
-
-          final res = await http.patch(
-            Uri.parse(firestoreUrl),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(payload),
-          ).timeout(const Duration(seconds: 4));
-
-          if (res.statusCode == 200) {
-            successCount++;
-          } else {
-            final createUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/eat_calls?documentId=$docId&key=$_apiKey';
-            await http.post(
-              Uri.parse(createUrl),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode(payload),
-            ).timeout(const Duration(seconds: 4));
-            successCount++;
-          }
-
-          // RTDB 실시간 쪽지 전송 (0.1초 즉시 전달)
+          // RTDB 실시간 쪽지 전송 (Firestore 쓰기 0회)
           try {
             final rtdbUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/$docId.json';
             await http.patch(
@@ -1120,6 +985,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                 'messageSentAt': nowIso,
               }),
             ).timeout(const Duration(seconds: 4));
+            successCount++;
 
             if (_schoolId.toLowerCase() == 'demo' || _schoolName.contains('데모') || docId.startsWith('demo')) {
               final demoUrl = 'https://jiwhosboardest-default-rtdb.firebaseio.com/eat_calls/demo.json';

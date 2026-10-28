@@ -29,7 +29,7 @@ enum UpdateState {
 /// 5. 잠금 화면 필수 4대 버튼: [업데이트 다운 / 수동 설치 / 앱 런처 / 앱 삭제]
 /// 6. 윈도우: AppData에 다운로드 후 종료하지 않고 윈도우 패키지 설치 관리자(AppX) 구동 -> 새 앱 실행 시 이전 AppX 자동 삭제
 class UpdateService {
-  static const String defaultVersion = '5.3.1';
+  static const String defaultVersion = '5.3.3';
   static const String _releasesApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases?per_page=30';
   static const String _latestApi =
@@ -113,6 +113,20 @@ class UpdateService {
               try {
                 entity.deleteSync();
                 debugPrint('[UpdateService] 🧹 Old installer package removed: ${entity.path}');
+              } catch (_) {}
+            }
+          }
+        }
+      }
+      // 5.1.1 등 구버전이 %TEMP%에 캐시한 오염된 boardest_update_* 파일도 함께 정리
+      final tempDir = await getTemporaryDirectory();
+      if (tempDir.existsSync()) {
+        for (final entity in tempDir.listSync()) {
+          if (entity is File) {
+            final base = p.basename(entity.path).toLowerCase();
+            if (base.startsWith('boardest_update_') || base.startsWith('boardest_cloud_update_')) {
+              try {
+                entity.deleteSync();
               } catch (_) {}
             }
           }
@@ -397,21 +411,52 @@ class UpdateService {
     }
 
     if (!kIsWeb && Platform.isWindows) {
-      // 윈도우: 앱을 종료하지 않고 공식 Windows 패키지 설치 관리자(App Installer) GUI 실행
-      try {
-        await Process.start('explorer.exe', [savePath]);
-      } catch (_) {
-        await OpenFilex.open(savePath);
-      }
-
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('📦 Windows 패키지 설치 관리자가 실행되었습니다. 나타난 창에서 [업데이트]를 눌러주세요.'),
+            content: Text('🚀 최신 버전 자동 설치를 시작합니다. 잠시 후 새 버전으로 자동 재시작됩니다...'),
             backgroundColor: Color(0xFF00F5D4),
-            duration: Duration(seconds: 8),
+            duration: Duration(seconds: 6),
           ),
         );
+      }
+
+      final pkgFilter = AppConfig.isCloudMode ? 'jiwho.boardest.cloud' : 'jiwho.boardest.bst';
+      final escapedPath = savePath.replaceAll("'", "''");
+      final psScript = "Start-Sleep -Milliseconds 600; "
+          "try { "
+          "Add-AppxPackage -Path '$escapedPath' -ForceApplicationShutdown -ErrorAction Stop; "
+          "\$pkg = Get-AppxPackage -Name '*$pkgFilter*' | Sort-Object Version -Descending | Select-Object -First 1; "
+          "if (\$pkg) { Start-Process 'explorer.exe' ('shell:AppsFolder\\' + \$pkg.PackageFamilyName + '!App') } "
+          "} catch { "
+          "Start-Process 'explorer.exe' '$escapedPath' "
+          "}";
+
+      try {
+        await Process.start(
+          'cmd.exe',
+          [
+            '/c',
+            'start',
+            '""',
+            '/min',
+            'powershell.exe',
+            '-WindowStyle',
+            'Hidden',
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            psScript,
+          ],
+          mode: ProcessStartMode.detached,
+        );
+      } catch (_) {
+        try {
+          await Process.start('explorer.exe', [savePath]);
+        } catch (_) {
+          await OpenFilex.open(savePath);
+        }
       }
     }
   }

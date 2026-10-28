@@ -380,10 +380,50 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
       body: SafeArea(
         child: Column(
           children: [
-            // 상단: 백그라운드 업데이트 다운로드 진행 바 (승인 없이 무인 다운로드 시 표시)
+            // 상단: 백그라운드 업데이트 다운로드 진행 바 & 완료 시 즉시 설치 바 (급식표 미사용 시에도 상시 노출)
             ValueListenableBuilder<UpdateState>(
               valueListenable: UpdateService.stateNotifier,
               builder: (ctx, state, _) {
+                if (state == UpdateState.downloaded) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF00F5D4), Color(0xFF7F5AF0)],
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.system_update_alt_rounded, color: Colors.black, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '✨ 새 버전(v${UpdateService.latestVersion ?? '5.3.3'}) 준비 완료! 급식표 화면과 무관하게 우측 버튼으로 즉시 업데이트할 수 있습니다.',
+                            style: _ts(12.5, w: FontWeight.w900, c: Colors.black),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        InkWell(
+                          onTap: () => UpdateService.executeInstall(context),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '지금 즉시 업데이트 설치 (v${UpdateService.latestVersion ?? '5.3.3'})',
+                              style: _ts(12, w: FontWeight.w900, c: const Color(0xFF00F5D4)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
                 if (state != UpdateState.downloading) return const SizedBox.shrink();
                 return ValueListenableBuilder<double>(
                   valueListenable: UpdateService.downloadProgressNotifier,
@@ -406,12 +446,12 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                           ),
                           const SizedBox(width: 10),
                           Text(
-                            '🚀 새 버전(${UpdateService.latestVersion ?? '5.3.1'}) 백그라운드 다운로드 중... ($pct%)',
+                            '🚀 새 버전(${UpdateService.latestVersion ?? '5.3.3'}) 백그라운드 다운로드 중... ($pct%)',
                             style: _ts(12, w: FontWeight.w900, c: Colors.black),
                           ),
                           const Spacer(),
                           const Text(
-                            '수업 종료 후 쉬는 시간에 자동으로 교체할 수 있습니다.',
+                            '다운로드 완료 후 상단 바에서 즉시 설치할 수 있습니다.',
                             style: TextStyle(color: Colors.black87, fontSize: 11, fontWeight: FontWeight.bold),
                           ),
                         ],
@@ -987,7 +1027,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
   }
 
   /// [현재 선택된 과목 카드]: 조/종례/점심시간에는 과목명 대신 해당 시간을 크게 텍스트로 노출
-  /// - 수업 중에는 교과서 크기를 아담하게 줄이고, 교과서 바로 옆에 디지털 시계(HH:mm) 배치
+  /// [현재/다음 교시 대표 카드]: 좌측 교과서 표지 + 우측 과목명 & 시간대 & 학급 안내
   Widget _currentPeriodCard(TimetablePeriodItem p) {
     final times = _getTimesForPeriod(p);
     final start = times.$1;
@@ -1015,170 +1055,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
       }
     }
 
-    if (inClass) {
-      // ══════════════════════════════════════════════════════════
-      // [수업 모드 전용 레이아웃]: 상하 100% 꽉 채우기
-      // 상단: 날짜 바 & 교시 뱃지
-      // 중단: 교과서(크기 대폭 축소) + 그 옆에 대형 디지털 시계 (HH:mm)
-      // 하단: 과목명 크게(FittedBox) + 학급 정보
-      // ══════════════════════════════════════════════════════════
-      final now = widget.currentTime ?? DateTime.now();
-      final date = '${now.year}년 ${now.month}월 ${now.day}일 (${_wd[now.weekday - 1]})';
-      String two(int v) => v.toString().padLeft(2, '0');
-
-      return _glassSurface(
-        glow: true,
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 1. 상단 정보 바 (날짜, 교시 진행 뱃지, 교시 시간)
-            Row(
-              children: [
-                const Icon(Icons.calendar_today_rounded, color: Color(0xFF00F5D4), size: 16),
-                const SizedBox(width: 8),
-                Text(date, style: _ts(15, w: FontWeight.w700, c: Colors.white)),
-                const SizedBox(width: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00F5D4),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.play_circle_fill_rounded, size: 13, color: Colors.black),
-                      const SizedBox(width: 4),
-                      Text(badgeLabel, style: _ts(12, w: FontWeight.w900, c: Colors.black)),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text('$start ~ $end', style: _ts(13, w: FontWeight.w700, c: Colors.white70)),
-                ),
-                const Spacer(),
-                if (widget.ddayLabel != null && widget.ddayLabel!.isNotEmpty)
-                  GestureDetector(
-                    onLongPress: widget.onDdayLongPress,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(widget.ddayLabel!, style: _ts(12, w: FontWeight.w700, c: const Color(0xFF00F5D4))),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // 2. 중앙: 시원하게 키운 교과서 표지 + 그 옆에 대형 시계 (HH:mm) 나란히 배치!
-            Expanded(
-              flex: 5,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 시원하게 키운 교과서 표지 (높이에 맞추어 비율 유지)
-                  AspectRatio(
-                    aspectRatio: 0.72,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.4),
-                            blurRadius: 14,
-                            offset: const Offset(2, 6),
-                          ),
-                        ],
-                      ),
-                      child: hasSpecial
-                          ? _buildSpecialPeriodCover(special)
-                          : _buildBookCoverWidget(p.subject, radius: 14),
-                    ),
-                  ),
-                  const SizedBox(width: 24),
-                  // 교과서 바로 옆에 뜨는 시계 (HH:mm)
-                  Expanded(
-                    child: GestureDetector(
-                      onLongPress: widget.onClockLongPress,
-                      child: Container(
-                        height: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.03),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.white.withOpacity(0.06)),
-                        ),
-                        child: Center(
-                          child: FittedBox(
-                            fit: BoxFit.contain,
-                            child: Text(
-                              '${two(now.hour)}:${two(now.minute)}',
-                              style: _ts(200, w: FontWeight.w900, h: 0.85, ls: -4, c: Colors.white),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // 3. 하단: 과목명 크게 + 학급 정보 (담당 텍스트 삭제)
-            Expanded(
-              flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      displayTitle,
-                      style: _ts(68, w: FontWeight.w900, h: 1.05),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.school_rounded, color: Color(0xFF00F5D4), size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        widget.gradeClass.isNotEmpty ? widget.gradeClass : '우리반',
-                        style: _ts(17, w: FontWeight.w800, c: Colors.white),
-                      ),
-                      const SizedBox(width: 12),
-                      Flexible(
-                        child: Text(
-                          subText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: _ts(14.5, w: FontWeight.w600, c: Colors.white60),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // 쉬는 시간 / 방과 후 기본 카드
+    // 단정한 교과서 표지(좌측) + 과목명 & 수업 정보(우측) 단일 통합 카드 (중복 시계/날짜/D-day 제거)
     return _glassSurface(
       glow: true,
       padding: const EdgeInsets.all(14),

@@ -87,12 +87,6 @@ class MealVoteService {
                 final date = DateTime(y, m, d);
                 if (date.isBefore(cutoffDate)) {
                   await prefs.remove(k);
-                  // 서버에서도 30일 지난 데이터 1회 삭제
-                  try {
-                    final sId = _currentSchoolId.isNotEmpty ? _currentSchoolId : 'default';
-                    final url = Uri.parse('$_rtdbBase/meal_votes/$sId/$dateStr.json');
-                    http.delete(url);
-                  } catch (_) {}
                 }
               }
             }
@@ -204,7 +198,7 @@ class MealVoteService {
     );
   }
 
-  /// 점심시간 종료 10분 전: 교실 투표 결과를 RTDB에 딱 1회 PUT 전송
+  /// 점심시간 종료 전: 로컬 영구 저장소에 투표 결과 보존 (네트워크 요청 0회!)
   Future<void> syncClassVotesToServer({
     required String schoolId,
     required DateTime date,
@@ -214,28 +208,18 @@ class MealVoteService {
         ? schoolId.trim()
         : (_currentSchoolId.isNotEmpty ? _currentSchoolId : (schoolId.trim().isNotEmpty ? schoolId.trim() : 'default'));
     final dateKey = getDateKey(date);
-    final sanitizedClass = sanitizeKey(classKey.isEmpty ? '우리반' : classKey);
 
     if (_syncedServerDates.contains(dateKey)) return;
     _syncedServerDates.add(dateKey);
 
-    debugPrint('[MealVoteService] 🚀 Syncing class votes to server for $dateKey ($sanitizedClass)...');
     try {
-      for (final entry in _voteData.entries) {
-        final dishKey = entry.key;
-        final count = entry.value[sanitizedClass] ?? 0;
-        if (count > 0) {
-          final url = Uri.parse('$_rtdbBase/meal_votes/$sId/$dateKey/$dishKey/$sanitizedClass.json');
-          await http.put(url, body: json.encode(count));
-        }
-      }
-      debugPrint('[MealVoteService] ✅ Sync complete for $dateKey');
-    } catch (e) {
-      debugPrint('[MealVoteService] ⚠️ Sync error: $e');
-    }
+      final prefs = await SharedPreferences.getInstance();
+      final historyKey = _getHistoryPrefKey(sId, dateKey);
+      await prefs.setString(historyKey, json.encode(_voteData));
+    } catch (_) {}
   }
 
-  /// 점심시간 종료 9분 전 (1분 뒤): RTDB에서 전교 결과 1회 GET 가져와서 전자칠판 자체에 영구 저장
+  /// 점심시간 종료 전: 로컬 영구 저장소에 투표 결과 확정 (네트워크 요청 0회!)
   Future<void> fetchAndPersistFinalResults({
     required String schoolId,
     required DateTime date,
@@ -248,45 +232,19 @@ class MealVoteService {
     if (_fetchedFinalDates.contains(dateKey)) return;
     _fetchedFinalDates.add(dateKey);
 
-    debugPrint('[MealVoteService] 📥 Fetching all school votes from server for $dateKey...');
     try {
-      final url = Uri.parse('$_rtdbBase/meal_votes/$sId/$dateKey.json');
-      final res = await http.get(url);
-      if (res.statusCode == 200 && res.body.isNotEmpty && res.body != 'null') {
-        final decoded = json.decode(res.body);
-        if (decoded is Map<String, dynamic>) {
-          final Map<String, Map<String, int>> merged = {};
-          final Map<String, int> totals = {};
+      final Map<String, int> totals = {};
+      _voteData.forEach((dishKey, classMap) {
+        int sum = 0;
+        classMap.forEach((_, c) => sum += c);
+        totals[dishKey] = sum;
+      });
+      _historyCache[dateKey] = totals;
 
-          decoded.forEach((dishKey, classMap) {
-            if (classMap is Map) {
-              final Map<String, int> inner = {};
-              int sum = 0;
-              classMap.forEach((cKey, v) {
-                final c = (v as num?)?.toInt() ?? 0;
-                inner[cKey.toString()] = c;
-                sum += c;
-              });
-              merged[dishKey] = inner;
-              totals[dishKey] = sum;
-            }
-          });
-
-          // 로컬 데이터 병합
-          _voteData = merged;
-          votesNotifier.value = Map.from(_voteData);
-          _historyCache[dateKey] = totals;
-
-          // 전자칠판 자체(SharedPreferences)에 영구 저장
-          final prefs = await SharedPreferences.getInstance();
-          final historyKey = _getHistoryPrefKey(sId, dateKey);
-          await prefs.setString(historyKey, json.encode(merged));
-          debugPrint('[MealVoteService] 💾 Final votes persisted locally to $historyKey');
-        }
-      }
-    } catch (e) {
-      debugPrint('[MealVoteService] ⚠️ Fetch final votes error: $e');
-    }
+      final prefs = await SharedPreferences.getInstance();
+      final historyKey = _getHistoryPrefKey(sId, dateKey);
+      await prefs.setString(historyKey, json.encode(_voteData));
+    } catch (_) {}
   }
 
   /// 서버 투표 보관 정책 (30일간 보관하여 월간 급식표 등에서 열람 가능, 30일 초과 시에만 자동 삭제)
@@ -361,12 +319,12 @@ class MealVoteService {
       debugPrint('[MealVoteService] Error reading historical votes: $e');
     }
 
-    // 4. 로컬에 없는 경우 서버(RTDB)에서 직접 조회
+    // 4. 당일 로컬 투표에서도 확인 (네트워크 요청 0회)
     try {
-      final url = Uri.parse('$_rtdbBase/meal_votes/$sId/$dateKey.json');
-      final res = await http.get(url).timeout(const Duration(seconds: 4));
-      if (res.statusCode == 200 && res.body.isNotEmpty && res.body != 'null') {
-        final decoded = json.decode(res.body);
+      final prefs = await SharedPreferences.getInstance();
+      final localRaw = prefs.getString(_getLocalVotePrefKey(sId, dateKey));
+      if (localRaw != null && localRaw.isNotEmpty) {
+        final decoded = json.decode(localRaw);
         if (decoded is Map<String, dynamic>) {
           final Map<String, int> totals = {};
           decoded.forEach((dishKey, val) {

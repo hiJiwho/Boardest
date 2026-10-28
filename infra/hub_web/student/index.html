@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -445,19 +445,20 @@
       ];
 
       try {
-        const url = `https://comcigan.boardest.workers.dev/timetable/${config.schoolCode}`;
+        const url = `https://comcigan.jiwho.workers.dev/api/comcigan/lookup?code=${encodeURIComponent(config.schoolCode)}`;
         const res = await fetch(url).then(r => r.json()).catch(() => null);
         let lessons = sampleLessons;
-        if (res && res.lessons) {
+        const rawLessons = res?.data?.parsed?.lessons || res?.lessons;
+        if (Array.isArray(rawLessons) && rawLessons.length > 0) {
           const weekday = new Date().getDay();
           const targetDay = (weekday >= 1 && weekday <= 5) ? weekday : 1;
-          const filtered = res.lessons.filter(l => l.grade === config.grade && l.classNum === config.classNum && l.weekday === targetDay);
+          const filtered = rawLessons.filter(l => l.grade === config.grade && l.classNum === config.classNum && l.weekday === targetDay);
           if (filtered.length > 0) {
             lessons = filtered.map(l => ({
-              period: l.classTime,
+              period: l.classTime || l.period,
               subject: l.subject,
               teacher: l.teacher || '담당 교사',
-              time: `${l.classTime}교시`
+              time: `${l.classTime || l.period}교시`
             })).sort((a,b) => a.period - b.period);
           }
         }

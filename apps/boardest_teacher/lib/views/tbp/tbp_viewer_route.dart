@@ -251,7 +251,15 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
       );
       _infoJson = await TbpStorageService.instance.loadInfoJson(_tbpFolderPath);
 
-      final targetUrl = (_infoJson?['webUrl'] ?? _infoJson?['targetUrl'] ?? '').toString().trim();
+      var targetUrl = (_infoJson?['webUrl'] ?? _infoJson?['targetUrl'] ?? _infoJson?['url'] ?? _infoJson?['embedUrl'] ?? '').toString().trim();
+      if (targetUrl.isEmpty && !kIsWeb && rawPath.isNotEmpty && File(rawPath).existsSync()) {
+        try {
+          final parsed = jsonDecode(await File(rawPath).readAsString());
+          if (parsed is Map) {
+            targetUrl = (parsed['webUrl'] ?? parsed['targetUrl'] ?? parsed['url'] ?? parsed['embedUrl'] ?? '').toString().trim();
+          }
+        } catch (_) {}
+      }
       if (targetUrl.isEmpty) {
         setState(() {
           _errorMessage = 'TBP 폴더 내 webUrl 설정이 올바르지 않습니다.';
@@ -260,6 +268,9 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
         return;
       }
 
+      _dhashEngine.registerKnownHashes(
+        await TbpStorageService.instance.getKnownPageHashes(_tbpFolderPath),
+      );
       final initialHotspots = await TbpStorageService.instance.loadHotspots(
         _tbpFolderPath,
         _currentDhash,
@@ -559,6 +570,11 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
     _feedbackTimer?.cancel();
     _touchDhashTimer?.cancel();
     _dhashEngine.dispose();
+    if (_winWebviewInitialized) {
+      try {
+        _winWebview.dispose();
+      } catch (_) {}
+    }
     _annotationController.dispose();
     _longPressTimer?.cancel();
     _keyboardFocus.dispose();

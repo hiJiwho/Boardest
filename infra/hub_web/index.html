@@ -395,10 +395,11 @@
     <nav class="top-nav">
       <a href="https://boardest.web.app" class="nav-brand">
         <span class="nav-brand-title">Boardest</span>
-        <span class="nav-brand-sub version-display">v5.3.1</span>
+        <span class="nav-brand-sub version-display">v5.3.3</span>
       </a>
       <div class="nav-menu">
         <a href="/install" class="nav-item" style="color: #00F5D4; font-weight: 800; border: 1.5px solid rgba(0,245,212,0.4); background: rgba(0,245,212,0.12);">🚀 도입 및 설치 안내</a>
+        <a href="/guide" class="nav-item" style="color: #FFD166; border: 1px solid rgba(255,209,102,0.35);">📚 실전 가이드</a>
         <a href="#class-section" class="nav-item">🏫 Class 라인업</a>
         <a href="#teacher-section" class="nav-item">👩‍🏫 Teacher & Cloud</a>
         <a href="https://bcld.web.app" class="nav-item" style="color: #00BAF2; border: 1px solid rgba(0,186,242,0.3);">☁️ Class Cloud (bcld)</a>
@@ -412,7 +413,7 @@
     <header>
       <div class="brand-title">
         Boardest
-        <span class="brand-sub">스마트 교실 플랫폼 <span class="version-display" style="font-size: 16px; opacity: 0.85;">v5.3.1</span></span>
+        <span class="brand-sub">스마트 교실 플랫폼 <span class="version-display" style="font-size: 16px; opacity: 0.85;">v5.3.3</span></span>
       </div>
       <p class="hero-desc">
         전자칠판 대시보드, 교사용 원격 수업 제어, 교실 클라우드 칠판(bcld)과 초경량 시간표까지.<br>
@@ -457,7 +458,7 @@
       <div class="platform-card card-class">
         <div class="card-header">
           <div class="card-icon">🖥️</div>
-          <span class="card-badge version-display" style="background: rgba(0,245,212,0.2); color: #00F5D4; border-color: rgba(0,245,212,0.4);">v5.3.1</span>
+          <span class="card-badge version-display" style="background: rgba(0,245,212,0.2); color: #00F5D4; border-color: rgba(0,245,212,0.4);">v5.3.3</span>
         </div>
         <div class="card-title">Class PRO (Windows, APK)</div>
         <div class="card-desc">
@@ -493,7 +494,7 @@
           <a href="https://boardest-class-lite.web.app" class="btn-card btn-teal" style="background:#2EC4B6;" target="_blank">
             🍃 Class Lite 웹 바로가기 ➔
           </a>
-          <a href="https://boardest-downloads.web.app/Class-Win-Guide#lite" class="btn-card btn-outline" target="_blank">
+          <a href="https://boardest-downloads.web.app/Class-Lite-Win-Guide" class="btn-card btn-outline" target="_blank">
             📖 Class Lite 설치 가이드 & AppX ➔
           </a>
           <a href="https://boardest-downloads.web.app" class="btn-card btn-outline" target="_blank" style="border-color: rgba(0, 186, 242, 0.4); color: #00BAF2;">
@@ -533,7 +534,7 @@
       <div class="platform-card card-teacher">
         <div class="card-header">
           <div class="card-icon">💼</div>
-          <span class="card-badge version-display" style="background: rgba(127,90,240,0.25); color: #E0B0FF; border-color: rgba(127,90,240,0.5);">v5.3.1</span>
+          <span class="card-badge version-display" style="background: rgba(127,90,240,0.25); color: #E0B0FF; border-color: rgba(127,90,240,0.5);">v5.3.3</span>
         </div>
         <div class="card-title">Teacher PRO (Windows, APK)</div>
         <div class="card-desc">
@@ -553,7 +554,7 @@
       <div class="platform-card card-tools">
         <div class="card-header">
           <div class="card-icon">☁️</div>
-          <span class="card-badge version-display" style="background: rgba(0,186,242,0.18); color: #00BAF2; border-color: rgba(0,186,242,0.4);">v5.3.1</span>
+          <span class="card-badge version-display" style="background: rgba(0,186,242,0.18); color: #00BAF2; border-color: rgba(0,186,242,0.4);">v5.3.3</span>
         </div>
         <div class="card-title">Boardest Class Cloud (bcld)</div>
         <div class="card-desc">
@@ -586,7 +587,7 @@
         <a href="https://boardest-demo.web.app" class="btn-hero btn-hero-secondary" style="color: #FFA726; border-color: rgba(255,137,6,0.4);" target="_blank">
           📖 데모 체험 가이드 보기
         </a>
-        <a href="https://boardest-cloud-connect.web.app?Demo=1" class="btn-hero btn-hero-primary" style="background: #FFA726; color: #000;" target="_blank">
+        <a href="https://boardest-teacher-oauth.web.app?create-Demo=1" class="btn-hero btn-hero-primary" style="background: #FFA726; color: #000;" target="_blank">
           🔑 데모 교사 계정 만들기
         </a>
       </div>
@@ -605,7 +606,7 @@
         const res = await fetch('https://api.github.com/repos/hiJiwho/Boardest/releases/latest');
         if (res.ok) {
           const data = await res.json();
-          const ver = data.tag_name ? data.tag_name.replace(/^v/, '') : '5.3.1';
+          const ver = data.tag_name ? data.tag_name.replace(/^v/, '') : '5.3.3';
           document.querySelectorAll('.version-display').forEach(el => {
             el.textContent = 'v' + ver;
           });

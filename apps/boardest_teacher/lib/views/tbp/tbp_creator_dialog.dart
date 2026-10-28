@@ -154,8 +154,9 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
       final shellFileName = '$safeTitle.tbp.bst';
 
       final fullMeta = <String, dynamic>{
-        'version': '5.3.1',
+        'version': '5.3.3',
         'id': new32Id,
+        'folderId': new32Id,
         'title': safeTitle,
         'type': 'TBP',
         'webUrl': webUrl,
@@ -173,13 +174,15 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
         if (tbpRootId != null) {
           realFolderId = await cloud.createFolderInDrive(new32Id, parentFolderId: tbpRootId);
           if (realFolderId != null) {
+            fullMeta['folderId'] = realFolderId;
+            final updatedMetaStr = jsonEncode(fullMeta);
             await cloud.uploadBytesToDrive(
-              Uint8List.fromList(utf8.encode(metaJsonStr)),
+              Uint8List.fromList(utf8.encode(updatedMetaStr)),
               'manifest.json',
               folderId: realFolderId,
             );
             await cloud.uploadBytesToDrive(
-              Uint8List.fromList(utf8.encode(metaJsonStr)),
+              Uint8List.fromList(utf8.encode(updatedMetaStr)),
               'meta.bstsave',
               folderId: realFolderId,
             );
@@ -191,10 +194,11 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
         final shellJson = jsonEncode({
           'type': 'TBP',
           'id': new32Id,
+          'folderId': realFolderId ?? new32Id,
           'title': safeTitle,
           'webUrl': webUrl,
           'createdAt': DateTime.now().millisecondsSinceEpoch,
-          'version': '5.3.1',
+          'version': '5.3.3',
         });
         await cloud.uploadBytesToDrive(
           Uint8List.fromList(utf8.encode(shellJson)),
@@ -217,10 +221,11 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
         await dummyFile.writeAsString(jsonEncode({
           'type': 'TBP',
           'id': new32Id,
+          'folderId': realFolderId ?? new32Id,
           'title': safeTitle,
           'webUrl': webUrl,
           'createdAt': DateTime.now().millisecondsSinceEpoch,
-          'version': '5.3.1',
+          'version': '5.3.3',
         }));
         localDummyPath = dummyFile.path;
       }

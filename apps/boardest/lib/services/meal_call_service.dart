@@ -194,14 +194,17 @@ class MealCallService {
   // Track if popup is currently showing to prevent redundant triggers
   bool isPopupShowing = false;
 
-  /// 앱 시작 직후 급식실 대시보드에 교실 온라인 신호 전송
+  /// 앱 시작 직후 대시보드에 교실 온라인 신호 1회 전송 (중복 호출 차단)
+  String? _lastRegisteredDocId;
   Future<void> ensurePresence(AppSettings settings) async {
+    if (AppConfig.isCloudMode || AppConfig.isToolsMode) return;
     if (settings.connectionName.isEmpty &&
         settings.selectedSchool == null &&
         !settings.specialClassroomMode) {
       return;
     }
     _currentSettings = settings;
+    if (_lastRegisteredDocId == _documentId && _documentId.isNotEmpty) return;
     await _registerClassroom();
   }
 
@@ -268,7 +271,7 @@ class MealCallService {
   void _retryRtdbSse(String docId) {
     _reconnectTimer?.cancel();
     if (_currentSettings == null) return;
-    _reconnectTimer = Timer(const Duration(seconds: 4), () {
+    _reconnectTimer = Timer(const Duration(seconds: 60), () {
       if (_currentSettings != null) {
         _connectRtdbSse(docId);
       }
@@ -291,17 +294,8 @@ class MealCallService {
 
     if (path == '/' && data is Map) {
       final mapData = Map<String, dynamic>.from(data);
-      // 1. Meal Call Check
-      final isSpecialRoom = _currentSettings?.specialClassroomMode ?? false;
-      if (!isSpecialRoom && mapData.containsKey('called')) {
-        final isCalled = mapData['called'] == true || mapData['called']?.toString().toLowerCase() == 'true';
-        if (isCalled && !isPopupShowing) {
-          _lastCalledState = true;
-          onMealCallReceived?.call();
-        } else if (!isCalled) {
-          _lastCalledState = false;
-        }
-      }
+      // 1. Meal Call Check 비활성화 (급식 호출 미사용 - 쪽지 및 학생 호출만 유지)
+      _lastCalledState = false;
 
       // 2. Message Check
       if (mapData['message'] != null && mapData['messageSentAt'] != null) {
@@ -334,13 +328,7 @@ class MealCallService {
         }
       }
     } else if (path == '/called') {
-      final isCalled = data == true || data?.toString().toLowerCase() == 'true';
-      if (isCalled && !isPopupShowing) {
-        _lastCalledState = true;
-        onMealCallReceived?.call();
-      } else if (!isCalled) {
-        _lastCalledState = false;
-      }
+      _lastCalledState = false;
     } else if (path == '/message') {
       final msg = data?.toString() ?? '';
       if (msg.isNotEmpty) {
@@ -348,15 +336,7 @@ class MealCallService {
       }
     } else if (data is Map) {
       final mapData = Map<String, dynamic>.from(data);
-      if (mapData.containsKey('called')) {
-        final isCalled = mapData['called'] == true || mapData['called']?.toString().toLowerCase() == 'true';
-        if (isCalled && !isPopupShowing) {
-          _lastCalledState = true;
-          onMealCallReceived?.call();
-        } else if (!isCalled) {
-          _lastCalledState = false;
-        }
-      }
+      _lastCalledState = false;
       if (mapData.containsKey('message') && mapData.containsKey('messageSentAt')) {
         final msg = mapData['message']?.toString() ?? '';
         final from = mapData['messageFrom']?.toString() ?? '';
@@ -389,6 +369,7 @@ class MealCallService {
     required void Function(String message, String from) onMessage,
     required void Function(String message, String from) onStudentCall,
   }) {
+    if (AppConfig.isCloudMode || AppConfig.isToolsMode) return;
     if (settings.connectionName.isEmpty &&
         settings.selectedSchool == null &&
         !settings.specialClassroomMode) {
@@ -408,9 +389,10 @@ class MealCallService {
     // 1. RTDB 실시간 SSE 스트림 연결 (0.1초 즉시 수신, Firestore 읽기 0회)
     _startRtdbStream();
 
-    // 2. [친환경/쿼터 초절약] 하트비트 완전 제거! 앱 켤 때 1회만 등록 (24시간 유효)
-    _registerClassroom();
-    _checkCallStatus();
+    // 2. [친환경/쿼터 초절약] 하트비트 완전 제거! 세션당 1회만 등록
+    if (_lastRegisteredDocId != _documentId) {
+      _registerClassroom();
+    }
   }
 
   void stopListening() {
@@ -537,6 +519,7 @@ class MealCallService {
             'classOrder': _currentSettings!.mealCallClassOrder,
           }),
         ).timeout(const Duration(seconds: 4));
+        _lastRegisteredDocId = docId;
       } catch (re) {
         debugPrint('[MealCallService] RTDB registration error: $re');
       }

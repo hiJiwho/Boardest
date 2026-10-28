@@ -278,9 +278,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     });
     _loadPreferencesAndFetch();
     _preloadAppsList();
-    _loadSavedTextbooksToMemory().then((_) {
-      _syncSchoolTextbooksFromFirestore();
-    });
+    _loadSavedTextbooksToMemory();
 
     if (!kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1573,7 +1571,6 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
       });
       _applyAutoSleepSchedule();
       _startDashboardTimer();
-      _syncSchoolTextbooksFromFirestore();
 
       if (!_initialToolTriggered && widget.initialTool != null) {
         _initialToolTriggered = true;
@@ -10110,9 +10107,15 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     _showTbpWebSelectionDialog();
   }
 
-  /// 학교 설정 데이터 실시간 동기화 (TimeSettings, Textbooks)
+  DateTime? _lastSchoolConfigsSyncAt;
+
+  /// 학교 설정 데이터 실시간 동기화 (TimeSettings, Textbooks — 6시간 쿨다운으로 Firestore 할당량 보호)
   Future<void> _syncSchoolConfigsFromFirestore() async {
     try {
+      if (_lastSchoolConfigsSyncAt != null &&
+          DateTime.now().difference(_lastSchoolConfigsSyncAt!).inHours < 6) {
+        return;
+      }
       final rawSchoolId = _settings.schoolId.isNotEmpty
           ? _settings.schoolId
           : (_settings.connectionName.isNotEmpty ? _settings.connectionName : '');
@@ -10121,6 +10124,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
         return;
       }
 
+      _lastSchoolConfigsSyncAt = DateTime.now();
       var url = '${AppConfig.firestoreBase}/control_configs/$schoolId?key=${AppConfig.firebaseApiKey}';
       var response = await http.get(Uri.parse(url));
 

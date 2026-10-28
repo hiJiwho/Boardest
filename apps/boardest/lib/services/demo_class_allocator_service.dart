@@ -105,11 +105,8 @@ class DemoClassAllocatorService {
 
   void _startHeartbeat(String classId) {
     _heartbeatTimer?.cancel();
+    // 앱 시작 시 1회만 등록 (상시 25초 주기 폴링/쓰기 제거로 Firebase 할당량 보호)
     _sendHeartbeat(classId);
-
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 25), (_) {
-      _sendHeartbeat(classId);
-    });
   }
 
   Future<void> _sendHeartbeat(String classId) async {

@@ -59,6 +59,7 @@ class TbpStorageService {
   }) async {
     final encoded = const JsonEncoder.withIndent('  ').convert(meta);
 
+    String? resolvedCacheDirPath;
     if (driveFolderId != null && driveFolderId.isNotEmpty) {
       final rawKey = 'drive://tbp/$driveFolderId';
       final vPath = 'drive_tbp_$driveFolderId';
@@ -67,6 +68,7 @@ class TbpStorageService {
       if (kIsWeb) {
         _extractCache[rawKey] = vPath;
         _driveFolderIds[vPath] = driveFolderId;
+        resolvedCacheDirPath = vPath;
       } else {
         try {
           final tmpDir = await getTemporaryDirectory();
@@ -81,17 +83,50 @@ class TbpStorageService {
           _extractCache[rawKey] = cacheDir.path;
           _driveFolderIds[cacheDir.path] = driveFolderId;
           _webJsonCache['${cacheDir.path}::info'] = encoded;
+          resolvedCacheDirPath = cacheDir.path;
         } catch (_) {}
       }
     }
 
     if (localDirPath != null && localDirPath.isNotEmpty) {
+      final lowerLocal = localDirPath.toLowerCase();
+      final isShellFile = lowerLocal.endsWith('.bst') ||
+          lowerLocal.endsWith('.tbp') ||
+          lowerLocal.endsWith('.htmlp') ||
+          lowerLocal.endsWith('.save') ||
+          (!kIsWeb && File(localDirPath).existsSync());
       if (kIsWeb || localDirPath.startsWith('web://')) {
         _extractCache[localDirPath] = localDirPath;
         _webJsonCache['$localDirPath::info'] = encoded;
         if (driveFolderId != null && driveFolderId.isNotEmpty) {
           _driveFolderIds[localDirPath] = driveFolderId;
         }
+        return localDirPath;
+      } else if (isShellFile) {
+        try {
+          String targetCacheDir = resolvedCacheDirPath ?? '';
+          if (targetCacheDir.isEmpty) {
+            final tmpDir = await getTemporaryDirectory();
+            final fallbackId = (meta['folderId'] ?? meta['id'] ?? p.basenameWithoutExtension(localDirPath))
+                .toString()
+                .replaceAll(RegExp(r'[^\w-]'), '_');
+            final cacheDir = Directory(p.join(tmpDir.path, 'bstTBP_local_$fallbackId'));
+            if (!cacheDir.existsSync()) {
+              cacheDir.createSync(recursive: true);
+            }
+            await File(p.join(cacheDir.path, 'manifest.json')).writeAsString(encoded, flush: true);
+            await File(p.join(cacheDir.path, 'meta.bstsave')).writeAsString(encoded, flush: true);
+            await File(p.join(cacheDir.path, 'info.json')).writeAsString(encoded, flush: true);
+            targetCacheDir = cacheDir.path;
+          }
+          _extractCache[localDirPath] = targetCacheDir;
+          _webJsonCache['$localDirPath::info'] = encoded;
+          _webJsonCache['$targetCacheDir::info'] = encoded;
+          if (driveFolderId != null && driveFolderId.isNotEmpty) {
+            _driveFolderIds[localDirPath] = driveFolderId;
+            _driveFolderIds[targetCacheDir] = driveFolderId;
+          }
+        } catch (_) {}
         return localDirPath;
       } else {
         try {
@@ -116,7 +151,25 @@ class TbpStorageService {
     }
 
     if (driveFolderId != null && driveFolderId.isNotEmpty) {
-      return 'drive://tbp/$driveFolderId';
+      return resolvedCacheDirPath ?? 'drive://tbp/$driveFolderId';
+    }
+    if (!kIsWeb && localDirPath == null) {
+      try {
+        final tmpDir = await getTemporaryDirectory();
+        final fallbackId = (meta['folderId'] ?? meta['id'] ?? 'default')
+            .toString()
+            .replaceAll(RegExp(r'[^\w-]'), '_');
+        final cacheDir = Directory(p.join(tmpDir.path, 'bstTBP_url_$fallbackId'));
+        if (!cacheDir.existsSync()) {
+          cacheDir.createSync(recursive: true);
+        }
+        await File(p.join(cacheDir.path, 'manifest.json')).writeAsString(encoded, flush: true);
+        await File(p.join(cacheDir.path, 'meta.bstsave')).writeAsString(encoded, flush: true);
+        await File(p.join(cacheDir.path, 'info.json')).writeAsString(encoded, flush: true);
+        _extractCache[cacheDir.path] = cacheDir.path;
+        _webJsonCache['${cacheDir.path}::info'] = encoded;
+        return cacheDir.path;
+      } catch (_) {}
     }
     return localDirPath ?? 'web://tbp/${meta['folderId'] ?? 'default'}';
   }
@@ -216,7 +269,7 @@ class TbpStorageService {
         return null;
       }
 
-      // 3. 레거시 .bstTBP (ZIP) 또는 .TBP (JSON) 파일 호환
+      // 3. 레거시 .bstTBP (ZIP) 또는 .TBP / .tbp.bst (JSON) 파일 호환
       if (tbpFilePath.toLowerCase().endsWith('.bsttbp')) {
         return await _loadFromBstTbpZip(tbpFilePath);
       }
@@ -226,10 +279,31 @@ class TbpStorageService {
       final shell = TbpStorageService.parsePointerShell(content);
       if (shell != null) {
         final targetId = shell['id'].toString();
-        final resolved = await _loadFromDriveTbpFolder('drive://tbp/$targetId', targetId, fallbackShell: shell);
-        if (resolved != null) return resolved;
+        final rawDriveKey = 'drive://tbp/$targetId';
+        final resolved = await _loadFromDriveTbpFolder(rawDriveKey, targetId, fallbackShell: shell);
+        if (resolved != null) {
+          if (_extractCache.containsKey(rawDriveKey)) {
+            _extractCache[tbpFilePath] = _extractCache[rawDriveKey]!;
+          }
+          if (_driveFolderIds.containsKey(rawDriveKey)) {
+            _driveFolderIds[tbpFilePath] = _driveFolderIds[rawDriveKey]!;
+          }
+          return resolved;
+        }
       }
       final json = jsonDecode(content) as Map<String, dynamic>;
+      final tmpDir = await getTemporaryDirectory();
+      final safeId = (json['folderId'] ?? json['id'] ?? p.basenameWithoutExtension(tbpFilePath))
+          .toString()
+          .replaceAll(RegExp(r'[^\w-]'), '_');
+      final cacheDir = Directory(p.join(tmpDir.path, 'bstTBP_file_$safeId'));
+      if (!cacheDir.existsSync()) {
+        cacheDir.createSync(recursive: true);
+      }
+      await File(p.join(cacheDir.path, 'meta.bstsave')).writeAsString(content, flush: true);
+      await File(p.join(cacheDir.path, 'info.json')).writeAsString(content, flush: true);
+      _extractCache[tbpFilePath] = cacheDir.path;
+      _webJsonCache['${cacheDir.path}::info'] = content;
       return TbpMetadata.fromJson(json);
     } catch (e) {
       debugPrint('[TbpStorageService] Error loading TBP file: $e');
@@ -474,7 +548,7 @@ class TbpStorageService {
     }
   }
 
-  // ─── 핫스팟 (.bstsave 우선, Drive 폴더 온디맨드 다운로드 지원) ─────────
+  // ─── 핫스팟 (.bstsave 우선, Drive 폴더 온디맨드 다운로드/업로드 지원) ────
 
   static String sanitizeKey(String key) {
     if (key.length > 32 && RegExp(r'^[01]+$').hasMatch(key)) {
@@ -490,25 +564,139 @@ class TbpStorageService {
     return key;
   }
 
+  /// 64자리 16진수(hex) 키를 256비트 이진 문자열로 복원 (해밍 거리 비교용)
+  static String? toBinary256(String keyOrHash) {
+    final trimmed = keyOrHash.trim();
+    if (trimmed.length == 256 && RegExp(r'^[01]+$').hasMatch(trimmed)) {
+      return trimmed;
+    }
+    if (trimmed.length == 64 && RegExp(r'^[0-9a-fA-F]+$').hasMatch(trimmed)) {
+      final sb = StringBuffer();
+      for (int i = 0; i < 64; i++) {
+        final v = int.parse(trimmed[i], radix: 16);
+        sb.write(v.toRadixString(2).padLeft(4, '0'));
+      }
+      return sb.toString();
+    }
+    return null;
+  }
+
+  /// 두 dHash(256비트 이진 또는 64자 hex) 간의 해밍 거리 계산
+  static int hammingDistance(String a, String b) {
+    if (a == b) return 0;
+    final binA = toBinary256(a);
+    final binB = toBinary256(b);
+    if (binA == null || binB == null || binA.length != binB.length) return 256;
+    int dist = 0;
+    for (int i = 0; i < binA.length; i++) {
+      if (binA[i] != binB[i]) dist++;
+    }
+    return dist;
+  }
+
+  /// TBP 폴더에 저장된 모든 페이지 dHash 목록 조회 (핫스팟/판서가 존재하는 페이지 추적용)
+  Future<List<String>> getKnownPageHashes(String tbpFolderPath) async {
+    final result = <String>{};
+    try {
+      final prefixHotspot = '$tbpFolderPath::hotspot::';
+      final prefixPen = '$tbpFolderPath::PEN::';
+      for (final k in _webJsonCache.keys) {
+        if (k.startsWith(prefixHotspot)) {
+          final h = k.substring(prefixHotspot.length);
+          if (h.isNotEmpty && h != 'default') result.add(toBinary256(h) ?? h);
+        } else if (k.startsWith(prefixPen)) {
+          final h = k.substring(prefixPen.length);
+          if (h.isNotEmpty && h != 'default') result.add(toBinary256(h) ?? h);
+        }
+      }
+
+      if (!kIsWeb && tbpFolderPath.isNotEmpty) {
+        final rootDir = Directory(tbpFolderPath);
+        if (rootDir.existsSync()) {
+          for (final entity in rootDir.listSync()) {
+            final name = p.basename(entity.path);
+            if (entity is File) {
+              if (name.startsWith('hotspot_') && name.endsWith('.bstsave')) {
+                final k = name.substring('hotspot_'.length, name.length - '.bstsave'.length);
+                if (k.isNotEmpty && k != 'default') result.add(toBinary256(k) ?? k);
+              } else if (name.startsWith('pen_') && name.endsWith('.bstpen')) {
+                final k = name.substring('pen_'.length, name.length - '.bstpen'.length);
+                if (k.isNotEmpty && k != 'default') result.add(toBinary256(k) ?? k);
+              }
+            }
+          }
+          final hotspotDir = Directory(p.join(tbpFolderPath, 'HOTspot'));
+          if (hotspotDir.existsSync()) {
+            for (final sub in hotspotDir.listSync()) {
+              if (sub is Directory) {
+                final k = p.basename(sub.path);
+                if (k.isNotEmpty && k != 'default') result.add(toBinary256(k) ?? k);
+              }
+            }
+          }
+          final penDir = Directory(p.join(tbpFolderPath, 'PEN'));
+          if (penDir.existsSync()) {
+            for (final f in penDir.listSync()) {
+              if (f is File && f.path.endsWith('.bstpen')) {
+                final k = p.basenameWithoutExtension(f.path);
+                if (k.isNotEmpty && k != 'default') result.add(toBinary256(k) ?? k);
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return result.toList();
+  }
+
+  /// 해밍 거리 오차 범위(<= 36 bits) 내의 기존 저장된 페이지 키를 찾아 반환
+  Future<String> _resolveCanonicalKey(String tbpFolderPath, String rawDhash) async {
+    final exactKey = sanitizeKey(rawDhash);
+    if (rawDhash == 'default' || toBinary256(rawDhash) == null) {
+      return exactKey;
+    }
+    final knownList = await getKnownPageHashes(tbpFolderPath);
+    String? bestKey;
+    int bestDist = 37; // 36비트 이하일 때만 동일 페이지로 매칭
+    for (final known in knownList) {
+      final d = hammingDistance(rawDhash, known);
+      if (d < bestDist) {
+        bestDist = d;
+        bestKey = sanitizeKey(known);
+      }
+    }
+    return bestKey ?? exactKey;
+  }
+
   Future<List<Map<String, dynamic>>> loadHotspots(String tbpFolderPath, String dHash) async {
     try {
-      final key = sanitizeKey(dHash);
+      final key = await _resolveCanonicalKey(tbpFolderPath, dHash);
 
-      if (!kIsWeb) {
-        final newFile = File(p.join(tbpFolderPath, 'HOTspot', key, 'hotspot.bstsave'));
-        if (newFile.existsSync()) {
-          final List list = jsonDecode(await newFile.readAsString());
-          return list.cast<Map<String, dynamic>>();
+      if (kIsWeb) {
+        final cached = _webJsonCache['$tbpFolderPath::hotspot::$key'];
+        if (cached != null && cached.isNotEmpty) {
+          final decoded = jsonDecode(cached);
+          if (decoded is List) return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          if (decoded is Map && decoded['hotspots'] is List) {
+            return (decoded['hotspots'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          }
         }
-        final legacyRawFile = File(p.join(tbpFolderPath, 'HOTspot', dHash, 'hotspot.bstsave'));
-        if (legacyRawFile.existsSync()) {
-          final List list = jsonDecode(await legacyRawFile.readAsString());
-          return list.cast<Map<String, dynamic>>();
-        }
-        final legacyFile = File(p.join(tbpFolderPath, 'HOTspot', key, 'hotspot.json'));
-        if (legacyFile.existsSync()) {
-          final List list = jsonDecode(await legacyFile.readAsString());
-          return list.cast<Map<String, dynamic>>();
+      } else {
+        final candidates = [
+          File(p.join(tbpFolderPath, 'HOTspot', key, 'hotspot.bstsave')),
+          File(p.join(tbpFolderPath, 'hotspot_$key.bstsave')),
+          File(p.join(tbpFolderPath, 'HOTspot', dHash, 'hotspot.bstsave')),
+          File(p.join(tbpFolderPath, 'HOTspot', key, 'hotspot.json')),
+        ];
+        for (final f in candidates) {
+          if (f.existsSync()) {
+            final raw = await f.readAsString();
+            final decoded = jsonDecode(raw);
+            if (decoded is List) return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+            if (decoded is Map && decoded['hotspots'] is List) {
+              return (decoded['hotspots'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+            }
+          }
         }
       }
 
@@ -520,13 +708,17 @@ class TbpStorageService {
           'hotspot_$key.bstsave',
         );
         if (remoteStr != null && remoteStr.isNotEmpty) {
+          _webJsonCache['$tbpFolderPath::hotspot::$key'] = remoteStr;
           if (!kIsWeb) {
             final pageDir = Directory(p.join(tbpFolderPath, 'HOTspot', key));
             if (!pageDir.existsSync()) pageDir.createSync(recursive: true);
             await File(p.join(pageDir.path, 'hotspot.bstsave')).writeAsString(remoteStr, flush: true);
           }
-          final List list = jsonDecode(remoteStr);
-          return list.cast<Map<String, dynamic>>();
+          final decoded = jsonDecode(remoteStr);
+          if (decoded is List) return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          if (decoded is Map && decoded['hotspots'] is List) {
+            return (decoded['hotspots'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          }
         }
       }
       return [];
@@ -539,11 +731,14 @@ class TbpStorageService {
     try {
       final key = sanitizeKey(dHash);
       final encoded = jsonEncode(hotspots);
+      _webJsonCache['$tbpFolderPath::hotspot::$key'] = encoded;
       if (!kIsWeb) {
         final pageDir = Directory(p.join(tbpFolderPath, 'HOTspot', key));
         if (!await pageDir.exists()) await pageDir.create(recursive: true);
         final hotspotFile = File(p.join(pageDir.path, 'hotspot.bstsave'));
         await hotspotFile.writeAsString(encoded, flush: true);
+        final rootHotspotFile = File(p.join(tbpFolderPath, 'hotspot_$key.bstsave'));
+        await rootHotspotFile.writeAsString(encoded, flush: true);
       }
 
       final driveFolderId = _driveFolderIds[tbpFolderPath];
@@ -570,13 +765,19 @@ class TbpStorageService {
     String? filename,
   }) async {
     try {
-      final safeKey = sanitizeKey(scopeKey);
+      final safeKey = await _resolveCanonicalKey(tbpFolderPath, scopeKey);
       final base = filename != null && filename.isNotEmpty ? '$safeKey$filename' : safeKey;
       final rawBase = filename != null && filename.isNotEmpty ? '$scopeKey$filename' : scopeKey;
 
-      if (!kIsWeb) {
+      if (kIsWeb) {
+        final cached = _webJsonCache['$tbpFolderPath::$subFolder::$base'];
+        if (cached != null) return cached;
+      } else {
         final newFile = File(p.join(tbpFolderPath, subFolder, '$base.bstpen'));
         if (newFile.existsSync()) return await newFile.readAsString();
+
+        final rootPenFile = File(p.join(tbpFolderPath, 'pen_$base.bstpen'));
+        if (rootPenFile.existsSync()) return await rootPenFile.readAsString();
 
         final rawNewFile = File(p.join(tbpFolderPath, subFolder, '$rawBase.bstpen'));
         if (rawNewFile.existsSync()) return await rawNewFile.readAsString();
@@ -592,6 +793,7 @@ class TbpStorageService {
           'pen_$base.bstpen',
         );
         if (remoteStr != null && remoteStr.isNotEmpty) {
+          _webJsonCache['$tbpFolderPath::$subFolder::$base'] = remoteStr;
           if (!kIsWeb) {
             final targetDir = Directory(p.join(tbpFolderPath, subFolder));
             if (!targetDir.existsSync()) targetDir.createSync(recursive: true);
@@ -601,7 +803,7 @@ class TbpStorageService {
         }
       }
 
-      return null;
+      return _webJsonCache['$tbpFolderPath::$subFolder::$base'];
     } catch (_) {
       return null;
     }
@@ -617,12 +819,15 @@ class TbpStorageService {
     try {
       final safeKey = sanitizeKey(scopeKey);
       final base = filename != null && filename.isNotEmpty ? '$safeKey$filename' : safeKey;
+      _webJsonCache['$tbpFolderPath::$subFolder::$base'] = strokeContent;
 
       if (!kIsWeb) {
         final targetDir = Directory(p.join(tbpFolderPath, subFolder));
         if (!await targetDir.exists()) await targetDir.create(recursive: true);
         final strokeFile = File(p.join(targetDir.path, '$base.bstpen'));
         await strokeFile.writeAsString(strokeContent, flush: true);
+        final rootStrokeFile = File(p.join(tbpFolderPath, 'pen_$base.bstpen'));
+        await rootStrokeFile.writeAsString(strokeContent, flush: true);
       }
 
       final driveFolderId = _driveFolderIds[tbpFolderPath];

@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # Boardest 영구 인증서(2999년 만료) 원클릭 자동 설치 스크립트
 # 실행: irm https://bst-installer.web.app/win-cer.ps1 | iex
 # ==============================================================================
@@ -32,7 +32,6 @@ $downloadSuccess = $false
 Write-Host "[1/3] 최신 Boardest 영구 인증서 다운로드 중..." -ForegroundColor Yellow
 
 $sources = @(
-    "https://bst-installer.web.app/BoardestCert.cer",
     "https://bst-installer.web.app/BoardestCert.cer",
     "https://github.com/hiJiwho/Boardest/releases/latest/download/BoardestCert.cer"
 )

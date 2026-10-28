@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -218,23 +218,28 @@
       </button>
     </div>
 
-    <!-- 방법 2: AppInstaller 수동 다운로드 & 실행 -->
+    <!-- 방법 2: AppX 직접 다운로드 & 실행 -->
     <div class="method-card">
       <div class="card-header">
         <div class="card-title">
-          <span>📦 방법 2. .appinstaller 패키지 다운로드 설치</span>
+          <span>📦 방법 2. Windows AppX 패키지 직접 다운로드 설치</span>
         </div>
-        <span class="method-pill" style="background: var(--accent); color: #000;">자동 업데이트</span>
+        <span class="method-pill version-display" style="background: var(--accent); color: #000;">v5.3.3</span>
       </div>
       <p class="card-desc">
         Windows 설치 패키지(.appx)를 직접 다운로드하여 설치합니다.
       </p>
       <div class="tip-box">
-        💡 <em>참고:</em> 인증서를 먼저 등록한 후 다운로드한 <code>boardest.appx</code> 패키지를 실행하세요.
+        💡 <em>참고:</em> 인증서를 먼저 등록한 후 다운로드한 <code>boardest.appx</code> 또는 <code>boardest-cloud.appx</code> 패키지를 실행하세요.
       </div>
-      <a href="https://bst-installer.web.app/boardest.appx" class="btn btn-secondary">
-        <span>📥 Boardest v4.0.2 AppX 다운로드</span>
-      </a>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx" class="btn btn-secondary">
+          <span>📥 Boardest Class PRO (<span class="version-display">v5.3.3</span>) AppX 다운로드</span>
+        </a>
+        <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx" class="btn btn-secondary">
+          <span>☁️ Boardest Class Cloud (<span class="version-display">v5.3.3</span>) AppX 다운로드</span>
+        </a>
+      </div>
     </div>
 
     <!-- 방법 3: AppX 패키지 및 인증서 직접 설치 -->
@@ -253,8 +258,8 @@
         <li><strong>AppX 설치:</strong> 인증서 등록 후 <code>boardest.appx</code>를 더블 클릭하여 설치합니다.</li>
       </ol>
       <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px;">
-        <a href="https://bst-installer.web.app/boardest.appx" class="btn btn-secondary">
-          <span>📥 Boardest v4.0.2 AppX 패키지 다운로드</span>
+        <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx" class="btn btn-secondary">
+          <span>📥 Boardest (<span class="version-display">v5.3.3</span>) AppX 패키지 다운로드</span>
         </a>
         <a href="https://bst-installer.web.app/BoardestCert.cer" class="btn btn-secondary">
           <span>📜 BoardestCert.cer 인증서 다운로드</span>
@@ -281,6 +286,18 @@
         alert('명령어가 복사되었습니다!\nPowerShell 창에서 마우스 우클릭 후 Enter를 누르시면 자동으로 진행됩니다.');
       });
     }
+    (async function() {
+      try {
+        const res = await fetch('https://api.github.com/repos/hiJiwho/Boardest/releases/latest');
+        if (res.ok) {
+          const data = await res.json();
+          const ver = data.tag_name ? data.tag_name.replace(/^v/, '') : '5.3.3';
+          document.querySelectorAll('.version-display').forEach(el => {
+            el.textContent = 'v' + ver;
+          });
+        }
+      } catch (e) {}
+    })();
   </script>
 </body>
 </html>

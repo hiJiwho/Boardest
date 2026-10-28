@@ -602,9 +602,87 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
     return Scaffold(
       backgroundColor: const Color(0xFF070B14),
       body: SafeArea(
-        child: ValueListenableBuilder<bool>(
-          valueListenable: UpdateService.isCloudBlockedNotifier,
-          builder: (context, isCloudBlocked, _) {
+        child: Column(
+          children: [
+            ValueListenableBuilder<UpdateState>(
+              valueListenable: UpdateService.stateNotifier,
+              builder: (ctx, state, _) {
+                if (state == UpdateState.downloaded) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF00F5D4), Color(0xFF7F5AF0)],
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.system_update_alt_rounded, color: Colors.black, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '✨ Boardest Cloud 새 버전(v${UpdateService.latestVersion ?? '5.3.3'}) 다운로드 완료!',
+                            style: GoogleFonts.notoSansKr(color: Colors.black, fontSize: 13, fontWeight: FontWeight.w900),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        InkWell(
+                          onTap: () => UpdateService.executeInstall(context),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.black,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '지금 즉시 업데이트 설치 (v${UpdateService.latestVersion ?? '5.3.3'})',
+                              style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontSize: 12, fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                if (state != UpdateState.downloading) return const SizedBox.shrink();
+                return ValueListenableBuilder<double>(
+                  valueListenable: UpdateService.downloadProgressNotifier,
+                  builder: (c, progress, _) {
+                    final pct = (progress * 100).toInt();
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF00F5D4), Color(0xFF7F5AF0)],
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            '🚀 새 버전(${UpdateService.latestVersion ?? '5.3.3'}) 백그라운드 다운로드 중... ($pct%)',
+                            style: GoogleFonts.notoSansKr(color: Colors.black, fontSize: 12, fontWeight: FontWeight.w900),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+            Expanded(
+              child: ValueListenableBuilder<bool>(
+                valueListenable: UpdateService.isCloudBlockedNotifier,
+                builder: (context, isCloudBlocked, _) {
             if (isCloudBlocked) {
               return Center(
                 child: Container(
@@ -662,11 +740,14 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
                 ),
               );
             }
-            return _isConnected ? _buildCloudBrowser() : _buildQrLoginView();
-          },
-        ),
+                return _isConnected ? _buildCloudBrowser() : _buildQrLoginView();
+              },
+            ),
+          ),
+        ],
       ),
-    );
+    ),
+  );
   }
 
   // ─────────────────────────────────────────────────────────────

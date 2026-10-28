@@ -204,14 +204,14 @@ class BstCloudService {
   List<BstCloudTeacher>? _cachedTeachers;
   Future<List<BstCloudTeacher>>? _ongoingTeachersFetchFuture;
 
-  /// 1. 모든 드라이브 연동 완료된 교사 리스트 조회 (현재 학교 필터링 지원 & 10초 캐시 & 중복 요청 차단)
+  /// 1. 모든 드라이브 연동 완료된 교사 리스트 조회 (현재 학교 필터링 지원 & 30분 캐시 & 중복 요청 차단)
   Future<List<BstCloudTeacher>> getCloudTeachers({
     String? targetSchoolCode,
     String? targetSchoolName,
     bool forceRefresh = false,
   }) {
     if (!forceRefresh && _cachedTeachers != null && _lastTeachersFetchTime != null &&
-        DateTime.now().difference(_lastTeachersFetchTime!).inSeconds < 10) {
+        DateTime.now().difference(_lastTeachersFetchTime!).inMinutes < 30) {
       return Future.value(_cachedTeachers!.where((t) => _isSchoolMatched(t, targetSchoolCode, targetSchoolName)).toList());
     }
 
@@ -264,23 +264,6 @@ class BstCloudService {
     } catch (e) {
       debugPrint('[BstCloudService] getCloudTeachers (teacher_cloud_tokens) error: $e');
     }
-    // 레거시 컬렉션 fallback
-    try {
-      final legacyUrl = '$_firestoreBase/teachers_cloud?key=$_apiKey';
-      final res = await http.get(Uri.parse(legacyUrl)).timeout(const Duration(seconds: 5));
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body) as Map<String, dynamic>;
-        final docs = data['documents'] as List<dynamic>? ?? [];
-        for (final doc in docs) {
-          final name = p.basename(doc['name'] as String? ?? '');
-          final fields = doc['fields'] as Map<String, dynamic>?;
-          if (fields != null && name.isNotEmpty) {
-            final t = BstCloudTeacher.fromFirestore(fields, _safeDecode(name));
-            teachers.add(t);
-          }
-        }
-      }
-    } catch (_) {}
 
     // 데모 교사 9명 내장 등록 (Firestore 미동기화 및 데모 모드 접속 100% 보장)
     final demoPresets = [
@@ -775,51 +758,58 @@ class BstCloudService {
         : (isAdf
             ? "name = '$folderName' and 'appDataFolder' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
             : "name = '$folderName' and '$parentFolderId' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
-    final url = 'https://www.googleapis.com/drive/v3/files'
-        '?${isAdf ? "spaces=appDataFolder&" : ""}'
-        'q=${Uri.encodeComponent(query)}'
-        '&fields=files(id,name)';
-    try {
-      final res = await http.get(
-        Uri.parse(url),
-        headers: {'Authorization': 'Bearer $token'},
-      ).timeout(const Duration(seconds: 8));
+    final spaceQueries = isAdf
+        ? ['spaces=appDataFolder&']
+        : (parentFolderId == 'root' ? [''] : ['', 'spaces=appDataFolder&']);
+    var currentToken = token;
+    for (final spaceParam in spaceQueries) {
+      final url = 'https://www.googleapis.com/drive/v3/files'
+          '?$spaceParam'
+          'q=${Uri.encodeComponent(query)}'
+          '&fields=files(id,name)';
+      try {
+        final res = await http.get(
+          Uri.parse(url),
+          headers: {'Authorization': 'Bearer $currentToken'},
+        ).timeout(const Duration(seconds: 8));
 
-      if (res.statusCode == 401) {
-        final rToken = await _resolveRefreshToken();
-        if (rToken != null && rToken.isNotEmpty) {
-          final refreshed = await exchangeRefreshTokenForAccessToken(rToken);
-          if (refreshed != null && refreshed.isNotEmpty) {
-            activeToken = refreshed;
-            _hasAuthError = false;
-            final retryRes = await http.get(
-              Uri.parse(url),
-              headers: {'Authorization': 'Bearer $refreshed'},
-            ).timeout(const Duration(seconds: 8));
-            if (retryRes.statusCode == 200) {
-              final data = json.decode(retryRes.body) as Map<String, dynamic>;
-              final filesJson = data['files'] as List<dynamic>? ?? [];
-              if (filesJson.isNotEmpty) {
-                return filesJson.first['id'] as String?;
+        if (res.statusCode == 401) {
+          final rToken = await _resolveRefreshToken();
+          if (rToken != null && rToken.isNotEmpty) {
+            final refreshed = await exchangeRefreshTokenForAccessToken(rToken);
+            if (refreshed != null && refreshed.isNotEmpty) {
+              activeToken = refreshed;
+              currentToken = refreshed;
+              _hasAuthError = false;
+              final retryRes = await http.get(
+                Uri.parse(url),
+                headers: {'Authorization': 'Bearer $refreshed'},
+              ).timeout(const Duration(seconds: 8));
+              if (retryRes.statusCode == 200) {
+                final data = json.decode(retryRes.body) as Map<String, dynamic>;
+                final filesJson = data['files'] as List<dynamic>? ?? [];
+                if (filesJson.isNotEmpty) {
+                  return filesJson.first['id'] as String?;
+                }
+                continue;
               }
-              return null;
             }
           }
+          _hasAuthError = true;
+          activeToken = null;
+          return null;
         }
-        _hasAuthError = true;
-        activeToken = null;
-        return null;
-      }
 
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body) as Map<String, dynamic>;
-        final filesJson = data['files'] as List<dynamic>? ?? [];
-        if (filesJson.isNotEmpty) {
-          return filesJson.first['id'] as String?;
+        if (res.statusCode == 200) {
+          final data = json.decode(res.body) as Map<String, dynamic>;
+          final filesJson = data['files'] as List<dynamic>? ?? [];
+          if (filesJson.isNotEmpty) {
+            return filesJson.first['id'] as String?;
+          }
         }
+      } catch (e) {
+        debugPrint('[BstCloudService] findDriveFolderByName error: $e');
       }
-    } catch (e) {
-      debugPrint('[BstCloudService] findDriveFolderByName error: $e');
     }
     return null;
   }
@@ -1759,25 +1749,25 @@ class BstCloudService {
     final qrUrl = 'https://boardest-cloud-connect.web.app/?bst_pair=${Uri.encodeComponent(mangled)}';
 
     try {
-      final docUrl = '$_firestoreBase/cloud_pair_sessions/$secret?key=$_apiKey';
-      await http.patch(
-        Uri.parse(docUrl),
+      // RTDB 기반으로 역방향 QR 페어링 세션 생성 (Firestore 읽기/쓰기 할당량 0회 소모)
+      const rtdbBase = 'https://jiwhosboardest-default-rtdb.firebaseio.com';
+      final rtdbUrl = '$rtdbBase/cloud_pair_sessions/$secret.json';
+      await http.put(
+        Uri.parse(rtdbUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'fields': {
-            'status': {'stringValue': 'pending'},
-            'secret': {'stringValue': secret},
-            'mangled': {'stringValue': mangled},
-            'createdAt': {'timestampValue': DateTime.now().toUtc().toIso8601String()},
-            'expiresAt': {'timestampValue': DateTime.now().add(const Duration(minutes: 10)).toUtc().toIso8601String()},
-            if (schoolCode != null && schoolCode.isNotEmpty) 'schoolCode': {'stringValue': schoolCode},
-            if (grade != null) 'grade': {'integerValue': grade.toString()},
-            if (classNum != null) 'classNum': {'integerValue': classNum.toString()},
-          }
+          'status': 'pending',
+          'secret': secret,
+          'mangled': mangled,
+          'createdAt': DateTime.now().toUtc().toIso8601String(),
+          'expiresAt': DateTime.now().add(const Duration(minutes: 10)).toUtc().toIso8601String(),
+          if (schoolCode != null && schoolCode.isNotEmpty) 'schoolCode': schoolCode,
+          if (grade != null) 'grade': grade,
+          if (classNum != null) 'classNum': classNum,
         }),
       ).timeout(const Duration(seconds: 4));
     } catch (e) {
-      debugPrint('[BstCloudService] createReversePairSession doc error: $e');
+      debugPrint('[BstCloudService] createReversePairSession RTDB error: $e');
     }
 
     return ReversePairSession(
@@ -1788,35 +1778,35 @@ class BstCloudService {
     );
   }
 
-  /// 스마트폰에서 Google 로그인 및 연동 완료될 때까지 Firestore REST polling
+  /// 스마트폰에서 Google 로그인 및 연동 완료될 때까지 RTDB polling (Firestore 읽기 할당량 0회 소모)
   Future<({bool success, String? teacherName, String? email, String? errorMessage})>
       waitForReversePairAuth(String secret, {Duration timeout = const Duration(minutes: 5), bool Function()? isCancelled}) async {
+    const rtdbBase = 'https://jiwhosboardest-default-rtdb.firebaseio.com';
     final startTime = DateTime.now();
     while (DateTime.now().difference(startTime) < timeout) {
       if (isCancelled?.call() == true) {
         return (success: false, teacherName: null, email: null, errorMessage: '취소되었습니다.');
       }
-      await Future.delayed(const Duration(milliseconds: 1500));
+      await Future.delayed(const Duration(milliseconds: 2500));
       if (isCancelled?.call() == true) {
         return (success: false, teacherName: null, email: null, errorMessage: '취소되었습니다.');
       }
 
       try {
-        final docUrl = '$_firestoreBase/cloud_pair_sessions/$secret?key=$_apiKey';
-        final res = await http.get(Uri.parse(docUrl)).timeout(const Duration(seconds: 3));
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body) as Map<String, dynamic>;
-          final fields = data['fields'] as Map<String, dynamic>?;
-          if (fields != null) {
-            final status = (fields['status'] as Map?)?['stringValue'] as String? ?? '';
+        final rtdbUrl = '$rtdbBase/cloud_pair_sessions/$secret.json';
+        final res = await http.get(Uri.parse(rtdbUrl)).timeout(const Duration(seconds: 3));
+        if (res.statusCode == 200 && res.body != 'null' && res.body.isNotEmpty) {
+          final data = jsonDecode(res.body);
+          if (data is Map) {
+            final status = data['status']?.toString() ?? '';
             if (status == 'authenticated') {
-              final token = (fields['accessToken'] as Map?)?['stringValue'] as String?;
-              final refreshTok = (fields['refreshToken'] as Map?)?['stringValue'] as String?;
-              final tName = (fields['teacherName'] as Map?)?['stringValue'] as String? ?? '선생님';
-              final ownerEmail = (fields['email'] as Map?)?['stringValue'] as String? ?? '';
-              final totpSec = (fields['totpSecret'] as Map?)?['stringValue'] as String?;
-              final folderId = (fields['folderId'] as Map?)?['stringValue'] as String? ?? '';
-              final bstCloudFolderId = (fields['bstCloudFolderId'] as Map?)?['stringValue'] as String? ?? folderId;
+              final token = data['accessToken']?.toString();
+              final refreshTok = data['refreshToken']?.toString();
+              final tName = data['teacherName']?.toString() ?? '선생님';
+              final ownerEmail = data['email']?.toString() ?? '';
+              final totpSec = data['totpSecret']?.toString();
+              final folderId = data['folderId']?.toString() ?? '';
+              final bstCloudFolderId = data['bstCloudFolderId']?.toString() ?? folderId;
 
               if (token != null && token.isNotEmpty) {
                 activeToken = token;
@@ -1826,14 +1816,11 @@ class BstCloudService {
                 activeTotpSecret = totpSec;
                 activeFolderId = bstCloudFolderId.isNotEmpty ? bstCloudFolderId : folderId;
 
-                // Mark session consumed
                 try {
                   await http.patch(
-                    Uri.parse('$docUrl&updateMask.fieldPaths=status'),
+                    Uri.parse(rtdbUrl),
                     headers: {'Content-Type': 'application/json'},
-                    body: jsonEncode({
-                      'fields': {'status': {'stringValue': 'consumed'}}
-                    }),
+                    body: jsonEncode({'status': 'consumed'}),
                   );
                 } catch (_) {}
 
@@ -2391,18 +2378,20 @@ class BstCloudService {
       }
 
       final q = "'$tbpFolderId' in parents and name = '$fileName' and trashed = false";
-      final url = Uri.parse(
-        "https://www.googleapis.com/drive/v3/files?q=${Uri.encodeComponent(q)}&fields=files(id,name)&pageSize=1",
-      );
-      final res = await http.get(url, headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 6));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final files = data['files'] as List? ?? [];
-        if (files.isNotEmpty) {
-          final fileId = files[0]['id']?.toString() ?? '';
-          if (fileId.isNotEmpty) {
-            _tbpFileIdCache[cacheKey] = fileId;
-            return await readDriveFileText(fileId, token);
+      for (final spaceParam in ['', 'spaces=appDataFolder&']) {
+        final url = Uri.parse(
+          "https://www.googleapis.com/drive/v3/files?${spaceParam}q=${Uri.encodeComponent(q)}&fields=files(id,name)&pageSize=1",
+        );
+        final res = await http.get(url, headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 6));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final files = data['files'] as List? ?? [];
+          if (files.isNotEmpty) {
+            final fileId = files[0]['id']?.toString() ?? '';
+            if (fileId.isNotEmpty) {
+              _tbpFileIdCache[cacheKey] = fileId;
+              return await readDriveFileText(fileId, token);
+            }
           }
         }
       }
@@ -2423,17 +2412,20 @@ class BstCloudService {
 
       if (existingFileId == null || existingFileId.isEmpty) {
         final q = "'$tbpFolderId' in parents and name = '$fileName' and trashed = false";
-        final url = Uri.parse(
-          "https://www.googleapis.com/drive/v3/files?q=${Uri.encodeComponent(q)}&fields=files(id,name)&pageSize=1",
-        );
-        final res = await http.get(url, headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 6));
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          final files = data['files'] as List? ?? [];
-          if (files.isNotEmpty) {
-            existingFileId = files[0]['id']?.toString();
-            if (existingFileId != null && existingFileId.isNotEmpty) {
-              _tbpFileIdCache[cacheKey] = existingFileId;
+        for (final spaceParam in ['', 'spaces=appDataFolder&']) {
+          final url = Uri.parse(
+            "https://www.googleapis.com/drive/v3/files?${spaceParam}q=${Uri.encodeComponent(q)}&fields=files(id,name)&pageSize=1",
+          );
+          final res = await http.get(url, headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 6));
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            final files = data['files'] as List? ?? [];
+            if (files.isNotEmpty) {
+              existingFileId = files[0]['id']?.toString();
+              if (existingFileId != null && existingFileId.isNotEmpty) {
+                _tbpFileIdCache[cacheKey] = existingFileId;
+                break;
+              }
             }
           }
         }

@@ -411,7 +411,7 @@
             <div class="app-top">
               <div class="app-name">
                 <span>🪟 Windows 전자칠판 Full PRO</span>
-                <span class="stable-badge version-display" style="font-size:11px; color:#00F5D4; font-weight:700;">v5.3.1</span>
+                <span class="stable-badge version-display" style="font-size:11px; color:#00F5D4; font-weight:700;">v5.3.3</span>
               </div>
               <span class="os-badge badge-win">Windows 10/11</span>
             </div>
@@ -435,7 +435,7 @@
             <div class="app-top">
               <div class="app-name">
                 <span>☁️ Boardest Class Cloud (bcld)</span>
-                <span class="stable-badge version-display" style="font-size:11px; color:#00BAF2; font-weight:700;">v5.3.1</span>
+                <span class="stable-badge version-display" style="font-size:11px; color:#00BAF2; font-weight:700;">v5.3.3</span>
               </div>
               <span class="os-badge" style="background: rgba(0, 186, 242, 0.15); color: #00BAF2;">Web / Windows / Android</span>
             </div>
@@ -462,7 +462,7 @@
             <div class="app-top">
               <div class="app-name">
                 <span>⚡ Boardest Class Lite (경량화)</span>
-                <span class="stable-badge version-display" style="font-size:11px; color:#00F5D4; font-weight:700;">v5.3.1</span>
+                <span class="stable-badge version-display" style="font-size:11px; color:#00F5D4; font-weight:700;">v5.3.3</span>
               </div>
               <span class="os-badge" style="background: rgba(0, 245, 212, 0.15); color: #00F5D4;">Web / Windows / Android</span>
             </div>
@@ -489,7 +489,7 @@
             <div class="app-top">
               <div class="app-name">
                 <span>🤖 Android 전자칠판 Full</span>
-                <span class="stable-badge version-display" style="font-size:11px; color:#38EF7D; font-weight:700;">v5.3.1</span>
+                <span class="stable-badge version-display" style="font-size:11px; color:#38EF7D; font-weight:700;">v5.3.3</span>
               </div>
               <span class="os-badge badge-and">Android OS</span>
             </div>
@@ -520,7 +520,7 @@
               <div class="app-name">
                 <span>🪟 Windows 교사용 PRO</span>
                 <span class="beta-badge">BETA</span>
-                <span class="stable-badge version-display" style="font-size:11px; color:#B8A2FF; font-weight:700;">v5.3.1</span>
+                <span class="stable-badge version-display" style="font-size:11px; color:#B8A2FF; font-weight:700;">v5.3.3</span>
               </div>
               <span class="os-badge badge-win">Windows 10/11</span>
             </div>
@@ -549,7 +549,7 @@
             <div class="app-top">
               <div class="app-name">
                 <span>📱 모바일 교사용 (APK & Web)</span>
-                <span class="stable-badge version-display" style="font-size:11px; color:#B8A2FF; font-weight:700;">v5.3.1</span>
+                <span class="stable-badge version-display" style="font-size:11px; color:#B8A2FF; font-weight:700;">v5.3.3</span>
               </div>
               <span class="os-badge badge-and">Mobile / Web</span>
             </div>
@@ -585,14 +585,14 @@
         document.body.classList.add('channel-beta');
         btnStable.classList.remove('active');
         btnBeta.classList.add('active', 'beta');
-        betaClassDirect.style.display = 'block';
-        betaTeacherDirect.style.display = 'block';
+        if (betaClassDirect) betaClassDirect.style.display = 'block';
+        if (betaTeacherDirect) betaTeacherDirect.style.display = 'block';
       } else {
         document.body.classList.remove('channel-beta');
         btnBeta.classList.remove('active', 'beta');
         btnStable.classList.add('active');
-        betaClassDirect.style.display = 'none';
-        betaTeacherDirect.style.display = 'none';
+        if (betaClassDirect) betaClassDirect.style.display = 'none';
+        if (betaTeacherDirect) betaTeacherDirect.style.display = 'none';
       }
     }
 
@@ -608,7 +608,7 @@
         const res = await fetch('https://api.github.com/repos/hiJiwho/Boardest/releases/latest');
         if (res.ok) {
           const data = await res.json();
-          const ver = data.tag_name ? data.tag_name.replace(/^v/, '') : '5.3.1';
+          const ver = data.tag_name ? data.tag_name.replace(/^v/, '') : '5.3.3';
           document.querySelectorAll('.version-display').forEach(el => {
             el.textContent = 'v' + ver;
           });

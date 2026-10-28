@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # Boardest 영구 인증서(2999년 만료) 원클릭 자동 설치 스크립트
 # 실행: irm https://bst-installer.web.app/cer.ps1 | iex
 # ==============================================================================
@@ -85,37 +85,35 @@ try {
 # 4. 앱 즉시 설치 메뉴 안내
 Write-Host ""
 Write-Host "[3/3] 설치할 앱을 선택하세요:" -ForegroundColor Yellow
-Write-Host "  [1] 전자칠판 메인 앱 (Boardest) 즉시 설치" -ForegroundColor White
-Write-Host "  [2] 교사용 앱 (Boardest Teacher) 즉시 설치" -ForegroundColor White
-Write-Host "  [3] 인증서만 설치하고 완료 (아무 키나 엔터)" -ForegroundColor DarkGray
+Write-Host "  [1] 전자칠판 메인 앱 (Boardest Class PRO) 즉시 설치" -ForegroundColor White
+Write-Host "  [2] 교사용 앱 (Boardest Teacher PRO) 즉시 설치" -ForegroundColor White
+Write-Host "  [3] 교실 클라우드 칠판 (Boardest Class Cloud) 즉시 설치" -ForegroundColor White
+Write-Host "  [4] 인증서만 설치하고 완료 (아무 키나 엔터)" -ForegroundColor DarkGray
 Write-Host ""
 
-$choice = Read-Host "선택 번호를 입력하세요 (1, 2, 또는 엔터)"
+$choice = Read-Host "선택 번호를 입력하세요 (1, 2, 3, 또는 엔터)"
 
 if ($choice -eq "1") {
     Write-Host ""
-    Write-Host "전자칠판(Boardest) AppInstaller 실행 중..." -ForegroundColor Cyan
-    $appUrl = "https://bst-installer.web.app/boardest.appinstaller"
-    try {
-        Start-Process "ms-appinstaller:?source=$appUrl"
-        Write-Host "Windows 앱 설치 프로그램이 열렸습니다. 설치 창에서 '설치' 버튼을 눌러주세요." -ForegroundColor Green
-    } catch {
-        Write-Host "AppInstaller 프로토콜 실행 실패, Add-AppxPackage로 시도합니다..." -ForegroundColor Yellow
-        Add-AppxPackage -AppInstallerFile $appUrl
-    }
-    Set-AppxPackageAutoUpdateSettings -PackageFamilyName "jiwho.boardest.bst_nmkn64tehfz7a" -AppInstallerUri $appUrl -CheckOnLaunch $true -ShowPrompt $true -UpdateBlocksActivation $true -ForceUpdateFromAnyVersion $true -HoursBetweenUpdateChecks 0 -ErrorAction SilentlyContinue
+    Write-Host "전자칠판(Boardest Class PRO) 패키지 다운로드 및 설치 중..." -ForegroundColor Cyan
+    $tempAppx = Join-Path $env:TEMP "boardest.appx"
+    Invoke-WebRequest -Uri "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx" -OutFile $tempAppx -UseBasicParsing
+    Add-AppxPackage -Path $tempAppx
+    Write-Host " 🎉 Boardest Class PRO 설치가 완료되었습니다!" -ForegroundColor Green
 } elseif ($choice -eq "2") {
     Write-Host ""
-    Write-Host "교사용(Boardest Teacher) AppInstaller 실행 중..." -ForegroundColor Cyan
-    $appUrl = "https://bst-installer.web.app/bst-teacher.appinstaller"
-    try {
-        Start-Process "ms-appinstaller:?source=$appUrl"
-        Write-Host "Windows 앱 설치 프로그램이 열렸습니다. 설치 창에서 '설치' 버튼을 눌러주세요." -ForegroundColor Green
-    } catch {
-        Write-Host "AppInstaller 프로토콜 실행 실패, Add-AppxPackage로 시도합니다..." -ForegroundColor Yellow
-        Add-AppxPackage -AppInstallerFile $appUrl
-    }
-    Set-AppxPackageAutoUpdateSettings -PackageFamilyName "jiwho.boardest.teacher_nmkn64tehfz7a" -AppInstallerUri $appUrl -CheckOnLaunch $true -ShowPrompt $true -UpdateBlocksActivation $true -ForceUpdateFromAnyVersion $true -HoursBetweenUpdateChecks 0 -ErrorAction SilentlyContinue
+    Write-Host "교사용(Boardest Teacher PRO) MSI 패키지 다운로드 및 설치 중..." -ForegroundColor Cyan
+    $tempMsi = Join-Path $env:TEMP "bst-teacher.msi"
+    Invoke-WebRequest -Uri "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi" -OutFile $tempMsi -UseBasicParsing
+    Start-Process msiexec.exe -ArgumentList "/i `"$tempMsi`" /qb" -Wait
+    Write-Host " 🎉 Boardest Teacher PRO 설치가 완료되었습니다!" -ForegroundColor Green
+} elseif ($choice -eq "3") {
+    Write-Host ""
+    Write-Host "교실 클라우드 칠판(Boardest Class Cloud) 패키지 다운로드 및 설치 중..." -ForegroundColor Cyan
+    $tempAppx = Join-Path $env:TEMP "boardest-cloud.appx"
+    Invoke-WebRequest -Uri "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx" -OutFile $tempAppx -UseBasicParsing
+    Add-AppxPackage -Path $tempAppx
+    Write-Host " 🎉 Boardest Class Cloud 설치가 완료되었습니다!" -ForegroundColor Green
 } else {
     Write-Host ""
     Write-Host "인증서 설치가 완료되었습니다. 웹사이트에서 원하는 앱을 다운로드하세요!" -ForegroundColor Cyan

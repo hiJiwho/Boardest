@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Boardest 선생님 교실 실전 & 독학 마스터 가이드 (v5.1.2)</title>
+  <title>Boardest 선생님 교실 실전 & 독학 마스터 가이드 (v5.3.3)</title>
   <link rel="icon" type="image/png" href="https://boardest-teacher.web.app/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -129,7 +129,7 @@
     <nav class="top-nav">
       <a href="/" class="nav-brand">
         <span class="nav-brand-title">BOARDEST</span>
-        <span class="nav-brand-sub">GUIDE v5.1.2</span>
+        <span class="nav-brand-sub">GUIDE <span class="version-display">v5.3.3</span></span>
       </a>
       <a href="/" class="nav-back">← 메인 허브로 돌아가기</a>
     </nav>
@@ -137,7 +137,7 @@
     <header class="hero">
       <div class="badge">선생님 전용 교실 실전 & 독학 매뉴얼</div>
       <h1>수업 준비는 <span>3초</span>만에,<br>판서는 <span>과목별로 자동 기억</span>됩니다</h1>
-      <p>선생님, 바쁜 교실에서 로그인과 케이블 연결, 지난 시간 판서 찾기로 고생하지 마세요.<br>Boardest v5.1.2의 스마트 기능들을 200% 활용하는 실전 비법을 아주 친절하게 안내해 드립니다.</p>
+      <p>선생님, 바쁜 교실에서 로그인과 케이블 연결, 지난 시간 판서 찾기로 고생하지 마세요.<br>Boardest <span class="version-display">v5.3.3</span>의 스마트 기능들을 200% 활용하는 실전 비법을 아주 친절하게 안내해 드립니다.</p>
     </header>
 
     <div class="quick-intro-banner">
@@ -197,13 +197,13 @@
         <div class="step-num">03</div>
         <span class="card-tag">TBP & 슬라이드 업그레이드</span>
       </div>
-      <h2 class="card-title">🎯 캔바(Canva) & 웹 교안 완벽 수업 (.web.bst)</h2>
+      <h2 class="card-title">🎯 캔바(Canva) & TBP 스마트교과서 통합 수업 (.tbp.bst)</h2>
       <div class="card-body">
         캔바, 미리캔버스, 구글 슬라이드, 에듀넷 디지털교과서를 판서와 함께 한 화면에서 자유자재로 수업하세요.
         <ul>
           <li><strong>무선 프리젠터(클리커) 버그 완전 해결:</strong> 캔바에서 무선 클리커의 <code>PgUp/PgDn</code>을 누르면 첫/마지막 장으로 순간이동하던 문제를 해결하여, 이제 일반 PPT처럼 <strong>한 장씩 부드럽게</strong> 넘어갑니다!</li>
           <li><strong>슬라이드별 판서 자동 기억 (256-bit dHash):</strong> 슬라이드를 다음 장으로 넘기면 이전 장 판서는 사라지고, 해당 페이지에 썼던 판서만 쏙 나타납니다!</li>
-          <li><strong>✨ v5.1.1 신규 펜 툴바 기능:</strong>
+          <li><strong>✨ 최신 펜 툴바 기능:</strong>
             <ul style="margin-top:4px;">
               <li><strong>형광펜 (반투명 하이라이터):</strong> 교과서 본문이나 슬라이드 중요 문장을 은은하게 강조할 수 있습니다.</li>
               <li><strong>실행 취소 (Undo / Ctrl+Z):</strong> 잘못 그은 획을 버튼 하나로 즉시 되돌릴 수 있습니다.</li>
@@ -212,7 +212,7 @@
           </li>
         </ul>
         <div class="highlight-box">
-          ✨ <strong>새 통합 규격 안내:</strong> v5.1부터 HTMLp와 TBP가 통일되어 모든 웹 교안은 <code>.web.bst</code> 규격으로 손쉽게 관리됩니다.
+          ✨ <strong>TBP & HTMLp 통합 규격 안내:</strong> TBP와 HTML Present가 하나로 통합되어 모든 교안은 <code>.tbp.bst</code> 포인터 규격과 <code>bst-tbp</code> 클라우드로 손쉽게 관리됩니다.
         </div>
       </div>
     </div>
@@ -245,7 +245,7 @@
       <div class="card-body">
         교실 전자칠판이나 학교 PC에 설치할 때 관리자 권한이나 인증서 오류로 고생하지 마세요. 파워쉘 1줄이면 2999년까지 만료되지 않는 영구 인증서가 자동 설치됩니다.
         <div class="code-box">
-          <span>powershell -ExecutionPolicy Bypass -Command "irm https://boardest.web.app/install/cert.ps1 | iex"</span>
+          <span>powershell -ExecutionPolicy Bypass -Command "irm https://bst-installer.web.app/win-cer.ps1 | iex"</span>
         </div>
         <ul>
           <li><strong>USB 설치:</strong> USB에 복사된 <code>boardest.appx</code> (Windows 전자칠판용) 및 <code>boardest.apk</code> (안드로이드 전자칠판용)를 더블클릭하면 끝!</li>
@@ -301,5 +301,19 @@
       <p>© 2026 Boardest by jiwho. 대한민국 선생님들의 즐겁고 편리한 스마트 수업을 진심으로 응원합니다. ❤️</p>
     </footer>
   </div>
+  <script>
+    (async function() {
+      try {
+        const res = await fetch('https://api.github.com/repos/hiJiwho/Boardest/releases/latest');
+        if (res.ok) {
+          const data = await res.json();
+          const ver = data.tag_name ? data.tag_name.replace(/^v/, '') : '5.3.3';
+          document.querySelectorAll('.version-display').forEach(el => {
+            el.textContent = 'v' + ver;
+          });
+        }
+      } catch (e) {}
+    })();
+  </script>
 </body>
 </html>

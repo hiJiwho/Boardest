@@ -29,36 +29,15 @@ class BstCloudService {
     });
   }
 
-  /// Firestore 및 기본 설정을 참조하여 접속 가능한 전자칠판(교실) 목록을 반환합니다.
+  /// 기본 학급 및 특별실 목록을 반환합니다 (Firestore 읽기 할당량 0회 소모).
   Future<List<String>> getOnlineClassrooms() async {
     final classrooms = <String>[];
-    try {
-      final url = '${AppConfig.firestoreBase}/classrooms?key=${AppConfig.firebaseApiKey}';
-      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body) as Map<String, dynamic>;
-        final docs = data['documents'] as List<dynamic>? ?? [];
-        for (final doc in docs) {
-          final fields = doc['fields'] as Map<String, dynamic>?;
-          final name = (fields?['name'] as Map?)?['stringValue'] as String? ??
-              (doc['name'] as String? ?? '').split('/').last;
-          if (name.isNotEmpty) {
-            classrooms.add(name);
-          }
-        }
+    for (var g = 1; g <= 3; g++) {
+      for (var c = 1; c <= 8; c++) {
+        classrooms.add('$g학년 $c반');
       }
-    } catch (e) {
-      debugPrint('[BstCloudService] getOnlineClassrooms error: $e');
     }
-
-    if (classrooms.isEmpty) {
-      for (var g = 1; g <= 3; g++) {
-        for (var c = 1; c <= 8; c++) {
-          classrooms.add('$g학년 $c반');
-        }
-      }
-      classrooms.addAll(['과학실', '음악실', '미술실', '컴퓨터실', '체육관', '도서관']);
-    }
+    classrooms.addAll(['과학실', '음악실', '미술실', '컴퓨터실', '체육관', '도서관']);
     return classrooms;
   }
 

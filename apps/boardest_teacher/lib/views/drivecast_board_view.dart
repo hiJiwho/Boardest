@@ -30,10 +30,6 @@ class _DriveCastBoardViewState extends State<DriveCastBoardView> {
     super.initState();
     _updateExpireAt();
     _fetchClassrooms();
-    _refreshTimer = Timer.periodic(
-      const Duration(seconds: 4),
-      (_) => _fetchClassrooms(),
-    );
   }
 
   Future<void> _fetchClassrooms() async {

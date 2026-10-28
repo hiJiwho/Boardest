@@ -73,9 +73,6 @@ class _MessageViewState extends State<MessageView> {
       });
     }
     await _fetchOnlineClassrooms();
-    _onlineClassroomTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (mounted) _fetchOnlineClassrooms();
-    });
   }
 
   String _getSchoolConnName() {

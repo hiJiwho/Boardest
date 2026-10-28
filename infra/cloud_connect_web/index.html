@@ -156,6 +156,9 @@
     const FIRESTORE_BASE = "https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents";
     const PROOF_SALT = "bst_passkey_v2_hmac_guard";
     const params = new URLSearchParams(window.location.search);
+    if (params.has('create-Demo') || params.has('Demo') || params.has('demo')) {
+      window.location.replace('https://boardest-teacher-oauth.web.app?create-Demo=1');
+    }
     const key = params.get('key');
     const qrChallenge = params.get('c') || '';
     const bstPairParam = params.get('bst_pair') || params.get('pair');
@@ -262,14 +265,14 @@
         document.getElementById('actionBtn').className = 'btn btn-primary';
         document.getElementById('actionBtn').innerHTML = '<span>🚀 전자칠판에 내 클라우드 연결</span>';
 
-        // Load reverse pair session details from Firestore
-        fetch(`${FIRESTORE_BASE}/cloud_pair_sessions/${reversePairSecret}`)
+        // Load reverse pair session details from RTDB (0 Firestore reads)
+        fetch(`${RTDB_URL}/cloud_pair_sessions/${reversePairSecret}.json`)
           .then(res => res.json())
           .then(data => {
-            const f = data.fields || {};
-            const sc = f.schoolCode?.stringValue || '';
-            const gr = f.grade?.integerValue || '';
-            const cl = f.classNum?.integerValue || '';
+            if (!data) return;
+            const sc = data.schoolCode || '';
+            const gr = data.grade || '';
+            const cl = data.classNum || '';
             let loc = '전자칠판';
             if (gr && cl) loc = `${gr}학년 ${cl}반 전자칠판`;
             if (sc) loc = `${sc} ${loc}`;
@@ -280,9 +283,15 @@
         const teacherDisplay = (savedTeacherName || teacherName !== '선생님') ? ` (${savedTeacherName || teacherName} 선생님)` : '';
         document.getElementById('targetInfo').innerText = school + ' · ' + device + teacherDisplay;
       } else {
-        document.getElementById('descText').innerText = '전자칠판 화면의 QR 코드를 스마트폰 카메라로 비춰 접속해주세요.';
+        document.getElementById('descText').innerText = '전자칠판 화면의 QR 코드를 스마트폰 카메라로 비춰 접속하거나 아래 메뉴로 이동해주세요.';
         document.getElementById('actionBtn').style.display = 'none';
         document.getElementById('infoBox').style.display = 'none';
+        document.getElementById('statusMsg').innerHTML = `
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
+            <a href="https://boardest-teacher-oauth.web.app" class="btn btn-purple" style="text-decoration:none;">👩‍🏫 교사 통합 계정 로그인 · 패스키 설정</a>
+            <a href="https://bcld.web.app" class="btn btn-primary" style="text-decoration:none;">☁️ Boardest Class Cloud (bcld) 열기</a>
+          </div>
+        `;
       }
     };
 
@@ -577,6 +586,24 @@
           }
 
           status.innerText = "전자칠판에 클라우드 연결 전송 중...";
+          // 1. RTDB 우선 전송 (v5.3.3+ 전자칠판 즉시 수신, Firestore 읽기/쓰기 0회)
+          const rtdbPairUrl = `${RTDB_URL}/cloud_pair_sessions/${reversePairSecret}.json`;
+          const rtdbPairRes = await fetch(rtdbPairUrl, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              status: 'authenticated',
+              teacherName: teacherNameToSend || '선생님',
+              email: emailToSend,
+              accessToken: tokenToSend,
+              refreshToken: refreshTokenToSend,
+              folderId: folderIdToSend,
+              bstCloudFolderId: folderIdToSend,
+              totpSecret: totpSecretToSend
+            })
+          }).catch(() => null);
+
+          // 2. 구버전 호환용 Firestore 1회 PATCH
           const patchUrl = `${FIRESTORE_BASE}/cloud_pair_sessions/${reversePairSecret}?updateMask.fieldPaths=status&updateMask.fieldPaths=teacherName&updateMask.fieldPaths=email&updateMask.fieldPaths=accessToken&updateMask.fieldPaths=refreshToken&updateMask.fieldPaths=folderId&updateMask.fieldPaths=bstCloudFolderId&updateMask.fieldPaths=totpSecret`;
           const patchPayload = {
             fields: {
@@ -595,9 +622,9 @@
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(patchPayload)
-          });
+          }).catch(() => null);
 
-          if (patchRes.ok) {
+          if ((rtdbPairRes && rtdbPairRes.ok) || (patchRes && patchRes.ok)) {
             status.innerHTML = "🎉 <strong>전자칠판에 클라우드가 연결되었습니다!</strong><br>칠판 화면이 내 수업 자료로 즉시 전환됩니다.";
             btn.style.display = 'none';
             setTimeout(() => {

@@ -1673,34 +1673,36 @@ class CloudDriveService with ChangeNotifier {
           q += " and 'appDataFolder' in parents";
         }
 
-        final spaceQuery = isAdf ? 'spaces=appDataFolder&' : '';
-        final url = Uri.parse(
-          'https://www.googleapis.com/drive/v3/files?'
-          '$spaceQuery'
-          'q=${Uri.encodeComponent(q)}&'
-          'fields=files(id,name)&'
-          'pageSize=10',
-        );
+        final spaceQueries = isAdf ? ['spaces=appDataFolder&'] : ['', 'spaces=appDataFolder&'];
+        for (final spaceQuery in spaceQueries) {
+          final url = Uri.parse(
+            'https://www.googleapis.com/drive/v3/files?'
+            '$spaceQuery'
+            'q=${Uri.encodeComponent(q)}&'
+            'fields=files(id,name)&'
+            'pageSize=10',
+          );
 
-        final response = await http.get(
-          url,
-          headers: {'Authorization': 'Bearer $_accessToken'},
-        );
+          final response = await http.get(
+            url,
+            headers: {'Authorization': 'Bearer $_accessToken'},
+          );
 
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body) as Map<String, dynamic>;
-          final files = data['files'] as List? ?? [];
-          if (files.isNotEmpty) {
-            return files.first['id'].toString();
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body) as Map<String, dynamic>;
+            final files = data['files'] as List? ?? [];
+            if (files.isNotEmpty) {
+              return files.first['id'].toString();
+            }
+          } else if (response.statusCode == 401 && attempt == 0) {
+            debugPrint('[CloudDriveService] Drive API token notice: 401, attempting auto refresh...');
+            final refreshed = await refreshAccessToken();
+            if (refreshed) break;
+            _hasAuthError = true;
+            return null;
           }
-          return null;
-        } else if (response.statusCode == 401 && attempt == 0) {
-          debugPrint('[CloudDriveService] Drive API token notice: 401, attempting auto refresh...');
-          final refreshed = await refreshAccessToken();
-          if (refreshed) continue;
-          _hasAuthError = true;
-          return null;
         }
+        return null;
       } catch (e) {
         debugPrint('[CloudDriveService] findFolderByName error: $e');
       }
