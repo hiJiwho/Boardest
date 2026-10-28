@@ -61,6 +61,7 @@ class BstTeacherMainLayout extends StatelessWidget {
   static const _nav = <(IconData, String, String)>[
     (Icons.dashboard_rounded, '대시보드', 'dashboard'),
     (Icons.calendar_month_rounded, '시간표', 'timetable'),
+    (Icons.assignment_turned_in_rounded, '수행평가', 'assessment'),
     (Icons.add_circle_outline_rounded, '새로 만들기', 'create'),
     (Icons.folder_open_rounded, '파일 관리', 'files'),
     (Icons.mark_email_unread_rounded, '쪽지', 'memo'),
@@ -248,6 +249,52 @@ class BstTeacherMainLayout extends StatelessWidget {
               ),
             ),
           const Spacer(),
+          // 업데이트 알람 & 바로가기 버튼
+          ValueListenableBuilder<bool>(
+            valueListenable: UpdateService.hasUpdateNotifier,
+            builder: (context, hasUpdate, _) {
+              return InkWell(
+                onTap: () => UpdateService.instance.checkForUpdate(force: true),
+                borderRadius: BorderRadius.circular(10),
+                child: _tile(
+                  selected: hasUpdate,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.rocket_launch_rounded,
+                        size: 16,
+                        color: hasUpdate ? const Color(0xFF00F5D4) : Colors.white70,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '업데이트',
+                        style: _ts(
+                          13,
+                          w: FontWeight.w700,
+                          c: hasUpdate ? const Color(0xFF00F5D4) : Colors.white70,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (hasUpdate)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00F5D4),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'NEW',
+                            style: _ts(9.5, w: FontWeight.w900, c: Colors.black),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 6),
           // 설정 바로가기 버튼
           InkWell(
             onTap: () => onTabSelected?.call('settings'),

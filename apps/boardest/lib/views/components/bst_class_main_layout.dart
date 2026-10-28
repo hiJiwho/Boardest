@@ -1,4 +1,6 @@
 import 'assessment_dialog.dart';
+import '../../models/assessment_item.dart';
+import '../../services/assessment_service.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' show PointerDeviceKind;
@@ -327,12 +329,25 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
   }
 
   Timer? _tickerTimer;
+  int _selectedMealDayOffset = 0;
 
   @override
   void initState() {
     super.initState();
     _initCurrentPeriod();
     _loadSystemApps();
+    int g = 1;
+    int c = 1;
+    final m = RegExp(r'(\d+)\s*[-학년]\s*(\d+)?').firstMatch(widget.gradeClass);
+    if (m != null) {
+      g = int.tryParse(m.group(1) ?? '1') ?? 1;
+      c = int.tryParse(m.group(2) ?? '1') ?? 1;
+    }
+    AssessmentService.instance.loadAssessments(
+      schoolCode: widget.schoolName,
+      grade: g,
+      classNum: c,
+    );
     _tickerTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -2318,24 +2333,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: _mealColumn('오늘 점심', widget.todayCalories, widget.todayDishes, true),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    flex: 2,
-                    child: _mealColumn(
-                      widget.tomorrowDateLabel.isNotEmpty ? widget.tomorrowDateLabel : '내일 점심',
-                      widget.tomorrowCalories,
-                      widget.tomorrowDishes,
-                      false,
-                    ),
-                  ),
-                ],
-              ),
+              child: _mealAndAssessmentSplit(),
             ),
           ],
         ),
@@ -3107,24 +3105,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                         );
                       },
                     ))
-                : Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: _mealColumn('오늘 점심', widget.todayCalories, widget.todayDishes, true),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: _mealColumn(
-                          widget.tomorrowDateLabel.isNotEmpty ? widget.tomorrowDateLabel : '내일 점심',
-                          widget.tomorrowCalories,
-                          widget.tomorrowDishes,
-                          false,
-                        ),
-                      ),
-                    ],
-                  ),
+                : _mealAndAssessmentSplit(),
           ),
         ],
       ),
@@ -3789,7 +3770,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     );
   }
 
-  /// [쉬는 시간 미연결] 바닥 끝까지 시원하게 다 쓰는 급식 식단표 (알레르기 칩 제외 + 월 급식표 버튼 + 메뉴 꾹 누르면 팝업)
+  /// [쉬는 시간 미연결] 바닥 끝까지 시원하게 다 쓰는 급식 & 수행평가 공지 (5:5 분할)
   Widget _mealTableFull() {
     return _glassSurface(
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
@@ -3799,9 +3780,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
             children: [
               const Icon(Icons.restaurant_rounded, color: Color(0xFF00F5D4), size: 20),
               const SizedBox(width: 8),
-              Text('급식 식단표', style: _ts(19, w: FontWeight.w800)),
-              const SizedBox(width: 8),
-              Text('(메뉴 꾹 누르면 반별 득표 현황)', style: _ts(12, c: Colors.white54)),
+              Text('급식 & 수행평가 공지', style: _ts(19, w: FontWeight.w800)),
               const Spacer(),
               // 월 급식표 버튼
               InkWell(
@@ -3848,32 +3827,404 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 1,
-                  child: _mealColumn('오늘 점심', widget.todayCalories, widget.todayDishes, true),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  flex: 1,
-                  child: _mealColumn(
-                    widget.tomorrowDateLabel.isNotEmpty ? widget.tomorrowDateLabel : '다음 급식',
-                    widget.tomorrowCalories,
-                    widget.tomorrowDishes,
-                    false,
+            child: _mealAndAssessmentSplit(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// [5:5 분할 UI]: 좌측 1일 급식 카드 + 우측 수행평가 공지 카드
+  Widget _mealAndAssessmentSplit() {
+    return Row(
+      children: [
+        // 좌측 50%: 1일 급식
+        Expanded(
+          flex: 1,
+          child: _singleMealColumn(),
+        ),
+        const SizedBox(width: 14),
+        // 우측 50%: 수행평가 공지
+        Expanded(
+          flex: 1,
+          child: _assessmentNoticeColumn(),
+        ),
+      ],
+    );
+  }
+
+  /// [1일 급식 카드]: 오늘/내일 토글, 좌우 이동, 메뉴명 옆 알레르기 태그 가로 나열
+  Widget _singleMealColumn() {
+    final isToday = _selectedMealDayOffset == 0;
+    final title = isToday ? '오늘 점심' : (widget.tomorrowDateLabel.isNotEmpty ? widget.tomorrowDateLabel : '내일 점심');
+    final kcal = isToday ? widget.todayCalories : widget.tomorrowCalories;
+    final dishes = isToday ? widget.todayDishes : widget.tomorrowDishes;
+
+    return _glassTile(
+      selected: isToday,
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                icon: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 22),
+                onPressed: () {
+                  if (_selectedMealDayOffset > 0) {
+                    setState(() => _selectedMealDayOffset = 0);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('이번 달 급식만 조회 가능합니다.'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                },
+              ),
+              const SizedBox(width: 4),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _selectedMealDayOffset = (_selectedMealDayOffset == 0) ? 1 : 0;
+                  });
+                },
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: _ts(17, w: FontWeight.w800, c: isToday ? const Color(0xFF00F5D4) : Colors.white),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.swap_horiz_rounded, size: 16, color: isToday ? const Color(0xFF00F5D4) : Colors.white54),
+                    ],
                   ),
                 ),
-              ],
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                icon: const Icon(Icons.chevron_right_rounded, color: Colors.white70, size: 22),
+                onPressed: () {
+                  if (_selectedMealDayOffset == 0) {
+                    setState(() => _selectedMealDayOffset = 1);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('이번 달 급식만 조회 가능합니다.'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                },
+              ),
+              const Spacer(),
+              if (kcal.isNotEmpty)
+                Text(kcal, style: _ts(13, c: Colors.white54, w: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Container(height: 1.0, color: Colors.white.withOpacity(0.12)),
+          const SizedBox(height: 4),
+          Expanded(
+            child: dishes.isEmpty
+                ? Center(
+                    child: Text('급식 정보가 없습니다.', style: _ts(14, c: Colors.white38)),
+                  )
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      for (final d in dishes) ...[
+                        Builder(
+                          builder: (context) {
+                            final isHighlighted = _highlightedMealNames.contains(d.name);
+                            return InkWell(
+                              onTap: () {
+                                _showDishFullDetailDialog(context, d, isToday: isToday);
+                              },
+                              onLongPress: () {
+                                _showDishFullDetailDialog(context, d, isToday: isToday);
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                                decoration: BoxDecoration(
+                                  color: isHighlighted
+                                      ? const Color(0xFFFFEE55).withOpacity(0.35)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: isHighlighted
+                                      ? Border.all(color: const Color(0xFFFFD166), width: 1.5)
+                                      : null,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.circle,
+                                      size: 6,
+                                      color: isHighlighted
+                                          ? const Color(0xFFFFD166)
+                                          : const Color(0xFF00F5D4),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      d.name,
+                                      style: _ts(
+                                        16,
+                                        w: FontWeight.w800,
+                                        c: isHighlighted
+                                            ? const Color(0xFFFFEE55)
+                                            : Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    // 사용자 피드백: 공간 넉넉하므로 알레르기 태그를 시원하게 표시!
+                                    if (d.allergies.isNotEmpty)
+                                      Expanded(
+                                        child: SingleChildScrollView(
+                                          scrollDirection: Axis.horizontal,
+                                          child: Row(
+                                            children: d.allergies.map((a) {
+                                              final code = int.tryParse(a);
+                                              final label = (code != null && MealDayInfo.allergyCodeMap.containsKey(code))
+                                                  ? MealDayInfo.allergyCodeMap[code]!
+                                                  : a;
+                                              return Container(
+                                                margin: const EdgeInsets.only(right: 4),
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.amber.withOpacity(0.18),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                  border: Border.all(color: Colors.amber.withOpacity(0.4), width: 0.8),
+                                                ),
+                                                child: Text(
+                                                  label,
+                                                  style: _ts(10.5, c: const Color(0xFFFFD166), w: FontWeight.w700),
+                                                ),
+                                              );
+                                            }).toList(),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// [수행평가 공지 카드]: 마감 임박 순 리스트, 일시/교시 먼저 + D-Day 뒤로, 등록 버튼
+  Widget _assessmentNoticeColumn() {
+    int grade = 1;
+    int classNum = 1;
+    final match = RegExp(r'(\d+)\s*[-학년]\s*(\d+)?').firstMatch(widget.gradeClass);
+    if (match != null) {
+      grade = int.tryParse(match.group(1) ?? '1') ?? 1;
+      classNum = int.tryParse(match.group(2) ?? '1') ?? 1;
+    }
+
+    return _glassTile(
+      selected: false,
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.assignment_outlined, size: 18, color: Color(0xFF00F5D4)),
+              const SizedBox(width: 6),
+              Text(
+                '수행평가 공지',
+                style: _ts(17, w: FontWeight.w800, c: Colors.white),
+              ),
+              const Spacer(),
+              // 월간 달력 버튼
+              InkWell(
+                onTap: () {
+                  AssessmentDialog.show(
+                    context,
+                    schoolCode: widget.schoolName,
+                    grade: grade,
+                    classNum: classNum,
+                  );
+                },
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_month_rounded, size: 13, color: Color(0xFF00F5D4)),
+                      const SizedBox(width: 4),
+                      Text('전체/달력', style: _ts(11.5, w: FontWeight.w700, c: const Color(0xFF00F5D4))),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Container(height: 1.0, color: Colors.white.withOpacity(0.12)),
+          const SizedBox(height: 4),
+          Expanded(
+            child: ValueListenableBuilder<List<AssessmentItem>>(
+              valueListenable: AssessmentService.instance.assessmentsNotifier,
+              builder: (context, items, _) {
+                final filtered = items.where((it) {
+                  if (it.grade != grade && it.grade != 0) return false;
+                  if (it.classNum != 0 && it.classNum != classNum) return false;
+                  return true;
+                }).toList();
+
+                if (filtered.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.event_available_rounded, size: 36, color: Colors.white24),
+                        const SizedBox(height: 6),
+                        Text('등록된 수행평가 일정이 없습니다.', style: _ts(13.5, c: Colors.white38)),
+                      ],
+                    ),
+                  );
+                }
+
+                final displayList = filtered.take(4).toList();
+                return ListView.separated(
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  itemCount: displayList.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 6),
+                  itemBuilder: (context, idx) {
+                    final it = displayList[idx];
+                    return InkWell(
+                      onTap: () {
+                        AssessmentDialog.show(
+                          context,
+                          schoolCode: widget.schoolName,
+                          grade: grade,
+                          classNum: classNum,
+                          initialItem: it,
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        ),
+                        child: Row(
+                          children: [
+                            // 1. [과목]
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00F5D4).withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                it.subject,
+                                style: _ts(12, w: FontWeight.w800, c: const Color(0xFF00F5D4)),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // 2. [제목]
+                            Expanded(
+                              child: Text(
+                                it.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _ts(14.5, w: FontWeight.w700, c: Colors.white),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // 3. [실시 날짜/교시] (피드백 반영: 일시 먼저!)
+                            Text(
+                              it.scheduleDisplay,
+                              style: _ts(12, c: Colors.white70, w: FontWeight.w600),
+                            ),
+                            const SizedBox(width: 8),
+                            // 4. [D-Day 뱃지] (피드백 반영: D-Day 뒤로!)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: it.dday.contains('+')
+                                    ? Colors.grey.withOpacity(0.2)
+                                    : (it.dday == 'D-Day' || it.dday == 'D-1'
+                                        ? Colors.redAccent.withOpacity(0.3)
+                                        : Colors.amber.withOpacity(0.2)),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: it.dday == 'D-Day' || it.dday == 'D-1'
+                                      ? Colors.redAccent
+                                      : Colors.amber.withOpacity(0.6),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Text(
+                                it.dday,
+                                style: _ts(
+                                  11,
+                                  w: FontWeight.w900,
+                                  c: it.dday == 'D-Day' || it.dday == 'D-1'
+                                      ? Colors.redAccent
+                                      : Colors.amberAccent,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
             ),
           ),
-          // 사용자 요청 안내 문구 작게 표기
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              '※ 투표는 당일 점심시간 5분 전까지 가능하며, 점심시간부터 득표수가 공개됩니다. (메뉴를 꾹 누르면 반별 득표 현황 확인)',
-              style: _ts(11, c: Colors.white54, w: FontWeight.w500),
-              textAlign: TextAlign.center,
+          const SizedBox(height: 6),
+          // 수행평가 등록 버튼
+          SizedBox(
+            width: double.infinity,
+            height: 32,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                AssessmentDialog.show(
+                  context,
+                  schoolCode: widget.schoolName,
+                  grade: grade,
+                  classNum: classNum,
+                  initialShowAdd: true,
+                );
+              },
+              icon: const Icon(Icons.add_rounded, size: 16, color: Colors.black),
+              label: Text('수행평가 등록', style: _ts(13, w: FontWeight.w800, c: Colors.black)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00F5D4),
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: EdgeInsets.zero,
+              ),
             ),
           ),
         ],
@@ -3910,122 +4261,6 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     if (special.contains('점심')) return true;
     final mins = now.hour * 60 + now.minute;
     return mins >= (12 * 60 + 15);
-  }
-
-  /// [급식 메뉴 열]: 오늘과 내일 1:1 분할, 메뉴명 바로 아래 알레르기 정보 표시, 꾹 누르면 반별 득표 현황!
-  Widget _mealColumn(String title, String kcal, List<MealDishItem> dishes, bool today) {
-    return _glassTile(
-      selected: today,
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Text(
-                title,
-                style: _ts(17, w: FontWeight.w800, c: today ? const Color(0xFF00F5D4) : Colors.white),
-              ),
-              const Spacer(),
-              if (kcal.isNotEmpty)
-                Text(kcal, style: _ts(13, c: Colors.white54, w: FontWeight.w600)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Container(height: 1.0, color: Colors.white.withOpacity(0.12)),
-          const SizedBox(height: 4),
-          Expanded(
-            child: dishes.isEmpty
-                ? Center(
-                    child: Text('급식 정보가 없습니다.', style: _ts(14, c: Colors.white38)),
-                  )
-                : Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      for (final d in dishes) ...[
-                        Builder(
-                          builder: (context) {
-                            final isHighlighted = _highlightedMealNames.contains(d.name);
-                            final allergyStr = _formatDishAllergies(d);
-                            final isResultTime = _isMealVoteResultTimeNow();
-
-                            return InkWell(
-                              onTap: () {
-                                _showDishFullDetailDialog(context, d, isToday: today);
-                              },
-                              onLongPress: () {
-                                _showDishFullDetailDialog(context, d, isToday: today);
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                                decoration: BoxDecoration(
-                                  color: isHighlighted
-                                      ? const Color(0xFFFFEE55).withOpacity(0.35)
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: isHighlighted
-                                      ? Border.all(color: const Color(0xFFFFD166), width: 1.5)
-                                      : null,
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.circle,
-                                      size: 6,
-                                      color: isHighlighted
-                                          ? const Color(0xFFFFD166)
-                                          : const Color(0xFF00F5D4),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            d.name,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: _ts(
-                                              16,
-                                              w: FontWeight.w800,
-                                              c: isHighlighted
-                                                  ? const Color(0xFFFFEE55)
-                                                  : Colors.white,
-                                            ),
-                                          ),
-                                          if (allergyStr.isNotEmpty)
-                                            Padding(
-                                              padding: const EdgeInsets.only(top: 1),
-                                              child: Text(
-                                                '알레르기: $allergyStr',
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: _ts(
-                                                  11,
-                                                  c: isHighlighted
-                                                      ? const Color(0xFFFFEE55).withOpacity(0.9)
-                                                      : Colors.white54,
-                                                  w: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ],
-                  ),
-          ),
-        ],
-      ),
-    );
   }
 
   /// 우측 끝에 세로로 독(Dock) 형태로 세운 도구함

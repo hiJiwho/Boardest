@@ -57,6 +57,7 @@ class UpdateService {
 
   static final ValueNotifier<bool> isBlockedNotifier = ValueNotifier(false);
   static final ValueNotifier<bool> isCloudBlockedNotifier = ValueNotifier(false);
+  static final ValueNotifier<bool> hasUpdateNotifier = ValueNotifier(false);
 
   static String get currentVersion {
     if (_resolvedVersion != null) return _resolvedVersion!;
@@ -266,12 +267,15 @@ class UpdateService {
       msiUrl ??= 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi';
       apkUrl ??= 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.apk';
 
+      final hasUpdate = _isNewer(distinctNormalized.first, currentNorm);
+      hasUpdateNotifier.value = hasUpdate;
+
       return UpdateInfo(
         latestVersion: latestFullTag,
         currentVersion: currentVersion,
         downloadUrl: isWindows ? msiUrl : apkUrl,
         releaseNotes: (latestReleaseData['body'] as String? ?? '').trim(),
-        hasUpdate: _isNewer(distinctNormalized.first, currentNorm),
+        hasUpdate: hasUpdate,
         isWindows: isWindows,
         isAndroid: isAndroid,
         isBlocked: isBlocked,

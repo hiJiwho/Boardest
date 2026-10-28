@@ -429,7 +429,7 @@ class UpdateService {
           "\$pkg = Get-AppxPackage -Name '*$pkgFilter*' | Sort-Object Version -Descending | Select-Object -First 1; "
           "if (\$pkg) { Start-Process 'explorer.exe' ('shell:AppsFolder\\' + \$pkg.PackageFamilyName + '!App') } "
           "} catch { "
-          "Start-Process 'explorer.exe' '$escapedPath' "
+          "Start-Process -FilePath '$escapedPath' "
           "}";
 
       try {
@@ -453,7 +453,7 @@ class UpdateService {
         );
       } catch (_) {
         try {
-          await Process.start('explorer.exe', [savePath]);
+          await Process.start('powershell.exe', ['-Command', "Start-Process -FilePath '$escapedPath'"]);
         } catch (_) {
           await OpenFilex.open(savePath);
         }

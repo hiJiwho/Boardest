@@ -49,6 +49,7 @@ import 'tbp/tbp_creator_dialog.dart';
 import 'tbp/tbp_viewer_route.dart';
 import 'meal_view.dart';
 import 'message_view.dart';
+import 'teacher_assessment_view.dart';
 import '../services/tray_service.dart';
 import '../services/update_service.dart';
 import 'saved_ink_view.dart';
@@ -2054,6 +2055,13 @@ class _TeacherViewState extends State<TeacherView> {
       if (mounted) setState(() => _currentTeacherTab = 'dashboard');
     };
     switch (_currentTeacherTab) {
+      case 'assessment':
+        return TeacherAssessmentView(
+          schoolCode: _settings.schoolId.isNotEmpty ? _settings.schoolId : (_settings.selectedSchool?.name ?? 'default'),
+          teacherName: _settings.selectedTeacher,
+          timetableResult: _timetableResult,
+          onBack: onBack,
+        );
       case 'lesson':
         return BoardestPenView(
           key: const ValueKey('lesson_pen_workspace'),

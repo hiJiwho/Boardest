@@ -14,13 +14,13 @@ Future<void> main() async {
   if (Platform.isWindows) {
     await windowManager.ensureInitialized();
     const windowOptions = WindowOptions(
+      title: 'Boardest Class Cloud',
       backgroundColor: Color(0xFF070B14),
       skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.hidden,
-      windowButtonVisibility: false,
+      titleBarStyle: TitleBarStyle.normal,
+      windowButtonVisibility: true,
     );
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
-      await windowManager.setAsFrameless();
       await windowManager.show();
       await windowManager.focus();
     });

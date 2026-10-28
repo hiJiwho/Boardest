@@ -99,6 +99,29 @@ class AssessmentService {
     return false;
   }
 
+  /// 여러 학급에 한 번에 공지 등록 (교사용 스마트 다중 공지)
+  Future<bool> addMultiClassAssessment({
+    required String schoolCode,
+    required AssessmentItem baseItem,
+    required List<int> targetClasses,
+  }) async {
+    if (targetClasses.isEmpty) {
+      // 0: 전 학급 공통
+      return addAssessment(schoolCode: schoolCode, item: baseItem.copyWith(classNum: 0));
+    }
+    bool allSuccess = true;
+    for (int i = 0; i < targetClasses.length; i++) {
+      final cNum = targetClasses[i];
+      final item = baseItem.copyWith(
+        id: 'as_${DateTime.now().millisecondsSinceEpoch}_$i',
+        classNum: cNum,
+      );
+      final ok = await addAssessment(schoolCode: schoolCode, item: item);
+      if (!ok) allSuccess = false;
+    }
+    return allSuccess;
+  }
+
   Future<bool> deleteAssessment({
     required String schoolCode,
     required int grade,
