@@ -97,8 +97,8 @@ Future<List<Map<String, dynamic>>> _fetchOnlineClassrooms([String? schoolCode]) 
           if (lastActiveMs == null) return;
 
           final dt = DateTime.fromMillisecondsSinceEpoch(lastActiveMs, isUtc: true);
-          final diffMinutes = now.difference(dt).inMinutes.abs();
-          if (diffMinutes <= 5) {
+          final diffHours = now.difference(dt).inHours.abs();
+          if (diffHours <= 24) {
             final nickname = val['classNickname']?.toString() ?? val['nickname']?.toString() ?? docId;
             final m = {
               'docId': docId,
@@ -2078,6 +2078,11 @@ class _TeacherViewState extends State<TeacherView> {
           filePath: _activeFilePath,
         );
       case 'meal':
+        return MealView(
+          key: const ValueKey('meal_workspace'),
+          scaleFactor: scale,
+          onBack: onBack,
+        );
       case 'memo':
         return MessageView(
           key: const ValueKey('memo_workspace'),

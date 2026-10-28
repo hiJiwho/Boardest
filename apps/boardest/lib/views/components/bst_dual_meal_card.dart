@@ -191,40 +191,7 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  // 최애 메뉴 투표
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: !canVote
-                          ? null
-                          : () async {
-                              await _recordVote(dish);
-                              if (!ctx.mounted) return;
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('\'${dish.name}\'에 최애 메뉴 투표 완료! (결과는 종료 9분 전 공개)'),
-                                  backgroundColor: const Color(0xFF00F5D4),
-                                ),
-                              );
-                            },
-                      icon: Icon(
-                        isVoted ? Icons.favorite : Icons.favorite_border,
-                        color: isVoted ? Colors.redAccent : Colors.black,
-                      ),
-                      label: Text(
-                        isVoted ? '투표 완료' : (canVote ? '최애 메뉴 투표' : '투표 시간 아님'),
-                        style: TextStyle(
-                          color: isVoted ? Colors.white : Colors.black,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isVoted ? Colors.redAccent : const Color(0xFF00F5D4),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
+                  
                 ],
               ),
             ],
@@ -734,49 +701,6 @@ class _BstDualMealCardState extends State<BstDualMealCard> {
                                             ],
                                           ),
                                         ),
-                                        if (localVoteCount > 0 && !revealResult)
-                                          Container(
-                                            margin: const EdgeInsets.only(left: 6),
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                            decoration: BoxDecoration(
-                                              color: Colors.redAccent.withOpacity(0.2),
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(color: Colors.redAccent.withOpacity(0.5), width: 0.8),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                const Icon(Icons.favorite, size: 10, color: Colors.redAccent),
-                                                const SizedBox(width: 3),
-                                                Text(
-                                                  '$localVoteCount',
-                                                  style: const TextStyle(
-                                                    fontSize: 10.5,
-                                                    color: Colors.redAccent,
-                                                    fontWeight: FontWeight.w900,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        if (revealResult && totalServerVotes > 0)
-                                          Container(
-                                            margin: const EdgeInsets.only(left: 6),
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFFFD166).withOpacity(0.2),
-                                              borderRadius: BorderRadius.circular(6),
-                                              border: Border.all(color: const Color(0xFFFFD166), width: 1),
-                                            ),
-                                            child: Text(
-                                              '$totalServerVotes표 👑',
-                                              style: const TextStyle(
-                                                fontSize: 11,
-                                                color: Color(0xFFFFD166),
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                            ),
-                                          ),
                                       ],
                                     ),
                                   ),

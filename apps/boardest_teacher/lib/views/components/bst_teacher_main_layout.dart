@@ -64,6 +64,7 @@ class BstTeacherMainLayout extends StatelessWidget {
     (Icons.add_circle_outline_rounded, '새로 만들기', 'create'),
     (Icons.folder_open_rounded, '파일 관리', 'files'),
     (Icons.mark_email_unread_rounded, '쪽지', 'memo'),
+    (Icons.restaurant_rounded, '급식 호출', 'meal'),
     (Icons.draw_rounded, '판서 관리함', 'archive'),
   ];
 

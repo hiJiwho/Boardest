@@ -1,3 +1,4 @@
+import 'assessment_dialog.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' show PointerDeviceKind;
@@ -1463,7 +1464,22 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 ),
                 const Spacer(),
                 if (widget.ddayLabel != null && widget.ddayLabel!.isNotEmpty)
-                  GestureDetector(
+                  InkWell(
+                    onTap: () {
+                      int grade = 1;
+                      int classNum = 1;
+                      final match = RegExp(r'(\d+)\s*[-학년]\s*(\d+)?').firstMatch(widget.gradeClass);
+                      if (match != null) {
+                        grade = int.tryParse(match.group(1) ?? '1') ?? 1;
+                        classNum = int.tryParse(match.group(2) ?? '1') ?? 1;
+                      }
+                      AssessmentDialog.show(
+                        context,
+                        schoolCode: widget.schoolName,
+                        grade: grade,
+                        classNum: classNum,
+                      );
+                    },
                     onLongPress: widget.onDdayLongPress,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -1959,7 +1975,22 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 ),
                 const Spacer(),
                 if (widget.ddayLabel != null && widget.ddayLabel!.isNotEmpty)
-                  GestureDetector(
+                  InkWell(
+                    onTap: () {
+                      int grade = 1;
+                      int classNum = 1;
+                      final match = RegExp(r'(\d+)\s*[-학년]\s*(\d+)?').firstMatch(widget.gradeClass);
+                      if (match != null) {
+                        grade = int.tryParse(match.group(1) ?? '1') ?? 1;
+                        classNum = int.tryParse(match.group(2) ?? '1') ?? 1;
+                      }
+                      AssessmentDialog.show(
+                        context,
+                        schoolCode: widget.schoolName,
+                        grade: grade,
+                        classNum: classNum,
+                      );
+                    },
                     onLongPress: widget.onDdayLongPress,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -2014,7 +2045,22 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 Text(date, style: _ts(19, w: FontWeight.w700, c: Colors.white)),
                 const Spacer(),
                 if (widget.ddayLabel != null && widget.ddayLabel!.isNotEmpty)
-                  GestureDetector(
+                  InkWell(
+                    onTap: () {
+                      int grade = 1;
+                      int classNum = 1;
+                      final match = RegExp(r'(\d+)\s*[-학년]\s*(\d+)?').firstMatch(widget.gradeClass);
+                      if (match != null) {
+                        grade = int.tryParse(match.group(1) ?? '1') ?? 1;
+                        classNum = int.tryParse(match.group(2) ?? '1') ?? 1;
+                      }
+                      AssessmentDialog.show(
+                        context,
+                        schoolCode: widget.schoolName,
+                        grade: grade,
+                        classNum: classNum,
+                      );
+                    },
                     onLongPress: widget.onDdayLongPress,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -3689,8 +3735,8 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                                               (dish.allergies.contains(selectedAllergy) ||
                                                   _formatDishAllergies(dish).contains(selectedAllergy!));
                                           final isMarked = highlighted.contains(dish.name);
-                                          final votes = MealVoteService.instance.getTotalVotes(dish.name);
-                                          final heartStr = votes > 0 ? ' ❤️$votes' : '';
+                                          // meal vote removed
+                                          const heartStr = '';
 
                                           return InkWell(
                                             onLongPress: () {
@@ -3966,107 +4012,6 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                                             ),
                                         ],
                                       ),
-                                    ),
-                                    if (today) ...[
-                                      InkWell(
-                                        onTap: () async {
-                                          final sId = widget.schoolName.isNotEmpty ? widget.schoolName : 'Demo';
-                                          final cKey = widget.gradeClass.isNotEmpty ? widget.gradeClass : '우리반';
-                                          final now = widget.currentTime ?? DateTime.now();
-                                          await MealVoteService.instance.recordLocalVote(
-                                            schoolId: sId,
-                                            date: DateTime(now.year, now.month, now.day),
-                                            dishName: d.name,
-                                            classKey: cKey,
-                                            amount: 10,
-                                          );
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text('🔥 ${d.name}에 10표를 투표했습니다! (현재 총 ${MealVoteService.instance.getTotalVotes(d.name)}표)'),
-                                                backgroundColor: const Color(0xFF00C896),
-                                                duration: const Duration(seconds: 2),
-                                              ),
-                                            );
-                                            setState(() {});
-                                          }
-                                        },
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF00F5D4).withOpacity(0.18),
-                                            borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.5)),
-                                          ),
-                                          child: Text('+10', style: _ts(11, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                    ],
-                                    // 점심시간 투표 기능 및 점심시간 전/후 득표수 분기 (점심시간 전에는 표수 숨김)
-                                    ValueListenableBuilder<Map<String, Map<String, int>>>(
-                                      valueListenable: MealVoteService.instance.votesNotifier,
-                                      builder: (ctx, _, __) {
-                                        final votes = MealVoteService.instance.getTotalVotes(d.name);
-                                        return InkWell(
-                                          onTap: () async {
-                                            if (today && _isMealVoteTimeNow()) {
-                                              await widget.onMealVote?.call(d.name);
-                                              if (context.mounted) setState(() {});
-                                            }
-                                          },
-                                          borderRadius: BorderRadius.circular(10),
-                                          child: Container(
-                                            margin: const EdgeInsets.only(left: 2),
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                            decoration: BoxDecoration(
-                                              color: votes > 0
-                                                  ? const Color(0xFFFF6B6B).withOpacity(0.22)
-                                                  : Colors.white.withOpacity(0.06),
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(
-                                                color: votes > 0
-                                                    ? const Color(0xFFFF6B6B).withOpacity(0.65)
-                                                    : Colors.white24,
-                                                width: 1,
-                                              ),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  votes > 0 ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                                  color: votes > 0 ? const Color(0xFFFF6B6B) : Colors.white60,
-                                                  size: 14,
-                                                ),
-                                                if (isResultTime) ...[
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    '$votes표',
-                                                    style: _ts(
-                                                      11.5,
-                                                      w: FontWeight.w800,
-                                                      c: votes > 0 ? const Color(0xFFFF6B6B) : Colors.white70,
-                                                    ),
-                                                  ),
-                                                ] else if (votes > 0) ...[
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    '${votes}표',
-                                                    style: _ts(
-                                                      10.5,
-                                                      w: FontWeight.w800,
-                                                      c: const Color(0xFFFF6B6B),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                        );
-                                      },
                                     ),
                                   ],
                                 ),
