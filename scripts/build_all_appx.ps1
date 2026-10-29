@@ -75,16 +75,18 @@ function Build-Apk([string]$Directory, [string]$Name, [string]$ExtraArgs = '') {
 }
 function Pack-Signed([string]$Name) {
   $source = Join-Path $PackageDir $Name
-  $target = Join-Path $OutDir "$Name.appx"
+  $targetMsix = Join-Path $OutDir "$Name.msix"
+  $targetAppx = Join-Path $OutDir "$Name.appx"
   Set-PackageVersion (Join-Path $source 'AppxManifest.xml')
-  & $MakeAppx pack /d $source /p $target /o
-  if ($LASTEXITCODE -ne 0) { throw "AppX packaging failed: $Name" }
+  & $MakeAppx pack /d $source /p $targetMsix /o
+  if ($LASTEXITCODE -ne 0) { throw "MSIX packaging failed: $Name" }
   if ($UseCertificateStore) {
-    & $SignTool sign /fd SHA256 /s My /sha1 $CertificateThumbprint $target
+    & $SignTool sign /fd SHA256 /s My /sha1 $CertificateThumbprint $targetMsix
   } else {
-    & $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $target
+    & $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $targetMsix
   }
-  if ($LASTEXITCODE -ne 0) { throw "AppX signing failed: $Name" }
+  if ($LASTEXITCODE -ne 0) { throw "MSIX signing failed: $Name" }
+  Copy-Item $targetMsix $targetAppx -Force
 }
 
 function Pack-TeacherMsi([string]$Version) {
@@ -233,15 +235,46 @@ foreach ($name in @('boardest', 'bst-overlay-panser', 'boardest-class-lite', 'bo
 if (Test-Path (Join-Path $OutDir 'boardest-class-cloud.appx')) {
   Copy-Item (Join-Path $OutDir 'boardest-class-cloud.appx') (Join-Path $OutDir 'boardest-cloud.appx') -Force
 }
+if (Test-Path (Join-Path $OutDir 'boardest-class-cloud.msix')) {
+  Copy-Item (Join-Path $OutDir 'boardest-class-cloud.msix') (Join-Path $OutDir 'boardest-cloud.msix') -Force
+}
+if (Test-Path (Join-Path $OutDir 'boardest.msix')) {
+  Copy-Item (Join-Path $OutDir 'boardest.msix') (Join-Path $OutDir 'boardest-class.msix') -Force
+}
+if (Test-Path (Join-Path $OutDir 'boardest.appx')) {
+  Copy-Item (Join-Path $OutDir 'boardest.appx') (Join-Path $OutDir 'boardest-class.appx') -Force
+}
 Pack-TeacherMsi $AppVersion
 Copy-Item $CerFile (Join-Path $OutDir 'BoardestCert.cer') -Force
 Copy-Item (Join-Path $RootDir 'certs\install_certificate.bat') (Join-Path $OutDir 'install_certificate.bat') -Force
 Copy-Item (Join-Path $RootDir 'certs\install_certificate.ps1') (Join-Path $OutDir 'install_certificate.ps1') -Force
 
+# Build Modern Lightweight WebView2 Online Installers (.exe)
+& "$RootDir\tools\installer\build_installer.ps1" -AppVersion $AppVersion
+
 $DownloadDir = Join-Path $RootDir 'infra\download_web'
+$DownloadsHubWeb = Join-Path $RootDir 'infra\downloads_hub_web'
 New-Item -ItemType Directory -Force -Path $DownloadDir | Out-Null
-foreach ($file in @('boardest.appx', 'bst-teacher.msi', 'bst-overlay-panser.appx', 'boardest-class-lite.appx', 'boardest-class-cloud.appx', 'boardest-cloud.appx', 'boardest.apk', 'bst-teacher.apk', 'bst-teacher-lite.apk', 'bst-class-lite.apk', 'boardest-class-lite.apk', 'boardest-cloud.apk', 'BoardestCert.cer', 'install_certificate.bat', 'install_certificate.ps1')) {
+New-Item -ItemType Directory -Force -Path $DownloadsHubWeb | Out-Null
+
+$FilesToCopy = @(
+  'boardest.msix', 'boardest-class.msix', 'boardest-cloud.msix', 'boardest-class-cloud.msix',
+  'boardest.appx', 'boardest-class.appx', 'boardest-cloud.appx', 'boardest-class-cloud.appx',
+  'boardest-teacher-installer.exe', 'Boardest-Teacher-Setup.exe',
+  'boardest-class-installer.exe', 'Boardest-Class-Setup.exe',
+  'boardest-cloud-installer.exe', 'Boardest-Cloud-Setup.exe',
+  'boardest-teacher.msi', 'bst-teacher.msi',
+  'bst-teacher-windows.zip', 'boardest-windows.zip',
+  'boardest.apk', 'boardest-class.apk', 'boardest-cloud.apk', 'boardest-class-cloud.apk',
+  'bst-teacher.apk', 'boardest-teacher.apk', 'bst-teacher-lite.apk', 'boardest-teacher-lite.apk',
+  'bst-class-lite.apk', 'boardest-class-lite.apk',
+  'BoardestCert.cer', 'install_certificate.bat', 'install_certificate.ps1'
+)
+foreach ($file in $FilesToCopy) {
   $source = Join-Path $OutDir $file
-  if (Test-Path $source) { Copy-Item $source (Join-Path $DownloadDir $file) -Force }
+  if (Test-Path $source) {
+    Copy-Item $source (Join-Path $DownloadDir $file) -Force
+    Copy-Item $source (Join-Path $DownloadsHubWeb $file) -Force
+  }
 }
-Write-Host 'Official AppX/MSI/APK artifacts are ready in dist\appx.' -ForegroundColor Green
+Write-Host 'Official MSIX/EXE/MSI/APK artifacts are ready in dist\appx.' -ForegroundColor Green

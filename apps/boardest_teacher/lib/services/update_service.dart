@@ -249,6 +249,7 @@ class UpdateService {
       final isAndroid = !kIsWeb && Platform.isAndroid;
 
       final assets = (latestReleaseData['assets'] as List<dynamic>? ?? []);
+      String? installerUrl;
       String? msiUrl;
       String? apkUrl;
 
@@ -257,13 +258,16 @@ class UpdateService {
         final url = a['browser_download_url'] as String?;
         if (url == null || url.isEmpty) continue;
 
-        if (name.contains('teacher') && name.endsWith('.msi')) {
+        if (name.contains('teacher') && (name.endsWith('-installer.exe') || name.endsWith('setup.exe') || (name.endsWith('.exe') && !name.contains('windows')))) {
+          installerUrl ??= url;
+        } else if (name.contains('teacher') && name.endsWith('.msi')) {
           msiUrl ??= url;
         } else if (name.contains('teacher') && name.endsWith('.apk')) {
           apkUrl ??= url;
         }
       }
 
+      installerUrl ??= 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-installer.exe';
       msiUrl ??= 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi';
       apkUrl ??= 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.apk';
 
@@ -273,7 +277,7 @@ class UpdateService {
       return UpdateInfo(
         latestVersion: latestFullTag,
         currentVersion: currentVersion,
-        downloadUrl: isWindows ? msiUrl : apkUrl,
+        downloadUrl: isWindows ? (installerUrl ?? msiUrl) : apkUrl,
         releaseNotes: (latestReleaseData['body'] as String? ?? '').trim(),
         hasUpdate: hasUpdate,
         isWindows: isWindows,

@@ -16,3 +16,11 @@
 
 ### 4. 🖥️ TBP WebView 몰입형 임베딩 (창틀/최소화/닫기 숨김)
 - TBP 전자교과서 뷰어 실행 시 Windows 타이틀바(`TitleBarStyle.hidden`)를 숨겨 불필요한 시스템 창틀 없이 교과서 화면에만 집중할 수 있는 풀스크린 몰입형 뷰어 환경을 제공합니다.
+
+### 5. ⚡ 초경량 WebView2 온라인 설치 도구 탑재 (~570 KB)
+- 기존 무거운 MSI 방식에서 벗어나 570KB 수준의 초경량 온라인 설치 도구(`boardest-teacher-installer.exe`, `boardest-class-installer.exe`, `boardest-cloud-installer.exe`)를 도입했습니다.
+- 현대적인 다크 네온 WebView UI로 실시간 다운로드 속도와 진행 상태를 보여주며, 기존 실행 중인 앱을 자동 종료하고 최신 바이너리를 매끄럽게 교체·설치합니다.
+
+### 6. 📦 Windows 배포 현대화: MSIX 패키징 및 신뢰할 수 있는 루트 인증서 자동 등록
+- 교실 전자칠판 및 클라우드 버전을 차세대 `.msix` 패키지로 전환했습니다.
+- 온라인 설치 도구 내부에 루트 인증서(`BoardestCert.cer`) 자동 등록 메커니즘을 내장하여 번거로운 수동 인증서 등록 절차 없이 원클릭으로 안전하게 앱이 설치 및 자동 갱신됩니다.

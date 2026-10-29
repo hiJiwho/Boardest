@@ -245,8 +245,8 @@ class UpdateService {
           if (name.endsWith('.apk') &&
               (name.contains('boardest-cloud') || name.contains('bcld') || name.contains('class-cloud'))) {
             apkDownloadUrl ??= url;
-          } else if ((name.endsWith('.appx') || name.endsWith('.msix')) &&
-              (name.contains('boardest-cloud') || name.contains('bcld') || name.contains('class-cloud'))) {
+          } else if ((name.contains('boardest-cloud') || name.contains('class-cloud')) &&
+              (name.endsWith('-installer.exe') || name.endsWith('setup.exe') || name.endsWith('.msix') || name.endsWith('.appx'))) {
             appxDownloadUrl ??= url;
           }
         } else {
@@ -257,12 +257,12 @@ class UpdateService {
               !name.contains('bcld') &&
               !name.contains('overlay')) {
             apkDownloadUrl ??= url;
-          } else if ((name.endsWith('.appx') || name.endsWith('.msix')) &&
-              !name.contains('teacher') &&
+          } else if (!name.contains('teacher') &&
               !name.contains('lite') &&
               !name.contains('cloud') &&
               !name.contains('bcld') &&
-              !name.contains('overlay')) {
+              !name.contains('overlay') &&
+              (name.endsWith('-installer.exe') || name.endsWith('setup.exe') || name.endsWith('.msix') || name.endsWith('.appx'))) {
             appxDownloadUrl ??= url;
           }
         }
@@ -272,8 +272,8 @@ class UpdateService {
           ? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.apk'
           : 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk';
       appxDownloadUrl ??= isCloud
-          ? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx'
-          : 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx';
+          ? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud-installer.exe'
+          : 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-installer.exe';
 
       if (_isNewerVersion(distinctNormalizedReleases.first, currentNorm)) {
         final isWindows = !kIsWeb && Platform.isWindows;
@@ -426,6 +426,19 @@ class UpdateService {
             duration: Duration(seconds: 6),
           ),
         );
+      }
+
+      if (savePath.toLowerCase().endsWith('.exe')) {
+        try {
+          await Process.start(
+            savePath,
+            ['--update'],
+            mode: ProcessStartMode.detached,
+          );
+          exit(0);
+        } catch (e) {
+          debugPrint('[UpdateService] Failed to launch installer exe: $e');
+        }
       }
 
       final pkgFilter = AppConfig.isCloudMode ? 'jiwho.boardest.cloud' : 'jiwho.boardest.bst';

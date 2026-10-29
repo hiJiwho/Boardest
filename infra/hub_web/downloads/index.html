@@ -187,13 +187,16 @@
           <a href="https://boardest-teacher.web.app" target="_blank" class="m3-btn m3-btn-tonal">웹 바로 열기</a>
         </div>
 
-        <!-- Teacher 2. Pro for Windows (윈도 MSI만!) -->
+        <!-- Teacher 2. Pro for Windows (온라인 간편 설치기 .exe / MSI) -->
         <div class="dl-package-item">
           <div>
-            <div class="package-name">🖥️ Pro for Windows (MSI 단독 패키지)</div>
-            <div class="package-desc">교사용 PC/노트북 전용 정식 윈도우 설치 마법사 패키지 (.msi)</div>
+            <div class="package-name">🖥️ Pro for Windows (온라인 자동 설치기)</div>
+            <div class="package-desc">초경량 온라인 설치 도구 (~570KB) · 자동 업데이트 및 바탕화면 바로가기 생성</div>
           </div>
-          <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.msi" class="m3-btn m3-btn-filled">Windows MSI 다운로드</a>
+          <div class="btn-row">
+            <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-installer.exe" class="m3-btn m3-btn-filled">온라인 설치기 (.exe)</a>
+            <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.msi" class="m3-btn m3-btn-outlined">오프라인 MSI 받기</a>
+          </div>
         </div>
 
         <!-- Teacher 3. Lite (웹링크 + APK) -->
@@ -240,15 +243,16 @@
             <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk" class="m3-btn m3-btn-filled">APK 받기</a>
           </div>
 
-          <!-- 3. Pro for Windows (원클릭 스크립트 복사 또는 AppX) -->
+          <!-- 3. Pro for Windows (온라인 설치기 또는 MSIX) -->
           <div class="dl-package-item">
             <div>
               <div class="package-name">🖥️ Pro for Windows</div>
-              <div class="package-desc">윈도우 전자칠판 (.appx 및 원클릭 설치)</div>
+              <div class="package-desc">윈도우 전자칠판 (초경량 온라인 설치기 · 차세대 .msix)</div>
             </div>
             <div class="btn-row">
-              <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx" class="m3-btn m3-btn-outlined">AppX 받기</a>
-              <button class="m3-btn m3-btn-tonal" onclick="copyClassPs()">원클릭 스크립트 복사</button>
+              <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-installer.exe" class="m3-btn m3-btn-filled">온라인 설치기 (.exe)</a>
+              <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.msix" class="m3-btn m3-btn-outlined">MSIX 받기</a>
+              <button class="m3-btn m3-btn-tonal" onclick="copyClassPs()">원클릭 파워쉘</button>
             </div>
           </div>
         </div>
@@ -278,15 +282,16 @@
             <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.apk" class="m3-btn m3-btn-filled">APK 받기</a>
           </div>
 
-          <!-- 3. Pro for Windows (원클릭 스크립트 복사 또는 AppX) -->
+          <!-- 3. Pro for Windows (온라인 설치기 또는 MSIX) -->
           <div class="dl-package-item">
             <div>
               <div class="package-name">🖥️ Pro for Windows</div>
-              <div class="package-desc">일반 창틀 탑재 클라우드 전용 앱</div>
+              <div class="package-desc">일반 창틀 탑재 클라우드 전용 앱 (온라인 설치기 · .msix)</div>
             </div>
             <div class="btn-row">
-              <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx" class="m3-btn m3-btn-outlined">AppX 받기</a>
-              <button class="m3-btn m3-btn-tonal" onclick="copyBcldPs()">원클릭 스크립트 복사</button>
+              <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud-installer.exe" class="m3-btn m3-btn-filled">온라인 설치기 (.exe)</a>
+              <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.msix" class="m3-btn m3-btn-outlined">MSIX 받기</a>
+              <button class="m3-btn m3-btn-tonal" onclick="copyBcldPs()">원클릭 파워쉘</button>
             </div>
           </div>
         </div>
@@ -340,7 +345,7 @@
   <footer class="m3-footer">
     <div class="m3-container">
       <p style="margin-bottom: 8px;">© 2026 Boardest Open Source Project. All rights reserved.</p>
-      <p>공식 GitHub Releases: <a href="https://github.com/hiJiwho/Boardest/releases/latest" target="_blank">최신 빌드 v5.3.5</a></p>
+      <p>공식 GitHub Releases: <a href="https://github.com/hiJiwho/Boardest/releases/latest" target="_blank">최신 빌드 v5.3.6</a></p>
     </div>
   </footer>
 
@@ -356,9 +361,9 @@
       const link = document.getElementById('recommendedLink');
 
       if (isWin) {
-        osText.innerText = '🖥️ Windows PC 환경 감지 — 교사용은 MSI, 교실용은 AppX / 스크립트를 추천합니다.';
-        link.href = 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.msi';
-        link.innerText = '교사용 MSI 다운로드';
+        osText.innerText = '🖥️ Windows PC 환경 감지 — 교사용은 초경량 온라인 설치 도구(.exe)를 추천합니다.';
+        link.href = 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-installer.exe';
+        link.innerText = '교사용 온라인 설치기 다운로드';
       } else if (isAndroid) {
         osText.innerText = '📱 Android 모바일/태블릿 감지 — 모바일 현장용 Teacher Lite APK를 추천합니다.';
         link.href = 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-lite.apk';
