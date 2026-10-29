@@ -57,15 +57,27 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
   bool _isConfiguringCafeteria = false;
 
   // Teacher Profile & School Settings
-  String _schoolId = 'BST';
-  String _schoolCode = '48588';
-  String _schoolName = '보데스트 중학교';
-  String _teacherName = '김보데';
+  String _schoolId = '';
+  String _schoolCode = '';
+  String _schoolName = '';
+  String _teacherName = '';
   String _teacherId = '';
   int _grade = 1;
-  int _classNum = 7;
+  int _classNum = 1;
   String _cafeteriaNum = '1';
   bool _isHomeroom = true;
+
+  String get _effectiveSchoolCode {
+    final code = _schoolCode.isNotEmpty ? _schoolCode : (_schoolId.isNotEmpty ? _schoolId : _schoolName);
+    final s = code.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9_-]'), '_');
+    return s.isEmpty ? 'default' : s;
+  }
+
+  int _assessmentSubTab = 0; // 0: 수행평가, 1: 학교 행사 & 광고
+  List<Map<String, dynamic>> _teacherAssessments = [];
+  bool _isLoadingAssessments = false;
+  List<Map<String, dynamic>> _teacherNotices = [];
+  bool _isLoadingNotices = false;
 
   String _googleEmail = '';
   String _googleToken = '';
@@ -307,17 +319,17 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
 
     if (path.contains('/eat') || query.containsKey('eat')) {
       _isEatRoute = true;
-      _selectedTab = 3;
+      _selectedTab = 4;
     }
 
     final prefs = await SharedPreferences.getInstance();
-    _schoolId = prefs.getString('bst_school_id') ?? 'BST';
-    _schoolCode = prefs.getString('bst_school_code') ?? '48588';
-    _schoolName = prefs.getString('bst_school_name') ?? '보데스트 중학교';
-    _teacherName = prefs.getString('bst_teacher_name') ?? '김보데';
+    _schoolId = prefs.getString('bst_school_id') ?? '';
+    _schoolCode = prefs.getString('bst_school_code') ?? '';
+    _schoolName = prefs.getString('bst_school_name') ?? '';
+    _teacherName = prefs.getString('bst_teacher_name') ?? '';
     _teacherId = prefs.getString('bst_teacher_id') ?? '';
     _grade = prefs.getInt('bst_grade') ?? 1;
-    _classNum = prefs.getInt('bst_class_num') ?? 7;
+    _classNum = prefs.getInt('bst_class_num') ?? 1;
     _cafeteriaNum = prefs.getString('bst_cafeteria_num') ?? '1';
     _isHomeroom = prefs.getBool('bst_is_homeroom') ?? true;
 
@@ -1089,7 +1101,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '${_schoolName.isNotEmpty ? _schoolName : "보데스트 중학교"} ${_grade > 0 ? "$_grade학년" : "1학년"} ${_classNum > 0 ? "$_classNum반" : "7반"}',
+                        '${_schoolName.isNotEmpty ? _schoolName : "학교 미설정"} ${_grade > 0 ? "$_grade학년" : ""} ${_classNum > 0 ? "$_classNum반" : ""}',
                         style: const TextStyle(color: Color(0xFF00F5D4), fontSize: 11, fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -1154,16 +1166,20 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
           setState(() => _selectedTab = idx);
           if (idx == 0) {
             _fetchLiveComciganTimetable();
+          } else if (idx == 1) {
+            _fetchTeacherAssessments();
+            _fetchTeacherNotices();
           }
         },
         backgroundColor: const Color(0xFF16161A),
         selectedItemColor: const Color(0xFF00F5D4),
         unselectedItemColor: const Color(0xFF94A1B2),
         type: BottomNavigationBarType.fixed,
-        selectedFontSize: 10,
-        unselectedFontSize: 9.5,
+        selectedFontSize: 9.5,
+        unselectedFontSize: 9.0,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.schedule_rounded), label: '시간표'),
+          BottomNavigationBarItem(icon: Icon(Icons.assignment_turned_in_rounded), label: '수행/행사'),
           BottomNavigationBarItem(icon: Icon(Icons.vpn_key_rounded), label: 'OTP 설정'),
           BottomNavigationBarItem(icon: Icon(Icons.restaurant_rounded), label: '급식'),
           BottomNavigationBarItem(icon: Icon(Icons.campaign_rounded), label: '급식지도'),
@@ -1184,16 +1200,18 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
       case 0:
         return _buildTimetableTab();
       case 1:
-        return _buildOtpTab();
+        return _buildLiteAssessmentTab();
       case 2:
-        return _buildLiteMealOnlyTab();
+        return _buildOtpTab();
       case 3:
-        return _buildLiteCafeteriaGuidanceTab();
+        return _buildLiteMealOnlyTab();
       case 4:
-        return _buildLiteNoteSendTab();
+        return _buildLiteCafeteriaGuidanceTab();
       case 5:
-        return _buildLiteCloudFilesTab();
+        return _buildLiteNoteSendTab();
       case 6:
+        return _buildLiteCloudFilesTab();
+      case 7:
         return _buildLiteInkManagementTab();
       default:
         return _buildTimetableTab();
@@ -1258,7 +1276,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                   width: double.infinity,
                   height: 42,
                   child: OutlinedButton.icon(
-                    onPressed: () => setState(() => _selectedTab = 3),
+                    onPressed: () => setState(() => _selectedTab = 4),
                     icon: const Icon(Icons.restaurant_rounded, size: 17, color: Color(0xFFFF8906)),
                     label: Text('급식 지도 화면으로 이동', style: GoogleFonts.notoSansKr(color: const Color(0xFFFF8906), fontWeight: FontWeight.w600, fontSize: 12.5)),
                     style: OutlinedButton.styleFrom(
@@ -1272,6 +1290,816 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _fetchTeacherAssessments() async {
+    setState(() => _isLoadingAssessments = true);
+    final effectiveCode = _effectiveSchoolCode;
+    final url = 'https://jiwhosboardest-default-rtdb.firebaseio.com/assessments/$effectiveCode/$_grade.json';
+    try {
+      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200 && res.body != 'null') {
+        final data = jsonDecode(res.body);
+        final List<Map<String, dynamic>> list = [];
+        if (data is Map) {
+          data.forEach((k, v) {
+            if (v is Map) {
+              list.add(Map<String, dynamic>.from(v));
+            }
+          });
+        }
+        list.sort((a, b) => (a['dueDate'] ?? '').toString().compareTo((b['dueDate'] ?? '').toString()));
+        if (mounted) {
+          setState(() {
+            _teacherAssessments = list;
+            _isLoadingAssessments = false;
+          });
+        }
+        return;
+      }
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _teacherAssessments = [];
+        _isLoadingAssessments = false;
+      });
+    }
+  }
+
+  Future<void> _fetchTeacherNotices() async {
+    setState(() => _isLoadingNotices = true);
+    final effectiveCode = _effectiveSchoolCode;
+    final url = 'https://jiwhosboardest-default-rtdb.firebaseio.com/school_notices/$effectiveCode.json';
+    try {
+      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200 && res.body != 'null') {
+        final data = jsonDecode(res.body);
+        final List<Map<String, dynamic>> list = [];
+        if (data is Map) {
+          data.forEach((k, v) {
+            if (v is Map) {
+              final map = Map<String, dynamic>.from(v);
+              final endStr = map['endDate']?.toString();
+              if (endStr != null && endStr.isNotEmpty) {
+                final endD = DateTime.tryParse(endStr);
+                if (endD != null) {
+                  final expiry = DateTime(endD.year, endD.month, endD.day, 23, 59, 59).add(const Duration(hours: 48));
+                  if (DateTime.now().isAfter(expiry)) {
+                    http.delete(Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/school_notices/$effectiveCode/$k.json'));
+                    return;
+                  }
+                }
+              }
+              list.add(map);
+            }
+          });
+        }
+        list.sort((a, b) => (b['createdAt'] ?? '').toString().compareTo((a['createdAt'] ?? '').toString()));
+        if (mounted) {
+          setState(() {
+            _teacherNotices = list;
+            _isLoadingNotices = false;
+          });
+        }
+        return;
+      }
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _teacherNotices = [];
+        _isLoadingNotices = false;
+      });
+    }
+  }
+
+  Future<void> _deleteAssessment(String id) async {
+    final url = 'https://jiwhosboardest-default-rtdb.firebaseio.com/assessments/$_effectiveSchoolCode/$_grade/$id.json';
+    try {
+      await http.delete(Uri.parse(url));
+      _fetchTeacherAssessments();
+    } catch (_) {}
+  }
+
+  Future<void> _deleteNotice(String id) async {
+    final url = 'https://jiwhosboardest-default-rtdb.firebaseio.com/school_notices/$_effectiveSchoolCode/$id.json';
+    try {
+      await http.delete(Uri.parse(url));
+      _fetchTeacherNotices();
+    } catch (_) {}
+  }
+
+  void _showAddAssessmentModal() {
+    final titleCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final pointsCtrl = TextEditingController(text: '20');
+    String selectedSubject = '수학';
+    String selectedType = '수행평가';
+    int selectedClass = 0;
+    DateTime selectedDate = DateTime.now().add(const Duration(days: 7));
+    int selectedPeriod = 1;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF16161A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setMState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              left: 20,
+              right: 20,
+              top: 20,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.assignment_add, color: Color(0xFF00F5D4)),
+                      const SizedBox(width: 8),
+                      Text(
+                        '새 수행평가 등록 (${_grade}학년)',
+                        style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white70),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: selectedSubject,
+                          dropdownColor: const Color(0xFF24262E),
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            labelText: '과목',
+                            labelStyle: const TextStyle(color: Colors.white70),
+                            filled: true,
+                            fillColor: Colors.black26,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          items: ['국어', '수학', '영어', '과학', '사회', '역사', '도덕', '음악', '미술', '체육', '기술가정', '정보', '기타']
+                              .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                              .toList(),
+                          onChanged: (v) {
+                            if (v != null) setMState(() => selectedSubject = v);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: selectedType,
+                          dropdownColor: const Color(0xFF24262E),
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            labelText: '평가 유형',
+                            labelStyle: const TextStyle(color: Colors.white70),
+                            filled: true,
+                            fillColor: Colors.black26,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          items: ['수행평가', '과제', '단원평가', '프로젝트', '실습/실험', '발표']
+                              .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                              .toList(),
+                          onChanged: (v) {
+                            if (v != null) setMState(() => selectedType = v);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: titleCtrl,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: '평가 제목',
+                      labelStyle: const TextStyle(color: Colors.white70),
+                      hintText: '예: 삼각비의 실생활 활용 탐구 보고서',
+                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                      filled: true,
+                      fillColor: Colors.black26,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<int>(
+                          value: selectedClass,
+                          dropdownColor: const Color(0xFF24262E),
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            labelText: '대상 학급',
+                            labelStyle: const TextStyle(color: Colors.white70),
+                            filled: true,
+                            fillColor: Colors.black26,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          items: [
+                            const DropdownMenuItem(value: 0, child: Text('학년 전체')),
+                            ...List.generate(12, (i) => DropdownMenuItem(value: i + 1, child: Text('${i + 1}반'))),
+                          ],
+                          onChanged: (v) {
+                            if (v != null) setMState(() => selectedClass = v);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () async {
+                            final d = await showDatePicker(
+                              context: ctx,
+                              initialDate: selectedDate,
+                              firstDate: DateTime.now().subtract(const Duration(days: 7)),
+                              lastDate: DateTime.now().add(const Duration(days: 180)),
+                            );
+                            if (d != null) {
+                              setMState(() => selectedDate = d);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+                            decoration: BoxDecoration(
+                              color: Colors.black26,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.white24),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.calendar_today, size: 16, color: Color(0xFF00F5D4)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '${selectedDate.month}/${selectedDate.day}',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 100,
+                        child: TextField(
+                          controller: pointsCtrl,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            labelText: '배점',
+                            labelStyle: const TextStyle(color: Colors.white70),
+                            suffixText: '점',
+                            filled: true,
+                            fillColor: Colors.black26,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: descCtrl,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            labelText: '세부 안내 사항 / 준비물',
+                            labelStyle: const TextStyle(color: Colors.white70),
+                            hintText: '예: 교과서 45~52쪽, 계산기 지참',
+                            hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                            filled: true,
+                            fillColor: Colors.black26,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00F5D4),
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () async {
+                        final title = titleCtrl.text.trim();
+                        if (title.isEmpty) return;
+                        final id = 'ass_${DateTime.now().millisecondsSinceEpoch}';
+                        final item = {
+                          'id': id,
+                          'schoolCode': _effectiveSchoolCode,
+                          'grade': _grade,
+                          'classNum': selectedClass,
+                          'subject': selectedSubject,
+                          'title': title,
+                          'description': descCtrl.text.trim(),
+                          'points': int.tryParse(pointsCtrl.text.trim()) ?? 20,
+                          'period': selectedPeriod,
+                          'dueDate': selectedDate.toIso8601String(),
+                          'type': selectedType,
+                          'authorRole': 'teacher',
+                          'authorName': _teacherName.isNotEmpty ? _teacherName : '선생님',
+                          'createdAt': DateTime.now().toIso8601String(),
+                          'isCompleted': false,
+                        };
+
+                        Navigator.pop(ctx);
+                        final url = 'https://jiwhosboardest-default-rtdb.firebaseio.com/assessments/$_effectiveSchoolCode/$_grade/$id.json';
+                        try {
+                          await http.put(
+                            Uri.parse(url),
+                            headers: {'Content-Type': 'application/json'},
+                            body: jsonEncode(item),
+                          );
+                          _fetchTeacherAssessments();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('수행평가가 성공적으로 등록되었습니다.')),
+                          );
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('등록 실패: $e')),
+                          );
+                        }
+                      },
+                      child: Text('수행평가 등록하기', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold, fontSize: 15)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showAddNoticeModal() {
+    final titleCtrl = TextEditingController();
+    final urlCtrl = TextEditingController();
+    DateTime selectedEndDate = DateTime.now().add(const Duration(days: 7));
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF16161A),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setMState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              left: 20,
+              right: 20,
+              top: 20,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.campaign_rounded, color: Color(0xFF00F5D4)),
+                      const SizedBox(width: 8),
+                      Text(
+                        '새 학교 행사 · 광고판 등록',
+                        style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      IconButton(icon: const Icon(Icons.close, color: Colors.white70), onPressed: () => Navigator.pop(ctx)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: titleCtrl,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: '행사 제목',
+                      labelStyle: const TextStyle(color: Colors.white70),
+                      hintText: '예: 2026 교내 봄 축제 부스 참가 신청 안내',
+                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                      filled: true,
+                      fillColor: Colors.black26,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: urlCtrl,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: '사진 이미지 URL (Firebase Storage 등)',
+                      labelStyle: const TextStyle(color: Colors.white70),
+                      hintText: 'https://...',
+                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                      filled: true,
+                      fillColor: Colors.black26,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('행사 마감일 (종료 48시간 후 자동 삭제):', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      TextButton.icon(
+                        onPressed: () async {
+                          final d = await showDatePicker(
+                            context: ctx,
+                            initialDate: selectedEndDate,
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                          );
+                          if (d != null) {
+                            setMState(() => selectedEndDate = d);
+                          }
+                        },
+                        icon: const Icon(Icons.calendar_today_rounded, size: 15, color: Color(0xFF00F5D4)),
+                        label: Text(
+                          '${selectedEndDate.year}-${selectedEndDate.month.toString().padLeft(2, '0')}-${selectedEndDate.day.toString().padLeft(2, '0')}',
+                          style: const TextStyle(color: Color(0xFF00F5D4), fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00F5D4),
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () async {
+                        final title = titleCtrl.text.trim();
+                        final imgUrl = urlCtrl.text.trim();
+                        if (title.isEmpty || imgUrl.isEmpty) return;
+
+                        final id = 'ad_${DateTime.now().millisecondsSinceEpoch}';
+                        final notice = {
+                          'id': id,
+                          'title': title,
+                          'imageUrl': imgUrl,
+                          'teacherName': _teacherName.isNotEmpty ? _teacherName : '선생님',
+                          'endDate': '${selectedEndDate.year}-${selectedEndDate.month.toString().padLeft(2, '0')}-${selectedEndDate.day.toString().padLeft(2, '0')}',
+                          'createdAt': DateTime.now().toIso8601String(),
+                        };
+
+                        Navigator.pop(ctx);
+                        final url = 'https://jiwhosboardest-default-rtdb.firebaseio.com/school_notices/$_effectiveSchoolCode/$id.json';
+                        try {
+                          await http.put(
+                            Uri.parse(url),
+                            headers: {'Content-Type': 'application/json'},
+                            body: jsonEncode(notice),
+                          );
+                          _fetchTeacherNotices();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('행사 광고가 등록되었습니다. 교실 전자칠판에 회전 표시됩니다.')),
+                          );
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('등록 실패: $e')),
+                          );
+                        }
+                      },
+                      child: Text('행사 광고 등록하기', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold, fontSize: 15)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLiteAssessmentTab() {
+    return Column(
+      children: [
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: const Color(0xFF16161A),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () {
+                    setState(() => _assessmentSubTab = 0);
+                    _fetchTeacherAssessments();
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      color: _assessmentSubTab == 0 ? const Color(0xFF00F5D4) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '📋 수행평가 및 과제',
+                      style: GoogleFonts.notoSansKr(
+                        color: _assessmentSubTab == 0 ? Colors.black : Colors.white70,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: InkWell(
+                  onTap: () {
+                    setState(() => _assessmentSubTab = 1);
+                    _fetchTeacherNotices();
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      color: _assessmentSubTab == 1 ? const Color(0xFF00F5D4) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '📢 학교 행사 · 광고판',
+                      style: GoogleFonts.notoSansKr(
+                        color: _assessmentSubTab == 1 ? Colors.black : Colors.white70,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Row(
+            children: [
+              Text(
+                _assessmentSubTab == 0
+                    ? '$_grade학년 수행평가 목록 (${_teacherAssessments.length}건)'
+                    : '학교 행사 및 소식 (${_teacherNotices.length}건)',
+                style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: _assessmentSubTab == 0 ? _showAddAssessmentModal : _showAddNoticeModal,
+                icon: const Icon(Icons.add, size: 16),
+                label: Text(
+                  _assessmentSubTab == 0 ? '수행평가 등록' : '행사 등록',
+                  style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00F5D4),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: _assessmentSubTab == 0
+              ? _buildAssessmentsList()
+              : _buildNoticesList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAssessmentsList() {
+    if (_isLoadingAssessments) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)));
+    }
+    if (_teacherAssessments.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.assignment_outlined, size: 54, color: Colors.white.withOpacity(0.2)),
+            const SizedBox(height: 12),
+            Text('등록된 수행평가가 없습니다.', style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 15)),
+            const SizedBox(height: 6),
+            Text('상단의 "수행평가 등록" 버튼을 눌러 등록해 보세요.', style: GoogleFonts.notoSansKr(color: Colors.white30, fontSize: 12)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: _teacherAssessments.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (ctx, idx) {
+        final item = _teacherAssessments[idx];
+        final dueStr = item['dueDate']?.toString() ?? '';
+        final dueD = DateTime.tryParse(dueStr) ?? DateTime.now();
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final target = DateTime(dueD.year, dueD.month, dueD.day);
+        final diff = target.difference(today).inDays;
+        final dDayText = diff == 0 ? 'D-Day' : (diff > 0 ? 'D-$diff' : 'D+${diff.abs()}');
+        final isUrgent = diff <= 1 && diff >= 0;
+
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF16161A),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: isUrgent ? const Color(0xFFEF4565).withOpacity(0.5) : Colors.white10),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isUrgent ? const Color(0xFFEF4565) : const Color(0xFF00F5D4).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  dDayText,
+                  style: TextStyle(
+                    color: isUrgent ? Colors.white : const Color(0xFF00F5D4),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(4)),
+                          child: Text(item['subject']?.toString() ?? '과목', style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(4)),
+                          child: Text(item['type']?.toString() ?? '수행평가', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          item['classNum'] == 0 ? '학년 전체' : '${item['classNum']}반',
+                          style: const TextStyle(color: Colors.white38, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      item['title']?.toString() ?? '무제',
+                      style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                    if (item['description']?.toString().isNotEmpty == true) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        item['description']?.toString() ?? '',
+                        style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 12),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    Text(
+                      '${dueD.month}월 ${dueD.day}일 (${item['period'] ?? 1}교시)  •  ${item['points'] ?? 20}점 만점',
+                      style: const TextStyle(color: Colors.white38, fontSize: 11.5),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4565), size: 20),
+                onPressed: () => _deleteAssessment(item['id']?.toString() ?? ''),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildNoticesList() {
+    if (_isLoadingNotices) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)));
+    }
+    if (_teacherNotices.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.campaign_outlined, size: 54, color: Colors.white.withOpacity(0.2)),
+            const SizedBox(height: 12),
+            Text('등록된 학교 행사 및 광고가 없습니다.', style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 15)),
+            const SizedBox(height: 6),
+            Text('상단의 "행사 등록" 버튼을 눌러 사진과 제목을 등록하세요.', style: GoogleFonts.notoSansKr(color: Colors.white30, fontSize: 12)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: _teacherNotices.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (ctx, idx) {
+        final notice = _teacherNotices[idx];
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF16161A),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  notice['imageUrl']?.toString() ?? '',
+                  width: 64,
+                  height: 64,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    width: 64,
+                    height: 64,
+                    color: Colors.black38,
+                    child: const Icon(Icons.broken_image_rounded, color: Colors.white24),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      notice['title']?.toString() ?? '',
+                      style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14.5, fontWeight: FontWeight.bold),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        if (notice['endDate'] != null)
+                          Text('종료: ${notice['endDate']}  ', style: const TextStyle(color: Color(0xFF00F5D4), fontSize: 11)),
+                        if (notice['teacherName'] != null)
+                          Text('• ${notice['teacherName']}', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4565), size: 20),
+                onPressed: () => _deleteNotice(notice['id']?.toString() ?? ''),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1791,7 +2619,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                   controller: _guestSchoolController,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: InputDecoration(
-                    hintText: '예: 보데스트 중학교 또는 BST',
+                    hintText: '예: 학교명 검색 또는 학교 코드',
                     hintStyle: const TextStyle(color: Color(0xFF72757E), fontSize: 12),
                     filled: true,
                     fillColor: const Color(0xFF0F0E17),

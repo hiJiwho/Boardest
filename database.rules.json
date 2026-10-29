@@ -55,6 +55,14 @@
         ".read": true,
         ".write": true
       }
+    },
+    "assessments": {
+      ".read": true,
+      ".write": true
+    },
+    "school_notices": {
+      ".read": true,
+      ".write": true
     }
   }
 }

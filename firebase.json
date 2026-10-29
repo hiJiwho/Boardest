@@ -37,6 +37,26 @@
       ],
       "redirects": [
         {
+          "source": "/class",
+          "destination": "https://boardest-class.web.app",
+          "type": 302
+        },
+        {
+          "source": "/class/**",
+          "destination": "https://boardest-class.web.app",
+          "type": 302
+        },
+        {
+          "source": "/student",
+          "destination": "https://boardest-student.web.app",
+          "type": 302
+        },
+        {
+          "source": "/student/**",
+          "destination": "https://boardest-student.web.app",
+          "type": 302
+        },
+        {
           "source": "/boardest-teacher.msi",
           "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.msi",
           "type": 302
@@ -236,6 +256,26 @@
         }
       ],
       "redirects": [
+        {
+          "source": "/class",
+          "destination": "https://boardest-class.web.app",
+          "type": 302
+        },
+        {
+          "source": "/class/**",
+          "destination": "https://boardest-class.web.app",
+          "type": 302
+        },
+        {
+          "source": "/student",
+          "destination": "https://boardest-student.web.app",
+          "type": 302
+        },
+        {
+          "source": "/student/**",
+          "destination": "https://boardest-student.web.app",
+          "type": 302
+        },
         {
           "source": "/boardest-teacher.msi",
           "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.msi",
@@ -986,6 +1026,33 @@
             {
               "key": "Access-Control-Allow-Origin",
               "value": "*"
+            }
+          ]
+        }
+      ],
+      "cleanUrls": true,
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    },
+    {
+      "target": "boardest-student",
+      "public": "infra/student_web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
             }
           ]
         }

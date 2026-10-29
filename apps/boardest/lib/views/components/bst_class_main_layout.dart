@@ -1,6 +1,9 @@
 import 'assessment_dialog.dart';
 import '../../models/assessment_item.dart';
 import '../../services/assessment_service.dart';
+import '../../models/school_notice.dart';
+import '../../services/school_notice_service.dart';
+import 'school_notice_dialog.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' show PointerDeviceKind;
@@ -36,6 +39,9 @@ class BstClassMainLayout extends StatefulWidget {
   final String appName;
   final String schoolName;
   final String gradeClass;
+  final String schoolCode;
+  final int grade;
+  final int classNum;
   final List<TimetablePeriodItem> periods;
   final ValueChanged<int>? onPeriodTap;
   final String? Function(String subject)? getTextbookPath;
@@ -102,6 +108,9 @@ class BstClassMainLayout extends StatefulWidget {
     this.appName = 'Class',
     this.schoolName = '보데스트 중학교',
     this.gradeClass = '1학년 7반',
+    this.schoolCode = 'default',
+    this.grade = 1,
+    this.classNum = 1,
     this.periods = const [],
     this.onPeriodTap,
     this.getTextbookPath,
@@ -330,24 +339,73 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
 
   Timer? _tickerTimer;
   int _selectedMealDayOffset = 0;
+  int _centerSlideIndex = 0;
+  Timer? _centerSlideTimer;
+
+  void _startCenterSlideTimer() {
+    _centerSlideTimer?.cancel();
+    final notices = SchoolNoticeService.instance.notices;
+    final totalSlides = 2 + notices.length;
+    if (totalSlides <= 1) return;
+
+    int seconds = 60; // 0: 수업 (60초)
+    if (_centerSlideIndex == 1) {
+      seconds = 90; // 1슬라이드: 무조건 수행 안내 (대기시간 1분 30초 = 90초)
+    } else if (_centerSlideIndex >= 2) {
+      seconds = 30; // 2~N슬라이드: 광고판 (30초 간격)
+    }
+
+    _centerSlideTimer = Timer(Duration(seconds: seconds), () {
+      if (!mounted) return;
+      final curTotal = 2 + SchoolNoticeService.instance.notices.length;
+      setState(() {
+        _centerSlideIndex = (_centerSlideIndex + 1) % curTotal;
+      });
+      _startCenterSlideTimer();
+    });
+  }
+
+  void _changeCenterSlide(int delta) {
+    final curTotal = 2 + SchoolNoticeService.instance.notices.length;
+    setState(() {
+      _centerSlideIndex = (_centerSlideIndex + delta + curTotal) % curTotal;
+    });
+    _startCenterSlideTimer();
+  }
+
+  void _setCenterSlide(int idx) {
+    setState(() {
+      _centerSlideIndex = idx;
+    });
+    _startCenterSlideTimer();
+  }
 
   @override
   void initState() {
     super.initState();
     _initCurrentPeriod();
     _loadSystemApps();
-    int g = 1;
-    int c = 1;
-    final m = RegExp(r'(\d+)\s*[-학년]\s*(\d+)?').firstMatch(widget.gradeClass);
-    if (m != null) {
-      g = int.tryParse(m.group(1) ?? '1') ?? 1;
-      c = int.tryParse(m.group(2) ?? '1') ?? 1;
+    int g = widget.grade;
+    int c = widget.classNum;
+    if (g <= 0 || c <= 0) {
+      final m = RegExp(r'(\d+)\s*[-학년]\s*(\d+)?').firstMatch(widget.gradeClass);
+      if (m != null) {
+        g = int.tryParse(m.group(1) ?? '1') ?? 1;
+        c = int.tryParse(m.group(2) ?? '1') ?? 1;
+      }
     }
+    final effectiveCode = widget.schoolCode.isNotEmpty && widget.schoolCode != 'default'
+        ? widget.schoolCode
+        : widget.schoolName;
     AssessmentService.instance.loadAssessments(
-      schoolCode: widget.schoolName,
+      schoolCode: effectiveCode,
       grade: g,
       classNum: c,
     );
+    SchoolNoticeService.instance.loadNotices(
+      schoolCode: effectiveCode,
+    );
+    _startCenterSlideTimer();
     _tickerTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -355,6 +413,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
 
   @override
   void dispose() {
+    _centerSlideTimer?.cancel();
     _tickerTimer?.cancel();
     super.dispose();
   }
@@ -1143,6 +1202,8 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                         style: _ts(14, w: FontWeight.w700, c: Colors.white70),
                       ),
                     ),
+                    const Spacer(),
+                    _buildSlideControlsHeader(),
                   ],
                 ),
                 // 과목명 또는 특수 일과 텍스트 크게 표시
@@ -1179,6 +1240,405 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSlideControlsHeader() {
+    final notices = SchoolNoticeService.instance.notices;
+    final totalSlides = 2 + notices.length;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.45),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Previous button
+          InkWell(
+            onTap: () => _changeCenterSlide(-1),
+            borderRadius: BorderRadius.circular(6),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 20),
+            ),
+          ),
+          const SizedBox(width: 2),
+          // Slide pills
+          ...List.generate(totalSlides, (i) {
+            final isCurrent = i == _centerSlideIndex;
+            String label;
+            if (i == 0) {
+              label = '수업';
+            } else if (i == 1) {
+              label = '수행 안내';
+            } else {
+              label = '행사 ${i - 1}';
+            }
+
+            return InkWell(
+              onTap: () => _setCenterSlide(i),
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isCurrent ? const Color(0xFF00F5D4) : Colors.white.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'SiwonhanSeolreim',
+                    color: isCurrent ? Colors.black : Colors.white70,
+                    fontSize: 11,
+                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              ),
+            );
+          }),
+          const SizedBox(width: 2),
+          // Next button
+          InkWell(
+            onTap: () => _changeCenterSlide(1),
+            borderRadius: BorderRadius.circular(6),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Icon(Icons.chevron_right_rounded, color: Colors.white70, size: 20),
+            ),
+          ),
+          const SizedBox(width: 4),
+          // Quick add button
+          InkWell(
+            onTap: () {
+              final effectiveCode = widget.schoolCode.isNotEmpty && widget.schoolCode != 'default'
+                  ? widget.schoolCode
+                  : widget.schoolName;
+              if (_centerSlideIndex == 1) {
+                AssessmentDialog.show(
+                  context,
+                  schoolCode: effectiveCode,
+                  grade: widget.grade,
+                  classNum: widget.classNum,
+                  initialShowAdd: true,
+                );
+              } else {
+                SchoolNoticeDialog.show(
+                  context,
+                  schoolCode: effectiveCode,
+                  initialShowAdd: true,
+                );
+              }
+            },
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00F5D4).withOpacity(0.18),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.4)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.add_rounded, color: Color(0xFF00F5D4), size: 14),
+                  const SizedBox(width: 2),
+                  Text(
+                    _centerSlideIndex == 1 ? '수행 등록' : '행사 등록',
+                    style: const TextStyle(
+                      fontFamily: 'SiwonhanSeolreim',
+                      color: Color(0xFF00F5D4),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Slide 1: 무조건 수행 안내 (대기시간 1분 30초)
+  Widget _buildAssessmentSlide() {
+    final effectiveCode = widget.schoolCode.isNotEmpty && widget.schoolCode != 'default'
+        ? widget.schoolCode
+        : widget.schoolName;
+
+    return ValueListenableBuilder<List<AssessmentItem>>(
+      valueListenable: AssessmentService.instance.assessmentsNotifier,
+      builder: (ctx, assessments, _) {
+        return _glassSurface(
+          glow: true,
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00F5D4),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.assignment_turned_in_rounded, size: 14, color: Colors.black),
+                        const SizedBox(width: 5),
+                        Text(
+                          '수행평가 & 과제 안내',
+                          style: _ts(13, w: FontWeight.w900, c: Colors.black),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '우리반 마감 일정 (${assessments.length}건)',
+                      style: _ts(13, w: FontWeight.w700, c: Colors.white70),
+                    ),
+                  ),
+                  const Spacer(),
+                  _buildSlideControlsHeader(),
+                ],
+              ),
+              const SizedBox(height: 10),
+              // Body
+              Expanded(
+                child: assessments.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.celebration_rounded, size: 48, color: const Color(0xFF00F5D4).withOpacity(0.4)),
+                            const SizedBox(height: 10),
+                            Text('등록된 수행평가 및 과제가 없습니다.', style: _ts(18, w: FontWeight.w800, c: Colors.white)),
+                            const SizedBox(height: 6),
+                            Text('자유롭고 여유로운 하루를 즐기세요!', style: _ts(14, w: FontWeight.w600, c: Colors.white54)),
+                          ],
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: assessments.take(3).length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (ctx, idx) {
+                          final item = assessments[idx];
+                          final d = item.dDay;
+                          final isUrgent = d <= 1 && d >= 0;
+                          return InkWell(
+                            onTap: () {
+                              AssessmentDialog.show(
+                                context,
+                                schoolCode: effectiveCode,
+                                grade: widget.grade,
+                                classNum: widget.classNum,
+                                initialItem: item,
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: isUrgent ? const Color(0xFFEF4565).withOpacity(0.5) : Colors.white10,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isUrgent ? const Color(0xFFEF4565) : const Color(0xFF00F5D4).withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      item.dDayString,
+                                      style: TextStyle(
+                                        fontFamily: 'SiwonhanSeolreim',
+                                        color: isUrgent ? Colors.white : const Color(0xFF00F5D4),
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white10,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(item.subject, style: _ts(12, w: FontWeight.bold, c: Colors.white70)),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      item.title,
+                                      style: _ts(16, w: FontWeight.bold, c: Colors.white),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    item.scheduleDisplay,
+                                    style: _ts(13, w: FontWeight.w600, c: Colors.white54),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Slide 2~N: 학교 행사 및 공지 광고판 (무조건 사진 + 제목 형식)
+  Widget _buildSchoolNoticeSlide(SchoolNotice notice) {
+    return _glassSurface(
+      glow: true,
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Photo (사진)
+            Image.network(
+              notice.imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                color: const Color(0xFF16161A),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.image_not_supported_rounded, color: Colors.white24, size: 54),
+                      const SizedBox(height: 8),
+                      Text(notice.title, style: _ts(16, c: Colors.white54)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Top Controls overlay
+            Positioned(
+              top: 12,
+              right: 12,
+              child: _buildSlideControlsHeader(),
+            ),
+            // Bottom Gradient & Title (무조건 사진 + 제목)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 40, 20, 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.92),
+                      Colors.black.withOpacity(0.6),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00F5D4),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            '학교 소식 · 행사',
+                            style: TextStyle(
+                              fontFamily: 'SiwonhanSeolreim',
+                              color: Colors.black,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        if (notice.endDate != null && notice.endDate!.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            '종료: ${notice.endDate}',
+                            style: _ts(12, w: FontWeight.bold, c: Colors.white70),
+                          ),
+                        ],
+                        if (notice.teacherName.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            '• ${notice.teacherName}',
+                            style: _ts(12, c: Colors.white54),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      notice.title,
+                      style: _ts(26, w: FontWeight.w900, h: 1.1),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 중앙 교대 카드 (0: 수업, 1: 수행 안내, 2..: 행사 광고)
+  Widget _buildCenterRotatingCard(TimetablePeriodItem p) {
+    return ValueListenableBuilder<List<SchoolNotice>>(
+      valueListenable: SchoolNoticeService.instance.noticesNotifier,
+      builder: (ctx, notices, _) {
+        final totalSlides = 2 + notices.length;
+        if (_centerSlideIndex >= totalSlides) {
+          _centerSlideIndex = 0;
+        }
+
+        if (_centerSlideIndex == 1) {
+          return _buildAssessmentSlide();
+        } else if (_centerSlideIndex >= 2 && _centerSlideIndex - 2 < notices.length) {
+          return _buildSchoolNoticeSlide(notices[_centerSlideIndex - 2]);
+        }
+        return _currentPeriodCard(p);
+      },
     );
   }
 
@@ -1709,7 +2169,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
             children: [
               Expanded(
                 flex: 1,
-                child: _currentPeriodCard(activePeriod),
+                child: _buildCenterRotatingCard(activePeriod),
               ),
               const SizedBox(width: 10),
               Expanded(

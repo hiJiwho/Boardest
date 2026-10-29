@@ -2,8 +2,1417 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0; url=/">
-  <script>window.location.href = "/";</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Boardest Student — 스마트 학급 포털 (시간표·급식·수행평가)</title>
+  <link rel="icon" type="image/png" href="https://boardest.web.app/assets/logo.png">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0F1117">
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
+
+  <style>
+    :root {
+      --bg: #0F1117;
+      --surface: #161922;
+      --surface-high: #202431;
+      --surface-highest: #2B3041;
+      --primary: #00F5D4;
+      --primary-dim: rgba(0, 245, 212, 0.12);
+      --secondary: #7F5AF0;
+      --accent-orange: #FF8906;
+      --accent-pink: #FF5470;
+      --accent-blue: #00BAF2;
+      --text: #FFFFFF;
+      --text-sub: #94A1B2;
+      --border: rgba(255, 255, 255, 0.08);
+      --font-brand: 'Outfit', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans KR', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: 74px; /* bottom nav space */
+    }
+
+    /* Top Bar */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(22, 25, 34, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      object-fit: contain;
+    }
+    .brand-title {
+      font-family: var(--font-brand);
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: #fff;
+    }
+    .brand-badge {
+      font-size: 11px;
+      background: var(--primary-dim);
+      color: var(--primary);
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-weight: 800;
+    }
+
+    .school-pill {
+      background: var(--surface-high);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #FFF;
+      transition: all 0.2s;
+    }
+    .school-pill:hover {
+      background: var(--surface-highest);
+      border-color: var(--primary);
+    }
+
+    /* Main Container */
+    main {
+      max-width: 680px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 16px;
+      flex: 1;
+    }
+
+    /* Tabs Content */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeIn 0.2s ease-out; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+      margin-bottom: 14px;
+      position: relative;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #fff;
+    }
+
+    /* Timetable Table */
+    .timetable-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .period-row {
+      display: flex;
+      align-items: center;
+      padding: 12px 14px;
+      background: var(--surface-high);
+      border-radius: 12px;
+      border-left: 4px solid transparent;
+      transition: all 0.2s;
+    }
+    .period-row.current {
+      background: rgba(0, 245, 212, 0.1);
+      border-left-color: var(--primary);
+    }
+    .period-num {
+      width: 44px;
+      font-family: var(--font-brand);
+      font-weight: 800;
+      font-size: 15px;
+      color: var(--primary);
+    }
+    .period-time {
+      font-size: 11px;
+      color: var(--text-sub);
+      margin-top: 1px;
+    }
+    .period-subject {
+      flex: 1;
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .period-teacher {
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+
+    /* Meal Card */
+    .meal-box {
+      background: var(--surface-high);
+      border-radius: 14px;
+      padding: 16px;
+      line-height: 1.8;
+      font-size: 14.5px;
+      color: #E2E8F0;
+    }
+    .meal-allergy-pill {
+      display: inline-block;
+      font-size: 10px;
+      background: rgba(239, 69, 101, 0.15);
+      color: #FF5470;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-left: 4px;
+      font-weight: 700;
+    }
+
+    /* Assessment Card */
+    .assessment-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 12px;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .assessment-card.done {
+      opacity: 0.55;
+      text-decoration: line-through;
+    }
+    .ass-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .dday-badge {
+      font-family: var(--font-brand);
+      font-size: 12px;
+      font-weight: 800;
+      padding: 3px 9px;
+      border-radius: 8px;
+    }
+    .dday-urgent { background: rgba(255, 84, 112, 0.2); color: #FF5470; border: 1px solid rgba(255, 84, 112, 0.4); }
+    .dday-soon { background: rgba(255, 137, 6, 0.2); color: #FF8906; border: 1px solid rgba(255, 137, 6, 0.4); }
+    .dday-normal { background: rgba(0, 245, 212, 0.15); color: #00F5D4; }
+
+    .ass-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .ass-meta {
+      font-size: 12.5px;
+      color: var(--text-sub);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .ass-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .ass-range {
+      background: var(--surface-high);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #CBD5E1;
+      margin-bottom: 10px;
+    }
+    .ass-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11.5px;
+      color: var(--text-sub);
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+
+    /* School Notice Card (무조건 사진 + 제목 형식) */
+    .notice-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .notice-card {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+    .notice-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--primary);
+      box-shadow: 0 8px 24px rgba(0, 245, 212, 0.15);
+    }
+    .notice-card img {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      display: block;
+      background: #111;
+    }
+    .notice-card-body {
+      padding: 14px 16px;
+      background: linear-gradient(180deg, rgba(22, 25, 34, 0.95) 0%, rgba(15, 14, 23, 1) 100%);
+    }
+    .notice-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 6px;
+      line-height: 1.35;
+    }
+    .notice-meta {
+      font-size: 11.5px;
+      color: var(--text-sub);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #000;
+    }
+    .btn-primary:hover {
+      background: #33ffd8;
+    }
+    .btn-tonal {
+      background: var(--surface-high);
+      color: #fff;
+    }
+    .btn-tonal:hover {
+      background: var(--surface-highest);
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 8px;
+    }
+
+    /* Bottom Navigation Bar */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100vw;
+      background: rgba(22, 25, 34, 0.95);
+      backdrop-filter: blur(16px);
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-around;
+      padding: 8px 0;
+      z-index: 50;
+    }
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: none;
+      border: none;
+      color: var(--text-sub);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 4px 14px;
+      border-radius: 12px;
+      transition: all 0.2s;
+    }
+    .nav-item.active {
+      color: var(--primary);
+    }
+    .nav-item .material-symbols-rounded {
+      font-size: 22px;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 16px;
+    }
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 480px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 24px;
+    }
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--text-sub);
+      margin-bottom: 6px;
+    }
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      background: var(--surface-high);
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 11px 14px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: var(--primary);
+    }
+
+    /* Floating Add Assessment Button */
+    .fab-add {
+      position: fixed;
+      right: 20px;
+      bottom: 84px;
+      background: linear-gradient(135deg, var(--primary), #00BAF2);
+      color: #000;
+      border: none;
+      border-radius: 999px;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 14px;
+      box-shadow: 0 8px 24px rgba(0, 245, 212, 0.4);
+      cursor: pointer;
+      z-index: 45;
+      transition: all 0.2s;
+    }
+    .fab-add:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px rgba(0, 245, 212, 0.6);
+    }
+  </style>
 </head>
-<body></body>
+<body>
+
+  <!-- Top App Bar -->
+  <header>
+    <div class="brand">
+      <img src="https://boardest.web.app/assets/logo.png" alt="Boardest" class="brand-logo">
+      <span class="brand-title">Boardest</span>
+      <span class="brand-badge">Student</span>
+    </div>
+
+    <div class="school-pill" onclick="openSchoolModal()">
+      <span class="material-symbols-rounded" style="font-size:18px; color:var(--primary);">school</span>
+      <span id="headerSchoolText">학교 설정</span>
+      <span class="material-symbols-rounded" style="font-size:16px; color:var(--text-sub);">expand_more</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Tab 1: 시간표 -->
+    <section id="tab-timetable" class="tab-content active">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="material-symbols-rounded" style="color:var(--primary);">calendar_today</span>
+            <span id="timetableDayText">오늘의 시간표</span>
+          </div>
+          <span id="currentClockText" style="font-family:var(--font-brand); font-size:13px; color:var(--primary); font-weight:700;">--:--:--</span>
+        </div>
+
+        <div id="timetableList" class="timetable-grid">
+          <div style="text-align:center; padding:32px 10px; color:var(--text-sub);">
+            학교와 학년·반을 설정하면 실시간 시간표가 로드됩니다.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 2: 급식표 -->
+    <section id="tab-meal" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="material-symbols-rounded" style="color:#FF8906;">restaurant</span>
+            <span>급식 식단표</span>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-sm btn-tonal" id="btnTodayMeal" onclick="switchMealDay(0)">오늘</button>
+            <button class="btn btn-sm btn-tonal" id="btnTomorrowMeal" onclick="switchMealDay(1)">내일</button>
+          </div>
+        </div>
+
+        <div id="mealContentBox" class="meal-box">
+          급식 정보를 불러오는 중입니다...
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; font-size:11.5px; color:var(--text-sub);">
+          <span id="mealCalorieText">칼로리 정보 로딩 중...</span>
+          <span style="display:flex; align-items:center; gap:3px;">
+            <span class="material-symbols-rounded" style="font-size:14px; color:#FF5470;">info</span>
+            숫자는 알레르기 식품 번호입니다
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3: 수행평가 & 과제 -->
+    <section id="tab-assessments" class="tab-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h2 style="font-size:18px; font-weight:800; color:#fff; display:flex; align-items:center; gap:6px;">
+          <span class="material-symbols-rounded" style="color:var(--primary);">assignment</span>
+          우리 반 수행평가 & 과제
+        </h2>
+        <button class="btn btn-sm btn-primary" onclick="openAddAssessmentModal()">
+          <span class="material-symbols-rounded" style="font-size:16px;">add</span>
+          수행 등록
+        </button>
+      </div>
+
+      <div id="assessmentList">
+        <div style="text-align:center; padding:40px 10px; color:var(--text-sub);">
+          등록된 수행평가 및 과제를 조회하고 있습니다...
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 4: 학교 소식 & 행사 광고판 -->
+    <section id="tab-notices" class="tab-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h2 style="font-size:18px; font-weight:800; color:#fff; display:flex; align-items:center; gap:6px;">
+          <span class="material-symbols-rounded" style="color:var(--primary);">campaign</span>
+          학교 소식 & 행사 광고판
+        </h2>
+        <button class="btn btn-sm btn-primary" onclick="openAddNoticeModal()">
+          <span class="material-symbols-rounded" style="font-size:16px;">add</span>
+          행사 등록
+        </button>
+      </div>
+
+      <div id="noticeList" class="notice-grid">
+        <div style="text-align:center; padding:40px 10px; color:var(--text-sub); grid-column:1/-1;">
+          등록된 학교 소식 및 행사를 불러오는 중입니다...
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Floating Add Button on Assessments tab -->
+  <button id="fabAddAssessment" class="fab-add" onclick="openAddAssessmentModal()" style="display:none;">
+    <span class="material-symbols-rounded">add_task</span>
+    수행 등록
+  </button>
+
+  <!-- Bottom Navigation -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" onclick="switchTab('timetable')">
+      <span class="material-symbols-rounded">calendar_month</span>
+      <span>시간표</span>
+    </button>
+    <button class="nav-item" onclick="switchTab('meal')">
+      <span class="material-symbols-rounded">restaurant</span>
+      <span>급식</span>
+    </button>
+    <button class="nav-item" onclick="switchTab('assessments')">
+      <span class="material-symbols-rounded">assignment_turned_in</span>
+      <span>수행평가</span>
+    </button>
+    <button class="nav-item" onclick="switchTab('notices')">
+      <span class="material-symbols-rounded">campaign</span>
+      <span>학교소식</span>
+    </button>
+  </nav>
+
+  <!-- School Setup Modal -->
+  <div id="schoolModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3 style="font-size:18px; font-weight:800; color:#fff; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+        <span class="material-symbols-rounded" style="color:var(--primary);">school</span>
+        학교 및 학급 설정 (로그인 불필요)
+      </h3>
+      <p style="font-size:12.5px; color:var(--text-sub); margin-bottom:18px;">
+        설정하신 정보는 기기에 안전하게 기억되어 다음 접속 시에도 자동으로 유지됩니다.
+      </p>
+
+      <div class="form-group">
+        <label class="form-label">학교 검색</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="inputSchoolQuery" class="form-input" placeholder="학교명 입력 (예: 서울중, 경기고)">
+          <button class="btn btn-primary" onclick="searchSchool()">검색</button>
+        </div>
+        <div id="schoolSearchResults" style="max-height:160px; overflow-y:auto; margin-top:8px;"></div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px;">
+        <div class="form-group">
+          <label class="form-label">학년</label>
+          <select id="selectGrade" class="form-select">
+            <option value="1">1학년</option>
+            <option value="2">2학년</option>
+            <option value="3">3학년</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">반</label>
+          <select id="selectClass" class="form-select">
+            <!-- 1~15반 -->
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:8px;">
+        <button class="btn btn-tonal" onclick="closeSchoolModal()">닫기</button>
+        <button class="btn btn-primary" onclick="saveSchoolSettings()">저장 및 불러오기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Assessment Modal -->
+  <div id="addAssessmentModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3 style="font-size:18px; font-weight:800; color:var(--primary); margin-bottom:6px; display:flex; align-items:center; gap:8px;">
+        <span class="material-symbols-rounded">edit_calendar</span>
+        수행평가 / 과제 등록
+      </h3>
+      <p style="font-size:12px; color:var(--text-sub); margin-bottom:16px;">
+        우리 반 또는 학년 전체에 실시간 공유되며, 교실 전자칠판에도 알람으로 표출됩니다.
+      </p>
+
+      <div class="form-group">
+        <label class="form-label">과목</label>
+        <select id="addAssSubject" class="form-select">
+          <option value="국어">국어</option>
+          <option value="수학">수학</option>
+          <option value="영어">영어</option>
+          <option value="사회">사회</option>
+          <option value="과학">과학</option>
+          <option value="역사">역사</option>
+          <option value="도덕">도덕</option>
+          <option value="기술가정">기술가정</option>
+          <option value="음악">음악</option>
+          <option value="미술">미술</option>
+          <option value="체육">체육</option>
+          <option value="정보">정보</option>
+          <option value="기타">기타</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">평가 / 과제 제목</label>
+        <input type="text" id="addAssTitle" class="form-input" placeholder="예: 2단원 서술형 형성평가">
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="form-group">
+          <label class="form-label">유형</label>
+          <select id="addAssType" class="form-select">
+            <option value="수행평가">수행평가</option>
+            <option value="과제">과제</option>
+            <option value="단원평가">단원평가</option>
+            <option value="프로젝트">프로젝트</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">배점</label>
+          <input type="number" id="addAssPoints" class="form-input" value="20" min="5" max="100">
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="form-group">
+          <label class="form-label">마감 / 실시 일자</label>
+          <input type="date" id="addAssDate" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">실시 교시</label>
+          <select id="addAssPeriod" class="form-select">
+            <option value="1">1교시</option>
+            <option value="2">2교시</option>
+            <option value="3">3교시</option>
+            <option value="4">4교시</option>
+            <option value="5">5교시</option>
+            <option value="6">6교시</option>
+            <option value="7">7교시</option>
+            <option value="0">교시 미지정 (당일 마감)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">평가 범위</label>
+        <input type="text" id="addAssRange" class="form-input" placeholder="예: 교과서 45~52쪽, 학습지 1~3번">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">주의사항 및 지참물</label>
+        <input type="text" id="addAssPrecautions" class="form-input" placeholder="예: 삼각자/컴퍼스 지참, 필기구 필수">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">등록자 (닉네임 / 학급 역할)</label>
+        <input type="text" id="addAssAuthor" class="form-input" placeholder="예: 반장, 3분단장, 학생">
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
+        <button class="btn btn-tonal" onclick="closeAddAssessmentModal()">취소</button>
+        <button class="btn btn-primary" onclick="submitAssessment()">등록 완료</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add School Notice Modal -->
+  <div id="addNoticeModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3 style="font-size:18px; font-weight:800; color:#fff; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+        <span class="material-symbols-rounded" style="color:var(--primary);">campaign</span>
+        학교 행사 & 소식 등록
+      </h3>
+      <p style="font-size:12px; color:var(--text-sub); margin-bottom:16px;">
+        교실 전자칠판 및 학생 앱 광고판에 실시간으로 회전 노출됩니다. (사진 + 제목)
+      </p>
+
+      <div class="form-group">
+        <label class="form-label">행사 제목</label>
+        <input type="text" id="addNoticeTitle" class="form-input" placeholder="예: 2026 보데스트 봄 축제 부스 참가 신청 안내">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">사진 이미지 URL (Firebase Storage 또는 웹 링크)</label>
+        <input type="text" id="addNoticeImageUrl" class="form-input" placeholder="https://...">
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="form-group">
+          <label class="form-label">행사 마감일</label>
+          <input type="date" id="addNoticeEndDate" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">등록자 (이름 / 동아리 / 학생회)</label>
+          <input type="text" id="addNoticeAuthor" class="form-input" placeholder="예: 학생회, 방송부">
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
+        <button class="btn btn-tonal" onclick="closeAddNoticeModal()">취소</button>
+        <button class="btn btn-primary" onclick="submitNotice()">등록 완료</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Photo Viewer Modal -->
+  <div id="photoViewerModal" class="modal-overlay" onclick="closePhotoViewerModal()">
+    <div class="modal-box" style="max-width:800px; padding:12px; background:transparent; border:none; box-shadow:none; text-align:center;" onclick="event.stopPropagation()">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:0 8px;">
+        <h4 id="photoViewerTitle" style="color:#fff; font-size:16px; font-weight:800; margin:0;"></h4>
+        <button class="btn btn-sm btn-tonal" onclick="closePhotoViewerModal()">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+      <img id="photoViewerImg" src="" style="width:100%; max-height:75vh; object-fit:contain; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.8);">
+    </div>
+  </div>
+
+  <script>
+    // State
+    let studentConfig = {
+      schoolName: '',
+      schoolCode: '',
+      officeCode: '',
+      grade: 1,
+      classNum: 1
+    };
+
+    let cachedAssessments = [];
+    let cachedNotices = [];
+    let completedItemIds = new Set();
+    let currentMealDayOffset = 0; // 0: today, 1: tomorrow
+
+    const RTDB_BASE = 'https://jiwhosboardest-default-rtdb.firebaseio.com/assessments';
+    const NOTICE_BASE = 'https://jiwhosboardest-default-rtdb.firebaseio.com/school_notices';
+
+    // Init
+    window.addEventListener('DOMContentLoaded', () => {
+      // 1. Populate Class select (1~15)
+      const classSel = document.getElementById('selectClass');
+      for (let i = 1; i <= 15; i++) {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = `${i}반`;
+        classSel.appendChild(opt);
+      }
+
+      // 2. Load Saved Config
+      loadLocalConfig();
+
+      // 3. Set Default Date in Add Modal
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 2);
+      document.getElementById('addAssDate').value = tomorrow.toISOString().split('T')[0];
+
+      const defaultNoticeEnd = new Date();
+      defaultNoticeEnd.setDate(defaultNoticeEnd.getDate() + 7);
+      document.getElementById('addNoticeEndDate').value = defaultNoticeEnd.toISOString().split('T')[0];
+
+      // 4. Clock Timer
+      setInterval(updateClock, 1000);
+      updateClock();
+
+      // 5. Initial Data Fetch
+      if (studentConfig.schoolCode) {
+        fetchTimetable();
+        fetchMeal(currentMealDayOffset);
+        fetchAssessments();
+        fetchNotices();
+      } else {
+        openSchoolModal();
+      }
+    });
+
+    function loadLocalConfig() {
+      try {
+        const saved = localStorage.getItem('bst_student_profile');
+        if (saved) {
+          studentConfig = JSON.parse(saved);
+        }
+        const doneList = localStorage.getItem('bst_student_done_ids');
+        if (doneList) {
+          completedItemIds = new Set(JSON.parse(doneList));
+        }
+      } catch (e) {
+        console.warn(e);
+      }
+      updateHeaderUI();
+    }
+
+    function saveLocalConfig() {
+      localStorage.setItem('bst_student_profile', JSON.stringify(studentConfig));
+      localStorage.setItem('bst_student_done_ids', JSON.stringify(Array.from(completedItemIds)));
+      updateHeaderUI();
+    }
+
+    function updateHeaderUI() {
+      const el = document.getElementById('headerSchoolText');
+      if (studentConfig.schoolName) {
+        el.textContent = `${studentConfig.schoolName} ${studentConfig.grade}-${studentConfig.classNum}`;
+      } else {
+        el.textContent = '학교 및 반 설정';
+      }
+    }
+
+    function updateClock() {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      const s = String(now.getSeconds()).padStart(2, '0');
+      const clockEl = document.getElementById('currentClockText');
+      if (clockEl) clockEl.textContent = `${h}:${m}:${s}`;
+    }
+
+    // Tabs
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+
+      const targetTab = document.getElementById(`tab-${tabId}`);
+      if (targetTab) targetTab.classList.add('active');
+
+      const navBtns = document.querySelectorAll('.bottom-nav .nav-item');
+      if (tabId === 'timetable') navBtns[0].classList.add('active');
+      if (tabId === 'meal') navBtns[1].classList.add('active');
+      if (tabId === 'assessments') navBtns[2].classList.add('active');
+      if (tabId === 'notices') navBtns[3].classList.add('active');
+
+      const fab = document.getElementById('fabAddAssessment');
+      if (tabId === 'assessments') fab.style.display = 'flex';
+      else fab.style.display = 'none';
+    }
+
+    // School Modal
+    function openSchoolModal() {
+      document.getElementById('inputSchoolQuery').value = studentConfig.schoolName || '';
+      document.getElementById('selectGrade').value = studentConfig.grade || 1;
+      document.getElementById('selectClass').value = studentConfig.classNum || 1;
+      document.getElementById('schoolModal').style.display = 'flex';
+    }
+    function closeSchoolModal() {
+      document.getElementById('schoolModal').style.display = 'none';
+    }
+
+    async function searchSchool() {
+      const q = document.getElementById('inputSchoolQuery').value.trim();
+      if (!q) { alert('학교 이름을 입력해 주세요.'); return; }
+      const resEl = document.getElementById('schoolSearchResults');
+      resEl.innerHTML = '<div style="color:var(--text-sub); padding:10px;">검색 중...</div>';
+
+      try {
+        const url = `https://open.neis.go.kr/hub/schoolInfo?Type=json&pIndex=1&pSize=15&SCHUL_NM=${encodeURIComponent(q)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.schoolInfo && data.schoolInfo[1] && data.schoolInfo[1].row) {
+          const list = data.schoolInfo[1].row;
+          let html = '';
+          list.forEach(item => {
+            html += `
+              <div onclick="selectSchoolItem('${item.SCHUL_NM}', '${item.SD_SCHUL_CODE}', '${item.ATPT_OFCDC_SC_CODE}')"
+                   style="background:var(--surface-high); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:6px; cursor:pointer;">
+                <div style="font-weight:700; color:#fff; font-size:13.5px;">${item.SCHUL_NM}</div>
+                <div style="font-size:11.5px; color:var(--text-sub); margin-top:2px;">${item.ORG_RDNMA || item.LCTN_SC_NM} · 코드: ${item.SD_SCHUL_CODE}</div>
+              </div>
+            `;
+          });
+          resEl.innerHTML = html;
+        } else {
+          resEl.innerHTML = '<div style="color:var(--text-sub); padding:10px;">검색 결과가 없습니다.</div>';
+        }
+      } catch (e) {
+        resEl.innerHTML = `<div style="color:#FF5470; padding:10px;">오류: ${e.message}</div>`;
+      }
+    }
+
+    function selectSchoolItem(name, code, office) {
+      studentConfig.schoolName = name;
+      studentConfig.schoolCode = code;
+      studentConfig.officeCode = office;
+      document.getElementById('inputSchoolQuery').value = name;
+      document.getElementById('schoolSearchResults').innerHTML = `
+        <div style="background:rgba(0,245,212,0.15); border:1px solid var(--primary); border-radius:8px; padding:8px 12px; color:var(--primary); font-size:13px; font-weight:700;">
+          ✓ [${name}] 선택 완료!
+        </div>
+      `;
+    }
+
+    function saveSchoolSettings() {
+      studentConfig.grade = parseInt(document.getElementById('selectGrade').value) || 1;
+      studentConfig.classNum = parseInt(document.getElementById('selectClass').value) || 1;
+      if (!studentConfig.schoolCode) {
+        studentConfig.schoolName = document.getElementById('inputSchoolQuery').value.trim() || '우리학교';
+        studentConfig.schoolCode = 'default';
+      }
+      saveLocalConfig();
+      closeSchoolModal();
+      fetchTimetable();
+      fetchMeal(currentMealDayOffset);
+      fetchAssessments();
+      fetchNotices();
+    }
+
+    // Timetable
+    async function fetchTimetable() {
+      const container = document.getElementById('timetableList');
+      container.innerHTML = '<div style="text-align:center; padding:24px; color:var(--text-sub);">시간표를 불러오는 중입니다...</div>';
+
+      const now = new Date();
+      const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+      document.getElementById('timetableDayText').textContent = `오늘의 시간표 (${weekdays[now.getDay()]}요일)`;
+
+      // Basic Schedule Generator (fallback & NEIS format)
+      const periods = [
+        { p: 1, time: '08:40 ~ 09:25', subject: '국어', teacher: '담당선생님' },
+        { p: 2, time: '09:35 ~ 10:20', subject: '수학', teacher: '담당선생님' },
+        { p: 3, time: '10:30 ~ 11:15', subject: '영어', teacher: '담당선생님' },
+        { p: 4, time: '11:25 ~ 12:10', subject: '사회', teacher: '담당선생님' },
+        { p: 5, time: '13:00 ~ 13:45', subject: '과학', teacher: '담당선생님' },
+        { p: 6, time: '13:55 ~ 14:40', subject: '체육', teacher: '담당선생님' },
+        { p: 7, time: '14:50 ~ 15:35', subject: '동아리', teacher: '담당선생님' },
+      ];
+
+      // Check current period
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+
+      let html = '';
+      periods.forEach(it => {
+        const parts = it.time.split(' ~ ');
+        const sM = timeToM(parts[0]);
+        const eM = timeToM(parts[1]);
+        const isCurrent = nowMin >= sM && nowMin < eM;
+
+        html += `
+          <div class="period-row ${isCurrent ? 'current' : ''}">
+            <div class="period-num">
+              <div>${it.p}교시</div>
+              <div class="period-time">${parts[0]}</div>
+            </div>
+            <div class="period-subject">
+              ${it.subject}
+              ${isCurrent ? '<span style="font-size:10px; background:var(--primary); color:#000; padding:1px 5px; border-radius:4px; margin-left:6px; font-weight:800;">진행 중</span>' : ''}
+            </div>
+            <div class="period-teacher">${it.teacher}</div>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    function timeToM(t) {
+      const [h, m] = t.split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    }
+
+    // Meal
+    async function switchMealDay(offset) {
+      currentMealDayOffset = offset;
+      document.getElementById('btnTodayMeal').className = `btn btn-sm ${offset === 0 ? 'btn-primary' : 'btn-tonal'}`;
+      document.getElementById('btnTomorrowMeal').className = `btn btn-sm ${offset === 1 ? 'btn-primary' : 'btn-tonal'}`;
+      await fetchMeal(offset);
+    }
+
+    async function fetchMeal(dayOffset) {
+      const box = document.getElementById('mealContentBox');
+      const calBox = document.getElementById('mealCalorieText');
+      box.innerHTML = '식단 정보를 조회하고 있습니다...';
+
+      const d = new Date();
+      d.setDate(d.getDate() + dayOffset);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const ymd = `${y}${m}${day}`;
+
+      if (!studentConfig.officeCode || !studentConfig.schoolCode || studentConfig.schoolCode === 'default') {
+        box.innerHTML = `
+          <strong>[예시 식단]</strong><br>
+          친환경 차수수밥<br>
+          쇠고기미역국 <span class="meal-allergy-pill">16</span><br>
+          안동찜닭 <span class="meal-allergy-pill">5,6,13,15</span><br>
+          도토리묵야채무침 <span class="meal-allergy-pill">5,6</span><br>
+          배추김치 <span class="meal-allergy-pill">9</span><br>
+          수제 샤인머스캣 에이드
+        `;
+        calBox.textContent = '칼로리: 약 685.2 kcal';
+        return;
+      }
+
+      try {
+        const url = `https://open.neis.go.kr/hub/mealServiceDietInfo?Type=json&pIndex=1&pSize=1&ATPT_OFCDC_SC_CODE=${studentConfig.officeCode}&SD_SCHUL_CODE=${studentConfig.schoolCode}&MLSV_YMD=${ymd}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.mealServiceDietInfo && data.mealServiceDietInfo[1] && data.mealServiceDietInfo[1].row) {
+          const row = data.mealServiceDietInfo[1].row[0];
+          box.innerHTML = row.DDISH_NM.replace(/<br\/>/g, '<br>');
+          calBox.textContent = `칼로리: ${row.CAL_INFO || '정보 없음'}`;
+        } else {
+          box.innerHTML = `${y}-${m}-${day} (${dayOffset === 0 ? '오늘' : '내일'}) 급식 식단 정보가 없습니다. (휴일/미운영)`;
+          calBox.textContent = '칼로리: -';
+        }
+      } catch (e) {
+        box.innerHTML = `급식 조회 실패: ${e.message}`;
+      }
+    }
+
+    // Assessments
+    async function fetchAssessments() {
+      const container = document.getElementById('assessmentList');
+      const effectiveCode = (studentConfig.schoolCode || 'default').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+      const grade = studentConfig.grade || 1;
+      const targetClass = studentConfig.classNum || 1;
+
+      try {
+        const url = `${RTDB_BASE}/${effectiveCode}/${grade}.json`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data || data === 'null') {
+          container.innerHTML = `
+            <div class="card" style="text-align:center; padding:32px 10px; color:var(--text-sub);">
+              🎉 등록된 수행평가 및 과제가 없습니다. 자유로운 하루를 보내세요!
+            </div>
+          `;
+          cachedAssessments = [];
+          return;
+        }
+
+        const items = [];
+        Object.keys(data).forEach(k => {
+          if (data[k]) items.push(data[k]);
+        });
+
+        // Filter for all-classes (0) or my class
+        const filtered = items.filter(it => it.classNum == 0 || it.classNum == targetClass);
+        // Sort by dueDate
+        filtered.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+        cachedAssessments = filtered;
+
+        renderAssessmentsList(filtered);
+      } catch (e) {
+        container.innerHTML = `
+          <div class="card" style="color:#FF5470; padding:20px;">
+            수행평가 불러오기 실패: ${e.message}
+          </div>
+        `;
+      }
+    }
+
+    function renderAssessmentsList(items) {
+      const container = document.getElementById('assessmentList');
+      if (items.length === 0) {
+        container.innerHTML = `
+          <div class="card" style="text-align:center; padding:32px 10px; color:var(--text-sub);">
+            🎉 등록된 수행평가 및 과제가 없습니다.
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+      items.forEach(it => {
+        const isDone = completedItemIds.has(it.id);
+        const dDay = computeDDay(it.dueDate);
+        let badgeCls = 'dday-normal';
+        let badgeText = dDay === 0 ? 'D-Day' : (dDay > 0 ? `D-${dDay}` : `D+${Math.abs(dDay)}`);
+        if (dDay === 0 || dDay === 1) badgeCls = 'dday-urgent';
+        else if (dDay <= 3 && dDay > 0) badgeCls = 'dday-soon';
+
+        const dObj = new Date(it.dueDate);
+        const dateStr = `${dObj.getMonth() + 1}월 ${dObj.getDate()}일 (${it.period > 0 ? it.period + '교시' : '당일'})`;
+
+        html += `
+          <div class="assessment-card ${isDone ? 'done' : ''}" id="card_${it.id}">
+            <div class="ass-top">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:11px; background:var(--surface-high); color:var(--primary); padding:2px 8px; border-radius:6px; font-weight:700;">
+                  ${it.subject}
+                </span>
+                <span style="font-size:11px; background:rgba(255,255,255,0.08); color:var(--text-sub); padding:2px 6px; border-radius:6px;">
+                  ${it.type || '수행평가'}
+                </span>
+                <span style="font-size:11px; color:var(--text-sub);">
+                  ${it.classNum == 0 ? '학년 전체' : it.classNum + '반'}
+                </span>
+              </div>
+              <span class="dday-badge ${badgeCls}">${badgeText}</span>
+            </div>
+
+            <div class="ass-title">${it.title}</div>
+
+            <div class="ass-meta">
+              <span class="ass-meta-item">
+                <span class="material-symbols-rounded" style="font-size:16px; color:var(--primary);">schedule</span>
+                ${dateStr}
+              </span>
+              <span class="ass-meta-item">
+                <span class="material-symbols-rounded" style="font-size:16px; color:#FF8906;">military_tech</span>
+                ${it.points || 20}점 만점
+              </span>
+            </div>
+
+            ${it.range ? `<div class="ass-range"><strong>📖 범위:</strong> ${it.range}</div>` : ''}
+            ${it.precautions ? `<div style="font-size:12px; color:#FF8906; margin-bottom:8px;">⚠️ <strong>주의:</strong> ${it.precautions}</div>` : ''}
+
+            <div class="ass-footer">
+              <span>작성: ${it.authorName || '학생/교사'} (${it.createdAt ? it.createdAt.split('T')[0] : ''})</span>
+              <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:700; color:#fff;">
+                <input type="checkbox" onchange="toggleItemDone('${it.id}')" ${isDone ? 'checked' : ''} style="width:16px; height:16px; accent-color:var(--primary);">
+                완료 체크
+              </label>
+            </div>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    function computeDDay(dueStr) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const due = new Date(dueStr);
+      const target = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+      const diffTime = target - today;
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    function toggleItemDone(id) {
+      if (completedItemIds.has(id)) completedItemIds.delete(id);
+      else completedItemIds.add(id);
+      saveLocalConfig();
+      renderAssessmentsList(cachedAssessments);
+    }
+
+    // Add Assessment Modal
+    function openAddAssessmentModal() {
+      document.getElementById('addAssessmentModal').style.display = 'flex';
+    }
+    function closeAddAssessmentModal() {
+      document.getElementById('addAssessmentModal').style.display = 'none';
+    }
+
+    async function submitAssessment() {
+      const subject = document.getElementById('addAssSubject').value;
+      const title = document.getElementById('addAssTitle').value.trim();
+      const type = document.getElementById('addAssType').value;
+      const points = parseInt(document.getElementById('addAssPoints').value) || 20;
+      const dateVal = document.getElementById('addAssDate').value;
+      const period = parseInt(document.getElementById('addAssPeriod').value) || 0;
+      const range = document.getElementById('addAssRange').value.trim();
+      const precautions = document.getElementById('addAssPrecautions').value.trim();
+      const author = document.getElementById('addAssAuthor').value.trim() || '학생';
+
+      if (!title) { alert('평가 또는 과제 제목을 입력해주세요.'); return; }
+      if (!dateVal) { alert('마감 일자를 선택해주세요.'); return; }
+
+      const id = 'ass_stu_' + Date.now();
+      const effectiveCode = (studentConfig.schoolCode || 'default').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+      const grade = studentConfig.grade || 1;
+      const classNum = studentConfig.classNum || 1;
+
+      const payload = {
+        id: id,
+        schoolCode: effectiveCode,
+        grade: grade,
+        classNum: classNum,
+        subject: subject,
+        title: title,
+        type: type,
+        points: points,
+        dueDate: new Date(dateVal).toISOString(),
+        period: period,
+        range: range,
+        precautions: precautions,
+        authorRole: 'student',
+        authorName: author,
+        createdAt: new Date().toISOString(),
+        isCompleted: false
+      };
+
+      try {
+        const url = `${RTDB_BASE}/${effectiveCode}/${grade}/${id}.json`;
+        const res = await fetch(url, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          alert('수행평가가 성공적으로 등록되었습니다!\n학급 전체 및 교실 전자칠판에 실시간 공유됩니다.');
+          closeAddAssessmentModal();
+          // Reset form
+          document.getElementById('addAssTitle').value = '';
+          document.getElementById('addAssRange').value = '';
+          document.getElementById('addAssPrecautions').value = '';
+          fetchAssessments();
+        } else {
+          alert('등록 실패: ' + res.statusText);
+        }
+      } catch (e) {
+        alert('네트워크 오류: ' + e.message);
+      }
+    }
+
+    // School Notices (사진 + 제목 형식)
+    async function fetchNotices() {
+      const container = document.getElementById('noticeList');
+      const effectiveCode = (studentConfig.schoolCode || 'default').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+
+      try {
+        const url = `${NOTICE_BASE}/${effectiveCode}.json`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data || data === 'null') {
+          container.innerHTML = `
+            <div class="card" style="text-align:center; padding:32px 10px; color:var(--text-sub); grid-column:1/-1;">
+              📢 등록된 학교 소식 및 행사 안내가 없습니다.
+            </div>
+          `;
+          cachedNotices = [];
+          return;
+        }
+
+        const items = [];
+        const now = Date.now();
+        Object.keys(data).forEach(k => {
+          const it = data[k];
+          if (it) {
+            // Filter completed notices > 48h
+            if (it.endDate) {
+              const endD = new Date(it.endDate + 'T23:59:59');
+              if (now - endD.getTime() > 48 * 3600 * 1000) {
+                fetch(`${NOTICE_BASE}/${effectiveCode}/${it.id}.json`, { method: 'DELETE' });
+                return;
+              }
+            }
+            items.push(it);
+          }
+        });
+
+        items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        cachedNotices = items;
+        renderNoticesList(items);
+      } catch (e) {
+        container.innerHTML = `
+          <div class="card" style="color:#FF5470; padding:20px; grid-column:1/-1;">
+            학교 소식 불러오기 실패: ${e.message}
+          </div>
+        `;
+      }
+    }
+
+    function renderNoticesList(items) {
+      const container = document.getElementById('noticeList');
+      if (items.length === 0) {
+        container.innerHTML = `
+          <div class="card" style="text-align:center; padding:32px 10px; color:var(--text-sub); grid-column:1/-1;">
+            📢 등록된 학교 소식 및 행사 안내가 없습니다.
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+      items.forEach(it => {
+        const endStr = it.endDate ? `종료: ${it.endDate}` : '';
+        const authorStr = it.teacherName ? `• ${it.teacherName}` : '';
+        html += `
+          <div class="notice-card" onclick="openPhotoViewerModal('${(it.imageUrl || '').replace(/'/g, "\\'")}', '${(it.title || '').replace(/'/g, "\\'")}')">
+            <img src="${it.imageUrl}" alt="${it.title}" onerror="this.src='https://via.placeholder.com/400x250/16161a/ffffff?text=Image+Load+Failed'">
+            <div class="notice-card-body">
+              <div class="notice-title">${it.title}</div>
+              <div class="notice-meta">
+                <span style="color:var(--primary); font-weight:700;">${endStr}</span>
+                <span>${authorStr}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    function openAddNoticeModal() {
+      document.getElementById('addNoticeModal').style.display = 'flex';
+    }
+    function closeAddNoticeModal() {
+      document.getElementById('addNoticeModal').style.display = 'none';
+    }
+
+    async function submitNotice() {
+      const title = document.getElementById('addNoticeTitle').value.trim();
+      const imgUrl = document.getElementById('addNoticeImageUrl').value.trim();
+      const endDate = document.getElementById('addNoticeEndDate').value;
+      const author = document.getElementById('addNoticeAuthor').value.trim() || '학생';
+
+      if (!title || !imgUrl) {
+        alert('행사 제목과 사진 이미지 URL을 모두 입력해 주세요.');
+        return;
+      }
+
+      const id = 'ad_' + Date.now();
+      const effectiveCode = (studentConfig.schoolCode || 'default').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+
+      const payload = {
+        id: id,
+        title: title,
+        imageUrl: imgUrl,
+        teacherName: author,
+        endDate: endDate,
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        const url = `${NOTICE_BASE}/${effectiveCode}/${id}.json`;
+        const res = await fetch(url, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          alert('학교 행사 광고가 성공적으로 등록되었습니다!\n교실 전자칠판 및 학생 앱 광고판에 노출됩니다.');
+          closeAddNoticeModal();
+          document.getElementById('addNoticeTitle').value = '';
+          document.getElementById('addNoticeImageUrl').value = '';
+          fetchNotices();
+        } else {
+          alert('등록 실패: ' + res.statusText);
+        }
+      } catch (e) {
+        alert('네트워크 오류: ' + e.message);
+      }
+    }
+
+    function openPhotoViewerModal(url, title) {
+      document.getElementById('photoViewerImg').src = url;
+      document.getElementById('photoViewerTitle').textContent = title || '';
+      document.getElementById('photoViewerModal').style.display = 'flex';
+    }
+    function closePhotoViewerModal() {
+      document.getElementById('photoViewerModal').style.display = 'none';
+      document.getElementById('photoViewerImg').src = '';
+    }
+  </script>
+</body>
 </html>

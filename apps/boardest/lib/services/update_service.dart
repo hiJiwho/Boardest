@@ -282,6 +282,7 @@ class UpdateService {
       }
     } catch (e) {
       debugPrint('[UpdateService] Update check failed: $e');
+      _lastSilentCheckTime = null; // 부팅 시 네트워크 미연결로 인한 실패 시 쿨다운 리셋하여 재시도 허용
     } finally {
       _isChecking = false;
     }
@@ -308,8 +309,14 @@ class UpdateService {
       stateNotifier.value = UpdateState.downloading;
       downloadProgressNotifier.value = 0.0;
 
-      final appSupport = await getApplicationSupportDirectory();
-      final updatesDir = Directory(p.join(appSupport.path, 'Updates'));
+      final Directory updatesDir;
+      if (!kIsWeb && Platform.isAndroid) {
+        final cacheDir = await getTemporaryDirectory();
+        updatesDir = Directory(p.join(cacheDir.path, 'Updates'));
+      } else {
+        final appSupport = await getApplicationSupportDirectory();
+        updatesDir = Directory(p.join(appSupport.path, 'Updates'));
+      }
       if (!updatesDir.existsSync()) {
         updatesDir.createSync(recursive: true);
       }

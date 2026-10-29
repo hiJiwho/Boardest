@@ -22,6 +22,7 @@ import '../models/school.dart';
 import '../models/lesson.dart';
 import '../models/app_settings.dart';
 import '../models/meal_models.dart';
+import '../models/school_notice.dart';
 import '../services/comcigan_service.dart';
 import '../services/storage_service.dart';
 import '../services/neis_service.dart';
@@ -230,6 +231,43 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
   bool _isTrustDeviceSaved = false;
   Future<List<BstCloudFile>>? _cloudFilesFuture;
 
+  List<SchoolNotice> _activeSchoolNotices = [];
+  int _centerSlideIndex = 0;
+  Timer? _adSlideTimer;
+
+  void _startAdSlideTimer() {
+    _adSlideTimer?.cancel();
+    int seconds = 60; // 0: 수업 슬라이드 (60초)
+    if (_centerSlideIndex == 1) {
+      seconds = 90; // 1슬라이드: 무조건 수행 안내 (대기시간 1분 30초 = 90초)
+    } else if (_centerSlideIndex >= 2) {
+      seconds = 30; // 2~N슬라이드: 광고/행사 (30초 간격)
+    }
+    _adSlideTimer = Timer(Duration(seconds: seconds), () {
+      if (!mounted) return;
+      final totalSlides = 2 + _activeSchoolNotices.length;
+      setState(() {
+        _centerSlideIndex = (_centerSlideIndex + 1) % totalSlides;
+      });
+      _startAdSlideTimer();
+    });
+  }
+
+  void _changeSlide(int delta) {
+    final totalSlides = 2 + _activeSchoolNotices.length;
+    setState(() {
+      _centerSlideIndex = (_centerSlideIndex + delta + totalSlides) % totalSlides;
+    });
+    _startAdSlideTimer();
+  }
+
+  void _setSlide(int index) {
+    setState(() {
+      _centerSlideIndex = index;
+    });
+    _startAdSlideTimer();
+  }
+
   void _refreshCloudFiles() {
     final token = BstCloudService.instance.activeToken;
     if (token != null && token.isNotEmpty) {
@@ -247,6 +285,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     super.initState();
     HardwareKeyboard.instance.addHandler(_handleDemoFullscreenKey);
     _refreshCloudFiles();
+    _startAdSlideTimer();
 
     // Auto OTP 등록 완료 FCM 리스너
     MealCallService.instance.onAutoOtpRegistered = (teacherName, teacherEmail) {
@@ -281,10 +320,18 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     _loadSavedTextbooksToMemory();
 
     if (!kIsWeb) {
+      UpdateService.stateNotifier.addListener(_onUpdateStateChanged);
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        UpdateService.checkAndUpdate(context, silent: true, channel: _settings.updateChannel);
         if (Platform.isAndroid) {
+          // Android 부팅 시 네트워크(Wi-Fi/이더넷) 안정화 대기 후 업데이트 확인
+          Future.delayed(const Duration(seconds: 5), () {
+            if (mounted) {
+              UpdateService.checkAndUpdate(context, silent: true, channel: _settings.updateChannel);
+            }
+          });
           _checkAndPromptHomeLauncher();
+        } else {
+          UpdateService.checkAndUpdate(context, silent: true, channel: _settings.updateChannel);
         }
         PanserPluginService.checkAndAutoInstallOnStartup(
           onStatus: (msg) {
@@ -371,6 +418,10 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
 
   @override
   void dispose() {
+    if (!kIsWeb) {
+      UpdateService.stateNotifier.removeListener(_onUpdateStateChanged);
+    }
+    _adSlideTimer?.cancel();
     MealCallService.instance.stopListening();
     _timer?.cancel();
     _cloudAutoLogoutTimer?.cancel();
@@ -381,6 +432,15 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
     _appDrawerSearchController.dispose();
     HardwareKeyboard.instance.removeHandler(_handleDemoFullscreenKey);
     super.dispose();
+  }
+
+  void _onUpdateStateChanged() {
+    if (!mounted) return;
+    if (UpdateService.stateNotifier.value == UpdateState.downloaded) {
+      if (!kIsWeb && Platform.isAndroid) {
+        UpdateService.executeInstall(context);
+      }
+    }
   }
 
   Future<void> _preloadAppsList() async {
@@ -5018,6 +5078,11 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                 : (_settings.specialClassroomMode ? 'Teacher PRO' : 'Class PRO'),
                             schoolName: _settings.selectedSchool?.name ?? (_settings.schoolId.isNotEmpty ? _settings.schoolId : '보데스트 중학교'),
                             gradeClass: '${_settings.selectedGrade}학년 ${_settings.selectedClass}반',
+                            schoolCode: _settings.schoolId.isNotEmpty
+                                ? _settings.schoolId
+                                : (_settings.selectedSchool?.code?.toString() ?? 'default'),
+                            grade: _settings.selectedGrade,
+                            classNum: _settings.selectedClass,
                             isSpecialRoom: _settings.specialClassroomMode,
                             specialSubjectName: _settings.selectedSubject.isNotEmpty ? _settings.selectedSubject : null,
                             showCloudFiles: !_hideCloudPanel,
