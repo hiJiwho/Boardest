@@ -52,6 +52,27 @@ class TbpDhashEngine {
   /// JS 해시 추출 및 이벤트 후킹 스크립트
   static const String _hashJsScript = '''
     (function() {
+      // ── [FHD 125% 표준 뷰포트 강제 락 (모든 기기/배율/해상도 편차 완전 제거)] ──
+      try {
+        var meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.name = 'viewport';
+          document.head.appendChild(meta);
+        }
+        // 1920 / 1.25 = 1536px 논리 해상도 고정
+        meta.content = 'width=1536, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+
+        var styleId = 'bst-fhd-lock-style';
+        var styleEl = document.getElementById(styleId);
+        if (!styleEl) {
+          styleEl = document.createElement('style');
+          styleEl.id = styleId;
+          document.head.appendChild(styleEl);
+        }
+        styleEl.textContent = 'html, body { width: 1536px !important; min-width: 1536px !important; margin: 0 auto !important; text-size-adjust: 100% !important; -webkit-text-size-adjust: 100% !important; }';
+      } catch (ve) {}
+
       function postToFlutter(payload) {
         var msg = JSON.stringify(payload);
         if (window.chrome && window.chrome.webview) {
