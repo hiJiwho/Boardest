@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta name="application-version" content="5.3.3">
+  <meta name="application-version" content="5.3.6">
   <!--
     If you are serving your web app in a path other than the root, change the
     href value below to reflect the base path you are serving from.
@@ -73,22 +73,13 @@
             console.log('[VersionHotSwap] New version detected:', currentVersion, '(was:', lastVersion, '). Purging cache & hot-reloading...');
             localStorage.setItem('bst_deployed_version', currentVersion);
             await purgeAllCachesAndSW();
-            window.location.reload(true);
+            window.location.reload();
             return;
           }
           localStorage.setItem('bst_deployed_version', currentVersion);
         }
       } catch (err) {
         console.log('[VersionHotSwap] Version fetch skipped:', err);
-      }
-
-      purgeAllCachesAndSW();
-
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.addEventListener('controllerchange', function() {
-          console.log('[SW] Controller changed, updating view...');
-          window.location.reload();
-        });
       }
     })();
   </script>
