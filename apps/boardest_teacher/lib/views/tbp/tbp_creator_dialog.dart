@@ -154,7 +154,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
       final shellFileName = '$safeTitle.tbp.bst';
 
       final fullMeta = <String, dynamic>{
-        'version': '5.3.3',
+        'version': '5.3.6',
         'id': new32Id,
         'folderId': new32Id,
         'title': safeTitle,
@@ -198,7 +198,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
           'title': safeTitle,
           'webUrl': webUrl,
           'createdAt': DateTime.now().millisecondsSinceEpoch,
-          'version': '5.3.3',
+          'version': '5.3.6',
         });
         await cloud.uploadBytesToDrive(
           Uint8List.fromList(utf8.encode(shellJson)),
@@ -225,7 +225,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
           'title': safeTitle,
           'webUrl': webUrl,
           'createdAt': DateTime.now().millisecondsSinceEpoch,
-          'version': '5.3.3',
+          'version': '5.3.6',
         }));
         localDummyPath = dummyFile.path;
       }

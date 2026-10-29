@@ -553,7 +553,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            '✨ Boardest Cloud 새 버전(v${UpdateService.latestVersion ?? '5.3.3'}) 다운로드 완료!',
+                            '✨ Boardest Cloud 새 버전(v${UpdateService.latestVersion ?? '5.3.6'}) 다운로드 완료!',
                             style: GoogleFonts.notoSansKr(color: Colors.black, fontSize: 13, fontWeight: FontWeight.w900),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -569,7 +569,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              '지금 즉시 업데이트 설치 (v${UpdateService.latestVersion ?? '5.3.3'})',
+                              '지금 즉시 업데이트 설치 (v${UpdateService.latestVersion ?? '5.3.6'})',
                               style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontSize: 12, fontWeight: FontWeight.w900),
                             ),
                           ),
@@ -600,7 +600,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
                           ),
                           const SizedBox(width: 10),
                           Text(
-                            '🚀 새 버전(${UpdateService.latestVersion ?? '5.3.3'}) 백그라운드 다운로드 중... ($pct%)',
+                            '🚀 새 버전(${UpdateService.latestVersion ?? '5.3.6'}) 백그라운드 다운로드 중... ($pct%)',
                             style: GoogleFonts.notoSansKr(color: Colors.black, fontSize: 12, fontWeight: FontWeight.w900),
                           ),
                         ],

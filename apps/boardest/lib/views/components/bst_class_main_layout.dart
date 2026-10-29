@@ -473,7 +473,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            '✨ 새 버전(v${UpdateService.latestVersion ?? '5.3.3'}) 준비 완료! 급식표 화면과 무관하게 우측 버튼으로 즉시 업데이트할 수 있습니다.',
+                            '✨ 새 버전(v${UpdateService.latestVersion ?? '5.3.6'}) 준비 완료! 급식표 화면과 무관하게 우측 버튼으로 즉시 업데이트할 수 있습니다.',
                             style: _ts(12.5, w: FontWeight.w900, c: Colors.black),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -489,7 +489,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              '지금 즉시 업데이트 설치 (v${UpdateService.latestVersion ?? '5.3.3'})',
+                              '지금 즉시 업데이트 설치 (v${UpdateService.latestVersion ?? '5.3.6'})',
                               style: _ts(12, w: FontWeight.w900, c: const Color(0xFF00F5D4)),
                             ),
                           ),
@@ -520,7 +520,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                           ),
                           const SizedBox(width: 10),
                           Text(
-                            '🚀 새 버전(${UpdateService.latestVersion ?? '5.3.3'}) 백그라운드 다운로드 중... ($pct%)',
+                            '🚀 새 버전(${UpdateService.latestVersion ?? '5.3.6'}) 백그라운드 다운로드 중... ($pct%)',
                             style: _ts(12, w: FontWeight.w900, c: Colors.black),
                           ),
                           const Spacer(),
