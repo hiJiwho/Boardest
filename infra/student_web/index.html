@@ -209,6 +209,30 @@
       font-weight: 700;
     }
 
+    /* Filter Pills */
+    .filter-pill {
+      background: var(--surface-high);
+      border: 1px solid var(--border);
+      color: var(--text-sub);
+      padding: 5px 13px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .filter-pill:hover {
+      border-color: var(--primary);
+      color: #fff;
+    }
+    .filter-pill.active {
+      background: var(--primary);
+      color: #000;
+      border-color: var(--primary);
+      font-weight: 800;
+    }
+
     /* Assessment Card */
     .assessment-card {
       background: var(--surface);
@@ -533,7 +557,7 @@
 
     <!-- Tab 3: 수행평가 & 과제 -->
     <section id="tab-assessments" class="tab-content">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <h2 style="font-size:18px; font-weight:800; color:#fff; display:flex; align-items:center; gap:6px;">
           <span class="material-symbols-rounded" style="color:var(--primary);">assignment</span>
           우리 반 수행평가 & 과제
@@ -542,6 +566,39 @@
           <span class="material-symbols-rounded" style="font-size:16px;">add</span>
           수행 등록
         </button>
+      </div>
+
+      <!-- Search & Filters -->
+      <div style="margin-bottom: 12px; display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; gap:8px;">
+          <div style="position:relative; flex:1;">
+            <input type="text" id="assSearchInput" class="form-input" style="padding-left:34px; padding-top:8px; padding-bottom:8px; font-size:13px;" placeholder="과목, 과제명, 작성자 검색..." oninput="filterAssessments()">
+            <span class="material-symbols-rounded" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:18px; color:var(--text-sub);">search</span>
+          </div>
+          <button class="btn btn-sm btn-tonal" id="btnToggleHideDone" onclick="toggleHideDone()" title="완료 항목 숨기기 토글">
+            <span class="material-symbols-rounded" id="iconHideDone" style="font-size:16px;">visibility_off</span>
+            <span id="textHideDone">완료 숨김</span>
+          </button>
+        </div>
+
+        <!-- Subject Filter Pills -->
+        <div id="subjectPills" style="display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none;">
+          <button class="filter-pill active" onclick="setSubjectFilter('전체')">전체</button>
+          <button class="filter-pill" onclick="setSubjectFilter('국어')">국어</button>
+          <button class="filter-pill" onclick="setSubjectFilter('수학')">수학</button>
+          <button class="filter-pill" onclick="setSubjectFilter('영어')">영어</button>
+          <button class="filter-pill" onclick="setSubjectFilter('사회')">사회</button>
+          <button class="filter-pill" onclick="setSubjectFilter('과학')">과학</button>
+          <button class="filter-pill" onclick="setSubjectFilter('역사')">역사</button>
+          <button class="filter-pill" onclick="setSubjectFilter('도덕')">도덕</button>
+          <button class="filter-pill" onclick="setSubjectFilter('기타')">기타</button>
+        </div>
+
+        <!-- Summary Bar -->
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--text-sub); padding:0 2px;">
+          <span id="assTotalCountText">총 0건의 일정</span>
+          <span id="assDoneCountText" style="color:var(--primary); font-weight:700;">완료 0건</span>
+        </div>
       </div>
 
       <div id="assessmentList">
@@ -553,7 +610,7 @@
 
     <!-- Tab 4: 학교 소식 & 행사 광고판 -->
     <section id="tab-notices" class="tab-content">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <h2 style="font-size:18px; font-weight:800; color:#fff; display:flex; align-items:center; gap:6px;">
           <span class="material-symbols-rounded" style="color:var(--primary);">campaign</span>
           학교 소식 & 행사 광고판
@@ -561,6 +618,18 @@
         <button class="btn btn-sm btn-primary" onclick="openAddNoticeModal()">
           <span class="material-symbols-rounded" style="font-size:16px;">add</span>
           행사 등록
+        </button>
+      </div>
+
+      <!-- Notice Search & Refresh -->
+      <div style="margin-bottom: 12px; display:flex; gap:8px;">
+        <div style="position:relative; flex:1;">
+          <input type="text" id="noticeSearchInput" class="form-input" style="padding-left:34px; padding-top:8px; padding-bottom:8px; font-size:13px;" placeholder="학교 행사 및 소식 검색..." oninput="filterNotices()">
+          <span class="material-symbols-rounded" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:18px; color:var(--text-sub);">search</span>
+        </div>
+        <button class="btn btn-sm btn-tonal" onclick="fetchNotices()">
+          <span class="material-symbols-rounded" style="font-size:16px;">refresh</span>
+          새로고침
         </button>
       </div>
 
@@ -1075,6 +1144,86 @@
     }
 
     // Assessments
+    let currentSubjectFilter = '전체';
+    let hideCompleted = false;
+
+    function setSubjectFilter(subj) {
+      currentSubjectFilter = subj;
+      const pills = document.querySelectorAll('#subjectPills .filter-pill');
+      pills.forEach(p => {
+        if (p.textContent.trim() === subj) p.classList.add('active');
+        else p.classList.remove('active');
+      });
+      filterAssessments();
+    }
+
+    function toggleHideDone() {
+      hideCompleted = !hideCompleted;
+      const btn = document.getElementById('btnToggleHideDone');
+      const text = document.getElementById('textHideDone');
+      const icon = document.getElementById('iconHideDone');
+      if (hideCompleted) {
+        btn.className = 'btn btn-sm btn-primary';
+        text.textContent = '숨김 중';
+        icon.textContent = 'visibility';
+      } else {
+        btn.className = 'btn btn-sm btn-tonal';
+        text.textContent = '완료 숨김';
+        icon.textContent = 'visibility_off';
+      }
+      filterAssessments();
+    }
+
+    function filterAssessments() {
+      const q = (document.getElementById('assSearchInput') ? document.getElementById('assSearchInput').value : '').trim().toLowerCase();
+      let filtered = cachedAssessments.slice();
+
+      if (currentSubjectFilter !== '전체') {
+        if (currentSubjectFilter === '기타') {
+          const mainSubjects = ['국어', '수학', '영어', '사회', '과학', '역사', '도덕'];
+          filtered = filtered.filter(it => !mainSubjects.some(s => (it.subject || '').includes(s)));
+        } else {
+          filtered = filtered.filter(it => (it.subject || '').includes(currentSubjectFilter));
+        }
+      }
+
+      if (hideCompleted) {
+        filtered = filtered.filter(it => !completedItemIds.has(it.id));
+      }
+
+      if (q) {
+        filtered = filtered.filter(it => 
+          (it.title || '').toLowerCase().includes(q) ||
+          (it.subject || '').toLowerCase().includes(q) ||
+          (it.authorName || '').toLowerCase().includes(q) ||
+          (it.range || '').toLowerCase().includes(q)
+        );
+      }
+
+      const totalCount = cachedAssessments.length;
+      const doneCount = cachedAssessments.filter(it => completedItemIds.has(it.id)).length;
+      if (document.getElementById('assTotalCountText')) {
+        document.getElementById('assTotalCountText').textContent = `총 ${totalCount}건 (표시 ${filtered.length}건)`;
+      }
+      if (document.getElementById('assDoneCountText')) {
+        document.getElementById('assDoneCountText').textContent = `완료 ${doneCount}/${totalCount}건`;
+      }
+
+      renderAssessmentsList(filtered);
+    }
+
+    function filterNotices() {
+      const q = (document.getElementById('noticeSearchInput') ? document.getElementById('noticeSearchInput').value : '').trim().toLowerCase();
+      let filtered = cachedNotices.slice();
+      if (q) {
+        filtered = filtered.filter(it => 
+          (it.title || '').toLowerCase().includes(q) ||
+          (it.teacherName || '').toLowerCase().includes(q)
+        );
+      }
+      renderNoticesList(filtered);
+    }
+
     async function fetchAssessments() {
       const container = document.getElementById('assessmentList');
       const effectiveCode = (studentConfig.schoolCode || 'default').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
@@ -1093,6 +1242,7 @@
             </div>
           `;
           cachedAssessments = [];
+          filterAssessments();
           return;
         }
 
@@ -1107,7 +1257,7 @@
         filtered.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
         cachedAssessments = filtered;
 
-        renderAssessmentsList(filtered);
+        filterAssessments();
       } catch (e) {
         container.innerHTML = `
           <div class="card" style="color:#FF5470; padding:20px;">
@@ -1199,7 +1349,7 @@
       if (completedItemIds.has(id)) completedItemIds.delete(id);
       else completedItemIds.add(id);
       saveLocalConfig();
-      renderAssessmentsList(cachedAssessments);
+      filterAssessments();
     }
 
     // Add Assessment Modal
@@ -1311,7 +1461,7 @@
 
         items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         cachedNotices = items;
-        renderNoticesList(items);
+        filterNotices();
       } catch (e) {
         container.innerHTML = `
           <div class="card" style="color:#FF5470; padding:20px; grid-column:1/-1;">
