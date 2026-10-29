@@ -60,7 +60,7 @@ class TbpDhashEngine {
           meta.name = 'viewport';
           document.head.appendChild(meta);
         }
-        // 1920 / 1.25 = 1536px 논리 해상도 고정
+        // 1920 / 1.25 = 1536px 논리 해상도 고정 (16:9 비율: 1536 x 864)
         meta.content = 'width=1536, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
 
         var styleId = 'bst-fhd-lock-style';
@@ -70,7 +70,7 @@ class TbpDhashEngine {
           styleEl.id = styleId;
           document.head.appendChild(styleEl);
         }
-        styleEl.textContent = 'html, body { width: 1536px !important; min-width: 1536px !important; margin: 0 auto !important; text-size-adjust: 100% !important; -webkit-text-size-adjust: 100% !important; }';
+        styleEl.textContent = 'html, body { width: 1536px !important; min-width: 1536px !important; max-width: 1536px !important; height: 864px !important; min-height: 864px !important; margin: 0 auto !important; text-size-adjust: 100% !important; -webkit-text-size-adjust: 100% !important; box-sizing: border-box !important; }';
       } catch (ve) {}
 
       function postToFlutter(payload) {
