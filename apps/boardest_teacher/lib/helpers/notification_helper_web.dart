@@ -1,6 +1,5 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
-import 'dart:js_util' as js_util;
 import 'package:flutter/foundation.dart';
 
 Future<void> requestWebNotificationPermission() async {
@@ -31,30 +30,26 @@ void showWebBrowserNotification({required String title, required String body}) {
 
 void playNotificationChime() {
   try {
-    final audioCtxClass = js_util.getProperty(html.window, 'AudioContext') ??
-        js_util.getProperty(html.window, 'webkitAudioContext');
-    if (audioCtxClass == null) return;
+    final ctx = html.AudioContext();
+    final osc = ctx.createOscillator();
+    final gain = ctx.createGain();
 
-    final dynamic ctx = js_util.callConstructor(audioCtxClass, []);
-    final dynamic osc = js_util.callMethod(ctx, 'createOscillator', []);
-    final dynamic gain = js_util.callMethod(ctx, 'createGain', []);
+    osc.type = 'sine';
 
-    js_util.setProperty(osc, 'type', 'sine');
+    final num currentTime = ctx.currentTime ?? 0.0;
+    osc.frequency?.setValueAtTime(587.33, currentTime);
+    osc.frequency?.exponentialRampToValueAtTime(880.0, currentTime + 0.15);
 
-    final double currentTime = js_util.getProperty(ctx, 'currentTime') ?? 0.0;
-    final dynamic oscFreq = js_util.getProperty(osc, 'frequency');
-    js_util.callMethod(oscFreq, 'setValueAtTime', [587.33, currentTime]);
-    js_util.callMethod(oscFreq, 'exponentialRampToValueAtTime', [880.0, currentTime + 0.15]);
+    gain.gain?.setValueAtTime(0.3, currentTime);
+    gain.gain?.exponentialRampToValueAtTime(0.001, currentTime + 0.6);
 
-    final dynamic gainNode = js_util.getProperty(gain, 'gain');
-    js_util.callMethod(gainNode, 'setValueAtTime', [0.3, currentTime]);
-    js_util.callMethod(gainNode, 'exponentialRampToValueAtTime', [0.001, currentTime + 0.6]);
+    osc.connect(gain);
+    if (ctx.destination != null) {
+      gain.connect(ctx.destination!);
+    }
 
-    js_util.callMethod(osc, 'connect', [gain]);
-    js_util.callMethod(gain, 'connect', [js_util.getProperty(ctx, 'destination')]);
-
-    js_util.callMethod(osc, 'start', []);
-    js_util.callMethod(osc, 'stop', [currentTime + 0.6]);
+    osc.start();
+    osc.stop(currentTime + 0.6);
   } catch (e) {
     debugPrint('[WebNotification] playNotificationChime error: $e');
   }

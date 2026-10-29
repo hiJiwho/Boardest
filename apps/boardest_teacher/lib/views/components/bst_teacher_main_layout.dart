@@ -61,7 +61,7 @@ class BstTeacherMainLayout extends StatelessWidget {
   static const _nav = <(IconData, String, String)>[
     (Icons.dashboard_rounded, '대시보드', 'dashboard'),
     (Icons.calendar_month_rounded, '시간표', 'timetable'),
-    (Icons.assignment_turned_in_rounded, '수행평가', 'assessment'),
+    (Icons.assignment_turned_in_rounded, '수행 · 행사광고', 'assessment'),
     (Icons.add_circle_outline_rounded, '새로 만들기', 'create'),
     (Icons.folder_open_rounded, '파일 관리', 'files'),
     (Icons.mark_email_unread_rounded, '쪽지', 'memo'),

@@ -2020,6 +2020,39 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
     );
   }
 
+  Widget _buildLiteNoticeThumb(String imageUrl) {
+    if (imageUrl.startsWith('data:image')) {
+      try {
+        final commaIdx = imageUrl.indexOf(',');
+        final base64Str = commaIdx != -1 ? imageUrl.substring(commaIdx + 1) : imageUrl;
+        final bytes = base64Decode(base64Str);
+        return Image.memory(
+          bytes,
+          width: 64,
+          height: 64,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildLiteNoticeThumbFallback(),
+        );
+      } catch (_) {}
+    }
+    return Image.network(
+      imageUrl,
+      width: 64,
+      height: 64,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => _buildLiteNoticeThumbFallback(),
+    );
+  }
+
+  Widget _buildLiteNoticeThumbFallback() {
+    return Container(
+      width: 64,
+      height: 64,
+      color: Colors.black38,
+      child: const Icon(Icons.broken_image_rounded, color: Colors.white24),
+    );
+  }
+
   Widget _buildNoticesList() {
     if (_isLoadingNotices) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)));
@@ -2056,18 +2089,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  notice['imageUrl']?.toString() ?? '',
-                  width: 64,
-                  height: 64,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    width: 64,
-                    height: 64,
-                    color: Colors.black38,
-                    child: const Icon(Icons.broken_image_rounded, color: Colors.white24),
-                  ),
-                ),
+                child: _buildLiteNoticeThumb(notice['imageUrl']?.toString() ?? ''),
               ),
               const SizedBox(width: 12),
               Expanded(
