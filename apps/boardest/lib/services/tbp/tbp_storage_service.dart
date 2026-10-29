@@ -684,6 +684,8 @@ class TbpStorageService {
         }
       } else {
         final candidates = [
+          File(p.join(tbpFolderPath, 'BBplus', '$key.json')),
+          File(p.join(tbpFolderPath, 'BBplus', '$dHash.json')),
           File(p.join(tbpFolderPath, 'HOTspot', key, 'hotspot.bstsave')),
           File(p.join(tbpFolderPath, 'hotspot_$key.bstsave')),
           File(p.join(tbpFolderPath, 'HOTspot', dHash, 'hotspot.bstsave')),
@@ -780,6 +782,15 @@ class TbpStorageService {
         final cached = _webJsonCache['$tbpFolderPath::$subFolder::$base'];
         if (cached != null) return cached;
       } else {
+        final bbpenSvg = File(p.join(tbpFolderPath, 'BBPen', '$base.svg'));
+        if (bbpenSvg.existsSync()) return await bbpenSvg.readAsString();
+
+        final rawBbpenSvg = File(p.join(tbpFolderPath, 'BBPen', '$rawBase.svg'));
+        if (rawBbpenSvg.existsSync()) return await rawBbpenSvg.readAsString();
+
+        final bbpenJson = File(p.join(tbpFolderPath, 'BBPen', '$base.json'));
+        if (bbpenJson.existsSync()) return await bbpenJson.readAsString();
+
         final newFile = File(p.join(tbpFolderPath, subFolder, '$base.bstpen'));
         if (newFile.existsSync()) return await newFile.readAsString();
 
