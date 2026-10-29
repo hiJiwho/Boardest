@@ -1717,12 +1717,12 @@ class _TeacherViewState extends State<TeacherView> {
       return;
     }
 
-    // 4. HTML Present (.htmlp, .canva, .bstcanva, .canva.bst, .canvaboard): Boardest HTML Present 뷰어로 열기
+    // 4. 웹 교안 / 교과서: 신규 TBP 스마트교과서 뷰어로 일원화 통합 (레거시 HTMLP 완전 대체)
     if (lower.endsWith('.web.bst') || lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva') || lower.endsWith('.bstcanva') || lower.endsWith('.canva.bst') || lower.endsWith('.canvaboard')) {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => CanvaBoardView(
-            filePath: path,
+          builder: (_) => TbpViewerRoute(
+            tbpFilePath: path,
             scaleFactor: _settings.scaleFactor,
           ),
         ),

@@ -18,15 +18,9 @@ import '../../widgets/annotation_canvas.dart';
 import '../../helpers/iframe_view_helper.dart';
 import 'tbp_hotspot_overlay.dart';
 
-/// TBP (스마트교과서) / HTMLP (웹·Canva 프레젠터) 통합 모드
-enum TbpViewerMode {
-  tbp,   // 교과서: 우클릭 핫스팟(파일/URL/메모/영상) 풀스펙 + 다운로드 가로채기
-  htmlp, // 프레젠터: 우클릭 핫스팟 생성 차단 + dHash 페이지 판서 풀스펙 구동
-}
-
-/// TextBook Plus (TBP) & HTML Present (HTMLP) 단일 통합 뷰어
-/// - hijiwho/boardbook 동일 이미지 dHash 페이지 추적 및 판서 자동 교체
-/// - Windows: webview_windows, Android: webview_flutter, Web: iframe 샌드박스
+/// TextBook Plus (TBP) 단일 스마트교과서 뷰어
+/// - hijiwho/boardbook 동일 구조 dHash 페이지 추적 및 판서 자동 교체
+/// - Windows: webview_windows, Android: webview_flutter
 /// - Pen / Touch / Smart 3모드 입력 시스템
 class TbpViewerRoute extends StatefulWidget {
   final String? tbpFilePath;
@@ -103,7 +97,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
     if (!kIsWeb && Platform.isWindows) {
       windowManager.setTitleBarStyle(TitleBarStyle.hidden);
     }
-    _resolvedTitle = widget.title ?? (widget.mode == TbpViewerMode.htmlp ? '웹 프레젠테이션' : '스마트교과서');
+    _resolvedTitle = widget.title ?? '스마트교과서';
     _annotationController.activeColor = _penColor;
     _annotationController.activeWidth = _strokeWidth;
     _annotationController.toolMode = _tool;
@@ -195,14 +189,14 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
       if (rawPath.startsWith('http://') || rawPath.startsWith('https://') || rawPath.contains('<iframe')) {
         _targetUrl = formatPresentUrl(rawPath);
         final safeKey = _targetUrl.replaceAll(RegExp(r'[^\w-]'), '_');
-        final folderId = '${widget.mode == TbpViewerMode.htmlp ? 'htmlp' : 'tbp'}_${safeKey.length > 32 ? safeKey.substring(0, 32) : safeKey}';
+        final folderId = 'tbp_${safeKey.length > 32 ? safeKey.substring(0, 32) : safeKey}';
         
         _tbpFolderPath = await TbpStorageService.instance.registerCreatedTbpProject(
           meta: {
             'title': _resolvedTitle,
             'folderId': folderId,
             'webUrl': _targetUrl,
-            'scopeKey': widget.mode == TbpViewerMode.htmlp ? 'HTMLP' : 'TBP',
+            'scopeKey': 'TBP',
             'createdAt': DateTime.now().toIso8601String(),
           },
           localDirPath: kIsWeb ? 'web://tbp/$folderId' : null,
@@ -875,7 +869,6 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
   }
 
   Widget _buildControlBar(double s) {
-    final isHtmlp = widget.mode == TbpViewerMode.htmlp;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -905,7 +898,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
               ),
               SizedBox(width: 6 * s),
               Text(
-                '${isHtmlp ? "🌐" : "📖"} $_resolvedTitle',
+                '📖 $_resolvedTitle',
                 style: GoogleFonts.notoSansKr(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -940,43 +933,41 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                 tooltip: '다음 페이지 (→ ArrowRight / PgDn)',
                 onPressed: () => _navigatePage(true),
               ),
-              if (!isHtmlp) ...[
-                SizedBox(width: 8 * s),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.add_location_alt_rounded, size: 16),
-                  label: Text(
-                    '+ 핫스팟',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 12 * s,
-                      fontWeight: FontWeight.bold,
-                    ),
+              SizedBox(width: 8 * s),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add_location_alt_rounded, size: 16),
+                label: Text(
+                  '+ 핫스팟',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 12 * s,
+                    fontWeight: FontWeight.bold,
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2EC4B6),
-                    foregroundColor: Colors.black,
-                    padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * s)),
-                  ),
-                  onPressed: () {
-                    final offsetCount = _currentHotspots.length;
-                    final rx = (0.2 + (offsetCount % 5) * 0.14).clamp(0.1, 0.88);
-                    final ry = (0.22 + (offsetCount ~/ 5) * 0.14).clamp(0.15, 0.82);
-                    TbpHotspotOverlay.showAddHotspotModal(
-                      context,
-                      rx,
-                      ry,
-                      _tbpFolderPath,
-                      _currentDhash,
-                      _currentHotspots,
-                      (updated) {
-                        setState(() {
-                          _currentHotspots = updated;
-                        });
-                      },
-                    );
-                  },
                 ),
-              ],
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2EC4B6),
+                  foregroundColor: Colors.black,
+                  padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * s)),
+                ),
+                onPressed: () {
+                  final offsetCount = _currentHotspots.length;
+                  final rx = (0.2 + (offsetCount % 5) * 0.14).clamp(0.1, 0.88);
+                  final ry = (0.22 + (offsetCount ~/ 5) * 0.14).clamp(0.15, 0.82);
+                  TbpHotspotOverlay.showAddHotspotModal(
+                    context,
+                    rx,
+                    ry,
+                    _tbpFolderPath,
+                    _currentDhash,
+                    _currentHotspots,
+                    (updated) {
+                      setState(() {
+                        _currentHotspots = updated;
+                      });
+                    },
+                  );
+                },
+              ),
             ],
           ),
         ),

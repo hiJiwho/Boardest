@@ -770,6 +770,12 @@ class TbpStorageService {
       _webJsonCache['$tbpFolderPath::hotspot::$key'] = encoded;
 
       if (!kIsWeb) {
+        // BoardBook 100% 동일 구조: BBplus/[hash].json 저장
+        final bbplusDir = Directory(p.join(tbpFolderPath, 'BBplus'));
+        if (!await bbplusDir.exists()) await bbplusDir.create(recursive: true);
+        final bbplusFile = File(p.join(bbplusDir.path, '$key.json'));
+        await bbplusFile.writeAsString(encoded, flush: true);
+
         final pageDir = Directory(p.join(tbpFolderPath, 'HOTspot', key));
         if (!await pageDir.exists()) await pageDir.create(recursive: true);
         final hotspotFile = File(p.join(pageDir.path, 'hotspot.bstsave'));
@@ -859,6 +865,12 @@ class TbpStorageService {
       _webJsonCache['$tbpFolderPath::$subFolder::$base'] = strokeContent;
 
       if (!kIsWeb) {
+        // BoardBook 100% 동일 구조: BBPen/[hash].svg 저장
+        final bbpenDir = Directory(p.join(tbpFolderPath, 'BBPen'));
+        if (!await bbpenDir.exists()) await bbpenDir.create(recursive: true);
+        final bbpenFile = File(p.join(bbpenDir.path, '$base.svg'));
+        await bbpenFile.writeAsString(strokeContent, flush: true);
+
         final targetDir = Directory(p.join(tbpFolderPath, subFolder));
         if (!await targetDir.exists()) await targetDir.create(recursive: true);
         final strokeFile = File(p.join(targetDir.path, '$base.bstpen'));
