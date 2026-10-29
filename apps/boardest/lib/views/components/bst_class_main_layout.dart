@@ -5,6 +5,7 @@ import '../../models/school_notice.dart';
 import '../../services/school_notice_service.dart';
 import 'school_notice_dialog.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/foundation.dart';
@@ -4007,51 +4008,11 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // 1. 무조건 사진 배경
+            // 1. 무조건 사진 배경 (PNG Data URL 및 네트워크 이미지 모두 완벽 지원)
             if (notice.imageUrl.isNotEmpty)
-              Image.network(
-                notice.imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF1E2638), Color(0xFF101420)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.campaign_rounded, color: Color(0xFF00F5D4), size: 40),
-                        const SizedBox(height: 8),
-                        Text('학교 행사 및 소식', style: _ts(14, w: FontWeight.bold, c: Colors.white70)),
-                      ],
-                    ),
-                  ),
-                ),
-              )
+              _buildNoticeImage(notice.imageUrl)
             else
-              Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF1E2638), Color(0xFF101420)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.campaign_rounded, color: Color(0xFF00F5D4), size: 40),
-                      const SizedBox(height: 8),
-                      Text('학교 행사 및 소식', style: _ts(14, w: FontWeight.bold, c: Colors.white70)),
-                    ],
-                  ),
-                ),
-              ),
+              _buildNoticeImageFallback(),
 
             // 2. 상단 컨트롤 바 (슬라이드 조절기 + 행사 등록 버튼)
             Positioned(
@@ -4164,6 +4125,48 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoticeImage(String imageUrl) {
+    if (imageUrl.startsWith('data:image')) {
+      try {
+        final commaIdx = imageUrl.indexOf(',');
+        final base64Str = commaIdx != -1 ? imageUrl.substring(commaIdx + 1) : imageUrl;
+        final bytes = base64Decode(base64Str);
+        return Image.memory(
+          bytes,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildNoticeImageFallback(),
+        );
+      } catch (_) {}
+    }
+    return Image.network(
+      imageUrl,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => _buildNoticeImageFallback(),
+    );
+  }
+
+  Widget _buildNoticeImageFallback() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF1E2638), Color(0xFF101420)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.campaign_rounded, color: Color(0xFF00F5D4), size: 40),
+            const SizedBox(height: 8),
+            Text('학교 행사 및 소식', style: _ts(14, w: FontWeight.bold, c: Colors.white70)),
           ],
         ),
       ),

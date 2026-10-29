@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boardest Teacher — 학교 행사 & 광고판 관리 (PNG 업로드)</title>
+  <link rel="icon" type="image/png" href="/assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
+  <link rel="stylesheet" href="/assets/m3.css">
+
+  <style>
+    :root {
+      --bg: #0C0F17;
+      --surface: #141824;
+      --surface-high: #1E2335;
+      --surface-higher: #272E44;
+      --primary: #00F5D4;
+      --primary-dim: rgba(0, 245, 212, 0.12);
+      --accent-purple: #7F5AF0;
+      --accent-pink: #FF5470;
+      --accent-amber: #FF8906;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(0, 245, 212, 0.4);
+      --text: #FFFFFF;
+      --text-sub: #94A1B2;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans KR', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .top-header {
+      background: rgba(20, 24, 36, 0.9);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: #fff;
+    }
+    .brand-wrap img { width: 34px; height: 34px; object-fit: contain; }
+    .brand-title { font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 900; }
+    .brand-badge {
+      font-size: 11.5px;
+      background: var(--primary-dim);
+      color: var(--primary);
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 800;
+    }
+
+    .container {
+      max-width: 960px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 36px 20px 80px;
+      flex: 1;
+    }
+
+    .page-title {
+      font-size: 28px;
+      font-weight: 900;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .page-desc {
+      color: var(--text-sub);
+      font-size: 15px;
+      line-height: 1.6;
+      margin-bottom: 28px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px;
+      margin-bottom: 30px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: block;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text-sub);
+      margin-bottom: 8px;
+    }
+    .form-input, .form-select {
+      width: 100%;
+      background: var(--surface-high);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: #fff;
+      font-size: 14.5px;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .form-input:focus, .form-select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-dim);
+    }
+
+    /* Drag & Drop File Zone */
+    .drop-zone {
+      border: 2px dashed rgba(255, 255, 255, 0.16);
+      border-radius: 16px;
+      padding: 32px 20px;
+      text-align: center;
+      background: rgba(30, 35, 53, 0.4);
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--primary);
+      background: var(--primary-dim);
+    }
+    .drop-zone input[type="file"] {
+      position: absolute;
+      left: 0; top: 0; width: 100%; height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .preview-container {
+      margin-top: 16px;
+      display: none;
+      position: relative;
+      border-radius: 14px;
+      overflow: hidden;
+      max-height: 380px;
+      border: 1px solid var(--border);
+      background: #000;
+    }
+    .preview-container img {
+      width: 100%;
+      height: 100%;
+      max-height: 380px;
+      object-fit: contain;
+    }
+
+    .btn-submit {
+      width: 100%;
+      background: var(--primary);
+      color: #000;
+      border: none;
+      border-radius: 14px;
+      padding: 15px;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-submit:hover {
+      filter: brightness(1.1);
+      box-shadow: 0 8px 24px rgba(0, 245, 212, 0.3);
+    }
+
+    /* Notices Table */
+    .notice-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 16px;
+      background: var(--surface-high);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin-bottom: 10px;
+      transition: all 0.2s;
+    }
+    .notice-item:hover {
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+    .notice-thumb {
+      width: 72px;
+      height: 50px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #000;
+    }
+    .notice-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .notice-info-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .notice-info-sub {
+      font-size: 12px;
+      color: var(--text-sub);
+      display: flex;
+      gap: 12px;
+    }
+    .btn-del {
+      background: rgba(255, 84, 112, 0.15);
+      color: #FF5470;
+      border: 1px solid rgba(255, 84, 112, 0.3);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-del:hover {
+      background: #FF5470;
+      color: #fff;
+    }
+
+    /* Search School Modal */
+    .modal-overlay {
+      position: fixed;
+      left: 0; top: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(8px);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      padding: 20px;
+    }
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      max-width: 500px;
+      width: 100%;
+      padding: 24px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+    }
+  </style>
+</head>
+<body>
+
+  <header class="top-header">
+    <a href="/" class="brand-wrap">
+      <img src="/assets/logo.png" alt="Boardest Logo">
+      <span class="brand-title">Boardest</span>
+      <span class="brand-badge">Teacher Billboard Admin</span>
+    </a>
+    <div style="display:flex; gap:10px;">
+      <a href="https://boardest-student.web.app" target="_blank" class="btn btn-sm btn-tonal" style="text-decoration:none;">
+        <span class="material-symbols-rounded" style="font-size:16px;">school</span>
+        학생 앱 보기
+      </a>
+      <a href="https://boardest-class.web.app" target="_blank" class="btn btn-sm btn-tonal" style="text-decoration:none;">
+        <span class="material-symbols-rounded" style="font-size:16px;">tv</span>
+        교실 전자칠판 보기
+      </a>
+    </div>
+  </header>
+
+  <main class="container">
+    <h1 class="page-title">
+      <span class="material-symbols-rounded" style="color:var(--primary); font-size:32px;">campaign</span>
+      학교 행사 & 광고판 관리 센터
+    </h1>
+    <p class="page-desc">
+      선생님이 여기서 <strong>PNG/이미지 포스터</strong>를 업로드하면 Firebase를 통해
+      <strong>교실 전자칠판</strong> 및 <strong>학생용 웹 포털(Boardest Student)</strong> 광고판에 실시간 자동 표출됩니다.
+      (학생은 업로드할 수 없으며 열람만 가능합니다.)
+    </p>
+
+    <!-- School ID Settings Card -->
+    <div class="card">
+      <div class="card-title">
+        <span class="material-symbols-rounded" style="color:var(--primary);">badge</span>
+        학교 ID (School Code) 설정
+      </div>
+      <div style="display:grid; grid-template-columns: 2fr 1fr; gap:12px;">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">학교 ID (NEIS 고유코드 또는 학교 영문코드)</label>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="inputSchoolId" class="form-input" placeholder="예: B100000662 또는 seoul_ms" onchange="onSchoolIdChanged()">
+            <button class="btn btn-primary" onclick="openSchoolSearchModal()">학교명 검색</button>
+          </div>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">현재 연결 학교명</label>
+          <input type="text" id="inputSchoolName" class="form-input" placeholder="학교명 (선택)" readonly style="background:rgba(255,255,255,0.04); color:var(--text-sub);">
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload Notice Card -->
+    <div class="card">
+      <div class="card-title">
+        <span class="material-symbols-rounded" style="color:#FF8906;">add_photo_alternate</span>
+        새 학교 행사 광고 포스터 등록
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">행사 제목 *</label>
+        <input type="text" id="noticeTitle" class="form-input" placeholder="예: 2026학년도 1학기 보데스트 스마트 축제 부스 신청 안내">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">포스터 이미지 파일 (PNG / JPG / WEBP) *</label>
+        <div class="drop-zone" id="dropZone">
+          <input type="file" id="fileInput" accept="image/png, image/jpeg, image/webp" onchange="handleFileSelect(this)">
+          <span class="material-symbols-rounded" style="font-size:48px; color:var(--primary); margin-bottom:8px;">cloud_upload</span>
+          <div style="font-size:16px; font-weight:700; color:#fff; margin-bottom:4px;">포스터 이미지 파일을 드래그하거나 클릭하여 선택하세요</div>
+          <div style="font-size:12.5px; color:var(--text-sub);">권장 형식: PNG 또는 고화질 JPG (자동으로 최적화 압축되어 Firebase에 업로드됩니다)</div>
+        </div>
+        <div class="preview-container" id="previewContainer">
+          <img id="previewImg" src="" alt="포스터 미리보기">
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+        <div class="form-group">
+          <label class="form-label">행사 종료일 (마감일)</label>
+          <input type="date" id="noticeEndDate" class="form-input">
+          <span style="font-size:11.5px; color:var(--text-sub); display:block; margin-top:4px;">
+            ⚠️ 종료일 기준 48시간이 경과하면 전자칠판 및 학생 앱에서 자동 삭제됩니다.
+          </span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">담당 교사 / 주관 부서</label>
+          <input type="text" id="noticeTeacherName" class="form-input" placeholder="예: 학생생활안전부, 3학년 교무실">
+        </div>
+      </div>
+
+      <button class="btn-submit" id="btnSubmitNotice" onclick="uploadNotice()">
+        <span class="material-symbols-rounded">publish</span>
+        Firebase에 업로드 및 전송하기
+      </button>
+    </div>
+
+    <!-- Active Notices List Card -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+        <div class="card-title" style="margin:0;">
+          <span class="material-symbols-rounded" style="color:var(--primary);">format_list_bulleted</span>
+          현재 게시 중인 학교 행사 광고 목록
+        </div>
+        <button class="btn btn-sm btn-tonal" onclick="loadSchoolNotices()">
+          <span class="material-symbols-rounded" style="font-size:16px;">refresh</span>
+          새로고침
+        </button>
+      </div>
+
+      <div id="noticeListContainer">
+        <div style="text-align:center; padding:32px 10px; color:var(--text-sub);">
+          학교 ID를 설정하면 등록된 행사 광고가 표시됩니다.
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- School Search Modal -->
+  <div id="schoolModal" class="modal-overlay" onclick="closeSchoolSearchModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <h3 style="font-size:18px; font-weight:800; color:#fff; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+        <span class="material-symbols-rounded" style="color:var(--primary);">search</span>
+        NEIS 학교명 검색 및 학교 ID 자동 입력
+      </h3>
+      <div style="display:flex; gap:8px; margin-bottom:14px;">
+        <input type="text" id="modalSchoolQuery" class="form-input" placeholder="학교명 (예: 서울중, 경기고)">
+        <button class="btn btn-primary" onclick="searchNeisSchool()">검색</button>
+      </div>
+      <div id="schoolSearchResults" style="max-height:220px; overflow-y:auto; border-radius:10px;"></div>
+      <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+        <button class="btn btn-tonal" onclick="closeSchoolSearchModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const RTDB_BASE = 'https://jiwhosboardest-default-rtdb.firebaseio.com/school_notices';
+    let currentCompressedBase64 = null;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      // Load saved school ID
+      const savedSchoolId = localStorage.getItem('bst_teacher_school_id') || 'default';
+      const savedSchoolName = localStorage.getItem('bst_teacher_school_name') || '';
+      document.getElementById('inputSchoolId').value = savedSchoolId;
+      document.getElementById('inputSchoolName').value = savedSchoolName;
+
+      // Default end date (+7 days)
+      const d = new Date();
+      d.setDate(d.getDate() + 7);
+      document.getElementById('noticeEndDate').value = d.toISOString().split('T')[0];
+
+      // Drag and drop listeners
+      const dropZone = document.getElementById('dropZone');
+      ['dragenter', 'dragover'].forEach(n => {
+        dropZone.addEventListener(n, (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+      });
+      ['dragleave', 'drop'].forEach(n => {
+        dropZone.addEventListener(n, (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); });
+      });
+      dropZone.addEventListener('drop', (e) => {
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+          processFile(e.dataTransfer.files[0]);
+        }
+      });
+
+      if (savedSchoolId) {
+        loadSchoolNotices();
+      }
+    });
+
+    function onSchoolIdChanged() {
+      const id = document.getElementById('inputSchoolId').value.trim();
+      localStorage.setItem('bst_teacher_school_id', id);
+      loadSchoolNotices();
+    }
+
+    function handleFileSelect(input) {
+      if (input.files && input.files[0]) {
+        processFile(input.files[0]);
+      }
+    }
+
+    function processFile(file) {
+      if (!file.type.startsWith('image/')) {
+        alert('이미지 파일(PNG, JPG, WEBP)만 업로드할 수 있습니다.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          // HTML5 Canvas compress/resize
+          const canvas = document.createElement('canvas');
+          let w = img.width;
+          let h = img.height;
+          const maxDim = 1600;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
+            }
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+
+          // Convert to WebP or JPEG for compact payload
+          currentCompressedBase64 = canvas.toDataURL('image/jpeg', 0.88);
+
+          // Update preview
+          document.getElementById('previewImg').src = currentCompressedBase64;
+          document.getElementById('previewContainer').style.display = 'block';
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function uploadNotice() {
+      const schoolIdRaw = document.getElementById('inputSchoolId').value.trim();
+      if (!schoolIdRaw) {
+        alert('학교 ID를 입력해 주세요.');
+        return;
+      }
+      const schoolId = schoolIdRaw.toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'default';
+
+      const title = document.getElementById('noticeTitle').value.trim();
+      if (!title) {
+        alert('행사 제목을 입력해 주세요.');
+        return;
+      }
+
+      if (!currentCompressedBase64) {
+        alert('포스터 이미지 파일(PNG/JPG)을 선택해 주세요.');
+        return;
+      }
+
+      const endDate = document.getElementById('noticeEndDate').value;
+      const teacherName = document.getElementById('noticeTeacherName').value.trim() || '교무실';
+
+      const btn = document.getElementById('btnSubmitNotice');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-rounded">hourglass_top</span> Firebase로 업로드 중...';
+
+      const noticeId = 'ad_' + Date.now();
+      const payload = {
+        id: noticeId,
+        title: title,
+        imageUrl: currentCompressedBase64,
+        teacherName: teacherName,
+        endDate: endDate,
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        const url = `${RTDB_BASE}/${schoolId}/${noticeId}.json`;
+        const res = await fetch(url, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          alert('포스터가 성공적으로 등록되었습니다!\n교실 전자칠판 및 학생 앱 광고판에 즉시 실시간 표출됩니다.');
+          // Reset form
+          document.getElementById('noticeTitle').value = '';
+          currentCompressedBase64 = null;
+          document.getElementById('previewContainer').style.display = 'none';
+          document.getElementById('previewImg').src = '';
+          document.getElementById('fileInput').value = '';
+          loadSchoolNotices();
+        } else {
+          alert('등록 실패: ' + res.statusText);
+        }
+      } catch (e) {
+        alert('네트워크 오류: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-rounded">publish</span> Firebase에 업로드 및 전송하기';
+      }
+    }
+
+    async function loadSchoolNotices() {
+      const schoolIdRaw = document.getElementById('inputSchoolId').value.trim();
+      if (!schoolIdRaw) return;
+      const schoolId = schoolIdRaw.toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'default';
+
+      const container = document.getElementById('noticeListContainer');
+      container.innerHTML = '<div style="color:var(--text-sub); text-align:center; padding:20px;">불러오는 중...</div>';
+
+      try {
+        const url = `${RTDB_BASE}/${schoolId}.json`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data || data === 'null') {
+          container.innerHTML = '<div style="color:var(--text-sub); text-align:center; padding:24px;">등록된 행사 광고 포스터가 없습니다.</div>';
+          return;
+        }
+
+        const items = [];
+        const now = Date.now();
+        Object.keys(data).forEach(k => {
+          const it = data[k];
+          if (it) {
+            // Auto delete 48h expired
+            if (it.endDate) {
+              const endD = new Date(it.endDate + 'T23:59:59');
+              if (now - endD.getTime() > 48 * 3600 * 1000) {
+                fetch(`${RTDB_BASE}/${schoolId}/${it.id}.json`, { method: 'DELETE' });
+                return;
+              }
+            }
+            items.push(it);
+          }
+        });
+
+        if (items.length === 0) {
+          container.innerHTML = '<div style="color:var(--text-sub); text-align:center; padding:24px;">등록된 행사 광고 포스터가 없습니다.</div>';
+          return;
+        }
+
+        items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        let html = '';
+        items.forEach(it => {
+          html += `
+            <div class="notice-item" id="item_${it.id}">
+              <img src="${it.imageUrl}" class="notice-thumb" alt="${it.title}">
+              <div class="notice-info">
+                <div class="notice-info-title">${it.title}</div>
+                <div class="notice-info-sub">
+                  <span>종료: ${it.endDate || '상시'}</span>
+                  <span>담당: ${it.teacherName || '교무실'}</span>
+                  <span>등록일: ${it.createdAt ? it.createdAt.split('T')[0] : ''}</span>
+                </div>
+              </div>
+              <button class="btn-del" onclick="deleteNotice('${schoolId}', '${it.id}')">삭제</button>
+            </div>
+          `;
+        });
+        container.innerHTML = html;
+      } catch (e) {
+        container.innerHTML = `<div style="color:#FF5470; padding:16px;">목록 불러오기 실패: ${e.message}</div>`;
+      }
+    }
+
+    async function deleteNotice(schoolId, noticeId) {
+      if (!confirm('이 행사 포스터를 삭제하시겠습니까?\n교실 전자칠판 및 학생 앱에서도 즉시 제거됩니다.')) return;
+
+      try {
+        const url = `${RTDB_BASE}/${schoolId}/${noticeId}.json`;
+        const res = await fetch(url, { method: 'DELETE' });
+        if (res.ok) {
+          loadSchoolNotices();
+        } else {
+          alert('삭제 실패: ' + res.statusText);
+        }
+      } catch (e) {
+        alert('네트워크 오류: ' + e.message);
+      }
+    }
+
+    // Modal Search
+    function openSchoolSearchModal() {
+      document.getElementById('schoolModal').style.display = 'flex';
+      document.getElementById('modalSchoolQuery').focus();
+    }
+    function closeSchoolSearchModal() {
+      document.getElementById('schoolModal').style.display = 'none';
+    }
+
+    async function searchNeisSchool() {
+      const q = document.getElementById('modalSchoolQuery').value.trim();
+      if (!q) { alert('학교명을 입력하세요.'); return; }
+      const resEl = document.getElementById('schoolSearchResults');
+      resEl.innerHTML = '<div style="padding:10px; color:var(--text-sub);">검색 중...</div>';
+
+      try {
+        const url = `https://open.neis.go.kr/hub/schoolInfo?Type=json&pIndex=1&pSize=15&SCHUL_NM=${encodeURIComponent(q)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.schoolInfo && data.schoolInfo[1] && data.schoolInfo[1].row) {
+          let html = '';
+          data.schoolInfo[1].row.forEach(row => {
+            html += `
+              <div onclick="selectSchool('${row.SCHUL_NM}', '${row.SD_SCHUL_CODE}')" style="padding:10px 12px; background:var(--surface-high); border-bottom:1px solid var(--border); cursor:pointer; border-radius:8px; margin-bottom:6px;">
+                <div style="font-weight:800; color:#fff; font-size:14.5px;">${row.SCHUL_NM}</div>
+                <div style="font-size:12px; color:var(--primary); font-weight:700;">학교 ID: ${row.SD_SCHUL_CODE}</div>
+                <div style="font-size:11.5px; color:var(--text-sub);">${row.ORG_RDNMA || ''}</div>
+              </div>
+            `;
+          });
+          resEl.innerHTML = html;
+        } else {
+          resEl.innerHTML = '<div style="padding:10px; color:var(--text-sub);">검색 결과가 없습니다.</div>';
+        }
+      } catch (e) {
+        resEl.innerHTML = `<div style="padding:10px; color:#FF5470;">검색 오류: ${e.message}</div>`;
+      }
+    }
+
+    function selectSchool(name, code) {
+      document.getElementById('inputSchoolId').value = code;
+      document.getElementById('inputSchoolName').value = name;
+      localStorage.setItem('bst_teacher_school_id', code);
+      localStorage.setItem('bst_teacher_school_name', name);
+      closeSchoolSearchModal();
+      loadSchoolNotices();
+    }
+  </script>
+</body>
+</html>

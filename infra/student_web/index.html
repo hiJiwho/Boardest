@@ -3,32 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Boardest Student — 스마트 학급 포털 (시간표·급식·수행평가)</title>
+  <title>Boardest Student — 스마트 학급 포털 (시간표·급식·수행평가·학교소식)</title>
   <link rel="icon" type="image/png" href="https://boardest.web.app/assets/logo.png">
   <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#0F1117">
+  <meta name="theme-color" content="#0A0D14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
 
   <style>
     :root {
-      --bg: #0F1117;
-      --surface: #161922;
-      --surface-high: #202431;
-      --surface-highest: #2B3041;
+      --bg: #0A0D14;
+      --surface: #121622;
+      --surface-elevated: #181E2E;
+      --surface-high: #21283D;
+      --surface-border: rgba(255, 255, 255, 0.08);
       --primary: #00F5D4;
       --primary-dim: rgba(0, 245, 212, 0.12);
+      --primary-glow: rgba(0, 245, 212, 0.3);
       --secondary: #7F5AF0;
       --accent-orange: #FF8906;
       --accent-pink: #FF5470;
       --accent-blue: #00BAF2;
       --text: #FFFFFF;
       --text-sub: #94A1B2;
-      --border: rgba(255, 255, 255, 0.08);
+      --text-muted: #5C677D;
       --font-brand: 'Outfit', sans-serif;
+      --font-base: 'Noto Sans KR', sans-serif;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -36,11 +41,16 @@
     body {
       background-color: var(--bg);
       color: var(--text);
-      font-family: 'Noto Sans KR', sans-serif;
+      font-family: var(--font-base);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      padding-bottom: 74px; /* bottom nav space */
+      padding-bottom: 84px; /* bottom nav space */
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 10% 10%, rgba(0, 245, 212, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(127, 90, 240, 0.06) 0%, transparent 45%);
+      background-attachment: fixed;
     }
 
     /* Top Bar */
@@ -48,10 +58,10 @@
       position: sticky;
       top: 0;
       z-index: 50;
-      background: rgba(22, 25, 34, 0.92);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-      padding: 12px 16px;
+      background: rgba(18, 22, 34, 0.88);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--surface-border);
+      padding: 12px 18px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -69,8 +79,8 @@
     }
     .brand-title {
       font-family: var(--font-brand);
-      font-size: 19px;
-      font-weight: 800;
+      font-size: 20px;
+      font-weight: 900;
       letter-spacing: -0.5px;
       color: #fff;
     }
@@ -83,268 +93,132 @@
       font-weight: 800;
     }
 
-    .school-pill {
-      background: var(--surface-high);
-      border: 1px solid var(--border);
+    .school-id-pill {
+      background: var(--surface-elevated);
+      border: 1px solid var(--surface-border);
       border-radius: 999px;
-      padding: 6px 12px;
+      padding: 6px 14px;
       display: flex;
       align-items: center;
-      gap: 6px;
-      font-size: 12.5px;
-      font-weight: 600;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
       cursor: pointer;
       color: #FFF;
       transition: all 0.2s;
     }
-    .school-pill:hover {
-      background: var(--surface-highest);
+    .school-id-pill:hover {
       border-color: var(--primary);
+      background: var(--surface-high);
+    }
+    .school-id-tag {
+      font-size: 11px;
+      color: var(--primary);
+      background: var(--primary-dim);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--font-brand);
+      font-weight: 800;
+    }
+
+    /* Live Hero Bar */
+    .hero-bar {
+      margin: 16px 16px 0;
+      background: linear-gradient(135deg, rgba(24, 30, 46, 0.95), rgba(18, 22, 34, 0.95));
+      border: 1px solid var(--surface-border);
+      border-radius: 18px;
+      padding: 16px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    .hero-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      background: rgba(0, 245, 212, 0.15);
+      color: var(--primary);
+      border: 1px solid rgba(0, 245, 212, 0.3);
+      margin-bottom: 4px;
+    }
+    .hero-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--primary);
+      animation: pulse-dot 1.5s infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .hero-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .hero-time {
+      font-family: var(--font-brand);
+      font-size: 26px;
+      font-weight: 900;
+      color: #fff;
+      text-align: right;
+      letter-spacing: -0.5px;
+    }
+    .hero-date {
+      font-size: 12px;
+      color: var(--text-sub);
+      text-align: right;
     }
 
     /* Main Container */
     main {
-      max-width: 680px;
-      width: 100%;
-      margin: 0 auto;
       padding: 16px;
       flex: 1;
+      max-width: 860px;
+      margin: 0 auto;
+      width: 100%;
     }
 
-    /* Tabs Content */
-    .tab-content { display: none; }
-    .tab-content.active { display: block; animation: fadeIn 0.2s ease-out; }
-
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.25s ease-out;
+    }
+    .tab-content.active {
+      display: block;
+    }
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
+      from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Cards */
+    /* Common Card */
     .card {
       background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 18px;
-      margin-bottom: 14px;
-      position: relative;
+      border: 1px solid var(--surface-border);
+      border-radius: 20px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
     }
-
     .card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
-
     .card-title {
-      font-size: 16px;
-      font-weight: 700;
+      font-size: 17px;
+      font-weight: 800;
+      color: #fff;
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #fff;
-    }
-
-    /* Timetable Table */
-    .timetable-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .period-row {
-      display: flex;
-      align-items: center;
-      padding: 12px 14px;
-      background: var(--surface-high);
-      border-radius: 12px;
-      border-left: 4px solid transparent;
-      transition: all 0.2s;
-    }
-    .period-row.current {
-      background: rgba(0, 245, 212, 0.1);
-      border-left-color: var(--primary);
-    }
-    .period-num {
-      width: 44px;
-      font-family: var(--font-brand);
-      font-weight: 800;
-      font-size: 15px;
-      color: var(--primary);
-    }
-    .period-time {
-      font-size: 11px;
-      color: var(--text-sub);
-      margin-top: 1px;
-    }
-    .period-subject {
-      flex: 1;
-      font-size: 15px;
-      font-weight: 700;
-      color: #fff;
-    }
-    .period-teacher {
-      font-size: 12px;
-      color: var(--text-sub);
-    }
-
-    /* Meal Card */
-    .meal-box {
-      background: var(--surface-high);
-      border-radius: 14px;
-      padding: 16px;
-      line-height: 1.8;
-      font-size: 14.5px;
-      color: #E2E8F0;
-    }
-    .meal-allergy-pill {
-      display: inline-block;
-      font-size: 10px;
-      background: rgba(239, 69, 101, 0.15);
-      color: #FF5470;
-      padding: 1px 6px;
-      border-radius: 4px;
-      margin-left: 4px;
-      font-weight: 700;
-    }
-
-    /* Filter Pills */
-    .filter-pill {
-      background: var(--surface-high);
-      border: 1px solid var(--border);
-      color: var(--text-sub);
-      padding: 5px 13px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
-      white-space: nowrap;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .filter-pill:hover {
-      border-color: var(--primary);
-      color: #fff;
-    }
-    .filter-pill.active {
-      background: var(--primary);
-      color: #000;
-      border-color: var(--primary);
-      font-weight: 800;
-    }
-
-    /* Assessment Card */
-    .assessment-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 16px;
-      margin-bottom: 12px;
-      transition: all 0.2s;
-      position: relative;
-    }
-    .assessment-card.done {
-      opacity: 0.55;
-      text-decoration: line-through;
-    }
-    .ass-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-    .dday-badge {
-      font-family: var(--font-brand);
-      font-size: 12px;
-      font-weight: 800;
-      padding: 3px 9px;
-      border-radius: 8px;
-    }
-    .dday-urgent { background: rgba(255, 84, 112, 0.2); color: #FF5470; border: 1px solid rgba(255, 84, 112, 0.4); }
-    .dday-soon { background: rgba(255, 137, 6, 0.2); color: #FF8906; border: 1px solid rgba(255, 137, 6, 0.4); }
-    .dday-normal { background: rgba(0, 245, 212, 0.15); color: #00F5D4; }
-
-    .ass-title {
-      font-size: 16px;
-      font-weight: 800;
-      color: #fff;
-      margin-bottom: 6px;
-    }
-    .ass-meta {
-      font-size: 12.5px;
-      color: var(--text-sub);
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-bottom: 10px;
-    }
-    .ass-meta-item {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .ass-range {
-      background: var(--surface-high);
-      border-radius: 8px;
-      padding: 8px 12px;
-      font-size: 12px;
-      color: #CBD5E1;
-      margin-bottom: 10px;
-    }
-    .ass-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 11.5px;
-      color: var(--text-sub);
-      border-top: 1px solid var(--border);
-      padding-top: 10px;
-    }
-
-    /* School Notice Card (무조건 사진 + 제목 형식) */
-    .notice-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 16px;
-    }
-    .notice-card {
-      position: relative;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      overflow: hidden;
-      cursor: pointer;
-      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
-    }
-    .notice-card:hover {
-      transform: translateY(-3px);
-      border-color: var(--primary);
-      box-shadow: 0 8px 24px rgba(0, 245, 212, 0.15);
-    }
-    .notice-card img {
-      width: 100%;
-      height: 200px;
-      object-fit: cover;
-      display: block;
-      background: #111;
-    }
-    .notice-card-body {
-      padding: 14px 16px;
-      background: linear-gradient(180deg, rgba(22, 25, 34, 0.95) 0%, rgba(15, 14, 23, 1) 100%);
-    }
-    .notice-title {
-      font-size: 16px;
-      font-weight: 800;
-      color: #fff;
-      margin-bottom: 6px;
-      line-height: 1.35;
-    }
-    .notice-meta {
-      font-size: 11.5px;
-      color: var(--text-sub);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
     }
 
     /* Buttons */
@@ -353,191 +227,416 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
-      padding: 10px 16px;
+      padding: 8px 14px;
       border-radius: 12px;
       font-size: 13.5px;
       font-weight: 700;
+      cursor: pointer;
       border: none;
+      transition: all 0.2s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-sm { padding: 6px 12px; font-size: 12.5px; border-radius: 10px; }
+    .btn-primary { background: var(--primary); color: #000; font-weight: 800; }
+    .btn-primary:hover { filter: brightness(1.1); box-shadow: 0 4px 16px var(--primary-glow); }
+    .btn-tonal { background: var(--surface-elevated); color: #fff; border: 1px solid var(--surface-border); }
+    .btn-tonal:hover { background: var(--surface-high); }
+
+    /* Filter Pills */
+    .filter-pills-row {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .filter-pills-row::-webkit-scrollbar { display: none; }
+    .filter-pill {
+      background: var(--surface-elevated);
+      border: 1px solid var(--surface-border);
+      color: var(--text-sub);
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      white-space: nowrap;
       cursor: pointer;
       transition: all 0.2s;
     }
-    .btn-primary {
+    .filter-pill:hover { border-color: var(--primary); color: #fff; }
+    .filter-pill.active {
       background: var(--primary);
       color: #000;
-    }
-    .btn-primary:hover {
-      background: #33ffd8;
-    }
-    .btn-tonal {
-      background: var(--surface-high);
-      color: #fff;
-    }
-    .btn-tonal:hover {
-      background: var(--surface-highest);
-    }
-    .btn-sm {
-      padding: 6px 12px;
-      font-size: 12px;
-      border-radius: 8px;
+      border-color: var(--primary);
+      font-weight: 900;
     }
 
-    /* Bottom Navigation Bar */
+    /* Timetable Period Rows */
+    .period-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .period-row {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--surface-border);
+      border-radius: 14px;
+      transition: all 0.2s;
+    }
+    .period-row.current {
+      background: rgba(0, 245, 212, 0.08);
+      border-color: var(--primary);
+      box-shadow: 0 0 16px rgba(0, 245, 212, 0.2);
+    }
+    .period-num {
+      width: 44px;
+      font-size: 16px;
+      font-weight: 900;
+      font-family: var(--font-brand);
+      color: var(--primary);
+    }
+    .period-time {
+      font-size: 11px;
+      color: var(--text-sub);
+      width: 80px;
+    }
+    .period-subject {
+      flex: 1;
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .period-teacher {
+      font-size: 12.5px;
+      color: var(--text-sub);
+      font-weight: 600;
+    }
+
+    /* Meals */
+    .meal-box {
+      background: var(--surface-elevated);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      padding: 18px;
+      font-size: 15px;
+      line-height: 1.85;
+      color: #fff;
+    }
+    .allergy-chip {
+      display: inline-block;
+      font-size: 10.5px;
+      background: rgba(255, 84, 112, 0.15);
+      color: #FF5470;
+      padding: 1px 7px;
+      border-radius: 6px;
+      margin-left: 4px;
+      font-weight: 700;
+      border: 1px solid rgba(255, 84, 112, 0.3);
+    }
+
+    /* Assessment Card */
+    .assessment-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 18px;
+      padding: 18px;
+      margin-bottom: 12px;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .assessment-card:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+    .assessment-card.done {
+      opacity: 0.5;
+    }
+    .assessment-card.done .ass-title {
+      text-decoration: line-through;
+    }
+    .ass-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .dday-badge {
+      font-family: var(--font-brand);
+      font-size: 12.5px;
+      font-weight: 900;
+      padding: 3px 10px;
+      border-radius: 8px;
+    }
+    .dday-urgent { background: rgba(255, 84, 112, 0.25); color: #FF5470; border: 1px solid #FF5470; }
+    .dday-soon { background: rgba(255, 137, 6, 0.25); color: #FF8906; border: 1px solid #FF8906; }
+    .dday-normal { background: var(--surface-elevated); color: var(--primary); border: 1px solid var(--primary-glow); }
+    .ass-title {
+      font-size: 17px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 8px;
+      line-height: 1.35;
+    }
+    .ass-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 12.5px;
+      color: var(--text-sub);
+      margin-bottom: 8px;
+    }
+    .ass-meta-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .ass-range {
+      font-size: 12.5px;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 8px 12px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      color: #e0e6ed;
+    }
+    .ass-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--surface-border);
+      padding-top: 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* School Notice Billboard Grid */
+    .notice-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .notice-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 18px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+      position: relative;
+    }
+    .notice-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--primary);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+    }
+    .notice-card-img-wrap {
+      width: 100%;
+      height: 180px;
+      background: #000;
+      position: relative;
+      overflow: hidden;
+    }
+    .notice-card-img-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.3s;
+    }
+    .notice-card:hover .notice-card-img-wrap img {
+      transform: scale(1.04);
+    }
+    .notice-card-body {
+      padding: 14px 16px;
+    }
+    .notice-card-title {
+      font-size: 15.5px;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.35;
+      margin-bottom: 6px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .notice-card-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11.5px;
+      color: var(--text-sub);
+    }
+
+    /* Bottom Navigation */
     .bottom-nav {
       position: fixed;
       bottom: 0;
       left: 0;
-      width: 100vw;
-      background: rgba(22, 25, 34, 0.95);
-      backdrop-filter: blur(16px);
-      border-top: 1px solid var(--border);
+      right: 0;
+      height: 68px;
+      background: rgba(18, 22, 34, 0.94);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid var(--surface-border);
       display: flex;
       justify-content: space-around;
-      padding: 8px 0;
-      z-index: 50;
+      align-items: center;
+      z-index: 60;
+      padding: 0 10px;
     }
     .nav-item {
+      flex: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 4px;
+      justify-content: center;
+      gap: 3px;
+      color: var(--text-sub);
+      text-decoration: none;
+      font-size: 11px;
+      font-weight: 700;
       background: none;
       border: none;
-      color: var(--text-sub);
-      font-size: 11px;
-      font-weight: 600;
       cursor: pointer;
-      padding: 4px 14px;
-      border-radius: 12px;
+      padding: 6px 0;
+      transition: all 0.2s;
+    }
+    .nav-item .material-symbols-rounded {
+      font-size: 24px;
       transition: all 0.2s;
     }
     .nav-item.active {
       color: var(--primary);
     }
-    .nav-item .material-symbols-rounded {
-      font-size: 22px;
+    .nav-item.active .material-symbols-rounded {
+      font-variation-settings: 'FILL' 1;
+      transform: translateY(-2px);
     }
 
-    /* Modal */
+    /* Modals */
     .modal-overlay {
       position: fixed;
-      top: 0; left: 0; width: 100vw; height: 100vh;
+      left: 0; top: 0; width: 100%; height: 100%;
       background: rgba(0, 0, 0, 0.75);
       backdrop-filter: blur(8px);
       display: none;
-      align-items: center;
       justify-content: center;
+      align-items: center;
       z-index: 100;
       padding: 16px;
     }
     .modal-box {
       background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 20px;
+      border: 1px solid var(--surface-border);
+      border-radius: 22px;
+      max-width: 520px;
       width: 100%;
-      max-width: 480px;
+      padding: 24px;
       max-height: 90vh;
       overflow-y: auto;
-      padding: 24px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
     }
     .form-group {
-      margin-bottom: 14px;
+      margin-bottom: 16px;
     }
     .form-label {
       display: block;
-      font-size: 12.5px;
+      font-size: 13px;
       font-weight: 700;
       color: var(--text-sub);
       margin-bottom: 6px;
     }
-    .form-input, .form-select, .form-textarea {
+    .form-input, .form-select {
       width: 100%;
-      background: var(--surface-high);
-      border: 1px solid var(--border);
+      background: var(--surface-elevated);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      padding: 10px 14px;
       color: #fff;
-      padding: 11px 14px;
-      border-radius: 10px;
       font-size: 14px;
-      font-family: inherit;
       outline: none;
-    }
-    .form-input:focus, .form-select:focus, .form-textarea:focus {
-      border-color: var(--primary);
-    }
-
-    /* Floating Add Assessment Button */
-    .fab-add {
-      position: fixed;
-      right: 20px;
-      bottom: 84px;
-      background: linear-gradient(135deg, var(--primary), #00BAF2);
-      color: #000;
-      border: none;
-      border-radius: 999px;
-      padding: 12px 20px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-weight: 800;
-      font-size: 14px;
-      box-shadow: 0 8px 24px rgba(0, 245, 212, 0.4);
-      cursor: pointer;
-      z-index: 45;
       transition: all 0.2s;
+      font-family: inherit;
     }
-    .fab-add:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 30px rgba(0, 245, 212, 0.6);
+    .form-input:focus, .form-select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-dim);
     }
   </style>
 </head>
 <body>
 
-  <!-- Top App Bar -->
+  <!-- Top Bar -->
   <header>
     <div class="brand">
-      <img src="https://boardest.web.app/assets/logo.png" alt="Boardest" class="brand-logo">
+      <img src="https://boardest.web.app/assets/logo.png" alt="Boardest Logo" class="brand-logo">
       <span class="brand-title">Boardest</span>
-      <span class="brand-badge">Student</span>
+      <span class="brand-badge">STUDENT</span>
     </div>
 
-    <div class="school-pill" onclick="openSchoolModal()">
+    <!-- School ID Pill -->
+    <button class="school-id-pill" onclick="openSchoolModal()" title="학교 및 학급 설정">
       <span class="material-symbols-rounded" style="font-size:18px; color:var(--primary);">school</span>
       <span id="headerSchoolText">학교 설정</span>
-      <span class="material-symbols-rounded" style="font-size:16px; color:var(--text-sub);">expand_more</span>
-    </div>
+      <span class="school-id-tag" id="headerSchoolIdTag">ID 미설정</span>
+    </button>
   </header>
 
+  <!-- Live Status Hero Bar -->
+  <div class="hero-bar">
+    <div>
+      <div class="hero-status-pill" id="heroStatusPill">
+        <span class="hero-dot"></span>
+        <span id="heroStatusText">실시간 일과 확인 중</span>
+      </div>
+      <div class="hero-title" id="heroClassTitle">오늘의 학교 생활</div>
+    </div>
+    <div>
+      <div class="hero-time" id="currentClockText">--:--:--</div>
+      <div class="hero-date" id="currentDateText">----년 --월 --일</div>
+    </div>
+  </div>
+
+  <!-- Main Content Tabs -->
   <main>
-    <!-- Tab 1: 시간표 -->
+    <!-- Tab 1: 오늘 시간표 -->
     <section id="tab-timetable" class="tab-content active">
       <div class="card">
         <div class="card-header">
           <div class="card-title">
-            <span class="material-symbols-rounded" style="color:var(--primary);">calendar_today</span>
-            <span id="timetableDayText">오늘의 시간표</span>
+            <span class="material-symbols-rounded" style="color:var(--primary);">calendar_month</span>
+            <span>우리 반 시간표</span>
           </div>
-          <span id="currentClockText" style="font-family:var(--font-brand); font-size:13px; color:var(--primary); font-weight:700;">--:--:--</span>
+          <div class="filter-pills-row" id="dayPills">
+            <button class="filter-pill" onclick="switchDay(1)">월</button>
+            <button class="filter-pill" onclick="switchDay(2)">화</button>
+            <button class="filter-pill" onclick="switchDay(3)">수</button>
+            <button class="filter-pill" onclick="switchDay(4)">목</button>
+            <button class="filter-pill" onclick="switchDay(5)">금</button>
+          </div>
         </div>
 
-        <div id="timetableList" class="timetable-grid">
-          <div style="text-align:center; padding:32px 10px; color:var(--text-sub);">
-            학교와 학년·반을 설정하면 실시간 시간표가 로드됩니다.
+        <div id="timetableContent" class="period-list">
+          <div style="text-align:center; padding:36px 10px; color:var(--text-sub);">
+            학교 ID와 학년·반을 설정하면 실시간 시간표가 로드됩니다.
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Tab 2: 급식표 -->
+    <!-- Tab 2: 급식 식단표 -->
     <section id="tab-meal" class="tab-content">
       <div class="card">
         <div class="card-header">
           <div class="card-title">
-            <span class="material-symbols-rounded" style="color:#FF8906;">restaurant</span>
+            <span class="material-symbols-rounded" style="color:var(--accent-orange);">restaurant</span>
             <span>급식 식단표</span>
           </div>
           <div style="display:flex; gap:6px;">
-            <button class="btn btn-sm btn-tonal" id="btnTodayMeal" onclick="switchMealDay(0)">오늘</button>
-            <button class="btn btn-sm btn-tonal" id="btnTomorrowMeal" onclick="switchMealDay(1)">내일</button>
+            <button class="btn btn-sm btn-primary" id="btnTodayMeal" onclick="switchMealDay(0)">오늘 점심</button>
+            <button class="btn btn-sm btn-tonal" id="btnTomorrowMeal" onclick="switchMealDay(1)">내일 점심</button>
           </div>
         </div>
 
@@ -545,11 +644,11 @@
           급식 정보를 불러오는 중입니다...
         </div>
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; font-size:11.5px; color:var(--text-sub);">
-          <span id="mealCalorieText">칼로리 정보 로딩 중...</span>
-          <span style="display:flex; align-items:center; gap:3px;">
-            <span class="material-symbols-rounded" style="font-size:14px; color:#FF5470;">info</span>
-            숫자는 알레르기 식품 번호입니다
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:12px; color:var(--text-sub);">
+          <span id="mealCalorieText" style="font-weight:700; color:var(--primary);">칼로리 정보 조회 중...</span>
+          <span style="display:flex; align-items:center; gap:4px;">
+            <span class="material-symbols-rounded" style="font-size:15px; color:#FF5470;">info</span>
+            한국어 알레르기 태그 자동 표출
           </span>
         </div>
       </div>
@@ -558,9 +657,9 @@
     <!-- Tab 3: 수행평가 & 과제 -->
     <section id="tab-assessments" class="tab-content">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h2 style="font-size:18px; font-weight:800; color:#fff; display:flex; align-items:center; gap:6px;">
-          <span class="material-symbols-rounded" style="color:var(--primary);">assignment</span>
-          우리 반 수행평가 & 과제
+        <h2 style="font-size:18px; font-weight:800; color:#fff; display:flex; align-items:center; gap:8px;">
+          <span class="material-symbols-rounded" style="color:var(--primary);">assignment_turned_in</span>
+          수행평가 & 과제
         </h2>
         <button class="btn btn-sm btn-primary" onclick="openAddAssessmentModal()">
           <span class="material-symbols-rounded" style="font-size:16px;">add</span>
@@ -572,17 +671,17 @@
       <div style="margin-bottom: 12px; display:flex; flex-direction:column; gap:8px;">
         <div style="display:flex; gap:8px;">
           <div style="position:relative; flex:1;">
-            <input type="text" id="assSearchInput" class="form-input" style="padding-left:34px; padding-top:8px; padding-bottom:8px; font-size:13px;" placeholder="과목, 과제명, 작성자 검색..." oninput="filterAssessments()">
+            <input type="text" id="assSearchInput" class="form-input" style="padding-left:34px; font-size:13px;" placeholder="과목, 과제명, 작성자 검색..." oninput="filterAssessments()">
             <span class="material-symbols-rounded" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:18px; color:var(--text-sub);">search</span>
           </div>
-          <button class="btn btn-sm btn-tonal" id="btnToggleHideDone" onclick="toggleHideDone()" title="완료 항목 숨기기 토글">
+          <button class="btn btn-sm btn-tonal" id="btnToggleHideDone" onclick="toggleHideDone()" title="완료 항목 숨김">
             <span class="material-symbols-rounded" id="iconHideDone" style="font-size:16px;">visibility_off</span>
             <span id="textHideDone">완료 숨김</span>
           </button>
         </div>
 
         <!-- Subject Filter Pills -->
-        <div id="subjectPills" style="display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none;">
+        <div class="filter-pills-row" id="subjectPills">
           <button class="filter-pill active" onclick="setSubjectFilter('전체')">전체</button>
           <button class="filter-pill" onclick="setSubjectFilter('국어')">국어</button>
           <button class="filter-pill" onclick="setSubjectFilter('수학')">수학</button>
@@ -595,9 +694,9 @@
         </div>
 
         <!-- Summary Bar -->
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--text-sub); padding:0 2px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12.5px; color:var(--text-sub); padding:2px 4px;">
           <span id="assTotalCountText">총 0건의 일정</span>
-          <span id="assDoneCountText" style="color:var(--primary); font-weight:700;">완료 0건</span>
+          <span id="assDoneCountText" style="color:var(--primary); font-weight:800;">완료 0건</span>
         </div>
       </div>
 
@@ -608,29 +707,30 @@
       </div>
     </section>
 
-    <!-- Tab 4: 학교 소식 & 행사 광고판 -->
+    <!-- Tab 4: 학교 소식 & 행사 광고판 (학생 열람 전용) -->
     <section id="tab-notices" class="tab-content">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h2 style="font-size:18px; font-weight:800; color:#fff; display:flex; align-items:center; gap:6px;">
+        <h2 style="font-size:18px; font-weight:800; color:#fff; display:flex; align-items:center; gap:8px;">
           <span class="material-symbols-rounded" style="color:var(--primary);">campaign</span>
-          학교 소식 & 행사 광고판
+          학교 공식 소식 & 행사 광고판
         </h2>
-        <button class="btn btn-sm btn-primary" onclick="openAddNoticeModal()">
-          <span class="material-symbols-rounded" style="font-size:16px;">add</span>
-          행사 등록
-        </button>
-      </div>
-
-      <!-- Notice Search & Refresh -->
-      <div style="margin-bottom: 12px; display:flex; gap:8px;">
-        <div style="position:relative; flex:1;">
-          <input type="text" id="noticeSearchInput" class="form-input" style="padding-left:34px; padding-top:8px; padding-bottom:8px; font-size:13px;" placeholder="학교 행사 및 소식 검색..." oninput="filterNotices()">
-          <span class="material-symbols-rounded" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:18px; color:var(--text-sub);">search</span>
-        </div>
         <button class="btn btn-sm btn-tonal" onclick="fetchNotices()">
           <span class="material-symbols-rounded" style="font-size:16px;">refresh</span>
           새로고침
         </button>
+      </div>
+
+      <!-- Notice Banner & Search -->
+      <div style="margin-bottom: 14px; display:flex; flex-direction:column; gap:8px;">
+        <div style="padding:10px 14px; background:rgba(0, 245, 212, 0.08); border:1px solid rgba(0, 245, 212, 0.2); border-radius:12px; font-size:12.5px; color:#e0e6ed; display:flex; align-items:center; gap:8px;">
+          <span class="material-symbols-rounded" style="color:var(--primary); font-size:18px;">verified</span>
+          <span>학교 교무실 및 담당 선생님이 공식 게시한 행사·광고입니다. (열람 전용)</span>
+        </div>
+
+        <div style="position:relative;">
+          <input type="text" id="noticeSearchInput" class="form-input" style="padding-left:34px; font-size:13px;" placeholder="학교 행사 및 소식 검색..." oninput="filterNotices()">
+          <span class="material-symbols-rounded" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:18px; color:var(--text-sub);">search</span>
+        </div>
       </div>
 
       <div id="noticeList" class="notice-grid">
@@ -638,14 +738,17 @@
           등록된 학교 소식 및 행사를 불러오는 중입니다...
         </div>
       </div>
+
+      <!-- Teacher notice upload guide footer -->
+      <div style="text-align:center; margin-top:30px; padding:16px; border-top:1px solid var(--surface-border); font-size:12.5px; color:var(--text-sub);">
+        선생님이신가요? 학교 행사 포스터는 교사용 웹에서 PNG로 간편하게 등록할 수 있습니다.<br>
+        <a href="https://boardest.web.app/notice" target="_blank" style="color:var(--primary); font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:4px; margin-top:6px;">
+          <span class="material-symbols-rounded" style="font-size:16px;">upload_file</span>
+          교사용 행사 포스터 업로드 페이지 열기 ↗
+        </a>
+      </div>
     </section>
   </main>
-
-  <!-- Floating Add Button on Assessments tab -->
-  <button id="fabAddAssessment" class="fab-add" onclick="openAddAssessmentModal()" style="display:none;">
-    <span class="material-symbols-rounded">add_task</span>
-    수행 등록
-  </button>
 
   <!-- Bottom Navigation -->
   <nav class="bottom-nav">
@@ -667,26 +770,35 @@
     </button>
   </nav>
 
-  <!-- School Setup Modal -->
+  <!-- School ID Setup Modal -->
   <div id="schoolModal" class="modal-overlay">
     <div class="modal-box">
-      <h3 style="font-size:18px; font-weight:800; color:#fff; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+      <h3 style="font-size:19px; font-weight:800; color:#fff; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
         <span class="material-symbols-rounded" style="color:var(--primary);">school</span>
-        학교 및 학급 설정 (로그인 불필요)
+        학교 ID 및 학급 설정 (로그인 불필요)
       </h3>
       <p style="font-size:12.5px; color:var(--text-sub); margin-bottom:18px;">
-        설정하신 정보는 기기에 안전하게 기억되어 다음 접속 시에도 자동으로 유지됩니다.
+        학교 고유 ID를 기반으로 시간표, 급식, 수행평가 및 교내 행사가 실시간 연동됩니다.
       </p>
 
+      <!-- 1. School ID field -->
       <div class="form-group">
-        <label class="form-label">학교 검색</label>
+        <label class="form-label">학교 ID (School Code)</label>
         <div style="display:flex; gap:8px;">
-          <input type="text" id="inputSchoolQuery" class="form-input" placeholder="학교명 입력 (예: 서울중, 경기고)">
-          <button class="btn btn-primary" onclick="searchSchool()">검색</button>
+          <input type="text" id="setupSchoolId" class="form-input" placeholder="예: B100000662 또는 seoul_ms">
+          <button class="btn btn-primary" onclick="searchNeisModal()">학교 검색</button>
         </div>
-        <div id="schoolSearchResults" style="max-height:160px; overflow-y:auto; margin-top:8px;"></div>
+        <span style="font-size:11.5px; color:var(--text-muted); display:block; margin-top:4px;">
+          학교명을 모르실 경우 '학교 검색'을 누르면 NEIS 고유 학교 ID가 자동 기입됩니다.
+        </span>
       </div>
 
+      <div class="form-group">
+        <label class="form-label">학교 이름</label>
+        <input type="text" id="setupSchoolName" class="form-input" placeholder="예: 서울중학교">
+      </div>
+
+      <!-- Grade and Class -->
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px;">
         <div class="form-group">
           <label class="form-label">학년</label>
@@ -711,7 +823,22 @@
     </div>
   </div>
 
-  <!-- Add Assessment Modal -->
+  <!-- NEIS Search Sub-Modal -->
+  <div id="neisSearchModal" class="modal-overlay">
+    <div class="modal-box">
+      <h3 style="font-size:18px; font-weight:800; color:#fff; margin-bottom:12px;">학교명으로 학교 ID 검색</h3>
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <input type="text" id="inputSchoolQuery" class="form-input" placeholder="학교명 입력 (예: 서울중, 경기고)">
+        <button class="btn btn-primary" onclick="execSchoolSearch()">검색</button>
+      </div>
+      <div id="schoolSearchResults" style="max-height:220px; overflow-y:auto;"></div>
+      <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+        <button class="btn btn-tonal" onclick="closeNeisSearchModal()">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Assessment Modal (학생/학급 수행평가 등록) -->
   <div id="addAssessmentModal" class="modal-overlay">
     <div class="modal-box">
       <h3 style="font-size:18px; font-weight:800; color:var(--primary); margin-bottom:6px; display:flex; align-items:center; gap:8px;">
@@ -719,7 +846,7 @@
         수행평가 / 과제 등록
       </h3>
       <p style="font-size:12px; color:var(--text-sub); margin-bottom:16px;">
-        우리 반 또는 학년 전체에 실시간 공유되며, 교실 전자칠판에도 알람으로 표출됩니다.
+        우리 반 또는 학년 전체에 실시간 공유되며 교실 전자칠판에도 알람으로 표출됩니다.
       </p>
 
       <div class="form-group">
@@ -743,7 +870,7 @@
 
       <div class="form-group">
         <label class="form-label">평가 / 과제 제목</label>
-        <input type="text" id="addAssTitle" class="form-input" placeholder="예: 2단원 서술형 형성평가">
+        <input type="text" id="addAssTitle" class="form-input" placeholder="예: 2단원 형성평가 및 서술형 과제">
       </div>
 
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
@@ -768,8 +895,9 @@
           <input type="date" id="addAssDate" class="form-input">
         </div>
         <div class="form-group">
-          <label class="form-label">실시 교시</label>
+          <label class="form-label">교시</label>
           <select id="addAssPeriod" class="form-select">
+            <option value="0">당일 마감 (교시 무관)</option>
             <option value="1">1교시</option>
             <option value="2">2교시</option>
             <option value="3">3교시</option>
@@ -777,24 +905,23 @@
             <option value="5">5교시</option>
             <option value="6">6교시</option>
             <option value="7">7교시</option>
-            <option value="0">교시 미지정 (당일 마감)</option>
           </select>
         </div>
       </div>
 
       <div class="form-group">
         <label class="form-label">평가 범위</label>
-        <input type="text" id="addAssRange" class="form-input" placeholder="예: 교과서 45~52쪽, 학습지 1~3번">
+        <input type="text" id="addAssRange" class="form-input" placeholder="예: 교과서 p.45 ~ 68, 학습지 3~4호">
       </div>
 
       <div class="form-group">
-        <label class="form-label">주의사항 및 지참물</label>
-        <input type="text" id="addAssPrecautions" class="form-input" placeholder="예: 삼각자/컴퍼스 지참, 필기구 필수">
+        <label class="form-label">주의사항 및 준비물</label>
+        <input type="text" id="addAssPrecautions" class="form-input" placeholder="예: 컴퓨터용 수성 사인펜 지참">
       </div>
 
       <div class="form-group">
-        <label class="form-label">등록자 (닉네임 / 학급 역할)</label>
-        <input type="text" id="addAssAuthor" class="form-input" placeholder="예: 반장, 3분단장, 학생">
+        <label class="form-label">작성자</label>
+        <input type="text" id="addAssAuthor" class="form-input" placeholder="예: 학생회장, 3반 반장, 김교사">
       </div>
 
       <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
@@ -804,63 +931,24 @@
     </div>
   </div>
 
-  <!-- Add School Notice Modal -->
-  <div id="addNoticeModal" class="modal-overlay">
-    <div class="modal-box">
-      <h3 style="font-size:18px; font-weight:800; color:#fff; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
-        <span class="material-symbols-rounded" style="color:var(--primary);">campaign</span>
-        학교 행사 & 소식 등록
-      </h3>
-      <p style="font-size:12px; color:var(--text-sub); margin-bottom:16px;">
-        교실 전자칠판 및 학생 앱 광고판에 실시간으로 회전 노출됩니다. (사진 + 제목)
-      </p>
-
-      <div class="form-group">
-        <label class="form-label">행사 제목</label>
-        <input type="text" id="addNoticeTitle" class="form-input" placeholder="예: 2026 보데스트 봄 축제 부스 참가 신청 안내">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">사진 이미지 URL (Firebase Storage 또는 웹 링크)</label>
-        <input type="text" id="addNoticeImageUrl" class="form-input" placeholder="https://...">
-      </div>
-
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-        <div class="form-group">
-          <label class="form-label">행사 마감일</label>
-          <input type="date" id="addNoticeEndDate" class="form-input">
-        </div>
-        <div class="form-group">
-          <label class="form-label">등록자 (이름 / 동아리 / 학생회)</label>
-          <input type="text" id="addNoticeAuthor" class="form-input" placeholder="예: 학생회, 방송부">
-        </div>
-      </div>
-
-      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
-        <button class="btn btn-tonal" onclick="closeAddNoticeModal()">취소</button>
-        <button class="btn btn-primary" onclick="submitNotice()">등록 완료</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Photo Viewer Modal -->
+  <!-- Photo Viewer Lightbox Modal -->
   <div id="photoViewerModal" class="modal-overlay" onclick="closePhotoViewerModal()">
-    <div class="modal-box" style="max-width:800px; padding:12px; background:transparent; border:none; box-shadow:none; text-align:center;" onclick="event.stopPropagation()">
+    <div class="modal-box" style="max-width:840px; padding:12px; background:transparent; border:none; box-shadow:none; text-align:center;" onclick="event.stopPropagation()">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:0 8px;">
         <h4 id="photoViewerTitle" style="color:#fff; font-size:16px; font-weight:800; margin:0;"></h4>
         <button class="btn btn-sm btn-tonal" onclick="closePhotoViewerModal()">
           <span class="material-symbols-rounded">close</span>
         </button>
       </div>
-      <img id="photoViewerImg" src="" style="width:100%; max-height:75vh; object-fit:contain; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.8);">
+      <img id="photoViewerImg" src="" style="width:100%; max-height:75vh; object-fit:contain; border-radius:14px; box-shadow:0 10px 40px rgba(0,0,0,0.85);">
     </div>
   </div>
 
   <script>
     // State
     let studentConfig = {
+      schoolId: '',
       schoolName: '',
-      schoolCode: '',
       officeCode: '',
       grade: 1,
       classNum: 1
@@ -870,9 +958,21 @@
     let cachedNotices = [];
     let completedItemIds = new Set();
     let currentMealDayOffset = 0; // 0: today, 1: tomorrow
+    let currentSubjectFilter = '전체';
+    let hideCompleted = false;
+    let selectedWeekday = new Date().getDay() || 1; // 1: Mon .. 5: Fri
+    if (selectedWeekday > 5) selectedWeekday = 1;
 
     const RTDB_BASE = 'https://jiwhosboardest-default-rtdb.firebaseio.com/assessments';
     const NOTICE_BASE = 'https://jiwhosboardest-default-rtdb.firebaseio.com/school_notices';
+
+    // Allergy Code Map
+    const ALLERGY_MAP = {
+      1: '난류', 2: '우유', 3: '메밀', 4: '땅콩', 5: '대두', 6: '밀',
+      7: '고등어', 8: '게', 9: '새우', 10: '돼지고기', 11: '복숭아',
+      12: '토마토', 13: '아황산류', 14: '호두', 15: '닭고기', 16: '쇠고기',
+      17: '오징어', 18: '조개류(굴,전복,홍합)', 19: '잣'
+    };
 
     // Init
     window.addEventListener('DOMContentLoaded', () => {
@@ -888,21 +988,20 @@
       // 2. Load Saved Config
       loadLocalConfig();
 
-      // 3. Set Default Date in Add Modal
+      // 3. Set default date in modal
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 2);
       document.getElementById('addAssDate').value = tomorrow.toISOString().split('T')[0];
 
-      const defaultNoticeEnd = new Date();
-      defaultNoticeEnd.setDate(defaultNoticeEnd.getDate() + 7);
-      document.getElementById('addNoticeEndDate').value = defaultNoticeEnd.toISOString().split('T')[0];
-
-      // 4. Clock Timer
+      // 4. Clocks
       setInterval(updateClock, 1000);
       updateClock();
 
-      // 5. Initial Data Fetch
-      if (studentConfig.schoolCode) {
+      // 5. Day switcher active
+      updateDayPillsUI();
+
+      // 6. Fetch Data if School ID exists
+      if (studentConfig.schoolId) {
         fetchTimetable();
         fetchMeal(currentMealDayOffset);
         fetchAssessments();
@@ -917,6 +1016,10 @@
         const saved = localStorage.getItem('bst_student_profile');
         if (saved) {
           studentConfig = JSON.parse(saved);
+          // Migration from old schoolCode
+          if (!studentConfig.schoolId && studentConfig.schoolCode) {
+            studentConfig.schoolId = studentConfig.schoolCode;
+          }
         }
         const doneList = localStorage.getItem('bst_student_done_ids');
         if (doneList) {
@@ -935,11 +1038,15 @@
     }
 
     function updateHeaderUI() {
-      const el = document.getElementById('headerSchoolText');
-      if (studentConfig.schoolName) {
-        el.textContent = `${studentConfig.schoolName} ${studentConfig.grade}-${studentConfig.classNum}`;
+      const textEl = document.getElementById('headerSchoolText');
+      const tagEl = document.getElementById('headerSchoolIdTag');
+      if (studentConfig.schoolId) {
+        textEl.textContent = `${studentConfig.schoolName || '학교'} ${studentConfig.grade}-${studentConfig.classNum}`;
+        tagEl.textContent = `ID: ${studentConfig.schoolId}`;
+        tagEl.style.display = 'inline-block';
       } else {
-        el.textContent = '학교 및 반 설정';
+        textEl.textContent = '학교 ID 설정';
+        tagEl.textContent = '미설정';
       }
     }
 
@@ -950,6 +1057,51 @@
       const s = String(now.getSeconds()).padStart(2, '0');
       const clockEl = document.getElementById('currentClockText');
       if (clockEl) clockEl.textContent = `${h}:${m}:${s}`;
+
+      const wd = ['일', '월', '화', '수', '목', '금', '토'];
+      const dateEl = document.getElementById('currentDateText');
+      if (dateEl) {
+        dateEl.textContent = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 (${wd[now.getDay()]})`;
+      }
+
+      // Period status check
+      const currentMin = now.getHours() * 60 + now.getMinutes();
+      const heroPill = document.getElementById('heroStatusPill');
+      const heroText = document.getElementById('heroStatusText');
+      const heroTitle = document.getElementById('heroClassTitle');
+
+      // Schedule standards (approx)
+      if (currentMin >= 540 && currentMin < 585) {
+        heroText.textContent = '1교시 수업 진행 중';
+        heroTitle.textContent = `${studentConfig.grade || 1}학년 ${studentConfig.classNum || 1}반 1교시`;
+      } else if (currentMin >= 595 && currentMin < 640) {
+        heroText.textContent = '2교시 수업 진행 중';
+        heroTitle.textContent = `${studentConfig.grade || 1}학년 ${studentConfig.classNum || 1}반 2교시`;
+      } else if (currentMin >= 650 && currentMin < 695) {
+        heroText.textContent = '3교시 수업 진행 중';
+        heroTitle.textContent = `${studentConfig.grade || 1}학년 ${studentConfig.classNum || 1}반 3교시`;
+      } else if (currentMin >= 705 && currentMin < 750) {
+        heroText.textContent = '4교시 수업 진행 중';
+        heroTitle.textContent = `${studentConfig.grade || 1}학년 ${studentConfig.classNum || 1}반 4교시`;
+      } else if (currentMin >= 750 && currentMin < 800) {
+        heroText.textContent = '즐거운 점심 시간';
+        heroTitle.textContent = '맛있는 급식 시간입니다!';
+      } else if (currentMin >= 800 && currentMin < 845) {
+        heroText.textContent = '5교시 수업 진행 중';
+        heroTitle.textContent = `${studentConfig.grade || 1}학년 ${studentConfig.classNum || 1}반 5교시`;
+      } else if (currentMin >= 855 && currentMin < 900) {
+        heroText.textContent = '6교시 수업 진행 중';
+        heroTitle.textContent = `${studentConfig.grade || 1}학년 ${studentConfig.classNum || 1}반 6교시`;
+      } else if (currentMin >= 910 && currentMin < 955) {
+        heroText.textContent = '7교시 수업 진행 중';
+        heroTitle.textContent = `${studentConfig.grade || 1}학년 ${studentConfig.classNum || 1}반 7교시`;
+      } else if (currentMin >= 955) {
+        heroText.textContent = '방과 후 / 하교';
+        heroTitle.textContent = '오늘 하루도 수고 많았습니다!';
+      } else {
+        heroText.textContent = '등교 및 아침 조회';
+        heroTitle.textContent = '활기찬 하루를 준비하세요!';
+      }
     }
 
     // Tabs
@@ -965,131 +1117,130 @@
       if (tabId === 'meal') navBtns[1].classList.add('active');
       if (tabId === 'assessments') navBtns[2].classList.add('active');
       if (tabId === 'notices') navBtns[3].classList.add('active');
-
-      const fab = document.getElementById('fabAddAssessment');
-      if (tabId === 'assessments') fab.style.display = 'flex';
-      else fab.style.display = 'none';
-    }
-
-    // School Modal
-    function openSchoolModal() {
-      document.getElementById('inputSchoolQuery').value = studentConfig.schoolName || '';
-      document.getElementById('selectGrade').value = studentConfig.grade || 1;
-      document.getElementById('selectClass').value = studentConfig.classNum || 1;
-      document.getElementById('schoolModal').style.display = 'flex';
-    }
-    function closeSchoolModal() {
-      document.getElementById('schoolModal').style.display = 'none';
-    }
-
-    async function searchSchool() {
-      const q = document.getElementById('inputSchoolQuery').value.trim();
-      if (!q) { alert('학교 이름을 입력해 주세요.'); return; }
-      const resEl = document.getElementById('schoolSearchResults');
-      resEl.innerHTML = '<div style="color:var(--text-sub); padding:10px;">검색 중...</div>';
-
-      try {
-        const url = `https://open.neis.go.kr/hub/schoolInfo?Type=json&pIndex=1&pSize=15&SCHUL_NM=${encodeURIComponent(q)}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.schoolInfo && data.schoolInfo[1] && data.schoolInfo[1].row) {
-          const list = data.schoolInfo[1].row;
-          let html = '';
-          list.forEach(item => {
-            html += `
-              <div onclick="selectSchoolItem('${item.SCHUL_NM}', '${item.SD_SCHUL_CODE}', '${item.ATPT_OFCDC_SC_CODE}')"
-                   style="background:var(--surface-high); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:6px; cursor:pointer;">
-                <div style="font-weight:700; color:#fff; font-size:13.5px;">${item.SCHUL_NM}</div>
-                <div style="font-size:11.5px; color:var(--text-sub); margin-top:2px;">${item.ORG_RDNMA || item.LCTN_SC_NM} · 코드: ${item.SD_SCHUL_CODE}</div>
-              </div>
-            `;
-          });
-          resEl.innerHTML = html;
-        } else {
-          resEl.innerHTML = '<div style="color:var(--text-sub); padding:10px;">검색 결과가 없습니다.</div>';
-        }
-      } catch (e) {
-        resEl.innerHTML = `<div style="color:#FF5470; padding:10px;">오류: ${e.message}</div>`;
-      }
-    }
-
-    function selectSchoolItem(name, code, office) {
-      studentConfig.schoolName = name;
-      studentConfig.schoolCode = code;
-      studentConfig.officeCode = office;
-      document.getElementById('inputSchoolQuery').value = name;
-      document.getElementById('schoolSearchResults').innerHTML = `
-        <div style="background:rgba(0,245,212,0.15); border:1px solid var(--primary); border-radius:8px; padding:8px 12px; color:var(--primary); font-size:13px; font-weight:700;">
-          ✓ [${name}] 선택 완료!
-        </div>
-      `;
-    }
-
-    function saveSchoolSettings() {
-      studentConfig.grade = parseInt(document.getElementById('selectGrade').value) || 1;
-      studentConfig.classNum = parseInt(document.getElementById('selectClass').value) || 1;
-      if (!studentConfig.schoolCode) {
-        studentConfig.schoolName = document.getElementById('inputSchoolQuery').value.trim() || '우리학교';
-        studentConfig.schoolCode = 'default';
-      }
-      saveLocalConfig();
-      closeSchoolModal();
-      fetchTimetable();
-      fetchMeal(currentMealDayOffset);
-      fetchAssessments();
-      fetchNotices();
     }
 
     // Timetable
+    function switchDay(dayNum) {
+      selectedWeekday = dayNum;
+      updateDayPillsUI();
+      fetchTimetable();
+    }
+
+    function updateDayPillsUI() {
+      const pills = document.querySelectorAll('#dayPills .filter-pill');
+      pills.forEach((p, idx) => {
+        if (idx + 1 === selectedWeekday) p.classList.add('active');
+        else p.classList.remove('active');
+      });
+    }
+
     async function fetchTimetable() {
-      const container = document.getElementById('timetableList');
-      container.innerHTML = '<div style="text-align:center; padding:24px; color:var(--text-sub);">시간표를 불러오는 중입니다...</div>';
+      const container = document.getElementById('timetableContent');
+      container.innerHTML = '<div style="text-align:center; padding:24px; color:var(--text-sub);">시간표를 불러오고 있습니다...</div>';
 
-      const now = new Date();
-      const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
-      document.getElementById('timetableDayText').textContent = `오늘의 시간표 (${weekdays[now.getDay()]}요일)`;
+      const sId = studentConfig.schoolId || '';
+      const oCode = studentConfig.officeCode || '';
+      const grade = studentConfig.grade || 1;
+      const classNum = studentConfig.classNum || 1;
 
-      // Basic Schedule Generator (fallback & NEIS format)
-      const periods = [
-        { p: 1, time: '08:40 ~ 09:25', subject: '국어', teacher: '담당선생님' },
-        { p: 2, time: '09:35 ~ 10:20', subject: '수학', teacher: '담당선생님' },
-        { p: 3, time: '10:30 ~ 11:15', subject: '영어', teacher: '담당선생님' },
-        { p: 4, time: '11:25 ~ 12:10', subject: '사회', teacher: '담당선생님' },
-        { p: 5, time: '13:00 ~ 13:45', subject: '과학', teacher: '담당선생님' },
-        { p: 6, time: '13:55 ~ 14:40', subject: '체육', teacher: '담당선생님' },
-        { p: 7, time: '14:50 ~ 15:35', subject: '동아리', teacher: '담당선생님' },
+      // NEIS School code check (digits)
+      const isNeisCode = /^[A-Z0-9]{7,12}$/i.test(sId) && oCode;
+
+      if (!isNeisCode) {
+        // Fallback demo/custom schedule
+        renderDefaultTimetable();
+        return;
+      }
+
+      try {
+        // Target date for selected weekday
+        const now = new Date();
+        const curDay = now.getDay() || 7;
+        const diff = selectedWeekday - curDay;
+        const targetDate = new Date(now);
+        targetDate.setDate(now.getDate() + diff);
+
+        const y = targetDate.getFullYear();
+        const m = String(targetDate.getMonth() + 1).padStart(2, '0');
+        const d = String(targetDate.getDate()).padStart(2, '0');
+        const ymd = `${y}${m}${d}`;
+
+        const url = `https://open.neis.go.kr/hub/misTimetable?Type=json&pIndex=1&pSize=10&ATPT_OFCDC_SC_CODE=${oCode}&SD_SCHUL_CODE=${sId}&GRADE=${grade}&CLASS_NM=${classNum}&ALL_TI_YMD=${ymd}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        let rows = [];
+        if (data.misTimetable && data.misTimetable[1] && data.misTimetable[1].row) {
+          rows = data.misTimetable[1].row;
+        } else {
+          // Try high school timetable endpoint
+          const hisUrl = `https://open.neis.go.kr/hub/hisTimetable?Type=json&pIndex=1&pSize=10&ATPT_OFCDC_SC_CODE=${oCode}&SD_SCHUL_CODE=${sId}&GRADE=${grade}&CLASS_NM=${classNum}&ALL_TI_YMD=${ymd}`;
+          const res2 = await fetch(hisUrl);
+          const data2 = await res2.json();
+          if (data2.hisTimetable && data2.hisTimetable[1] && data2.hisTimetable[1].row) {
+            rows = data2.hisTimetable[1].row;
+          }
+        }
+
+        if (rows.length === 0) {
+          renderDefaultTimetable();
+          return;
+        }
+
+        renderNeisTimetable(rows);
+      } catch (e) {
+        renderDefaultTimetable();
+      }
+    }
+
+    function renderNeisTimetable(rows) {
+      const container = document.getElementById('timetableContent');
+      let html = '';
+      const times = [
+        '09:00~09:45', '09:55~10:40', '10:50~11:35', '11:45~12:30',
+        '13:20~14:05', '14:15~15:00', '15:10~15:55'
       ];
 
-      // Check current period
-      const nowMin = now.getHours() * 60 + now.getMinutes();
-
-      let html = '';
-      periods.forEach(it => {
-        const parts = it.time.split(' ~ ');
-        const sM = timeToM(parts[0]);
-        const eM = timeToM(parts[1]);
-        const isCurrent = nowMin >= sM && nowMin < eM;
+      rows.forEach((r, idx) => {
+        const period = r.PERIO || (idx + 1);
+        const subject = r.ITRT_CNTNT || '자율활동';
+        const timeStr = times[idx] || '';
 
         html += `
-          <div class="period-row ${isCurrent ? 'current' : ''}">
-            <div class="period-num">
-              <div>${it.p}교시</div>
-              <div class="period-time">${parts[0]}</div>
-            </div>
+          <div class="period-row">
+            <div class="period-num">${period}교시</div>
+            <div class="period-time">${timeStr}</div>
             <div class="period-subject">
-              ${it.subject}
-              ${isCurrent ? '<span style="font-size:10px; background:var(--primary); color:#000; padding:1px 5px; border-radius:4px; margin-left:6px; font-weight:800;">진행 중</span>' : ''}
+              <span>${subject}</span>
             </div>
-            <div class="period-teacher">${it.teacher}</div>
           </div>
         `;
       });
       container.innerHTML = html;
     }
 
-    function timeToM(t) {
-      const [h, m] = t.split(':').map(Number);
-      return (h || 0) * 60 + (m || 0);
+    function renderDefaultTimetable() {
+      const container = document.getElementById('timetableContent');
+      const defaultSubjects = ['국어', '수학', '사회', '과학', '영어', '음악', '체육'];
+      const times = [
+        '09:00~09:45', '09:55~10:40', '10:50~11:35', '11:45~12:30',
+        '13:20~14:05', '14:15~15:00', '15:10~15:55'
+      ];
+
+      let html = '';
+      defaultSubjects.forEach((sub, idx) => {
+        html += `
+          <div class="period-row">
+            <div class="period-num">${idx + 1}교시</div>
+            <div class="period-time">${times[idx]}</div>
+            <div class="period-subject">
+              <span>${sub}</span>
+            </div>
+            <div class="period-teacher">담당 교사</div>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
     }
 
     // Meal
@@ -1112,28 +1263,31 @@
       const day = String(d.getDate()).padStart(2, '0');
       const ymd = `${y}${m}${day}`;
 
-      if (!studentConfig.officeCode || !studentConfig.schoolCode || studentConfig.schoolCode === 'default') {
+      const sId = studentConfig.schoolId || '';
+      const oCode = studentConfig.officeCode || '';
+
+      if (!sId || !oCode) {
         box.innerHTML = `
           <strong>[예시 식단]</strong><br>
           친환경 차수수밥<br>
-          쇠고기미역국 <span class="meal-allergy-pill">16</span><br>
-          안동찜닭 <span class="meal-allergy-pill">5,6,13,15</span><br>
-          도토리묵야채무침 <span class="meal-allergy-pill">5,6</span><br>
-          배추김치 <span class="meal-allergy-pill">9</span><br>
+          쇠고기미역국 <span class="allergy-chip">쇠고기</span><br>
+          안동찜닭 <span class="allergy-chip">대두,밀,아황산류,닭고기</span><br>
+          도토리묵야채무침 <span class="allergy-chip">대두,밀</span><br>
+          배추김치 <span class="allergy-chip">새우</span><br>
           수제 샤인머스캣 에이드
         `;
-        calBox.textContent = '칼로리: 약 685.2 kcal';
+        calBox.textContent = '🔥 칼로리: 약 685.2 kcal';
         return;
       }
 
       try {
-        const url = `https://open.neis.go.kr/hub/mealServiceDietInfo?Type=json&pIndex=1&pSize=1&ATPT_OFCDC_SC_CODE=${studentConfig.officeCode}&SD_SCHUL_CODE=${studentConfig.schoolCode}&MLSV_YMD=${ymd}`;
+        const url = `https://open.neis.go.kr/hub/mealServiceDietInfo?Type=json&pIndex=1&pSize=1&ATPT_OFCDC_SC_CODE=${oCode}&SD_SCHUL_CODE=${sId}&MLSV_YMD=${ymd}`;
         const res = await fetch(url);
         const data = await res.json();
         if (data.mealServiceDietInfo && data.mealServiceDietInfo[1] && data.mealServiceDietInfo[1].row) {
           const row = data.mealServiceDietInfo[1].row[0];
-          box.innerHTML = row.DDISH_NM.replace(/<br\/>/g, '<br>');
-          calBox.textContent = `칼로리: ${row.CAL_INFO || '정보 없음'}`;
+          box.innerHTML = formatDishesWithAllergies(row.DDISH_NM);
+          calBox.textContent = `🔥 칼로리: ${row.CAL_INFO || '정보 없음'}`;
         } else {
           box.innerHTML = `${y}-${m}-${day} (${dayOffset === 0 ? '오늘' : '내일'}) 급식 식단 정보가 없습니다. (휴일/미운영)`;
           calBox.textContent = '칼로리: -';
@@ -1143,10 +1297,21 @@
       }
     }
 
-    // Assessments
-    let currentSubjectFilter = '전체';
-    let hideCompleted = false;
+    function formatDishesWithAllergies(rawStr) {
+      if (!rawStr) return '식단 정보 없음';
+      const lines = rawStr.split(/<br\s*\/?>/i);
+      return lines.map(line => {
+        // extract allergy numbers like (1.5.6.13)
+        return line.replace(/\(([\d\.]+)\)/g, (match, nums) => {
+          const codes = nums.split('.').map(n => parseInt(n.trim())).filter(n => ALLERGY_MAP[n]);
+          if (codes.length === 0) return '';
+          const names = codes.map(c => ALLERGY_MAP[c]).join(', ');
+          return ` <span class="allergy-chip">${names}</span>`;
+        });
+      }).join('<br>');
+    }
 
+    // Assessments
     function setSubjectFilter(subj) {
       currentSubjectFilter = subj;
       const pills = document.querySelectorAll('#subjectPills .filter-pill');
@@ -1203,7 +1368,7 @@
       const totalCount = cachedAssessments.length;
       const doneCount = cachedAssessments.filter(it => completedItemIds.has(it.id)).length;
       if (document.getElementById('assTotalCountText')) {
-        document.getElementById('assTotalCountText').textContent = `총 ${totalCount}건 (표시 ${filtered.length}건)`;
+        document.getElementById('assTotalCountText').textContent = `총 ${totalCount}건의 일정 (표시 ${filtered.length}건)`;
       }
       if (document.getElementById('assDoneCountText')) {
         document.getElementById('assDoneCountText').textContent = `완료 ${doneCount}/${totalCount}건`;
@@ -1212,33 +1377,21 @@
       renderAssessmentsList(filtered);
     }
 
-    function filterNotices() {
-      const q = (document.getElementById('noticeSearchInput') ? document.getElementById('noticeSearchInput').value : '').trim().toLowerCase();
-      let filtered = cachedNotices.slice();
-      if (q) {
-        filtered = filtered.filter(it => 
-          (it.title || '').toLowerCase().includes(q) ||
-          (it.teacherName || '').toLowerCase().includes(q)
-        );
-      }
-      renderNoticesList(filtered);
-    }
-
     async function fetchAssessments() {
       const container = document.getElementById('assessmentList');
-      const effectiveCode = (studentConfig.schoolCode || 'default').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+      const sId = (studentConfig.schoolId || 'default').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
       const grade = studentConfig.grade || 1;
       const targetClass = studentConfig.classNum || 1;
 
       try {
-        const url = `${RTDB_BASE}/${effectiveCode}/${grade}.json`;
+        const url = `${RTDB_BASE}/${sId}/${grade}.json`;
         const res = await fetch(url);
         const data = await res.json();
 
         if (!data || data === 'null') {
           container.innerHTML = `
-            <div class="card" style="text-align:center; padding:32px 10px; color:var(--text-sub);">
-              🎉 등록된 수행평가 및 과제가 없습니다. 자유로운 하루를 보내세요!
+            <div class="card" style="text-align:center; padding:36px 10px; color:var(--text-sub);">
+              🎉 등록된 수행평가 및 과제가 없습니다. 여유로운 하루를 보내세요!
             </div>
           `;
           cachedAssessments = [];
@@ -1251,9 +1404,7 @@
           if (data[k]) items.push(data[k]);
         });
 
-        // Filter for all-classes (0) or my class
         const filtered = items.filter(it => it.classNum == 0 || it.classNum == targetClass);
-        // Sort by dueDate
         filtered.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
         cachedAssessments = filtered;
 
@@ -1271,7 +1422,7 @@
       const container = document.getElementById('assessmentList');
       if (items.length === 0) {
         container.innerHTML = `
-          <div class="card" style="text-align:center; padding:32px 10px; color:var(--text-sub);">
+          <div class="card" style="text-align:center; padding:36px 10px; color:var(--text-sub);">
             🎉 등록된 수행평가 및 과제가 없습니다.
           </div>
         `;
@@ -1294,13 +1445,13 @@
           <div class="assessment-card ${isDone ? 'done' : ''}" id="card_${it.id}">
             <div class="ass-top">
               <div style="display:flex; align-items:center; gap:8px;">
-                <span style="font-size:11px; background:var(--surface-high); color:var(--primary); padding:2px 8px; border-radius:6px; font-weight:700;">
+                <span style="font-size:11.5px; background:var(--primary-dim); color:var(--primary); padding:3px 9px; border-radius:6px; font-weight:800;">
                   ${it.subject}
                 </span>
-                <span style="font-size:11px; background:rgba(255,255,255,0.08); color:var(--text-sub); padding:2px 6px; border-radius:6px;">
+                <span style="font-size:11px; background:rgba(255,255,255,0.08); color:var(--text-sub); padding:3px 7px; border-radius:6px;">
                   ${it.type || '수행평가'}
                 </span>
-                <span style="font-size:11px; color:var(--text-sub);">
+                <span style="font-size:11.5px; color:var(--text-sub);">
                   ${it.classNum == 0 ? '학년 전체' : it.classNum + '반'}
                 </span>
               </div>
@@ -1321,10 +1472,10 @@
             </div>
 
             ${it.range ? `<div class="ass-range"><strong>📖 범위:</strong> ${it.range}</div>` : ''}
-            ${it.precautions ? `<div style="font-size:12px; color:#FF8906; margin-bottom:8px;">⚠️ <strong>주의:</strong> ${it.precautions}</div>` : ''}
+            ${it.precautions ? `<div style="font-size:12px; color:#FF8906; margin-bottom:10px;">⚠️ <strong>주의:</strong> ${it.precautions}</div>` : ''}
 
             <div class="ass-footer">
-              <span>작성: ${it.authorName || '학생/교사'} (${it.createdAt ? it.createdAt.split('T')[0] : ''})</span>
+              <span>작성: ${it.authorName || '선생님/학생'} (${it.createdAt ? it.createdAt.split('T')[0] : ''})</span>
               <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:700; color:#fff;">
                 <input type="checkbox" onchange="toggleItemDone('${it.id}')" ${isDone ? 'checked' : ''} style="width:16px; height:16px; accent-color:var(--primary);">
                 완료 체크
@@ -1352,7 +1503,7 @@
       filterAssessments();
     }
 
-    // Add Assessment Modal
+    // Add Assessment
     function openAddAssessmentModal() {
       document.getElementById('addAssessmentModal').style.display = 'flex';
     }
@@ -1371,17 +1522,17 @@
       const precautions = document.getElementById('addAssPrecautions').value.trim();
       const author = document.getElementById('addAssAuthor').value.trim() || '학생';
 
-      if (!title) { alert('평가 또는 과제 제목을 입력해주세요.'); return; }
-      if (!dateVal) { alert('마감 일자를 선택해주세요.'); return; }
+      if (!title) { alert('과제 제목을 입력해 주세요.'); return; }
+      if (!dateVal) { alert('마감 일자를 선택해 주세요.'); return; }
 
       const id = 'ass_stu_' + Date.now();
-      const effectiveCode = (studentConfig.schoolCode || 'default').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+      const sId = (studentConfig.schoolId || 'default').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
       const grade = studentConfig.grade || 1;
       const classNum = studentConfig.classNum || 1;
 
       const payload = {
         id: id,
-        schoolCode: effectiveCode,
+        schoolCode: sId,
         grade: grade,
         classNum: classNum,
         subject: subject,
@@ -1399,7 +1550,7 @@
       };
 
       try {
-        const url = `${RTDB_BASE}/${effectiveCode}/${grade}/${id}.json`;
+        const url = `${RTDB_BASE}/${sId}/${grade}/${id}.json`;
         const res = await fetch(url, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -1407,9 +1558,8 @@
         });
 
         if (res.ok) {
-          alert('수행평가가 성공적으로 등록되었습니다!\n학급 전체 및 교실 전자칠판에 실시간 공유됩니다.');
+          alert('수행평가가 등록되었습니다!\n학급 전체 및 교실 전자칠판에 실시간 공유됩니다.');
           closeAddAssessmentModal();
-          // Reset form
           document.getElementById('addAssTitle').value = '';
           document.getElementById('addAssRange').value = '';
           document.getElementById('addAssPrecautions').value = '';
@@ -1422,19 +1572,31 @@
       }
     }
 
-    // School Notices (사진 + 제목 형식)
+    // School Notices (사진 + 제목 형식, 열람 전용)
+    function filterNotices() {
+      const q = (document.getElementById('noticeSearchInput') ? document.getElementById('noticeSearchInput').value : '').trim().toLowerCase();
+      let filtered = cachedNotices.slice();
+      if (q) {
+        filtered = filtered.filter(it => 
+          (it.title || '').toLowerCase().includes(q) ||
+          (it.teacherName || '').toLowerCase().includes(q)
+        );
+      }
+      renderNoticesList(filtered);
+    }
+
     async function fetchNotices() {
       const container = document.getElementById('noticeList');
-      const effectiveCode = (studentConfig.schoolCode || 'default').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+      const sId = (studentConfig.schoolId || 'default').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
 
       try {
-        const url = `${NOTICE_BASE}/${effectiveCode}.json`;
+        const url = `${NOTICE_BASE}/${sId}.json`;
         const res = await fetch(url);
         const data = await res.json();
 
         if (!data || data === 'null') {
           container.innerHTML = `
-            <div class="card" style="text-align:center; padding:32px 10px; color:var(--text-sub); grid-column:1/-1;">
+            <div class="card" style="text-align:center; padding:36px 10px; color:var(--text-sub); grid-column:1/-1;">
               📢 등록된 학교 소식 및 행사 안내가 없습니다.
             </div>
           `;
@@ -1447,11 +1609,11 @@
         Object.keys(data).forEach(k => {
           const it = data[k];
           if (it) {
-            // Filter completed notices > 48h
+            // Auto delete 48h expired
             if (it.endDate) {
               const endD = new Date(it.endDate + 'T23:59:59');
               if (now - endD.getTime() > 48 * 3600 * 1000) {
-                fetch(`${NOTICE_BASE}/${effectiveCode}/${it.id}.json`, { method: 'DELETE' });
+                fetch(`${NOTICE_BASE}/${sId}/${it.id}.json`, { method: 'DELETE' });
                 return;
               }
             }
@@ -1475,7 +1637,7 @@
       const container = document.getElementById('noticeList');
       if (items.length === 0) {
         container.innerHTML = `
-          <div class="card" style="text-align:center; padding:32px 10px; color:var(--text-sub); grid-column:1/-1;">
+          <div class="card" style="text-align:center; padding:36px 10px; color:var(--text-sub); grid-column:1/-1;">
             📢 등록된 학교 소식 및 행사 안내가 없습니다.
           </div>
         `;
@@ -1484,15 +1646,17 @@
 
       let html = '';
       items.forEach(it => {
-        const endStr = it.endDate ? `종료: ${it.endDate}` : '';
+        const endStr = it.endDate ? `마감: ${it.endDate}` : '상시 게시';
         const authorStr = it.teacherName ? `• ${it.teacherName}` : '';
         html += `
           <div class="notice-card" onclick="openPhotoViewerModal('${(it.imageUrl || '').replace(/'/g, "\\'")}', '${(it.title || '').replace(/'/g, "\\'")}')">
-            <img src="${it.imageUrl}" alt="${it.title}" onerror="this.src='https://via.placeholder.com/400x250/16161a/ffffff?text=Image+Load+Failed'">
+            <div class="notice-card-img-wrap">
+              <img src="${it.imageUrl}" alt="${it.title}" onerror="this.src='https://via.placeholder.com/400x250/141824/ffffff?text=Image+Load+Failed'">
+            </div>
             <div class="notice-card-body">
-              <div class="notice-title">${it.title}</div>
-              <div class="notice-meta">
-                <span style="color:var(--primary); font-weight:700;">${endStr}</span>
+              <div class="notice-card-title">${it.title}</div>
+              <div class="notice-card-meta">
+                <span style="color:var(--primary); font-weight:800;">${endStr}</span>
                 <span>${authorStr}</span>
               </div>
             </div>
@@ -1500,58 +1664,6 @@
         `;
       });
       container.innerHTML = html;
-    }
-
-    function openAddNoticeModal() {
-      document.getElementById('addNoticeModal').style.display = 'flex';
-    }
-    function closeAddNoticeModal() {
-      document.getElementById('addNoticeModal').style.display = 'none';
-    }
-
-    async function submitNotice() {
-      const title = document.getElementById('addNoticeTitle').value.trim();
-      const imgUrl = document.getElementById('addNoticeImageUrl').value.trim();
-      const endDate = document.getElementById('addNoticeEndDate').value;
-      const author = document.getElementById('addNoticeAuthor').value.trim() || '학생';
-
-      if (!title || !imgUrl) {
-        alert('행사 제목과 사진 이미지 URL을 모두 입력해 주세요.');
-        return;
-      }
-
-      const id = 'ad_' + Date.now();
-      const effectiveCode = (studentConfig.schoolCode || 'default').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
-
-      const payload = {
-        id: id,
-        title: title,
-        imageUrl: imgUrl,
-        teacherName: author,
-        endDate: endDate,
-        createdAt: new Date().toISOString()
-      };
-
-      try {
-        const url = `${NOTICE_BASE}/${effectiveCode}/${id}.json`;
-        const res = await fetch(url, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (res.ok) {
-          alert('학교 행사 광고가 성공적으로 등록되었습니다!\n교실 전자칠판 및 학생 앱 광고판에 노출됩니다.');
-          closeAddNoticeModal();
-          document.getElementById('addNoticeTitle').value = '';
-          document.getElementById('addNoticeImageUrl').value = '';
-          fetchNotices();
-        } else {
-          alert('등록 실패: ' + res.statusText);
-        }
-      } catch (e) {
-        alert('네트워크 오류: ' + e.message);
-      }
     }
 
     function openPhotoViewerModal(url, title) {
@@ -1562,6 +1674,93 @@
     function closePhotoViewerModal() {
       document.getElementById('photoViewerModal').style.display = 'none';
       document.getElementById('photoViewerImg').src = '';
+    }
+
+    // School Modal
+    function openSchoolModal() {
+      document.getElementById('setupSchoolId').value = studentConfig.schoolId || '';
+      document.getElementById('setupSchoolName').value = studentConfig.schoolName || '';
+      document.getElementById('selectGrade').value = studentConfig.grade || 1;
+      document.getElementById('selectClass').value = studentConfig.classNum || 1;
+      document.getElementById('schoolModal').style.display = 'flex';
+    }
+    function closeSchoolModal() {
+      document.getElementById('schoolModal').style.display = 'none';
+    }
+
+    function saveSchoolSettings() {
+      const sId = document.getElementById('setupSchoolId').value.trim();
+      const sName = document.getElementById('setupSchoolName').value.trim();
+      const grade = parseInt(document.getElementById('selectGrade').value) || 1;
+      const classNum = parseInt(document.getElementById('selectClass').value) || 1;
+
+      if (!sId) {
+        alert('학교 ID를 입력하거나 학교 검색으로 선택해 주세요.');
+        return;
+      }
+
+      studentConfig.schoolId = sId;
+      studentConfig.schoolName = sName || sId;
+      studentConfig.grade = grade;
+      studentConfig.classNum = classNum;
+
+      saveLocalConfig();
+      closeSchoolModal();
+
+      // Refresh all tabs
+      fetchTimetable();
+      fetchMeal(currentMealDayOffset);
+      fetchAssessments();
+      fetchNotices();
+    }
+
+    // NEIS Search Sub-Modal
+    function searchNeisModal() {
+      document.getElementById('inputSchoolQuery').value = document.getElementById('setupSchoolName').value || '';
+      document.getElementById('neisSearchModal').style.display = 'flex';
+      if (document.getElementById('inputSchoolQuery').value) {
+        execSchoolSearch();
+      }
+    }
+    function closeNeisSearchModal() {
+      document.getElementById('neisSearchModal').style.display = 'none';
+    }
+
+    async function execSchoolSearch() {
+      const q = document.getElementById('inputSchoolQuery').value.trim();
+      if (!q) { alert('학교 이름을 입력해 주세요.'); return; }
+      const resEl = document.getElementById('schoolSearchResults');
+      resEl.innerHTML = '<div style="color:var(--text-sub); padding:12px;">검색 중...</div>';
+
+      try {
+        const url = `https://open.neis.go.kr/hub/schoolInfo?Type=json&pIndex=1&pSize=15&SCHUL_NM=${encodeURIComponent(q)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.schoolInfo && data.schoolInfo[1] && data.schoolInfo[1].row) {
+          let html = '';
+          data.schoolInfo[1].row.forEach(item => {
+            html += `
+              <div onclick="selectNeisSchool('${item.SCHUL_NM}', '${item.SD_SCHUL_CODE}', '${item.ATPT_OFCDC_SC_CODE}')" style="padding:10px 12px; background:var(--surface-elevated); border-radius:10px; margin-bottom:6px; cursor:pointer; border:1px solid var(--surface-border);">
+                <div style="font-weight:800; color:#fff; font-size:14.5px;">${item.SCHUL_NM}</div>
+                <div style="font-size:12px; color:var(--primary); font-weight:700;">학교 ID: ${item.SD_SCHUL_CODE}</div>
+                <div style="font-size:11.5px; color:var(--text-sub);">${item.ORG_RDNMA || ''}</div>
+              </div>
+            `;
+          });
+          resEl.innerHTML = html;
+        } else {
+          resEl.innerHTML = '<div style="color:var(--text-sub); padding:12px;">검색 결과가 없습니다.</div>';
+        }
+      } catch (e) {
+        resEl.innerHTML = `<div style="color:#FF5470; padding:12px;">검색 실패: ${e.message}</div>`;
+      }
+    }
+
+    function selectNeisSchool(name, code, office) {
+      document.getElementById('setupSchoolId').value = code;
+      document.getElementById('setupSchoolName').value = name;
+      studentConfig.officeCode = office;
+      closeNeisSearchModal();
     }
   </script>
 </body>

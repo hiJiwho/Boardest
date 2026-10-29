@@ -201,6 +201,22 @@
           "destination": "/install/index.html"
         },
         {
+          "source": "/notice",
+          "destination": "/notice/index.html"
+        },
+        {
+          "source": "/notice/**",
+          "destination": "/notice/index.html"
+        },
+        {
+          "source": "/notice-upload",
+          "destination": "/notice-upload/index.html"
+        },
+        {
+          "source": "/notice-upload/**",
+          "destination": "/notice-upload/index.html"
+        },
+        {
           "source": "/student",
           "destination": "/student/index.html"
         },
