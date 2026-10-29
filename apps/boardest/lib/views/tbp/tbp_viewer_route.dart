@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:webview_windows/webview_windows.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../../models/tbp_metadata.dart';
 import '../../models/board_tools.dart';
@@ -99,6 +100,9 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
   @override
   void initState() {
     super.initState();
+    if (!kIsWeb && Platform.isWindows) {
+      windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+    }
     _resolvedTitle = widget.title ?? (widget.mode == TbpViewerMode.htmlp ? '웹 프레젠테이션' : '스마트교과서');
     _annotationController.activeColor = _penColor;
     _annotationController.activeWidth = _strokeWidth;
@@ -578,6 +582,9 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
     _annotationController.dispose();
     _longPressTimer?.cancel();
     _keyboardFocus.dispose();
+    if (!kIsWeb && Platform.isWindows) {
+      windowManager.setTitleBarStyle(TitleBarStyle.normal);
+    }
     super.dispose();
   }
 
@@ -736,6 +743,72 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                     ),
                   ),
                 ),
+
+              // ── 전용 좌우 페이지 넘김 터치 버튼 (전자칠판 터치 친화형) ──
+              Positioned(
+                left: 8 * s,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _navigatePage(false),
+                      borderRadius: BorderRadius.circular(20 * s),
+                      hoverColor: const Color(0xFF00F5D4).withOpacity(0.2),
+                      child: Container(
+                        width: 44 * s,
+                        height: 74 * s,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16161A).withOpacity(0.72),
+                          borderRadius: BorderRadius.circular(16 * s),
+                          border: Border.all(color: Colors.white24, width: 1.2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.35),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Icon(Icons.chevron_left_rounded, color: Colors.white, size: 36 * s),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: (_isAnnotationEnabled || _isLaser || _isToolbarCollapsed) ? 80 * s : 8 * s,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _navigatePage(true),
+                      borderRadius: BorderRadius.circular(20 * s),
+                      hoverColor: const Color(0xFF00F5D4).withOpacity(0.2),
+                      child: Container(
+                        width: 44 * s,
+                        height: 74 * s,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF16161A).withOpacity(0.72),
+                          borderRadius: BorderRadius.circular(16 * s),
+                          border: Border.all(color: Colors.white24, width: 1.2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.35),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Icon(Icons.chevron_right_rounded, color: Colors.white, size: 36 * s),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
 
               // ── 우측 플로팅 펜 툴바 (세로형) ─────────────────────────
               if (_isAnnotationEnabled || _isLaser || _isToolbarCollapsed)

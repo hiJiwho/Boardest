@@ -1883,8 +1883,8 @@ class CloudDriveService with ChangeNotifier {
       if (folderIdToQuery != null && !_hasAuthError) {
         final files = await fetchDriveFiles(folderId: folderIdToQuery, includeFolders: true);
         for (final f in files) {
-          if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json') continue;
           final lower = f.name.toLowerCase();
+          if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json' || lower == 'bst-tbp' || lower == 'bst-textbookpro' || lower == 'bst-tbs') continue;
 
           String itemSource = source;
           String itemLabel = sourceLabel;
@@ -1993,9 +1993,10 @@ class CloudDriveService with ChangeNotifier {
       if (saveFolderId != null) {
         final files = await fetchDriveFiles(folderId: saveFolderId, includeFolders: true);
         for (final f in files) {
-          if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json') continue;
+          final lower = f.name.toLowerCase();
+          if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json' || lower == 'bst-tbp' || lower == 'bst-textbookpro' || lower == 'bst-tbs') continue;
           // 판서(.pen) 파일은 교안 파일 목록에 노출하지 않고 Bst-pen 판서 보관함으로 별도 취급!
-          if (f.name.toLowerCase().endsWith('.pen')) continue;
+          if (lower.endsWith('.pen')) continue;
 
           if (seenIds.add(f.id)) {
             String src = 'cloud';
@@ -2405,7 +2406,7 @@ class CloudDriveService with ChangeNotifier {
           for (final item in filesJson) {
             final f = CloudDriveFile.fromJson(item as Map<String, dynamic>);
             final lower = f.name.toLowerCase();
-            if (lower.endsWith('.file.pen') || lower == 'classroom_mappings.json' || lower == 'subject_mappings.json') continue;
+            if (lower.endsWith('.file.pen') || lower == 'classroom_mappings.json' || lower == 'subject_mappings.json' || lower == 'bst-tbp' || lower == 'bst-textbookpro' || lower == 'bst-tbs') continue;
             if (!allFiles.any((existing) => existing.id == f.id)) {
               allFiles.add(f);
             }
@@ -3581,8 +3582,8 @@ class CloudDriveService with ChangeNotifier {
         if (bytes != null && bytes.isNotEmpty) {
           final content = utf8.decode(bytes);
           final parsed = jsonDecode(content);
-          if (parsed is Map && parsed['id'] != null) {
-            target32Id = parsed['id'].toString();
+          if (parsed is Map) {
+            target32Id = (parsed['id'] ?? parsed['projectId'] ?? parsed['tbpId'] ?? parsed['targetId'])?.toString();
           }
         }
       } catch (_) {}

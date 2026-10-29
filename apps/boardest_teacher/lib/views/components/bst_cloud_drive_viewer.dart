@@ -125,7 +125,12 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
     if (id.isEmpty) return;
 
     final lower = name.toLowerCase();
-    final isTbpOrHtmlp = lower.endsWith('.tbp') || lower.endsWith('.htmlp') || lower.endsWith('.bsttbp') || lower.endsWith('.canva.bst');
+    final isTbpOrHtmlp = lower.endsWith('.tbp') ||
+        lower.endsWith('.tbp.bst') ||
+        lower.endsWith('.htmlp') ||
+        lower.endsWith('.htmlp.bst') ||
+        lower.endsWith('.bsttbp') ||
+        lower.endsWith('.canva.bst');
 
     final confirmed = await showDialog<bool>(
       context: context,

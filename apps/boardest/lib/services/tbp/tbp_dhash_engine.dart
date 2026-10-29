@@ -35,10 +35,10 @@ class TbpDhashEngine {
   // 지수 버스트 딜레이 (ms): 페이지 넘김 직후 즉각 감지
   static const List<int> _burstDelaysMs = [0, 1000, 2000, 5000];
 
-  // 동일 페이지 판정 임계값 (256비트 중 32비트 이하 차이는 같은 페이지의 렌더링/커서 노이즈로 간주)
-  static const int _samePageThreshold = 32;
-  // 기존 저장된 페이지 해시와 매칭할 임계값 (36비트 이하 차이면 저장된 페이지 해시로 스냅)
-  static const int _knownMatchThreshold = 36;
+  // 동일 페이지 판정 임계값 (민감도 대폭 상향: 14비트 이하 차이만 동일 페이지 노이즈로 간주하고, 미세한 페이지 전환도 즉시 감지)
+  static const int _samePageThreshold = 14;
+  // 기존 저장된 페이지 해시와 매칭할 임계값 (18비트 이하 차이면 저장된 페이지 해시로 정밀 스냅)
+  static const int _knownMatchThreshold = 18;
 
   /// 기존 저장된 페이지 dHash 목록을 등록하여 페이지 재방문 시 판서/핫스팟 100% 복원 보장
   void registerKnownHashes(Iterable<String> hashes) {
@@ -154,15 +154,15 @@ class TbpDhashEngine {
       function computeDhashFromSource(sourceEl, w, h) {
         try {
           if (!w || !h || w < 32 || h < 32) return false;
-          var size = Math.min(w, h);
-          var sx = (w - size) / 2;
-          var sy = (h - size) / 2;
 
+          // 16:9 표준 뷰포트 종횡비에 맞춰 다운샘플링 (모든 기기 해상도 편차 평탄화)
           var offscreen = document.createElement('canvas');
           offscreen.width = 17;
           offscreen.height = 16;
           var octx = offscreen.getContext('2d');
-          octx.drawImage(sourceEl, sx, sy, size, size, 0, 0, 17, 16);
+          octx.imageSmoothingEnabled = true;
+          octx.imageSmoothingQuality = 'medium';
+          octx.drawImage(sourceEl, 0, 0, w, h, 0, 0, 17, 16);
 
           var imgData = octx.getImageData(0, 0, 17, 16).data;
           var gray = [];
@@ -186,6 +186,8 @@ class TbpDhashEngine {
           return true;
         } catch (e) {
           return false;
+        }
+      }
         }
       }
 
@@ -357,14 +359,32 @@ class TbpDhashEngine {
 
     final script = '''
       (function() {
-        var el = document.activeElement || document.body;
-        ['keydown','keyup'].forEach(function(type) {
-          el.dispatchEvent(new KeyboardEvent(type, {
-            bubbles: true, cancelable: true,
-            key: '$key', code: '${isNext ? 'ArrowRight' : 'ArrowLeft'}',
-            keyCode: $keyCode, which: $keyCode
-          }));
-        });
+        function triggerInDoc(doc, win) {
+          if (!doc) return;
+          var el = doc.activeElement || doc.body;
+          ['keydown','keyup'].forEach(function(type) {
+            el.dispatchEvent(new KeyboardEvent(type, {
+              bubbles: true, cancelable: true,
+              key: '$key', code: '${isNext ? 'ArrowRight' : 'ArrowLeft'}',
+              keyCode: $keyCode, which: $keyCode
+            }));
+          });
+          // 전자교과서 및 웹 뷰어 표준 다음/이전 버튼 DOM 자동 클릭 연동
+          var selector = '${isNext ? '.btn_next, .btn-next, .next, .page-next, [title*="다음"], [aria-label*="다음"], [class*="next"], [id*="next"]' : '.btn_prev, .btn-prev, .prev, .page-prev, [title*="이전"], [aria-label*="이전"], [class*="prev"], [id*="prev"]'}';
+          var btn = doc.querySelector(selector);
+          if (btn && typeof btn.click === 'function') {
+            try { btn.click(); } catch(e) {}
+          }
+        }
+        triggerInDoc(document, window);
+        var frames = document.querySelectorAll('iframe');
+        for (var i = 0; i < frames.length; i++) {
+          try {
+            if (frames[i].contentDocument && frames[i].contentWindow) {
+              triggerInDoc(frames[i].contentDocument, frames[i].contentWindow);
+            }
+          } catch(e) {}
+        }
       })();
     ''';
 

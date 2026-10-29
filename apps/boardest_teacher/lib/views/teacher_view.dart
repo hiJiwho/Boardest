@@ -3524,10 +3524,27 @@ class _TeacherViewState extends State<TeacherView> {
     );
 
     if (confirmed == true) {
-      final ok = await CloudDriveService.instance.deleteDriveFile(fileId);
+      final lower = name.toLowerCase();
+      final isPointerShell = lower.endsWith('.tbp') ||
+          lower.endsWith('.tbp.bst') ||
+          lower.endsWith('.htmlp') ||
+          lower.endsWith('.htmlp.bst') ||
+          lower.endsWith('.bsttbp') ||
+          lower.endsWith('.canva.bst');
+
+      final ok = isPointerShell
+          ? await CloudDriveService.instance.deletePointerShellWithCascade(file)
+          : await CloudDriveService.instance.deleteDriveFile(fileId);
+
       if (ok) {
         await _refreshDriveFiles();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('파일이 삭제되었습니다.')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(isPointerShell
+                ? 'TBP 바로가기 및 클라우드 실체 데이터가 함께 영구 삭제되었습니다.'
+                : '파일이 삭제되었습니다.'),
+          ));
+        }
       } else {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('파일 삭제 실패')));
       }
