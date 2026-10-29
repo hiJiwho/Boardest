@@ -188,8 +188,6 @@ class TbpDhashEngine {
           return false;
         }
       }
-        }
-      }
 
       function collectDocSignature(doc, win) {
         if (!doc) return '';

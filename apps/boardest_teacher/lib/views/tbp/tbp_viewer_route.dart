@@ -320,6 +320,14 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
       await _winWebview.setBackgroundColor(Colors.transparent);
       await _winWebview.loadUrl(url);
 
+      _winWebview.loadingState.listen((state) {
+        if (state == LoadingState.navigationCompleted) {
+          _dhashEngine.requestHashNow();
+          Future.delayed(const Duration(milliseconds: 600), () => _dhashEngine.requestHashNow());
+          Future.delayed(const Duration(milliseconds: 1500), () => _dhashEngine.requestHashNow());
+        }
+      });
+
       _winWebview.webMessage.listen((message) {
         try {
           _dhashEngine.onDhashMessage(message);
@@ -365,6 +373,13 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
           } catch (_) {}
         },
       )
+      ..setNavigationDelegate(NavigationDelegate(
+        onPageFinished: (url) {
+          _dhashEngine.requestHashNow();
+          Future.delayed(const Duration(milliseconds: 600), () => _dhashEngine.requestHashNow());
+          Future.delayed(const Duration(milliseconds: 1500), () => _dhashEngine.requestHashNow());
+        },
+      ))
       ..loadRequest(Uri.parse(url));
   }
 
