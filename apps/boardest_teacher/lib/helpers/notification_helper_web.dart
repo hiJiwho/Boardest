@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
+import 'dart:js' as js;
 import 'package:flutter/foundation.dart';
 
 Future<void> requestWebNotificationPermission() async {
@@ -30,26 +31,27 @@ void showWebBrowserNotification({required String title, required String body}) {
 
 void playNotificationChime() {
   try {
-    final ctx = html.AudioContext();
-    final osc = ctx.createOscillator();
-    final gain = ctx.createGain();
-
-    osc.type = 'sine';
-
-    final num currentTime = ctx.currentTime ?? 0.0;
-    osc.frequency?.setValueAtTime(587.33, currentTime);
-    osc.frequency?.exponentialRampToValueAtTime(880.0, currentTime + 0.15);
-
-    gain.gain?.setValueAtTime(0.3, currentTime);
-    gain.gain?.exponentialRampToValueAtTime(0.001, currentTime + 0.6);
-
-    osc.connect(gain);
-    if (ctx.destination != null) {
-      gain.connect(ctx.destination!);
-    }
-
-    osc.start();
-    osc.stop(currentTime + 0.6);
+    js.context.callMethod('eval', [r'''
+      (function() {
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContext) return;
+          const ctx = new AudioContext();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          const t = ctx.currentTime;
+          osc.frequency.setValueAtTime(587.33, t);
+          osc.frequency.exponentialRampToValueAtTime(880.0, t + 0.15);
+          gain.gain.setValueAtTime(0.3, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t);
+          osc.stop(t + 0.6);
+        } catch (_) {}
+      })();
+    ''']);
   } catch (e) {
     debugPrint('[WebNotification] playNotificationChime error: $e');
   }
