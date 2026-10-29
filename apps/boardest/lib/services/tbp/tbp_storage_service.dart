@@ -8,6 +8,7 @@ import 'package:archive/archive.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../models/tbp_metadata.dart';
 import '../../widgets/annotation_canvas.dart';
+import 'package:bst_pen/bst_pen.dart';
 import '../bst_cloud_service.dart';
 
 /// TBP (TextBook Plus) 전용 스토리지 및 I/O 전담 서비스
@@ -849,6 +850,12 @@ class TbpStorageService {
     final raw = await loadStrokeData(tbpFolderPath: tbpFolderPath, subFolder: 'PEN', scopeKey: dHash);
     if (raw == null || raw.isEmpty) return [];
     try {
+      final trimmed = raw.trim();
+      // Boardest 특화 SVG 포맷 판서 복원
+      if (trimmed.startsWith('<svg') || trimmed.startsWith('<?xml')) {
+        return SvgStrokeConverter.svgToStrokes(trimmed);
+      }
+      // 레거시 JSON 포맷 판서 하위 호환
       final list = jsonDecode(raw) as List;
       return list.map((item) => AnnotationStroke.fromJson(item as Map<String, dynamic>)).toList();
     } catch (_) {
@@ -857,12 +864,13 @@ class TbpStorageService {
   }
 
   Future<void> savePenStrokes(String tbpFolderPath, String dHash, List<AnnotationStroke> strokes) async {
-    final jsonList = strokes.map((s) => s.toJson()).toList();
+    // Boardest 자체 특화 SvgStrokeConverter를 통해 순수 SVG 벡터 포맷으로 판서 저장
+    final svgContent = SvgStrokeConverter.strokesToSvg(strokes, width: 1536, height: 864);
     await saveStrokeData(
       tbpFolderPath: tbpFolderPath,
       subFolder: 'PEN',
       scopeKey: dHash,
-      strokeContent: jsonEncode(jsonList),
+      strokeContent: svgContent,
     );
   }
 
