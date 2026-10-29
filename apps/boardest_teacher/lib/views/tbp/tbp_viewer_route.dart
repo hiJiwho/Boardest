@@ -18,6 +18,8 @@ import '../../widgets/annotation_canvas.dart';
 import '../../helpers/iframe_view_helper.dart';
 import 'tbp_hotspot_overlay.dart';
 
+enum TbpViewerMode { tbp, htmlp }
+
 /// TextBook Plus (TBP) 단일 스마트교과서 뷰어
 /// - hijiwho/boardbook 동일 구조 dHash 페이지 추적 및 판서 자동 교체
 /// - Windows: webview_windows, Android: webview_flutter
