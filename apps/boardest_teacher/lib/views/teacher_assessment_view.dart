@@ -1404,7 +1404,7 @@ class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
                         children: [
                           ElevatedButton.icon(
                             onPressed: () async {
-                              final res = await FilePicker.platform.pickFiles(
+                              final res = await FilePicker.pickFiles(
                                 type: FileType.custom,
                                 allowedExtensions: ['png', 'jpg', 'jpeg', 'webp'],
                                 withData: true,
