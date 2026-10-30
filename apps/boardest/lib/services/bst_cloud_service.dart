@@ -1117,7 +1117,7 @@ class BstCloudService {
 
       Future<void> queryFilesInFolder(String fid, String? space) async {
         if (_hasAuthError) return;
-        final q = (folderName == 'bst-tbs' || folderName == 'bst-textbookpro')
+        final q = (folderName == 'bst-tbs' || folderName == 'bst-textbookpro' || folderName == 'bst-tbp')
             ? "'$fid' in parents and trashed = false"
             : "'$fid' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'";
         final spaceParam = space != null ? 'spaces=$space&' : '';
@@ -1143,7 +1143,7 @@ class BstCloudService {
             if (lower.endsWith('.file.pen') || lower == 'classroom_mappings.json' || lower == 'subject_mappings.json') continue;
             if (lower.endsWith('.json') && !lower.endsWith('.pen.json')) continue;
             final isFolder = f['mimeType'] == 'application/vnd.google-apps.folder';
-            final mimeType = (isFolder && (folderName == 'bst-tbs' || folderName == 'bst-textbookpro'))
+            final mimeType = (isFolder && (folderName == 'bst-tbs' || folderName == 'bst-textbookpro' || folderName == 'bst-tbp'))
                 ? 'application/x-bst-tbp-folder'
                 : (f['mimeType'] ?? '');
             if (!results.any((r) => r.id == f['id'])) {

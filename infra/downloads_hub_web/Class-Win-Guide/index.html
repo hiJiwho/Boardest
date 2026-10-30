@@ -197,16 +197,16 @@
       <p class="subtitle">학교 교실 전자칠판 환경에 가장 적합한 설치 방식을 선택해 진행하세요.</p>
     </header>
 
-    <!-- 방법 1: 초경량 온라인 설치 도구 (가장 간편 & 자동 인증서 등록) -->
+    <!-- 방법 1: 온라인 자동 설치기 (가장 간편 & 자동 인증서 등록) -->
     <div class="method-card featured">
       <div class="card-header">
         <div class="card-title">
-          <span>🚀 방법 1. 온라인 자동 설치기 (.exe 권장)</span>
+          <span>🚀 Windows 전용 자동 설치 마법사 (.exe 권장)</span>
         </div>
-        <span class="method-pill">570 KB · 인증서 자동 등록</span>
+        <span class="method-pill">인증서 자동 등록 · 원클릭</span>
       </div>
       <p class="card-desc">
-        인증서 등록부터 MSIX 패키지 다운로드 및 설치까지 한 번에 완료되는 초경량 설치기입니다.<br>
+        인증서 등록부터 최신 패키지 배포까지 한 번에 완료되는 공식 설치 마법사입니다.<br>
         더블 클릭으로 실행하면 모든 과정이 자동으로 완료됩니다.
       </p>
       <div style="margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;">
@@ -215,47 +215,6 @@
         </a>
         <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud-installer.exe" class="btn btn-secondary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">
           <span>☁️ Boardest Cloud 온라인 설치기 (.exe)</span>
-        </a>
-      </div>
-    </div>
-
-    <!-- 방법 2: PowerShell 원클릭 자동 설치 -->
-    <div class="method-card">
-      <div class="card-header">
-        <div class="card-title">
-          <span>⚡ 방법 2. 파워쉘 원클릭 자동 설치</span>
-        </div>
-        <span class="method-pill">터미널 자동화</span>
-      </div>
-      <p class="card-desc">
-        PowerShell 창에 아래 명령어를 복사하여 붙여넣고 엔터를 치면 백그라운드로 패키지를 설치합니다.
-      </p>
-      <div class="code-box">
-        <span class="code-text" id="cmd1">irm https://bst-installer.web.app/install-class.ps1 | iex</span>
-        <button class="btn btn-copy" onclick="copyCode('cmd1')">복사하기</button>
-      </div>
-      <button class="btn btn-secondary" onclick="copyCode('cmd1')">
-        <span>📋 명령어 복사하기</span>
-      </button>
-    </div>
-
-    <!-- 방법 3: MSIX / AppX 패키지 직접 다운로드 -->
-    <div class="method-card">
-      <div class="card-header">
-        <div class="card-title">
-          <span>📦 방법 3. Windows MSIX 패키지 직접 다운로드</span>
-        </div>
-        <span class="method-pill version-display" style="background: var(--accent); color: #000;">v5.3.6</span>
-      </div>
-      <p class="card-desc">
-        Windows 최신 패키지(.msix)를 직접 다운로드하여 설치합니다. (인증서 사전 등록 필요)
-      </p>
-      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.msix" class="btn btn-secondary">
-          <span>📥 Boardest Class MSIX 다운로드</span>
-        </a>
-        <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.msix" class="btn btn-secondary">
-          <span>☁️ Boardest Cloud MSIX 다운로드</span>
         </a>
       </div>
     </div>

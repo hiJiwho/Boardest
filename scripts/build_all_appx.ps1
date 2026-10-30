@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '5.3.5',
+  [string]$AppVersion = '5.3.7',
   [switch]$SkipApk,
   [switch]$SkipWindowsBuild
 )
@@ -263,6 +263,7 @@ $FilesToCopy = @(
   'boardest-teacher-installer.exe', 'Boardest-Teacher-Setup.exe',
   'boardest-class-installer.exe', 'Boardest-Class-Setup.exe',
   'boardest-cloud-installer.exe', 'Boardest-Cloud-Setup.exe',
+  'uninstall.exe',
   'boardest-teacher.msi', 'bst-teacher.msi',
   'bst-teacher-windows.zip', 'boardest-windows.zip',
   'boardest.apk', 'boardest-class.apk', 'boardest-cloud.apk', 'boardest-class-cloud.apk',

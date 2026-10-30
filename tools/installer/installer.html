@@ -60,17 +60,11 @@
       gap: 10px;
     }
 
-    .title-logo {
+    .title-logo-img {
       width: 22px;
       height: 22px;
-      border-radius: 6px;
-      background: linear-gradient(135deg, var(--teal), var(--purple));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 900;
-      font-size: 13px;
-      color: #000;
+      border-radius: 5px;
+      object-fit: contain;
     }
 
     .title-text {
@@ -114,7 +108,7 @@
     /* Main Container */
     .container {
       flex: 1;
-      padding: 24px 28px;
+      padding: 20px 24px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -125,25 +119,32 @@
     .hero {
       display: flex;
       align-items: center;
-      gap: 20px;
-      margin-bottom: 16px;
+      gap: 16px;
+      margin-bottom: 12px;
     }
 
     .hero-icon-box {
-      width: 64px;
-      height: 64px;
-      border-radius: 18px;
+      width: 58px;
+      height: 58px;
+      border-radius: 16px;
       background: linear-gradient(135deg, rgba(0, 245, 212, 0.15), rgba(127, 90, 240, 0.25));
       border: 1px solid var(--teal-glow);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 32px;
-      box-shadow: 0 8px 24px var(--teal-glow);
+      font-size: 28px;
+      box-shadow: 0 6px 20px var(--teal-glow);
+      overflow: hidden;
+    }
+
+    .hero-icon-box img {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
     }
 
     .hero-info h1 {
-      font-size: 20px;
+      font-size: 19px;
       font-weight: 800;
       color: #fff;
       display: flex;
@@ -162,17 +163,19 @@
     }
 
     .hero-info p {
-      font-size: 13px;
+      font-size: 12.5px;
       color: var(--text-muted);
-      margin-top: 4px;
+      margin-top: 3px;
     }
 
     /* Step Views */
     .step-view {
       display: none;
       flex-direction: column;
-      gap: 16px;
+      gap: 12px;
       animation: fadeIn 0.3s ease;
+      flex: 1;
+      justify-content: space-between;
     }
 
     .step-view.active {
@@ -184,19 +187,60 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
+    /* Feature Grid (소개 UI) */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .feature-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      transition: border-color 0.2s;
+    }
+
+    .feature-card:hover {
+      border-color: var(--teal-glow);
+    }
+
+    .feat-icon {
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .feat-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 2px;
+    }
+
+    .feat-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
     /* Options Panel */
     .panel {
       background: var(--card);
       border: 1px solid var(--card-border);
       border-radius: 12px;
-      padding: 16px;
+      padding: 14px 16px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
     }
 
     .field-label {
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 600;
       color: var(--text-muted);
     }
@@ -211,78 +255,76 @@
       background: rgba(0, 0, 0, 0.3);
       border: 1px solid var(--card-border);
       border-radius: 8px;
-      padding: 10px 14px;
+      padding: 8px 12px;
       color: #fff;
-      font-size: 13px;
+      font-size: 12px;
       outline: none;
-    }
-
-    .field-input:focus {
-      border-color: var(--teal);
     }
 
     .chk-group {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
     }
 
     .chk-label {
       display: flex;
       align-items: center;
       gap: 10px;
-      font-size: 13px;
+      font-size: 12px;
       cursor: pointer;
       color: var(--text);
     }
 
     .chk-label input {
       accent-color: var(--teal);
-      width: 16px;
-      height: 16px;
+      width: 15px;
+      height: 15px;
       cursor: pointer;
     }
 
-    .notice-box {
-      background: rgba(127, 90, 240, 0.1);
-      border: 1px solid var(--purple-glow);
+    .prompt-box {
+      background: rgba(0, 245, 212, 0.08);
+      border: 1px solid var(--teal-glow);
       border-radius: 10px;
       padding: 12px 14px;
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.85);
-      line-height: 1.5;
+      font-size: 12.5px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
 
     /* Progress Section */
     .progress-box {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
       background: var(--card);
       border: 1px solid var(--card-border);
       border-radius: 12px;
-      padding: 20px;
+      padding: 16px;
     }
 
     .progress-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 13px;
+      font-size: 12.5px;
       font-weight: 600;
     }
 
     .progress-pct {
-      font-size: 16px;
-      font-weight: 800;
+      font-size: 18px;
+      font-weight: 900;
       color: var(--teal);
     }
 
     .progress-bar-wrap {
       width: 100%;
-      height: 10px;
+      height: 8px;
       background: rgba(255, 255, 255, 0.08);
-      border-radius: 5px;
+      border-radius: 4px;
       overflow: hidden;
       position: relative;
     }
@@ -291,7 +333,7 @@
       height: 100%;
       width: 0%;
       background: linear-gradient(90deg, var(--teal), var(--purple));
-      border-radius: 5px;
+      border-radius: 4px;
       transition: width 0.25s ease;
       box-shadow: 0 0 10px var(--teal-glow);
     }
@@ -307,8 +349,8 @@
       background: rgba(0, 0, 0, 0.4);
       border: 1px solid var(--card-border);
       border-radius: 8px;
-      padding: 10px 12px;
-      height: 64px;
+      padding: 8px 12px;
+      height: 70px;
       overflow-y: auto;
       font-family: monospace;
       font-size: 11px;
@@ -321,42 +363,42 @@
       background: var(--card);
       border: 1px solid rgba(44, 182, 125, 0.3);
       border-radius: 14px;
-      padding: 28px 20px;
+      padding: 24px 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
       text-align: center;
-      gap: 12px;
+      gap: 10px;
       box-shadow: 0 8px 30px rgba(44, 182, 125, 0.15);
     }
 
     .success-icon {
-      width: 60px;
-      height: 60px;
+      width: 54px;
+      height: 54px;
       border-radius: 50%;
       background: rgba(44, 182, 125, 0.15);
       border: 2px solid var(--green);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 30px;
+      font-size: 26px;
       color: var(--green);
       animation: pulseGreen 1.8s infinite;
     }
 
     @keyframes pulseGreen {
       0%, 100% { box-shadow: 0 0 0 0 rgba(44, 182, 125, 0.4); }
-      50% { box-shadow: 0 0 0 14px rgba(44, 182, 125, 0); }
+      50% { box-shadow: 0 0 0 12px rgba(44, 182, 125, 0); }
     }
 
     .success-title {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 800;
       color: #fff;
     }
 
     .success-desc {
-      font-size: 13px;
+      font-size: 12.5px;
       color: var(--text-muted);
       line-height: 1.5;
     }
@@ -365,20 +407,20 @@
     .btn-row {
       display: flex;
       justify-content: flex-end;
-      gap: 12px;
-      margin-top: 10px;
+      gap: 10px;
+      margin-top: 6px;
     }
 
     .btn {
-      padding: 12px 24px;
-      border-radius: 10px;
-      font-size: 13px;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 12.5px;
       font-weight: 700;
       border: none;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       transition: all 0.2s;
     }
 
@@ -404,7 +446,18 @@
       background: rgba(255, 255, 255, 0.14);
     }
 
-    /* Pulse animation */
+    .btn-danger {
+      background: linear-gradient(135deg, var(--red), #d42a4a);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(239, 69, 101, 0.3);
+    }
+
+    .btn-danger:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(239, 69, 101, 0.5);
+      filter: brightness(1.05);
+    }
+
     .pulse {
       animation: pulse 1.5s infinite;
     }
@@ -419,8 +472,8 @@
   <!-- Custom Title Bar -->
   <div class="title-bar">
     <div class="title-brand">
-      <div class="title-logo">B</div>
-      <div class="title-text" id="appTitle">Boardest 온라인 설치 도구</div>
+      <img src="" id="titleLogoImg" class="title-logo-img" alt="Logo" style="display:none;">
+      <span class="title-text" id="appTitle">Boardest 설치 마법사</span>
     </div>
     <div class="title-controls">
       <button class="ctrl-btn" onclick="postToHost('minimize')">&#8722;</button>
@@ -433,27 +486,34 @@
 
     <!-- Hero Header -->
     <div class="hero">
-      <div class="hero-icon-box" id="heroIcon">🎓</div>
+      <div class="hero-icon-box" id="heroIconBox">
+        <span id="heroEmoji">🎓</span>
+      </div>
       <div class="hero-info">
         <h1>
           <span id="productName">Boardest Teacher</span>
-          <span class="hero-badge" id="productVersion">v5.3.6</span>
+          <span class="hero-badge" id="productVersion">v5.3.7</span>
         </h1>
         <p id="productDesc">교사용 스마트 전자칠판 & 수업 관리 솔루션 온라인 설치</p>
       </div>
     </div>
 
-    <!-- Step 1: Ready -->
+    <!-- Step 1: Ready / Intro (소개 & 설치 확인 UI) -->
     <div class="step-view active" id="stepReady">
+      <!-- Feature Cards (소개 UI) -->
+      <div class="feature-grid" id="featureGrid">
+        <!-- Injected via JavaScript -->
+      </div>
+
       <div class="panel">
         <div id="dirFieldGroup">
           <div class="field-label">설치 대상 경로</div>
-          <div class="field-input-box" style="margin-top: 6px;">
+          <div class="field-input-box" style="margin-top: 4px;">
             <input type="text" class="field-input" id="installDirInput" readonly>
           </div>
         </div>
 
-        <div class="chk-group" style="margin-top: 4px;">
+        <div class="chk-group" id="shortcutGroup" style="margin-top: 2px;">
           <label class="chk-label">
             <input type="checkbox" id="chkDesktopShortcut" checked>
             <span>바탕화면에 바로가기 생성</span>
@@ -465,9 +525,8 @@
         </div>
       </div>
 
-      <div class="notice-box">
-        <strong>⚡ 스마트 온라인 인스톨러:</strong><br>
-        실행 중인 기존 프로그램을 안전하게 종료하고, 최신 바이너리를 백그라운드 다운로드하여 즉시 설치/업데이트합니다.
+      <div class="prompt-box" id="promptText">
+        <span>⚡ <strong>설치 안내:</strong> 최신 버전을 안전하게 설치하고 실행 환경을 구성합니다. 지금 설치를 진행하시겠습니까?</span>
       </div>
 
       <div class="btn-row">
@@ -478,7 +537,7 @@
       </div>
     </div>
 
-    <!-- Step 2: Progress -->
+    <!-- Step 2: Progress (설치 진행률 표시) -->
     <div class="step-view" id="stepProgress">
       <div class="progress-box">
         <div class="progress-header">
@@ -511,7 +570,7 @@
         <div class="success-icon">&#10003;</div>
         <div class="success-title">설치가 완료되었습니다!</div>
         <div class="success-desc">
-          최신 버전의 Boardest가 성공적으로 설치 및 등록되었습니다.<br>
+          최신 버전의 <strong id="completeProductName">Boardest</strong>가 성공적으로 설치 및 등록되었습니다.<br>
           <span id="autoLaunchCountdown" style="color: var(--teal); font-weight: bold;">3초 후 자동으로 앱이 실행됩니다...</span>
         </div>
       </div>
@@ -519,111 +578,303 @@
       <div class="btn-row">
         <button class="btn btn-secondary" onclick="postToHost('close')">닫기</button>
         <button class="btn btn-primary" onclick="postToHost('launchApp')">
-          <span>지금 앱 실행</span> &#9654;
+          <span>지금 바로 실행</span> &#9654;
         </button>
+      </div>
+    </div>
+
+    <!-- ================= UNINSTALLER VIEWS ================= -->
+    <!-- Uninstall Step 1: 1차 확인 -->
+    <div class="step-view" id="stepUninstall1">
+      <div class="panel" style="border-color: rgba(239, 69, 101, 0.3);">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-size:32px;">⚠️</span>
+          <div>
+            <h3 style="color:#fff; font-size:15px; font-weight:800; margin-bottom:4px;">정말로 Boardest Teacher를 제거하시겠습니까?</h3>
+            <p style="color:var(--text-muted); font-size:12px; line-height:1.4;">
+              컴퓨터에 설치된 Boardest Teacher 프로그램 파일 및 바로가기가 제거됩니다.<br>
+              계속 진행하시려면 [다음 단계]를 누르세요.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="postToHost('close')">취소 (프로그램 유지)</button>
+        <button class="btn btn-danger" onclick="goToStep('stepUninstall2')">
+          <span>다음 단계로</span> &#8594;
+        </button>
+      </div>
+    </div>
+
+    <!-- Uninstall Step 2: 2차 확인 (데이터 보존 여부) -->
+    <div class="step-view" id="stepUninstall2">
+      <div class="panel">
+        <div class="field-label" style="font-size:13px; font-weight:700; color:#fff; margin-bottom:6px;">
+          📁 수업 판서 데이터 및 개별 설정 처리 방식 선택
+        </div>
+        <div class="chk-group" style="gap:10px;">
+          <label class="chk-label" style="background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
+            <input type="radio" name="uninstData" id="keepDataRadio" checked>
+            <div>
+              <strong style="color:var(--teal);">프로그램 파일만 삭제 (권장)</strong>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">선생님께서 작성하신 수업 교안(bst-save) 및 판서 기록은 그대로 보존됩니다.</div>
+            </div>
+          </label>
+          <label class="chk-label" style="background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
+            <input type="radio" name="uninstData" id="deleteDataRadio">
+            <div>
+              <strong style="color:var(--red);">모든 데이터 완전 삭제</strong>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">로컬에 저장된 임시 판서 데이터 및 사용자 설정을 모두 영구 삭제합니다.</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="goToStep('stepUninstall1')">&#8592; 이전</button>
+        <button class="btn btn-danger" onclick="goToStep('stepUninstall3')">
+          <span>다음 단계로</span> &#8594;
+        </button>
+      </div>
+    </div>
+
+    <!-- Uninstall Step 3: 최종 3차 확인 -->
+    <div class="step-view" id="stepUninstall3">
+      <div class="panel" style="border:1px solid var(--red); background:rgba(239,69,101,0.08);">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-size:32px;">🛑</span>
+          <div>
+            <h3 style="color:#fff; font-size:15px; font-weight:800; margin-bottom:4px;">마지막 확인: 프로그램이 영구적으로 제거됩니다</h3>
+            <p style="color:rgba(255,255,255,0.85); font-size:12px; line-height:1.4;">
+              [삭제 실행] 버튼을 누르면 작업이 즉시 시작되며 취소할 수 없습니다.<br>
+              진짜로 삭제하시겠습니까?
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="goToStep('stepUninstall2')">돌아가기</button>
+        <button class="btn btn-danger" onclick="startUninstall()">
+          <span>🗑️ 완전 삭제 실행</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Uninstall Step 4: Deleting Progress -->
+    <div class="step-view" id="stepUninstallProgress">
+      <div class="progress-box">
+        <div class="progress-header">
+          <span id="uninstStatusText" class="pulse" style="color:var(--red);">프로그램을 삭제하는 중...</span>
+          <span class="progress-pct" id="uninstPct" style="color:var(--red);">0%</span>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="uninstProgressBar" style="background:var(--red); box-shadow:0 0 10px rgba(239,69,101,0.5);"></div>
+        </div>
+      </div>
+      <div class="log-box" id="uninstLogBox">
+        [삭제] 프로그램 제거 작업을 시작합니다...
+      </div>
+    </div>
+
+    <!-- Uninstall Step 5: Complete -->
+    <div class="step-view" id="stepUninstallComplete">
+      <div class="success-card" style="border-color:rgba(0,245,212,0.3); box-shadow:0 8px 30px rgba(0,245,212,0.15);">
+        <div class="success-icon" style="border-color:var(--teal); color:var(--teal); background:rgba(0,245,212,0.15); animation:none;">&#10003;</div>
+        <div class="success-title">Boardest Teacher 삭제 완료</div>
+        <div class="success-desc">
+          컴퓨터에서 Boardest Teacher가 안전하게 모두 제거되었습니다.<br>
+          그동안 이용해 주셔서 감사합니다.
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="postToHost('close')">확인 (닫기)</button>
       </div>
     </div>
 
   </div>
 
   <script>
-    // Host Communication Bridge
-    function postToHost(action, data) {
-      const payload = Object.assign({ action: action }, data || {});
+    let appData = {
+      product: 'Teacher', // 'Teacher', 'Class', 'Cloud', 'Uninstaller'
+      version: '5.3.7',
+      installDir: '',
+      isUninstall: false
+    };
+
+    function postToHost(action, data = {}) {
+      const payload = JSON.stringify({ action, ...data });
       if (window.chrome && window.chrome.webview) {
         window.chrome.webview.postMessage(payload);
-      } else if (window.external && window.external.OnWebMessage) {
-        window.external.OnWebMessage(JSON.stringify(payload));
       } else {
-        console.log('[HostBridge] Post message:', payload);
+        console.log('[Host IPC]', payload);
       }
     }
 
-    // Logger
-    function appendLog(msg) {
-      const box = document.getElementById('logBox');
-      if (box) {
-        const line = document.createElement('div');
-        line.textContent = msg;
-        box.appendChild(line);
-        box.scrollTop = box.scrollHeight;
-      }
-    }
-
-    // Step switching
-    function showStep(stepId) {
+    function goToStep(stepId) {
       document.querySelectorAll('.step-view').forEach(el => el.classList.remove('active'));
       const target = document.getElementById(stepId);
       if (target) target.classList.add('active');
     }
 
-    function startInstall() {
-      showStep('stepProgress');
-      const createDesktop = document.getElementById('chkDesktopShortcut').checked;
-      const createStartMenu = document.getElementById('chkStartMenu').checked;
-      postToHost('startInstall', {
-        createDesktop: createDesktop,
-        createStartMenu: createStartMenu
+    function initFeatures(product) {
+      const grid = document.getElementById('featureGrid');
+      grid.innerHTML = '';
+
+      let features = [];
+      if (product === 'Class') {
+        features = [
+          { icon: '🏫', title: '교실 스마트 전자칠판', desc: '초·중·고 교실 전자칠판 전용 통합 대시보드' },
+          { icon: '⏱️', title: '교시 타이머 & 시간표', desc: '실시간 교시 알림 및 나이스 시간표 자동 연동' },
+          { icon: '🍱', title: '급식 식단 & 알레르기', desc: '오늘/내일 식단표 및 알레르기 유발 식품 표시' },
+          { icon: '📝', title: '풀스크린 펜 판서', desc: '전자칠판 터치 최적화 필기 및 수업 도구 모음' }
+        ];
+      } else if (product === 'Cloud') {
+        features = [
+          { icon: '☁️', title: 'Google Drive 1초 연동', desc: 'QR 코드를 스마트폰으로 찍어 1초 즉시 로그인' },
+          { icon: '📚', title: 'TBP 교과서 & PDF 뷰어', desc: '디지털 교과서 및 수업 PDF 원터치 열람' },
+          { icon: '🔒', title: '교실 열람 전용 모드', desc: '불필요한 파일 삭제/변조를 방지하는 보안 환경' },
+          { icon: '⚡', title: '초단축 도메인 호환', desc: 'bcld 초경량 전용 웹 및 앱 인터페이스 제공' }
+        ];
+      } else {
+        features = [
+          { icon: '🎓', title: '선생님 PC 전용 솔루션', desc: '교무실 PC 및 노트북 전용 정식 수업 관리자' },
+          { icon: '📅', title: '나이스 & 주간 시간표', desc: '학교 시간표 및 수업 일정 자동 동기화' },
+          { icon: '✏️', title: 'HWP / PPT 오버레이 판서', desc: '한글, PPT, 웹 브라우저 위 자유로운 판서' },
+          { icon: '📱', title: '모바일 & 패드(Lite) 연동', desc: '교실 이동 중 스마트폰/태블릿 원터치 제어' }
+        ];
+      }
+
+      features.forEach(f => {
+        const item = document.createElement('div');
+        item.className = 'feature-card';
+        item.innerHTML = `
+          <div class="feat-icon">${f.icon}</div>
+          <div>
+            <div class="feat-title">${f.title}</div>
+            <div class="feat-desc">${f.desc}</div>
+          </div>
+        `;
+        grid.appendChild(item);
       });
     }
 
-    // Called from C# host
-    window.initData = function(jsonStr) {
-      try {
-        const data = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
-        if (data.productName) document.getElementById('productName').textContent = data.productName;
-        if (data.productVersion) document.getElementById('productVersion').textContent = 'v' + data.productVersion;
-        if (data.productDesc) document.getElementById('productDesc').textContent = data.productDesc;
-        if (data.heroIcon) document.getElementById('heroIcon').textContent = data.heroIcon;
-        if (data.installDir) document.getElementById('installDirInput').value = data.installDir;
-        if (data.hideDirField) document.getElementById('dirFieldGroup').style.display = 'none';
+    // Host로부터 전달받는 데이터 핸들러
+    window.receiveInitData = function(data) {
+      appData = { ...appData, ...data };
 
-        if (data.isUpdate) {
-          // Automatic update mode
-          startInstall();
-        }
-      } catch (e) {
-        console.error('initData error:', e);
+      document.getElementById('productName').innerText = data.productName || 'Boardest';
+      document.getElementById('completeProductName').innerText = data.productName || 'Boardest';
+      document.getElementById('productVersion').innerText = 'v' + (data.productVersion || '5.3.7');
+      document.getElementById('productDesc').innerText = data.productDesc || '';
+      document.getElementById('installDirInput').value = data.installDir || '';
+      document.getElementById('heroEmoji').innerText = data.heroIcon || '🎓';
+
+      if (data.logoBase64) {
+        const titleLogo = document.getElementById('titleLogoImg');
+        titleLogo.src = 'data:image/png;base64,' + data.logoBase64;
+        titleLogo.style.display = 'block';
+
+        const heroBox = document.getElementById('heroIconBox');
+        heroBox.innerHTML = `<img src="data:image/png;base64,${data.logoBase64}" alt="Logo">`;
+      }
+
+      if (data.isUninstall) {
+        document.getElementById('appTitle').innerText = (data.productName || 'Boardest') + ' 제거 마법사';
+        goToStep('stepUninstall1');
+        return;
+      }
+
+      if (data.hideDirField) {
+        document.getElementById('dirFieldGroup').style.display = 'none';
+        document.getElementById('shortcutGroup').style.display = 'none';
+      }
+
+      initFeatures(data.productType || 'Teacher');
+
+      document.getElementById('promptText').innerHTML = `
+        <span>⚡ <strong>설치 안내:</strong> ${data.productName}을(를) 이 컴퓨터에 설치하시겠습니까?</span>
+      `;
+    };
+
+    function startInstall() {
+      const createDesktop = document.getElementById('chkDesktopShortcut') ? document.getElementById('chkDesktopShortcut').checked : true;
+      const createStartMenu = document.getElementById('chkStartMenu') ? document.getElementById('chkStartMenu').checked : true;
+
+      goToStep('stepProgress');
+      postToHost('startInstall', { createDesktop, createStartMenu });
+    }
+
+    function startUninstall() {
+      const purgeData = document.getElementById('deleteDataRadio') ? document.getElementById('deleteDataRadio').checked : false;
+      goToStep('stepUninstallProgress');
+      postToHost('startUninstall', { purgeData });
+    }
+
+    // 진행률 업데이트 (Host -> JS)
+    window.updateProgress = function(pct, status, bytes, speed, log) {
+      document.getElementById('progressPct').innerText = pct + '%';
+      document.getElementById('progressBar').style.width = pct + '%';
+      if (status) document.getElementById('statusText').innerText = status;
+      if (bytes) document.getElementById('bytesText').innerText = bytes;
+      if (speed) document.getElementById('speedText').innerText = speed;
+
+      if (log) {
+        const logBox = document.getElementById('logBox');
+        logBox.innerHTML += '<br>' + escapeHtml(log);
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+
+      if (pct >= 100) {
+        setTimeout(() => {
+          goToStep('stepComplete');
+          startAutoLaunchCountdown();
+        }, 800);
       }
     };
 
-    window.onProgress = function(pct, statusText, bytesText, speedText, logMsg) {
-      if (pct !== undefined && pct !== null) {
-        document.getElementById('progressPct').textContent = pct + '%';
-        document.getElementById('progressBar').style.width = pct + '%';
+    // 언인스톨 진행률 업데이트
+    window.updateUninstallProgress = function(pct, status, log) {
+      document.getElementById('uninstPct').innerText = pct + '%';
+      document.getElementById('uninstProgressBar').style.width = pct + '%';
+      if (status) document.getElementById('uninstStatusText').innerText = status;
+      if (log) {
+        const logBox = document.getElementById('uninstLogBox');
+        logBox.innerHTML += '<br>' + escapeHtml(log);
+        logBox.scrollTop = logBox.scrollHeight;
       }
-      if (statusText) document.getElementById('statusText').textContent = statusText;
-      if (bytesText) document.getElementById('bytesText').textContent = bytesText;
-      if (speedText) document.getElementById('speedText').textContent = speedText;
-      if (logMsg) appendLog(logMsg);
+
+      if (pct >= 100) {
+        setTimeout(() => {
+          goToStep('stepUninstallComplete');
+        }, 800);
+      }
     };
 
-    window.onComplete = function() {
-      showStep('stepComplete');
-      let count = 3;
-      const timerEl = document.getElementById('autoLaunchCountdown');
-      const iv = setInterval(() => {
-        count--;
-        if (count <= 0) {
-          clearInterval(iv);
-          postToHost('launchApp');
+    let countdown = 3;
+    function startAutoLaunchCountdown() {
+      const el = document.getElementById('autoLaunchCountdown');
+      const timer = setInterval(() => {
+        countdown--;
+        if (countdown > 0) {
+          el.innerText = `${countdown}초 후 자동으로 앱이 실행됩니다...`;
         } else {
-          if (timerEl) timerEl.textContent = count + '초 후 자동으로 앱이 실행됩니다...';
+          clearInterval(timer);
+          el.innerText = '앱을 시작합니다...';
+          postToHost('launchApp');
         }
       }, 1000);
-    };
+    }
 
-    window.onError = function(err) {
-      appendLog('[오류] ' + err);
-      const statusText = document.getElementById('statusText');
-      if (statusText) {
-        statusText.textContent = '설치 실패: ' + err;
-        statusText.style.color = '#EF4565';
-      }
-      alert('설치 중 오류가 발생했습니다:\n' + err);
-    };
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
 
-    // Notify host that UI is ready
+    // UI Ready 알림
     window.addEventListener('DOMContentLoaded', () => {
       postToHost('uiReady');
     });

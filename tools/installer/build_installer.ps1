@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '5.3.6'
+  [string]$AppVersion = '5.3.7'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,15 +13,22 @@ $CertPassword = $env:BOARDEST_CERT_PASSWORD
 $SignTool = 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\signtool.exe'
 $CSharpCompiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 
-# Locate WebView2 Package DLLs
+# Locate Assets
 $PkgDir = Join-Path $RootDir 'apps\boardest\build\windows\x64\packages\Microsoft.Web.WebView2'
 $CoreDll = Join-Path $PkgDir 'lib\net45\Microsoft.Web.WebView2.Core.dll'
 $WinFormsDll = Join-Path $PkgDir 'lib\net45\Microsoft.Web.WebView2.WinForms.dll'
 $LoaderDll = Join-Path $PkgDir 'build\native\x64\WebView2Loader.dll'
 $HtmlFile = Join-Path $InstallerDir 'installer.html'
-$CsFile = Join-Path $InstallerDir 'BoardestInstaller.cs'
+$AppLogo = Join-Path $RootDir 'apps\boardest\assets\icons\app_logo.png'
+$AppIcon = Join-Path $RootDir 'apps\boardest\windows\runner\resources\app_icon.ico'
 
-foreach ($f in @($CoreDll, $WinFormsDll, $LoaderDll, $HtmlFile, $CsFile, $CerFile, $CSharpCompiler)) {
+# Source files
+$TeacherUninstCs = Join-Path $InstallerDir 'BoardestTeacherUninstaller.cs'
+$TeacherInstallCs = Join-Path $InstallerDir 'BoardestTeacherInstaller.cs'
+$ClassInstallCs = Join-Path $InstallerDir 'BoardestClassInstaller.cs'
+$CloudInstallCs = Join-Path $InstallerDir 'BoardestCloudInstaller.cs'
+
+foreach ($f in @($CoreDll, $WinFormsDll, $LoaderDll, $HtmlFile, $AppLogo, $AppIcon, $CerFile, $CSharpCompiler, $TeacherUninstCs, $TeacherInstallCs, $ClassInstallCs, $CloudInstallCs)) {
   if (-not (Test-Path $f)) {
     throw "Required file not found for installer build: $f"
   }
@@ -29,7 +36,7 @@ foreach ($f in @($CoreDll, $WinFormsDll, $LoaderDll, $HtmlFile, $CsFile, $CerFil
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
-$References = @(
+$BaseReferences = @(
   '/r:System.dll',
   '/r:System.Core.dll',
   '/r:System.Drawing.dll',
@@ -40,66 +47,105 @@ $References = @(
   "/r:$WinFormsDll"
 )
 
-$Resources = @(
+$BaseResources = @(
   "/resource:$CoreDll,Microsoft.Web.WebView2.Core.dll",
   "/resource:$WinFormsDll,Microsoft.Web.WebView2.WinForms.dll",
   "/resource:$LoaderDll,WebView2Loader.dll",
   "/resource:$HtmlFile,installer.html",
-  "/resource:$CerFile,BoardestCert.cer"
+  "/resource:$AppLogo,app_logo.png"
 )
 
-# Product targets to build
-$Targets = @(
-  @{ Name = 'boardest-teacher-installer.exe'; Alias = 'Boardest-Teacher-Setup.exe' },
-  @{ Name = 'boardest-class-installer.exe'; Alias = 'Boardest-Class-Setup.exe' },
-  @{ Name = 'boardest-cloud-installer.exe'; Alias = 'Boardest-Cloud-Setup.exe' }
-)
-
-Write-Host "=== Building Lightweight WebView2 Online Installers (v$AppVersion) ===" -ForegroundColor Cyan
-
-foreach ($target in $Targets) {
-  $outExe = Join-Path $OutDir $target.Name
-  Write-Host "Compiling $($target.Name)..." -ForegroundColor Yellow
-
-  $cscArgs = @('/nologo', '/target:winexe', "/out:$outExe") + $References + $Resources + @($CsFile)
-  & $CSharpCompiler @cscArgs
-  if ($LASTEXITCODE -ne 0) {
-    throw "Compilation failed for $($target.Name)"
-  }
-
-  # Digital Signing with Boardest Certificate
+function Sign-File([string]$targetFile) {
   if (Test-Path $SignTool) {
-    Write-Host "Signing $($target.Name)..." -ForegroundColor Gray
+    Write-Host "Signing $targetFile..." -ForegroundColor Gray
     if ([string]::IsNullOrWhiteSpace($CertPassword)) {
       $PublicCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($CerFile)
-      & $SignTool sign /fd SHA256 /s My /sha1 $PublicCertificate.Thumbprint $outExe
+      & $SignTool sign /fd SHA256 /s My /sha1 $PublicCertificate.Thumbprint $targetFile
     } else {
-      & $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $outExe
+      & $SignTool sign /fd SHA256 /f $CertFile /p $CertPassword $targetFile
     }
-    if ($LASTEXITCODE -ne 0) {
-      Write-Host "Signing warning (continuing): $outExe" -ForegroundColor Yellow
-    }
-  }
-
-  if ($target.Alias) {
-    $aliasExe = Join-Path $OutDir $target.Alias
-    Copy-Item $outExe $aliasExe -Force
   }
 }
 
-# Copy to web distribution hubs
+Write-Host "=== Building Dedicated Webview2 Installers & Uninstaller (v$AppVersion) ===" -ForegroundColor Cyan
+
+# 1. Compile Teacher Uninstaller (uninstall.exe)
+$UninstExe = Join-Path $OutDir 'uninstall.exe'
+Write-Host "Compiling Teacher Uninstaller ($UninstExe)..." -ForegroundColor Yellow
+$uninstArgs = @('/nologo', '/target:winexe', "/out:$UninstExe", "/win32icon:$AppIcon") + $BaseReferences + $BaseResources + @($TeacherUninstCs)
+& $CSharpCompiler @uninstArgs
+if ($LASTEXITCODE -ne 0) { throw "Compilation failed for uninstall.exe" }
+Sign-File $UninstExe
+
+# 2. Compile Teacher Installer (boardest-teacher-installer.exe)
+$TeacherExe = Join-Path $OutDir 'boardest-teacher-installer.exe'
+Write-Host "Compiling Teacher Installer ($TeacherExe)..." -ForegroundColor Yellow
+$teacherResources = $BaseResources + @("/resource:$UninstExe,uninstall.exe")
+$teacherArgs = @('/nologo', '/target:winexe', "/out:$TeacherExe", "/win32icon:$AppIcon") + $BaseReferences + $teacherResources + @($TeacherInstallCs)
+& $CSharpCompiler @teacherArgs
+if ($LASTEXITCODE -ne 0) { throw "Compilation failed for boardest-teacher-installer.exe" }
+Sign-File $TeacherExe
+Copy-Item $TeacherExe (Join-Path $OutDir 'Boardest-Teacher-Setup.exe') -Force
+
+# 3. Compile Class Installer (boardest-class-installer.exe with embedded MSIX)
+$ClassMsix = Join-Path $OutDir 'boardest-class.msix'
+if (-not (Test-Path $ClassMsix)) {
+  $ClassMsix = Join-Path $OutDir 'boardest.msix'
+}
+if (-not (Test-Path $ClassMsix)) {
+  throw "boardest-class.msix not found in $OutDir"
+}
+
+$ClassExe = Join-Path $OutDir 'boardest-class-installer.exe'
+Write-Host "Compiling Class Installer with embedded MSIX ($ClassExe)..." -ForegroundColor Yellow
+$classResources = $BaseResources + @(
+  "/resource:$CerFile,BoardestCert.cer",
+  "/resource:$ClassMsix,package.msix"
+)
+$classArgs = @('/nologo', '/target:winexe', "/out:$ClassExe", "/win32icon:$AppIcon") + $BaseReferences + $classResources + @($ClassInstallCs)
+& $CSharpCompiler @classArgs
+if ($LASTEXITCODE -ne 0) { throw "Compilation failed for boardest-class-installer.exe" }
+Sign-File $ClassExe
+Copy-Item $ClassExe (Join-Path $OutDir 'Boardest-Class-Setup.exe') -Force
+
+# 4. Compile Cloud Installer (boardest-cloud-installer.exe with embedded MSIX)
+$CloudMsix = Join-Path $OutDir 'boardest-cloud.msix'
+if (-not (Test-Path $CloudMsix)) {
+  $CloudMsix = Join-Path $OutDir 'boardest-class-cloud.msix'
+}
+if (-not (Test-Path $CloudMsix)) {
+  throw "boardest-cloud.msix not found in $OutDir"
+}
+
+$CloudExe = Join-Path $OutDir 'boardest-cloud-installer.exe'
+Write-Host "Compiling Cloud Installer with embedded MSIX ($CloudExe)..." -ForegroundColor Yellow
+$cloudResources = $BaseResources + @(
+  "/resource:$CerFile,BoardestCert.cer",
+  "/resource:$CloudMsix,package.msix"
+)
+$cloudArgs = @('/nologo', '/target:winexe', "/out:$CloudExe", "/win32icon:$AppIcon") + $BaseReferences + $cloudResources + @($CloudInstallCs)
+& $CSharpCompiler @cloudArgs
+if ($LASTEXITCODE -ne 0) { throw "Compilation failed for boardest-cloud-installer.exe" }
+Sign-File $CloudExe
+Copy-Item $CloudExe (Join-Path $OutDir 'Boardest-Cloud-Setup.exe') -Force
+
+# 5. Distribute to web hubs
 $DownloadWeb = Join-Path $RootDir 'infra\download_web'
 $DownloadsHubWeb = Join-Path $RootDir 'infra\downloads_hub_web'
 
-foreach ($target in $Targets) {
-  $file = Join-Path $OutDir $target.Name
-  if (Test-Path $DownloadWeb) { Copy-Item $file (Join-Path $DownloadWeb $target.Name) -Force }
-  if (Test-Path $DownloadsHubWeb) { Copy-Item $file (Join-Path $DownloadsHubWeb $target.Name) -Force }
-  if ($target.Alias) {
-    $aliasFile = Join-Path $OutDir $target.Alias
-    if (Test-Path $DownloadWeb) { Copy-Item $aliasFile (Join-Path $DownloadWeb $target.Alias) -Force }
-    if (Test-Path $DownloadsHubWeb) { Copy-Item $aliasFile (Join-Path $DownloadsHubWeb $target.Alias) -Force }
+$FilesToDeploy = @(
+  'boardest-teacher-installer.exe', 'Boardest-Teacher-Setup.exe',
+  'boardest-class-installer.exe', 'Boardest-Class-Setup.exe',
+  'boardest-cloud-installer.exe', 'Boardest-Cloud-Setup.exe',
+  'uninstall.exe'
+)
+
+foreach ($f in $FilesToDeploy) {
+  $src = Join-Path $OutDir $f
+  if (Test-Path $src) {
+    if (Test-Path $DownloadWeb) { Copy-Item $src (Join-Path $DownloadWeb $f) -Force }
+    if (Test-Path $DownloadsHubWeb) { Copy-Item $src (Join-Path $DownloadsHubWeb $f) -Force }
   }
 }
 
-Write-Host "=== All Installers Built and Deployed Successfully! ===" -ForegroundColor Green
+Write-Host "=== All Dedicated Installers & Uninstaller Built and Deployed Successfully! ===" -ForegroundColor Green
