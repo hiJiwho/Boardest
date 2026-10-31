@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
@@ -37,10 +37,48 @@ class TbpDhashEngine {
     }
   }
 
-  /// BoardBook 오리지널 고속 JS 스크립트
+  /// BoardBook 오리지널 고속 JS 스크립트 + 1536px 고정 및 창 크기 맞춤 동적 배율(Auto-Fit Scale)
   static const String _hashJsScript = '''
     (function() {
-      try { if (document.body) { document.documentElement.style.margin = "0"; } } catch (ve) {}
+      function sync1536Scale() {
+        try {
+          var targetW = 1536;
+          var targetH = 864;
+          var winW = window.innerWidth || document.documentElement.clientWidth || screen.width;
+          var winH = window.innerHeight || document.documentElement.clientHeight || screen.height;
+          if (!winW || !winH || winW <= 0 || winH <= 0) return;
+
+          var scale = Math.min(winW / targetW, winH / targetH);
+          if (scale <= 0) scale = 1.0;
+
+          var offsetX = Math.max(0, (winW - (targetW * scale)) / 2);
+          var offsetY = Math.max(0, (winH - (targetH * scale)) / 2);
+
+          var meta = document.querySelector('meta[name="viewport"]');
+          if (!meta) {
+            meta = document.createElement('meta');
+            meta.name = 'viewport';
+            document.head.appendChild(meta);
+          }
+          meta.content = 'width=1536, initial-scale=' + scale.toFixed(4) + ', maximum-scale=' + scale.toFixed(4) + ', user-scalable=no';
+
+          var styleId = 'bst-1536-lock-style';
+          var styleEl = document.getElementById(styleId);
+          if (!styleEl) {
+            styleEl = document.createElement('style');
+            styleEl.id = styleId;
+            document.head.appendChild(styleEl);
+          }
+          styleEl.textContent = 'html { width: 100% !important; height: 100% !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; background-color: #0F0E17 !important; } ' +
+            'body { width: 1536px !important; min-width: 1536px !important; max-width: 1536px !important; height: 864px !important; min-height: 864px !important; max-height: 864px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important; transform-origin: 0 0 !important; transform: translate(' + offsetX.toFixed(2) + 'px, ' + offsetY.toFixed(2) + 'px) scale(' + scale.toFixed(4) + ') !important; -webkit-text-size-adjust: 100% !important; text-size-adjust: 100% !important; }';
+        } catch (ve) {}
+      }
+
+      sync1536Scale();
+      if (!window.__bstScaleBound) {
+        window.__bstScaleBound = true;
+        window.addEventListener('resize', sync1536Scale);
+      }
 
       function postToFlutter(payload) {
         var msg = JSON.stringify(payload);

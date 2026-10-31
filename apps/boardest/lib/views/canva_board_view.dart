@@ -648,8 +648,10 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
         child: Stack(
           children: [
             // ── 16:9 메인 프레젠테이션 컨테이너 ──
-            Positioned.fill(
-              child: LayoutBuilder(
+            Center(
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: LayoutBuilder(
                     builder: (context, constraints) {
                       final cWidth = constraints.maxWidth > 0 ? constraints.maxWidth : MediaQuery.of(context).size.width;
                       final cHeight = constraints.maxHeight > 0 ? constraints.maxHeight : MediaQuery.of(context).size.height;
@@ -802,7 +804,8 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                       );
                     },
                   ),
-            ),
+                ),
+              ),
 
             // ── 상단 타이틀 & 툴바 ──
             Positioned(

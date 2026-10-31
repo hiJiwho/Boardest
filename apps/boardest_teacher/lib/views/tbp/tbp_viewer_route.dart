@@ -821,9 +821,11 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
           child: Stack(
             children: [
               // ── 16:9 컨테이너 (WebView + 판서 + 핫스팟) ──
-              Positioned.fill(
-                child: Stack(
-                  children: [
+              Center(
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Stack(
+                    children: [
                         // ── WebView 레이어 ──────────────────────────────
                         Positioned.fill(
                           child: IgnorePointer(
@@ -867,6 +869,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                           ),
                       ],
                     ),
+                ),
               ),
 
               // ── 상단 컨트롤 바 ─────────────────────────────
