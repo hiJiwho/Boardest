@@ -18,12 +18,12 @@ using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
 [assembly: AssemblyTitle("Boardest Unified Online Installer")]
-[assembly: AssemblyDescription("Boardest 통합 온라인 설치 관리자 (Class / Teacher / Cloud)")]
+[assembly: AssemblyDescription("Boardest 통합 온라인 설치 및 관리 도구 (Class / Teacher / Cloud)")]
 [assembly: AssemblyCompany("Boardest Team")]
 [assembly: AssemblyProduct("Boardest Online Installer")]
 [assembly: AssemblyCopyright("Copyright © 2026 Boardest. All rights reserved.")]
-[assembly: AssemblyVersion("5.4.0.0")]
-[assembly: AssemblyFileVersion("5.4.0.0")]
+[assembly: AssemblyVersion("5.4.1.0")]
+[assembly: AssemblyFileVersion("5.4.1.0")]
 
 namespace BoardestInstaller
 {
@@ -34,8 +34,9 @@ namespace BoardestInstaller
         // =========================================================================
         private const string TrustedHost = "boardest-windows-installer.web.app";
         private const string TrustedInstallerUrl = "https://boardest-windows-installer.web.app/";
+        private const string CustomUserAgentTag = "boardest-win-install";
 
-        // Win32 API: 창틀 닫기(X) 버튼 비활성화 (최소화만 가능하도록 강제)
+        // Win32 API: 창틀 닫기(X) 버튼 비활성화 (설치 중 최소화만 가능하도록 강제)
         [DllImport("user32.dll")]
         private static extern IntPtr GetSystemMenu(IntPtr hWnd, bool bRevert);
 
@@ -50,10 +51,12 @@ namespace BoardestInstaller
         private WebView2 _webView;
         private string _productType = "Teacher"; // "Class", "Teacher", "Cloud"
         private string _productName = "Boardest 통합 온라인 설치";
-        private string _productVersion = "5.4.0";
+        private string _productVersion = "5.4.1";
         private string _teacherInstallDir;
         private string _exeFileName = "";
+        private string _lastTargetUrl = "";
         private bool _needsProductSelection = false;
+        private bool _isUninstall = false;
         private bool _isInstalling = false;
         private bool _allowClose = false;
 
@@ -61,12 +64,7 @@ namespace BoardestInstaller
         {
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 
-            // 실행 파일 이름 확인:
-            // - boardest-class -> 교실 앱 (Class)
-            // - boardest-teacher -> 교사 앱 (Teacher)
-            // - boardest-cloud -> 클라우드 앱 (Cloud)
-            // - 그 외 이름 -> 3개 중 무엇을 설치할지 물어봄 (_needsProductSelection = true)
-            DetectProductFromExecutableName();
+            DetectProductAndMode();
 
             _teacherInstallDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -74,10 +72,18 @@ namespace BoardestInstaller
                 "BoardestTeacher"
             );
 
-            // 창틀(Title Bar) 표시 + 최소화만 가능하도록 설정 (최대화 비활성화, 닫기 버튼 비활성화)
-            this.Text = _needsProductSelection
-                ? "Boardest 통합 온라인 설치 마법사"
-                : (_productName + " 온라인 설치 마법사");
+            // 창틀(Title Bar) 표시 + 최소화만 가능 (최대화 비활성화, 닫기 버튼 비활성화)
+            if (_isUninstall)
+            {
+                this.Text = "Boardest Teacher 온라인 삭제 마법사";
+            }
+            else
+            {
+                this.Text = _needsProductSelection
+                    ? "Boardest 통합 온라인 설치 마법사"
+                    : (_productName + " 온라인 설치 마법사");
+            }
+
             this.Size = new Size(760, 560);
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
@@ -99,12 +105,11 @@ namespace BoardestInstaller
 
             this.Load += async (s, e) =>
             {
-                DisableCloseButtonOnWindowFrame();
                 await InitializeWebViewAsync();
             };
         }
 
-        private void DetectProductFromExecutableName()
+        private void DetectProductAndMode()
         {
             string exeName = "";
             try
@@ -119,7 +124,11 @@ namespace BoardestInstaller
             for (int i = 1; i < args.Length; i++)
             {
                 string arg = (args[i] ?? "").ToLowerInvariant();
-                if (arg.Contains("boardest-class") || arg == "--class")
+                if (arg.Contains("boardest-class-lite") || arg == "--class-lite")
+                {
+                    exeName = "boardest-class-lite";
+                }
+                else if (arg.Contains("boardest-class") || arg == "--class")
                 {
                     exeName = "boardest-class";
                 }
@@ -131,9 +140,26 @@ namespace BoardestInstaller
                 {
                     exeName = "boardest-cloud";
                 }
+                else if (arg == "--uninstall" || arg == "-uninstall" || arg == "/uninstall")
+                {
+                    _isUninstall = true;
+                }
             }
 
-            if (exeName.Contains("boardest-class"))
+            if (exeName.Contains("uninstall") || exeName.Contains("uninst"))
+            {
+                _isUninstall = true;
+                _productType = "Teacher";
+                _productName = "Boardest Teacher 제거 마법사";
+                _needsProductSelection = false;
+            }
+            else if (exeName.Contains("boardest-class-lite") || exeName.Contains("class-lite"))
+            {
+                _productType = "ClassLite";
+                _productName = "Boardest Class Lite";
+                _needsProductSelection = false;
+            }
+            else if (exeName.Contains("boardest-class"))
             {
                 _productType = "Class";
                 _productName = "Boardest Class";
@@ -155,38 +181,38 @@ namespace BoardestInstaller
             {
                 _productType = "Class";
                 _productName = "Boardest 통합 온라인 설치";
-                _needsProductSelection = true;
+                _needsProductSelection = !_isUninstall;
             }
-        }
-
-        private void DisableCloseButtonOnWindowFrame()
-        {
-            try
-            {
-                IntPtr hMenu = GetSystemMenu(this.Handle, false);
-                if (hMenu != IntPtr.Zero)
-                {
-                    EnableMenuItem(hMenu, SC_CLOSE, MF_BYCOMMAND | MF_DISABLED | MF_GRAYED);
-                }
-            }
-            catch { }
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            // 설치 중이거나 명시적 종료 허용 전에는 창 닫기 차단 (최소화만 가능)
-            if (!_allowClose && e.CloseReason == CloseReason.UserClosing)
+            if (_isInstalling && e.CloseReason == CloseReason.UserClosing)
             {
-                e.Cancel = true;
-                this.WindowState = FormWindowState.Minimized;
-                return;
+                var res = MessageBox.Show(
+                    "설치(또는 삭제) 작업이 아직 진행 중입니다.\r\n작업을 중단하고 창을 닫으시겠습니까?",
+                    "작업 취소 확인",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question
+                );
+                if (res != DialogResult.Yes)
+                {
+                    e.Cancel = true;
+                    return;
+                }
             }
             base.OnFormClosing(e);
         }
 
-        // =========================================================================
-        // [핵심 안전 로직] 오직 https://boardest-windows-installer.web.app 출처인지 검증
-        // =========================================================================
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            if (_scheduleSelfDestructOnExit)
+            {
+                ScheduleSelfDestruct();
+            }
+            base.OnFormClosed(e);
+        }
+
         private bool IsTrustedOrigin(string urlString)
         {
             if (string.IsNullOrEmpty(urlString)) return false;
@@ -211,12 +237,37 @@ namespace BoardestInstaller
                 _webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
                 _webView.CoreWebView2.Settings.IsZoomControlEnabled = false;
 
-                // [안전 로직 1] https://boardest-windows-installer.web.app 외의 모든 URL 이동 차단!
+                // [요구사항 1] UserAgent에 boardest-win-install 추가
+                try
+                {
+                    string defaultUa = _webView.CoreWebView2.Settings.UserAgent;
+                    if (!string.IsNullOrEmpty(defaultUa) && !defaultUa.Contains(CustomUserAgentTag))
+                    {
+                        _webView.CoreWebView2.Settings.UserAgent = defaultUa + " " + CustomUserAgentTag;
+                    }
+                    else if (string.IsNullOrEmpty(defaultUa))
+                    {
+                        _webView.CoreWebView2.Settings.UserAgent = CustomUserAgentTag;
+                    }
+                }
+                catch { }
+
+                // [안전 로직 1] https://boardest-windows-installer.web.app 외의 모든 URL 이동 차단
                 _webView.CoreWebView2.NavigationStarting += (s, args) =>
                 {
+                    if (args.Uri.StartsWith("about:blank") || args.Uri.StartsWith("data:")) return;
                     if (!IsTrustedOrigin(args.Uri))
                     {
                         args.Cancel = true;
+                    }
+                };
+
+                // [요구사항 2] 오프라인 / 네트워크 연결 실패 시 Edge 기본 에러 창 대신 커스텀 오류창 표시
+                _webView.CoreWebView2.NavigationCompleted += (s, args) =>
+                {
+                    if (!args.IsSuccess)
+                    {
+                        ShowOfflineErrorPage();
                     }
                 };
 
@@ -229,43 +280,90 @@ namespace BoardestInstaller
                 // [안전 로직 3] 웹 메시지 수신 시 발신 URL 검증
                 _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
 
-                string prodQuery = _needsProductSelection ? "Select" : _productType;
-                string targetUrl = string.Format(
-                    "{0}?exe={1}&product={2}&ver={3}&t={4}",
-                    TrustedInstallerUrl,
-                    Uri.EscapeDataString(_exeFileName ?? ""),
-                    Uri.EscapeDataString(prodQuery),
-                    Uri.EscapeDataString(_productVersion),
-                    DateTime.UtcNow.Ticks
-                );
-
-                _webView.CoreWebView2.Navigate(targetUrl);
+                NavigateToOnlineSite();
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    "WebView2 초기화 실패 (Microsoft Edge WebView2 런타임이 필요합니다): " + ex.Message,
-                    "Boardest 온라인 설치 오류",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
+                ShowOfflineErrorPage("WebView2 초기화 실패: " + ex.Message);
             }
+        }
+
+        private void NavigateToOnlineSite()
+        {
+            string modeParam = _isUninstall ? "uninstall" : "install";
+            string prodQuery = _needsProductSelection ? "Select" : _productType;
+            _lastTargetUrl = string.Format(
+                "{0}?mode={1}&exe={2}&product={3}&ver={4}&t={5}",
+                TrustedInstallerUrl,
+                modeParam,
+                Uri.EscapeDataString(_exeFileName ?? ""),
+                Uri.EscapeDataString(prodQuery),
+                Uri.EscapeDataString(_productVersion),
+                DateTime.UtcNow.Ticks
+            );
+
+            _webView.CoreWebView2.Navigate(_lastTargetUrl);
+        }
+
+        private void ShowOfflineErrorPage(string customMessage = null)
+        {
+            if (this.IsDisposed || _webView == null || _webView.CoreWebView2 == null) return;
+            string desc = customMessage ?? "인터넷 네트워크에 연결할 수 없습니다. Wi-Fi 또는 이더넷 연결 상태를 확인한 후 아래 [다시 시도] 버튼을 눌러주세요.";
+            string html = GetOfflineHtml(desc);
+            _webView.CoreWebView2.NavigateToString(html);
+        }
+
+        private string GetOfflineHtml(string errorDescription)
+        {
+            return @"<!DOCTYPE html>
+<html lang=""ko"">
+<head>
+  <meta charset=""UTF-8"">
+  <title>네트워크 연결 필요 - Boardest</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Segoe UI', Roboto, sans-serif; }
+    body { background: #0B0C10; color: #FFFFFE; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .card { background: #16161A; border: 1.5px solid rgba(239, 69, 101, 0.4); border-radius: 16px; padding: 32px 28px; width: 520px; max-width: 90vw; text-align: center; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); }
+    .icon { font-size: 46px; margin-bottom: 14px; }
+    h2 { font-size: 19px; font-weight: 800; color: #fff; margin-bottom: 10px; }
+    p { font-size: 12.5px; color: rgba(255, 255, 255, 0.7); line-height: 1.55; margin-bottom: 24px; }
+    .btn-row { display: flex; justify-content: center; gap: 12px; }
+    .btn { padding: 10px 22px; border-radius: 8px; font-size: 13px; font-weight: 700; border: none; cursor: pointer; transition: all 0.2s; }
+    .btn-primary { background: linear-gradient(135deg, #00F5D4, #00c9ad); color: #000; box-shadow: 0 4px 14px rgba(0, 245, 212, 0.25); }
+    .btn-primary:hover { transform: translateY(-1px); filter: brightness(1.08); }
+    .btn-secondary { background: rgba(255, 255, 255, 0.08); color: #fff; border: 1px solid rgba(255, 255, 255, 0.15); }
+    .btn-secondary:hover { background: rgba(255, 255, 255, 0.14); }
+  </style>
+</head>
+<body>
+  <div class=""card"">
+    <div class=""icon"">📡</div>
+    <h2>인터넷 연결이 필요합니다</h2>
+    <p>" + WebUtility.HtmlEncode(errorDescription) + @"</p>
+    <div class=""btn-row"">
+      <button class=""btn btn-secondary"" onclick=""window.chrome.webview.postMessage(JSON.stringify({action:'close'}))"">닫기</button>
+      <button class=""btn btn-primary"" onclick=""window.chrome.webview.postMessage(JSON.stringify({action:'retry'}))"">다시 시도 ↻</button>
+    </div>
+  </div>
+</body>
+</html>";
         }
 
         private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
             try
             {
-                // [절대 보안 검증] 메시지 발신 Source와 현재 WebView2 Source가 모두
-                // https://boardest-windows-installer.web.app 인지 엄격히 확인!
+                // [보안 검증] 오직 https://boardest-windows-installer.web.app 또는 로컬 NavigateToString 메시지만 허용
                 string senderUrl = e.Source;
                 string currentWebViewUrl = (_webView != null && _webView.CoreWebView2 != null)
                     ? _webView.CoreWebView2.Source
                     : "";
 
-                if (!IsTrustedOrigin(senderUrl) || !IsTrustedOrigin(currentWebViewUrl))
+                bool isSenderTrusted = IsTrustedOrigin(senderUrl) || senderUrl.StartsWith("about:blank") || senderUrl.StartsWith("data:");
+                bool isViewTrusted = IsTrustedOrigin(currentWebViewUrl) || currentWebViewUrl.StartsWith("about:blank") || currentWebViewUrl.StartsWith("data:");
+
+                if (!isSenderTrusted || !isViewTrusted)
                 {
-                    // 허용된 URL이 아니면 어떠한 명령도 듣지 않고 즉시 무시!
                     return;
                 }
 
@@ -278,6 +376,10 @@ namespace BoardestInstaller
                 if (action == "uiReady")
                 {
                     SendInitData();
+                }
+                else if (action == "retry")
+                {
+                    NavigateToOnlineSite();
                 }
                 else if (action == "minimize")
                 {
@@ -323,9 +425,12 @@ namespace BoardestInstaller
                 {
                     Task.Run(() => HandleRunPowerShellCmd(reqId, json));
                 }
+                else if (action == "startUninstall" || action == "uninstallTeacher")
+                {
+                    Task.Run(() => HandleUninstallTeacherCmd(reqId, json));
+                }
                 else if (action == "startInstall")
                 {
-                    // 하위 호환 일괄 실행 핸들러
                     if (_isInstalling) return;
                     string selected = ExtractJsonString(json, "productType");
                     if (!string.IsNullOrEmpty(selected)) SetSelectedProduct(selected);
@@ -348,7 +453,8 @@ namespace BoardestInstaller
         private void SetSelectedProduct(string productType)
         {
             _productType = productType;
-            if (productType == "Class") _productName = "Boardest Class";
+            if (productType == "ClassLite") _productName = "Boardest Class Lite";
+            else if (productType == "Class") _productName = "Boardest Class";
             else if (productType == "Cloud") _productName = "Boardest Cloud";
             else _productName = "Boardest Teacher";
 
@@ -378,33 +484,15 @@ namespace BoardestInstaller
 
         private void SendInitData()
         {
-            string logoBase64 = "";
-            try
-            {
-                var asm = Assembly.GetExecutingAssembly();
-                using (var stream = asm.GetManifestResourceStream("app_logo.png"))
-                {
-                    if (stream != null)
-                    {
-                        using (var ms = new MemoryStream())
-                        {
-                            stream.CopyTo(ms);
-                            logoBase64 = Convert.ToBase64String(ms.ToArray());
-                        }
-                    }
-                }
-            }
-            catch { }
-
             string escapedDir = _teacherInstallDir.Replace("\\", "\\\\");
             string payload = string.Format(
-                "{{\"productType\":\"{0}\",\"productName\":\"{1}\",\"productVersion\":\"{2}\",\"installDir\":\"{3}\",\"teacherInstallDir\":\"{3}\",\"isUninstall\":false,\"needsProductSelection\":{4},\"logoBase64\":\"{5}\",\"isAdmin\":true}}",
+                "{{\"productType\":\"{0}\",\"productName\":\"{1}\",\"productVersion\":\"{2}\",\"installDir\":\"{3}\",\"teacherInstallDir\":\"{3}\",\"isUninstall\":{4},\"needsProductSelection\":{5},\"isAdmin\":true}}",
                 _productType,
                 _productName,
                 _productVersion,
                 escapedDir,
-                _needsProductSelection ? "true" : "false",
-                logoBase64
+                _isUninstall ? "true" : "false",
+                _needsProductSelection ? "true" : "false"
             );
             ExecuteScriptSafe(string.Format("if(window.receiveInitData) window.receiveInitData({0});", payload));
         }
@@ -456,7 +544,7 @@ namespace BoardestInstaller
             }
             try
             {
-                if (_webView != null && _webView.CoreWebView2 != null && IsTrustedOrigin(_webView.CoreWebView2.Source))
+                if (_webView != null && _webView.CoreWebView2 != null)
                 {
                     _webView.CoreWebView2.ExecuteScriptAsync(script);
                 }
@@ -650,6 +738,337 @@ namespace BoardestInstaller
         }
 
         // =========================================================================
+        // =========================================================================
+        // [요구사항 3] 온라인 삭제(언인스톨) 핸들러 구현 (MSIX 수준의 완전 무결 삭제)
+        // =========================================================================
+        private bool _scheduleSelfDestructOnExit = false;
+
+        private void HandleUninstallTeacherCmd(string reqId, string json)
+        {
+            _isInstalling = true;
+            try
+            {
+                // purgeData가 명시적으로 false가 아닌 한 기본적으로 모든 캐시와 사용자 데이터를 MSIX처럼 완전 삭제
+                bool purgeData = !json.Contains("\"purgeData\":false");
+
+                // 1단계: 실행 중인 프로세스 강제 종료
+                ExecuteScriptSafe("if(window.updateUninstallProgress) window.updateUninstallProgress(15, '실행 중인 관련 프로세스 강제 종료 중...', '[MSIX 완전삭제 1/5] boardest 관련 프로세스 종료...');");
+                KillRunningProcesses();
+                Thread.Sleep(500);
+
+                // 2단계: 바탕화면, 시작메뉴, 작업표시줄, 시작프로그램 바로가기 완전 제거
+                ExecuteScriptSafe("if(window.updateUninstallProgress) window.updateUninstallProgress(35, '바탕화면 및 시작 메뉴/작업표시줄 바로가기 완전 제거 중...', '[MSIX 완전삭제 2/5] 등록된 모든 바로가기(.lnk) 탐색 및 삭제...');");
+                RemoveShortcutsMultiLocations();
+
+                // 3단계: Windows 레지스트리 완전 청소 (Uninstall, Run, App 설정)
+                ExecuteScriptSafe("if(window.updateUninstallProgress) window.updateUninstallProgress(55, 'Windows 프로그램 추가/제거 및 레지스트리 키 완전 삭제 중...', '[MSIX 완전삭제 3/5] HKCU / HKLM 레지스트리 키 정리...');");
+                RemoveUninstallRegistry();
+
+                // 4단계: 설치 디렉토리 완전 삭제 (읽기 전용 해제 후 강제 삭제)
+                ExecuteScriptSafe("if(window.updateUninstallProgress) window.updateUninstallProgress(75, '프로그램 설치 파일 영구 삭제 중...', '[MSIX 완전삭제 4/5] 설치 디렉토리 파일 강제 삭제...');");
+                string myExe = Application.ExecutablePath;
+                bool isRunningInsideInstallDir = myExe.StartsWith(_teacherInstallDir, StringComparison.OrdinalIgnoreCase);
+
+                if (Directory.Exists(_teacherInstallDir))
+                {
+                    // 현재 실행 중인 exe를 제외한 모든 파일 삭제
+                    ForceDeleteDirectoryContentsExceptSelf(_teacherInstallDir, myExe);
+                }
+
+                // 타 설치 경로 점검 (Program Files 등)
+                try
+                {
+                    string pf = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "BoardestTeacher");
+                    if (Directory.Exists(pf)) ForceDeleteDirectoryRecursive(pf);
+                    string pf86 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "BoardestTeacher");
+                    if (Directory.Exists(pf86)) ForceDeleteDirectoryRecursive(pf86);
+                }
+                catch { }
+
+                // 5단계: 사용자 데이터 및 캐시/임시파일 완전 정리 (MSIX와 동일한 무결 청소)
+                if (purgeData)
+                {
+                    ExecuteScriptSafe("if(window.updateUninstallProgress) window.updateUninstallProgress(90, '임시 데이터, 세션 캐시 및 설정 완전 정리 중...', '[MSIX 완전삭제 5/5] AppData 및 캐시 영구 정리...');");
+                    PurgeAllUserDataAndCaches();
+                }
+
+                if (isRunningInsideInstallDir)
+                {
+                    // 언인스톨러 종료 시 자기 자신과 남은 빈 설치 폴더를 자폭(Self-Destruct) 삭제하도록 예약
+                    _scheduleSelfDestructOnExit = true;
+                }
+
+                ExecuteScriptSafe("if(window.updateUninstallProgress) window.updateUninstallProgress(100, 'Boardest Teacher의 모든 구성요소가 MSIX 수준으로 완벽하게 삭제되었습니다!', '[완료] 프로그램, 설정, 캐시, 바로가기 및 레지스트리가 흔적도 없이 삭제되었습니다.');");
+                _isInstalling = false;
+                ResolveHostCommand(reqId, true, "{\"uninstalled\":true}", null);
+            }
+            catch (Exception ex)
+            {
+                _isInstalling = false;
+                ResolveHostCommand(reqId, false, null, ex.Message);
+            }
+        }
+
+        private void ForceDeleteDirectoryRecursive(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !Directory.Exists(path)) return;
+            try
+            {
+                foreach (string file in Directory.GetFiles(path, "*", SearchOption.AllDirectories))
+                {
+                    try
+                    {
+                        File.SetAttributes(file, FileAttributes.Normal);
+                        File.Delete(file);
+                    }
+                    catch { }
+                }
+                var dirs = new List<string>(Directory.GetDirectories(path, "*", SearchOption.AllDirectories));
+                dirs.Sort((a, b) => b.Length.CompareTo(a.Length));
+                foreach (string dir in dirs)
+                {
+                    try { Directory.Delete(dir, true); } catch { }
+                }
+                Directory.Delete(path, true);
+            }
+            catch { }
+        }
+
+        private void ForceDeleteDirectoryContentsExceptSelf(string rootDir, string selfExePath)
+        {
+            if (string.IsNullOrEmpty(rootDir) || !Directory.Exists(rootDir)) return;
+            try
+            {
+                foreach (string file in Directory.GetFiles(rootDir, "*", SearchOption.AllDirectories))
+                {
+                    if (string.Equals(file, selfExePath, StringComparison.OrdinalIgnoreCase)) continue;
+                    try
+                    {
+                        File.SetAttributes(file, FileAttributes.Normal);
+                        File.Delete(file);
+                    }
+                    catch { }
+                }
+
+                // 빈 하위 디렉토리 삭제
+                var subDirs = new List<string>(Directory.GetDirectories(rootDir, "*", SearchOption.AllDirectories));
+                subDirs.Sort((a, b) => b.Length.CompareTo(a.Length));
+                foreach (string dir in subDirs)
+                {
+                    try
+                    {
+                        if (Directory.GetFiles(dir).Length == 0 && Directory.GetDirectories(dir).Length == 0)
+                        {
+                            Directory.Delete(dir, false);
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
+        private void PurgeAllUserDataAndCaches()
+        {
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string tempDir = Path.GetTempPath();
+
+            string[] targetDirs = new string[]
+            {
+                Path.Combine(localAppData, "Boardest"),
+                Path.Combine(localAppData, "BoardestTeacher"),
+                Path.Combine(localAppData, "boardest_teacher"),
+                Path.Combine(localAppData, "boardest"),
+                Path.Combine(appData, "Boardest"),
+                Path.Combine(appData, "BoardestTeacher"),
+                Path.Combine(appData, "boardest_teacher"),
+                Path.Combine(userProfile, ".boardest")
+            };
+
+            foreach (string dir in targetDirs)
+            {
+                ForceDeleteDirectoryRecursive(dir);
+            }
+
+            try
+            {
+                foreach (string d in Directory.GetDirectories(tempDir, "Boardest*", SearchOption.TopDirectoryOnly))
+                {
+                    ForceDeleteDirectoryRecursive(d);
+                }
+                foreach (string d in Directory.GetDirectories(tempDir, "boardest*", SearchOption.TopDirectoryOnly))
+                {
+                    ForceDeleteDirectoryRecursive(d);
+                }
+            }
+            catch { }
+        }
+
+        private void RemoveShortcutsMultiLocations()
+        {
+            string[] shortcutPatterns = new string[] { "Boardest Teacher*.lnk", "Boardest Teacher 제거*.lnk", "Boardest*.lnk" };
+            var desktopDirs = GetCandidateDesktopDirectories();
+
+            foreach (string dir in desktopDirs)
+            {
+                if (!Directory.Exists(dir)) continue;
+                foreach (string pattern in shortcutPatterns)
+                {
+                    try
+                    {
+                        foreach (string lnk in Directory.GetFiles(dir, pattern))
+                        {
+                            try { File.Delete(lnk); } catch { }
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            var startMenuDirs = new List<string>
+            {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), "Boardest"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Boardest"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), "Boardest Teacher"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Boardest Teacher")
+            };
+
+            foreach (string sDir in startMenuDirs)
+            {
+                ForceDeleteDirectoryRecursive(sDir);
+            }
+
+            string[] startRoots = new string[]
+            {
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
+                Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonStartup),
+                Environment.GetFolderPath(Environment.SpecialFolder.Startup)
+            };
+
+            foreach (string sRoot in startRoots)
+            {
+                if (!Directory.Exists(sRoot)) continue;
+                foreach (string pattern in shortcutPatterns)
+                {
+                    try
+                    {
+                        foreach (string lnk in Directory.GetFiles(sRoot, pattern))
+                        {
+                            try { File.Delete(lnk); } catch { }
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            try
+            {
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                string taskbarPinned = Path.Combine(appData, @"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar");
+                if (Directory.Exists(taskbarPinned))
+                {
+                    foreach (string pattern in shortcutPatterns)
+                    {
+                        foreach (string lnk in Directory.GetFiles(taskbarPinned, pattern))
+                        {
+                            try { File.Delete(lnk); } catch { }
+                        }
+                    }
+                }
+                string quickLaunch = Path.Combine(appData, @"Microsoft\Internet Explorer\Quick Launch");
+                if (Directory.Exists(quickLaunch))
+                {
+                    foreach (string pattern in shortcutPatterns)
+                    {
+                        foreach (string lnk in Directory.GetFiles(quickLaunch, pattern))
+                        {
+                            try { File.Delete(lnk); } catch { }
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private void RemoveUninstallRegistry()
+        {
+            try
+            {
+                Registry.CurrentUser.DeleteSubKeyTree(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\BoardestTeacher", false);
+            }
+            catch { }
+            try
+            {
+                Registry.LocalMachine.DeleteSubKeyTree(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\BoardestTeacher", false);
+            }
+            catch { }
+            try
+            {
+                Registry.LocalMachine.DeleteSubKeyTree(@"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\BoardestTeacher", false);
+            }
+            catch { }
+
+            try
+            {
+                using (var runKey = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true))
+                {
+                    if (runKey != null) runKey.DeleteValue("BoardestTeacher", false);
+                }
+            }
+            catch { }
+            try
+            {
+                using (var runKey = Registry.LocalMachine.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true))
+                {
+                    if (runKey != null) runKey.DeleteValue("BoardestTeacher", false);
+                }
+            }
+            catch { }
+
+            try
+            {
+                Registry.CurrentUser.DeleteSubKeyTree(@"Software\BoardestTeacher", false);
+                Registry.CurrentUser.DeleteSubKeyTree(@"Software\Boardest\Teacher", false);
+            }
+            catch { }
+            try
+            {
+                Registry.LocalMachine.DeleteSubKeyTree(@"Software\BoardestTeacher", false);
+                Registry.LocalMachine.DeleteSubKeyTree(@"Software\Boardest\Teacher", false);
+            }
+            catch { }
+        }
+
+        private void ScheduleSelfDestruct()
+        {
+            try
+            {
+                string exePath = Application.ExecutablePath;
+                string installDir = _teacherInstallDir;
+
+                string cmdArgs = string.Format(
+                    "/c ping 127.0.0.1 -n 3 > nul & del /f /q \"{0}\" & (rmdir /s /q \"{1}\" 2>nul) & exit",
+                    exePath,
+                    installDir
+                );
+
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = cmdArgs,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    UseShellExecute = false
+                };
+                Process.Start(psi);
+            }
+            catch { }
+        }
+
+        // =========================================================================
         // 3단계 설치 엔진 코어 구현
         // =========================================================================
         private async Task RunInstallProcessAsync(bool createDesktop, bool createStartMenu, string installScope)
@@ -799,9 +1218,13 @@ namespace BoardestInstaller
             string pattern = customRegex;
             if (string.IsNullOrEmpty(pattern))
             {
-                if (_productType == "Class")
+                if (_productType == "ClassLite")
                 {
-                    pattern = @"https://github\.com/[^""\s]+/releases/download/[^""\s]+/(?:boardest|bst-class)\.(?:msix|appx)";
+                    pattern = @"https://github\.com/[^""\s]+/releases/download/[^""\s]+/(?:boardest-class-lite|bst-class-lite)\.(?:msix|appx)";
+                }
+                else if (_productType == "Class")
+                {
+                    pattern = @"https://github\.com/[^""\s]+/releases/download/[^""\s]+/(?:boardest-class|boardest|bst-class)\.(?:msix|appx)";
                 }
                 else if (_productType == "Cloud")
                 {
@@ -809,7 +1232,7 @@ namespace BoardestInstaller
                 }
                 else
                 {
-                    pattern = @"https://github\.com/[^""\s]+/releases/download/[^""\s]+/(?:bst-teacher-windows|boardest-teacher-windows|boardest-teacher)\.zip";
+                    pattern = @"https://github\.com/[^""\s]+/releases/download/[^""\s]+/(?:bst-teacher-windows|boardest-teacher-windows|boardest-teacher|boardest-windows)\.zip";
                 }
             }
 
@@ -828,8 +1251,10 @@ namespace BoardestInstaller
             }
             catch { }
 
+            if (_productType == "ClassLite")
+                return "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.msix";
             if (_productType == "Class")
-                return "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.msix";
+                return "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.msix";
             if (_productType == "Cloud")
                 return "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.msix";
             return "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher-windows.zip";
@@ -837,15 +1262,39 @@ namespace BoardestInstaller
 
         private async Task DownloadFileWithStageProgressAsync(string primaryUrl, string destinationPath)
         {
+            try
+            {
+                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+            }
+            catch { }
+
             string[] candidateUrls;
-            if (_productType == "Class")
+            if (_productType == "ClassLite")
             {
                 candidateUrls = new string[]
                 {
                     primaryUrl,
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/boardest-class-lite.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.0/boardest-class-lite.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.msix",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.1/boardest-class-lite.msix",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.0/boardest-class-lite.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.appx"
+                };
+            }
+            else if (_productType == "Class")
+            {
+                candidateUrls = new string[]
+                {
+                    primaryUrl,
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/boardest-class.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.0/boardest-class.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/boardest.msix",
                     "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.msix",
-                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx",
-                    "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-class.appx"
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.1/boardest-class.msix",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.0/boardest-class.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.appx"
                 };
             }
             else if (_productType == "Cloud")
@@ -853,9 +1302,12 @@ namespace BoardestInstaller
                 candidateUrls = new string[]
                 {
                     primaryUrl,
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/boardest-cloud.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.0/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.msix",
-                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx",
-                    "https://github.com/hiJiwho/Boardest/releases/latest/download/bcld.appx"
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.1/boardest-cloud.msix",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.0/boardest-cloud.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx"
                 };
             }
             else
@@ -863,9 +1315,14 @@ namespace BoardestInstaller
                 candidateUrls = new string[]
                 {
                     primaryUrl,
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/bst-teacher-windows.zip",
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.0/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher-windows.zip",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.1/bst-teacher-windows.zip",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.0/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-windows.zip",
-                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.zip"
+                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.zip",
+                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-windows.zip"
                 };
             }
 
@@ -986,25 +1443,32 @@ namespace BoardestInstaller
                 }
             }
 
-            UpdateStageUI(3, 88, "언인스톨러 및 바로가기 생성 중...", null, null, "[3단계] 제거 프로그램(uninstall.exe) 및 바로가기를 등록합니다...");
-            string uninstallerPath = Path.Combine(_teacherInstallDir, "uninstall.exe");
-            ExtractResourceToFile("uninstall.exe", uninstallerPath);
+            UpdateStageUI(3, 88, "언인스톨러 복사 및 바로가기 등록 중...", null, null, "[3단계] 언인스톨러 및 바로가기 등록 중...");
+
+            // [사용자 요구] Teacher 설치 시 자기 자신을 boardest-teacher-uninstaller.exe 로 저장
+            string uninstallerPath = Path.Combine(_teacherInstallDir, "boardest-teacher-uninstaller.exe");
+            string legacyUninstallerPath = Path.Combine(_teacherInstallDir, "uninstall.exe");
+            try
+            {
+                File.Copy(Application.ExecutablePath, uninstallerPath, true);
+                File.Copy(Application.ExecutablePath, legacyUninstallerPath, true);
+            }
+            catch { }
 
             string mainExePath = Path.Combine(_teacherInstallDir, "boardest_teacher.exe");
+
+            // [요구사항 4] 바로가기 생성 대폭 강화 (공용 바탕화면 + 사용자 바탕화면 + 시작메뉴 모두 생성)
             if (createDesktop)
             {
-                string desktopDir = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-                CreateShortcut(Path.Combine(desktopDir, "Boardest Teacher.lnk"), mainExePath, _teacherInstallDir, "Boardest Teacher - 스마트 수업 관리 솔루션");
+                CreateDesktopShortcutsMultiLocations("Boardest Teacher.lnk", mainExePath, _teacherInstallDir, "Boardest Teacher - 스마트 수업 관리 솔루션");
             }
 
             if (createStartMenu)
             {
-                string startMenuDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Boardest");
-                if (!Directory.Exists(startMenuDir)) Directory.CreateDirectory(startMenuDir);
-                CreateShortcut(Path.Combine(startMenuDir, "Boardest Teacher.lnk"), mainExePath, _teacherInstallDir, "Boardest Teacher");
+                CreateStartMenuShortcutsMultiLocations("Boardest Teacher.lnk", mainExePath, _teacherInstallDir, "Boardest Teacher");
                 if (File.Exists(uninstallerPath))
                 {
-                    CreateShortcut(Path.Combine(startMenuDir, "Boardest Teacher 제거.lnk"), uninstallerPath, _teacherInstallDir, "Boardest Teacher 제거");
+                    CreateStartMenuShortcutsMultiLocations("Boardest Teacher 제거.lnk", uninstallerPath, _teacherInstallDir, "Boardest Teacher 제거");
                 }
             }
 
@@ -1016,7 +1480,7 @@ namespace BoardestInstaller
         {
             UpdateStageUI(3, 15, "기존 충돌 패키지 정리 중...", null, null, "[3단계] 구버전 패키지 충돌 여부를 확인합니다...");
 
-            if (_productType == "Class")
+            if (_productType == "Class" || _productType == "ClassLite")
             {
                 try
                 {
@@ -1086,18 +1550,90 @@ namespace BoardestInstaller
 
         private void KillRunningProcesses()
         {
-            string[] targets = new string[] { "boardest", "boardest_teacher", "boardest_cloud", "overlay_panser" };
+            int currentPid = 0;
+            string currentExeName = "";
+            try
+            {
+                currentPid = Process.GetCurrentProcess().Id;
+                currentExeName = Path.GetFileNameWithoutExtension(Application.ExecutablePath).ToLowerInvariant();
+            }
+            catch { }
+
+            string[] targets = new string[] { 
+                "boardest", 
+                "boardest_teacher", 
+                "boardest_cloud", 
+                "boardest_lite",
+                "overlay_panser",
+                "BoardestTeacher",
+                "boardest-teacher",
+                "boardest-class",
+                "boardest-class-lite",
+                "teacher-daemon",
+                "ffmpeg"
+            };
+
             foreach (string procName in targets)
             {
+                // 현재 실행 중인 인스톨러/언인스톨러 자체는 절대 종료하지 않음
+                if (string.Equals(procName, currentExeName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 try
                 {
                     foreach (Process p in Process.GetProcessesByName(procName))
                     {
-                        try { p.Kill(); p.WaitForExit(2000); } catch { }
+                        if (p.Id == currentPid) continue;
+                        try { p.Kill(); p.WaitForExit(1000); } catch { }
+                    }
+                }
+                catch { }
+
+                try
+                {
+                    ProcessStartInfo psi = new ProcessStartInfo
+                    {
+                        FileName = "taskkill.exe",
+                        Arguments = string.Format("/F /T /IM {0}.exe", procName),
+                        CreateNoWindow = true,
+                        WindowStyle = ProcessWindowStyle.Hidden,
+                        UseShellExecute = false
+                    };
+                    using (var proc = Process.Start(psi))
+                    {
+                        if (proc != null) proc.WaitForExit(800);
                     }
                 }
                 catch { }
             }
+
+            // 대기 (최대 1.5초)
+            int maxWaitMs = 1500;
+            int elapsed = 0;
+            while (elapsed < maxWaitMs)
+            {
+                bool anyTargetAlive = false;
+                foreach (string procName in targets)
+                {
+                    if (string.Equals(procName, currentExeName, StringComparison.OrdinalIgnoreCase)) continue;
+                    foreach (var p in Process.GetProcessesByName(procName))
+                    {
+                        if (p.Id != currentPid)
+                        {
+                            anyTargetAlive = true;
+                            break;
+                        }
+                    }
+                    if (anyTargetAlive) break;
+                }
+                if (!anyTargetAlive) break;
+                Thread.Sleep(150);
+                elapsed += 150;
+            }
+
+            Thread.Sleep(200);
         }
 
         private void CopyFileWithRetry(string src, string dest)
@@ -1138,21 +1674,144 @@ namespace BoardestInstaller
             }
         }
 
-        private void CreateShortcut(string shortcutPath, string targetPath, string workingDir, string description)
+        // =========================================================================
+        // 바로가기 생성 강화: 공용 바탕화면(All Users) + 사용자 바탕화면 동시 생성
+        // =========================================================================
+        private List<string> GetCandidateDesktopDirectories()
         {
+            var list = new List<string>();
+
+            // 1. 공용 바탕화면 (모든 사용자에게 즉시 표시됨 - 관리자 권한 필수)
+            try
+            {
+                string pub = Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory);
+                if (!string.IsNullOrEmpty(pub) && !list.Contains(pub)) list.Add(pub);
+            }
+            catch { }
+
+            // 2. 현재 사용자 특수 폴더 바탕화면
+            try
+            {
+                string usr = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+                if (!string.IsNullOrEmpty(usr) && !list.Contains(usr)) list.Add(usr);
+            }
+            catch { }
+
+            // 3. 레지스트리 User Shell Folders Desktop
+            try
+            {
+                using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"))
+                {
+                    if (key != null)
+                    {
+                        string regDesk = key.GetValue("Desktop") as string;
+                        if (!string.IsNullOrEmpty(regDesk))
+                        {
+                            regDesk = Environment.ExpandEnvironmentVariables(regDesk);
+                            if (!list.Contains(regDesk)) list.Add(regDesk);
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            return list;
+        }
+
+        private void CreateDesktopShortcutsMultiLocations(string shortcutName, string targetPath, string workingDir, string description, string args = "")
+        {
+            var desktopDirs = GetCandidateDesktopDirectories();
+            foreach (string dir in desktopDirs)
+            {
+                try
+                {
+                    if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                    string fullPath = Path.Combine(dir, shortcutName);
+                    CreateShortcutWithFallback(fullPath, targetPath, workingDir, description, args);
+                }
+                catch { }
+            }
+        }
+
+        private void CreateStartMenuShortcutsMultiLocations(string shortcutName, string targetPath, string workingDir, string description, string args = "")
+        {
+            var startDirs = new List<string>();
+            try
+            {
+                string commonStart = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), "Boardest");
+                startDirs.Add(commonStart);
+            }
+            catch { }
+
+            try
+            {
+                string userStart = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Boardest");
+                if (!startDirs.Contains(userStart)) startDirs.Add(userStart);
+            }
+            catch { }
+
+            foreach (string dir in startDirs)
+            {
+                try
+                {
+                    if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                    string fullPath = Path.Combine(dir, shortcutName);
+                    CreateShortcutWithFallback(fullPath, targetPath, workingDir, description, args);
+                }
+                catch { }
+            }
+        }
+
+        private void CreateShortcutWithFallback(string shortcutPath, string targetPath, string workingDir, string description, string args = "")
+        {
+            bool success = false;
+            // 1. WScript.Shell COM 객체 시도
             try
             {
                 Type shellType = Type.GetTypeFromProgID("WScript.Shell");
-                if (shellType == null) return;
-                dynamic shell = Activator.CreateInstance(shellType);
-                dynamic shortcut = shell.CreateShortcut(shortcutPath);
-                shortcut.TargetPath = targetPath;
-                shortcut.WorkingDirectory = workingDir;
-                shortcut.Description = description;
-                shortcut.IconLocation = targetPath + ",0";
-                shortcut.Save();
+                if (shellType != null)
+                {
+                    dynamic shell = Activator.CreateInstance(shellType);
+                    dynamic shortcut = shell.CreateShortcut(shortcutPath);
+                    shortcut.TargetPath = targetPath;
+                    shortcut.WorkingDirectory = workingDir;
+                    shortcut.Description = description;
+                    if (!string.IsNullOrEmpty(args)) shortcut.Arguments = args;
+                    shortcut.IconLocation = targetPath + ",0";
+                    shortcut.Save();
+                    success = File.Exists(shortcutPath);
+                }
             }
             catch { }
+
+            // 2. COM 실패 시 PowerShell 스크립트로 2차 보장
+            if (!success)
+            {
+                try
+                {
+                    string psCmd = string.Format(
+                        "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('{0}'); $s.TargetPath = '{1}'; $s.WorkingDirectory = '{2}'; $s.Description = '{3}'; {4} $s.IconLocation = '{1},0'; $s.Save();",
+                        shortcutPath.Replace("'", "''"),
+                        targetPath.Replace("'", "''"),
+                        workingDir.Replace("'", "''"),
+                        description.Replace("'", "''"),
+                        string.IsNullOrEmpty(args) ? "" : ("$s.Arguments = '" + args.Replace("'", "''") + "';")
+                    );
+
+                    ProcessStartInfo psi = new ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"" + psCmd + "\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+                    using (Process p = Process.Start(psi))
+                    {
+                        p.WaitForExit(4000);
+                    }
+                }
+                catch { }
+            }
         }
 
         private void RegisterUninstallRegistry(string mainExePath, string uninstallerPath)
@@ -1169,9 +1828,29 @@ namespace BoardestInstaller
                         key.SetValue("Publisher", "Boardest Team");
                         key.SetValue("DisplayIcon", mainExePath);
                         key.SetValue("InstallLocation", _teacherInstallDir);
-                        key.SetValue("UninstallString", "\"" + uninstallerPath + "\"");
+                        key.SetValue("UninstallString", "\"" + uninstallerPath + "\" --uninstall");
                         key.SetValue("NoModify", 1, RegistryValueKind.DWord);
                         key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
+                    }
+                }
+
+                // Program Files 등 전역 설치 경로인 경우 HKLM에도 함께 등록
+                string progFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+                if (!string.IsNullOrEmpty(progFiles) && _teacherInstallDir.StartsWith(progFiles, StringComparison.OrdinalIgnoreCase))
+                {
+                    using (RegistryKey lmKey = Registry.LocalMachine.CreateSubKey(regPath))
+                    {
+                        if (lmKey != null)
+                        {
+                            lmKey.SetValue("DisplayName", "Boardest Teacher");
+                            lmKey.SetValue("DisplayVersion", _productVersion);
+                            lmKey.SetValue("Publisher", "Boardest Team");
+                            lmKey.SetValue("DisplayIcon", mainExePath);
+                            lmKey.SetValue("InstallLocation", _teacherInstallDir);
+                            lmKey.SetValue("UninstallString", "\"" + uninstallerPath + "\" --uninstall");
+                            lmKey.SetValue("NoModify", 1, RegistryValueKind.DWord);
+                            lmKey.SetValue("NoRepair", 1, RegistryValueKind.DWord);
+                        }
                     }
                 }
             }
@@ -1234,7 +1913,7 @@ namespace BoardestInstaller
         [STAThread]
         static void Main(string[] args)
         {
-            // [필수] 실행 시 관리자 권한 확인 및 강제 권한 상승(UAC runas)
+            // [필수] 관리자 권한 확인 및 강제 권한 상승 (UAC runas)
             if (!IsRunningAsAdministrator())
             {
                 try
@@ -1261,7 +1940,7 @@ namespace BoardestInstaller
                 catch
                 {
                     MessageBox.Show(
-                        "Boardest 온라인 설치 관리자는 안전한 인증서 등록 및 앱 설치를 위해 반드시 [관리자 권한]으로 실행되어야 합니다.",
+                        "Boardest 온라인 설치/관리 도구는 안전한 시스템 등록 및 파일 관리를 위해 반드시 [관리자 권한]으로 실행되어야 합니다.",
                         "관리자 권한 필요",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning
@@ -1279,7 +1958,7 @@ namespace BoardestInstaller
                     return;
                 }
 
-                // 내장된 WebView2 DLL 자동 추출 로드
+                // 내장된 필수 WebView2 DLL 로드
                 AppDomain.CurrentDomain.AssemblyResolve += (sender, resolveArgs) =>
                 {
                     string dllName = new AssemblyName(resolveArgs.Name).Name + ".dll";

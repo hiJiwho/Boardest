@@ -47,7 +47,7 @@ class UpdateService {
   UpdateService._internal();
   static final instance = UpdateService._internal();
 
-  static const String defaultVersion = '5.4.0';
+  static const String defaultVersion = '5.4.1';
   static const String _releasesApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases?per_page=30';
   static const String downloadPage = 'https://boardest-downloads.web.app';
@@ -454,7 +454,7 @@ class _TeacherMandatoryLockoutDialogState
             ),
             const SizedBox(height: 12),
             Text(
-              '이 버전은 안전하지 않습니다.\n새 버전의 msi 를 다운받아주시기 바랍니다.',
+              '업데이트가 감지되었습니다.\n이 앱을 설치했던 installer 를 열어서 업데이트 해주세요.',
               textAlign: TextAlign.center,
               style: GoogleFonts.notoSansKr(
                 color: Colors.white,
@@ -592,7 +592,7 @@ class _TeacherOptionalUpdateDialog extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              '더 안정적인 교과서 동기화와 원격 제어 기능을 위해 최신 버전 설치를 권장합니다.\n버튼을 누르면 공식 다운로드 센터로 연결됩니다.',
+              '업데이트가 감지되었습니다. 이 앱을 설치했던 installer 를 열어서 업데이트 해주세요.\n(웹 사이트 이동 버튼을 누르면 최신 설치 관리자를 다시 다운로드하실 수도 있습니다.)',
               style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13, height: 1.5),
             ),
             const SizedBox(height: 24),

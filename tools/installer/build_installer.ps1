@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '5.4.0'
+  [string]$AppVersion = '5.4.1'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,16 +18,13 @@ $PkgDir = Join-Path $RootDir 'apps\boardest\build\windows\x64\packages\Microsoft
 $CoreDll = Join-Path $PkgDir 'lib\net45\Microsoft.Web.WebView2.Core.dll'
 $WinFormsDll = Join-Path $PkgDir 'lib\net45\Microsoft.Web.WebView2.WinForms.dll'
 $LoaderDll = Join-Path $PkgDir 'build\native\x64\WebView2Loader.dll'
-$HtmlFile = Join-Path $InstallerDir 'installer.html'
-$AppLogo = Join-Path $RootDir 'apps\boardest\assets\icons\app_logo.png'
 $AppIcon = Join-Path $RootDir 'apps\boardest\windows\runner\resources\app_icon.ico'
 $AppManifest = Join-Path $InstallerDir 'app.manifest'
 
-# Source files
-$TeacherUninstCs = Join-Path $InstallerDir 'BoardestTeacherUninstaller.cs'
+# Source file (단일 통합 인스톨러/언인스톨러)
 $UnifiedInstallCs = Join-Path $InstallerDir 'BoardestInstaller.cs'
 
-foreach ($f in @($CoreDll, $WinFormsDll, $LoaderDll, $HtmlFile, $AppLogo, $AppIcon, $AppManifest, $CerFile, $CSharpCompiler, $TeacherUninstCs, $UnifiedInstallCs)) {
+foreach ($f in @($CoreDll, $WinFormsDll, $LoaderDll, $AppIcon, $AppManifest, $CerFile, $CSharpCompiler, $UnifiedInstallCs)) {
   if (-not (Test-Path $f)) {
     throw "Required file not found for installer build: $f"
   }
@@ -46,12 +43,12 @@ $BaseReferences = @(
   "/r:$WinFormsDll"
 )
 
-$BaseResources = @(
+# 초경량 필수 리소스만 임베딩 (중복 exe 및 거대 html 제거)
+$LightResources = @(
   "/resource:$CoreDll,Microsoft.Web.WebView2.Core.dll",
   "/resource:$WinFormsDll,Microsoft.Web.WebView2.WinForms.dll",
   "/resource:$LoaderDll,WebView2Loader.dll",
-  "/resource:$HtmlFile,installer.html",
-  "/resource:$AppLogo,app_logo.png"
+  "/resource:$CerFile,BoardestCert.cer"
 )
 
 function Sign-File([string]$targetFile) {
@@ -66,44 +63,42 @@ function Sign-File([string]$targetFile) {
   }
 }
 
-Write-Host "=== Building Boardest Unified Online Installer & Uninstaller (v$AppVersion) ===" -ForegroundColor Cyan
+Write-Host "=== Building Ultra-Lightweight Boardest Unified Online Installer (v$AppVersion) ===" -ForegroundColor Cyan
 
-# 1. Compile Teacher Uninstaller (uninstall.exe)
-$UninstExe = Join-Path $OutDir 'uninstall.exe'
-Write-Host "Compiling Teacher Uninstaller ($UninstExe)..." -ForegroundColor Yellow
-$uninstArgs = @('/nologo', '/target:winexe', "/out:$UninstExe", "/win32icon:$AppIcon") + $BaseReferences + $BaseResources + @($TeacherUninstCs)
-& $CSharpCompiler @uninstArgs
-if ($LASTEXITCODE -ne 0) { throw "Compilation failed for uninstall.exe" }
-Sign-File $UninstExe
-
-# 2. Compile Unified Online Installer (boardest-installer.exe) with requireAdministrator manifest
+# 1. Compile Unified Online Installer (boardest-installer.exe) with requireAdministrator manifest
 $UnifiedExe = Join-Path $OutDir 'boardest-installer.exe'
-Write-Host "Compiling Unified Online Installer ($UnifiedExe) with Administrator Manifest..." -ForegroundColor Yellow
-$unifiedResources = $BaseResources + @(
-  "/resource:$CerFile,BoardestCert.cer",
-  "/resource:$UninstExe,uninstall.exe"
-)
+Write-Host "Compiling Unified Online Installer ($UnifiedExe)..." -ForegroundColor Yellow
 $unifiedArgs = @(
   '/nologo',
   '/target:winexe',
   "/out:$UnifiedExe",
   "/win32icon:$AppIcon",
   "/win32manifest:$AppManifest"
-) + $BaseReferences + $unifiedResources + @($UnifiedInstallCs)
+) + $BaseReferences + $LightResources + @($UnifiedInstallCs)
 
 & $CSharpCompiler @unifiedArgs
 if ($LASTEXITCODE -ne 0) { throw "Compilation failed for boardest-installer.exe" }
 Sign-File $UnifiedExe
 
+# 2. Duplicate to installer.exe and uninstall.exe (동일 바이너리가 이름 및 인자에 따라 자동 모드 전환)
+$InstallerExe = Join-Path $OutDir 'installer.exe'
+Copy-Item $UnifiedExe $InstallerExe -Force
+$UninstExe = Join-Path $OutDir 'uninstall.exe'
+Copy-Item $UnifiedExe $UninstExe -Force
+
 # 3. Create Named Variants (Executable name determines default app: Class / Teacher / Cloud)
 $VariantNames = @(
   'boardest-class.exe',
+  'boardest-class-lite.exe',
   'boardest-teacher.exe',
   'boardest-cloud.exe',
+  'boardest-teacher-uninstaller.exe',
   'boardest-class-installer.exe',
+  'boardest-class-lite-installer.exe',
   'boardest-teacher-installer.exe',
   'boardest-cloud-installer.exe',
   'Boardest-Class-Setup.exe',
+  'Boardest-Class-Lite-Setup.exe',
   'Boardest-Teacher-Setup.exe',
   'Boardest-Cloud-Setup.exe'
 )
@@ -117,7 +112,7 @@ foreach ($name in $VariantNames) {
 $DownloadWeb = Join-Path $RootDir 'infra\download_web'
 $DownloadsHubWeb = Join-Path $RootDir 'infra\downloads_hub_web'
 
-$FilesToDeploy = @('boardest-installer.exe', 'uninstall.exe') + $VariantNames
+$FilesToDeploy = @('boardest-installer.exe', 'installer.exe', 'uninstall.exe') + $VariantNames
 
 foreach ($f in $FilesToDeploy) {
   $src = Join-Path $OutDir $f

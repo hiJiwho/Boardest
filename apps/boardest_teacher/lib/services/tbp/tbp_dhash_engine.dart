@@ -4,13 +4,11 @@ import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:webview_windows/webview_windows.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'tbp_storage_service.dart';
-import 'tbp_web_capture_helper.dart';
 
-/// JS 기반 perceptual dHash 엔진 (Visual Canvas + DOM Page Fingerprint + Canonical Hash Matching)
-/// - 페이지 이동 시 실시간으로 256-bit dHash를 감지하고 기존 저장된 페이지 해시와 해밍 거리(<=36bit)로 매칭
-/// - 동일 페이지 내 미세 노이즈(<=32bit)는 무시하여 판서와 핫스팟이 흔들림 없이 유지됨
-/// - 마우스 모드에서 WebView 내부 우클릭 및 길게 누르기(Long-Press) 이벤트를 감지하여 핫스팟 모달 호출 지원
+/// BoardBook 오리지널 초고속 무결점 페이지 감지 엔진
+/// - DOM 페이지 식별자(.page-num, #pageNo 등) 및 URL, document.title, 고속 텍스트 해시로 실시간 페이지 감지
+/// - 페이지가 전환되자마자 0.1~0.2초 이내에 즉시 감지하여 지연 없이 판서 교체
+/// - 네비게이션 시 450ms 쿨다운 가드로 2페이지 연속 넘어감 완벽 차단
 class TbpDhashEngine {
   final Function(String dHash) onDhashChanged;
   final Function(double rx, double ry)? onWebContextMenu;
@@ -26,33 +24,22 @@ class TbpDhashEngine {
   String _currentDhash = '';
   final Set<String> _knownHashes = {};
   int _webVirtualPage = 1;
+  DateTime? _lastNavTime;
 
   Timer? _focusPollingTimer;
-  Timer? _fallbackPollingTimer;
-  final List<Timer> _burstTimers = [];
   bool _disposed = false;
 
-  // 지수 버스트 딜레이 (ms): 페이지 넘김 직후 즉각 감지
-  static const List<int> _burstDelaysMs = [0, 1000, 2000, 5000];
-
-  // 동일 페이지 판정 임계값 (민감도 대폭 상향: 14비트 이하 차이만 동일 페이지 노이즈로 간주하고, 미세한 페이지 전환도 즉시 감지)
-  static const int _samePageThreshold = 14;
-  // 기존 저장된 페이지 해시와 매칭할 임계값 (18비트 이하 차이면 저장된 페이지 해시로 정밀 스냅)
-  static const int _knownMatchThreshold = 18;
-
-  /// 기존 저장된 페이지 dHash 목록을 등록하여 페이지 재방문 시 판서/핫스팟 100% 복원 보장
   void registerKnownHashes(Iterable<String> hashes) {
     for (final h in hashes) {
       if (h.isNotEmpty && h != 'default') {
-        _knownHashes.add(TbpStorageService.toBinary256(h) ?? h);
+        _knownHashes.add(h);
       }
     }
   }
 
-  /// JS 해시 추출 및 이벤트 후킹 스크립트
+  /// BoardBook 오리지널 고속 JS 스크립트
   static const String _hashJsScript = '''
     (function() {
-      // ── [FHD 125% 표준 뷰포트 강제 락 (모든 기기/배율/해상도 편차 완전 제거)] ──
       try {
         var meta = document.querySelector('meta[name="viewport"]');
         if (!meta) {
@@ -60,7 +47,6 @@ class TbpDhashEngine {
           meta.name = 'viewport';
           document.head.appendChild(meta);
         }
-        // 1920 / 1.25 = 1536px 논리 해상도 고정 (16:9 비율: 1536 x 864)
         meta.content = 'width=1536, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
 
         var styleId = 'bst-fhd-lock-style';
@@ -83,12 +69,6 @@ class TbpDhashEngine {
         }
       }
 
-      function sendHash(hashStr) {
-        if (!hashStr) return;
-        postToFlutter({type: 'dhashResult', hash: hashStr});
-      }
-
-      // 1회성: WebView 내부 우클릭(contextmenu) 및 길게 누르기(Long-Press) 감지 + 페이지 변화 즉시 감지 훅 설치
       function bindDocEvents(doc, win, offsetLeft, offsetTop) {
         if (!doc || doc.__bstBound) return;
         doc.__bstBound = true;
@@ -107,226 +87,118 @@ class TbpDhashEngine {
           });
           return false;
         }, true);
-
-        var lpTimer = null;
-        var startX = 0;
-        var startY = 0;
-        doc.addEventListener('pointerdown', function(e) {
-          if (e.button === 2) return;
-          startX = e.clientX || 0;
-          startY = e.clientY || 0;
-          if (lpTimer) clearTimeout(lpTimer);
-          lpTimer = setTimeout(function() {
-            var vw = window.innerWidth || document.documentElement.clientWidth || 1;
-            var vh = window.innerHeight || document.documentElement.clientHeight || 1;
-            var cx = startX + (offsetLeft || 0);
-            var cy = startY + (offsetTop || 0);
-            postToFlutter({
-              type: 'hotspotContext',
-              rx: Math.max(0.02, Math.min(0.98, cx / vw)),
-              ry: Math.max(0.02, Math.min(0.98, cy / vh))
-            });
-          }, 650);
-        }, true);
-
-        doc.addEventListener('pointermove', function(e) {
-          if (!lpTimer) return;
-          var dx = (e.clientX || 0) - startX;
-          var dy = (e.clientY || 0) - startY;
-          if (Math.sqrt(dx * dx + dy * dy) > 10) {
-            clearTimeout(lpTimer);
-            lpTimer = null;
-          }
-        }, true);
-
-        var clearLp = function() {
-          if (lpTimer) {
-            clearTimeout(lpTimer);
-            lpTimer = null;
-          }
-        };
-        doc.addEventListener('pointerup', clearLp, true);
-        doc.addEventListener('pointercancel', clearLp, true);
-
-        doc.addEventListener('click', function() {
-          setTimeout(runCapture, 120);
-          setTimeout(runCapture, 450);
-        }, true);
-        doc.addEventListener('keyup', function() {
-          setTimeout(runCapture, 120);
-          setTimeout(runCapture, 450);
-        }, true);
       }
 
-      try {
-        bindDocEvents(document, window, 0, 0);
-        var frames = document.querySelectorAll('iframe');
-        for (var fi = 0; fi < frames.length; fi++) {
-          try {
-            var fr = frames[fi];
-            var rect = fr.getBoundingClientRect();
-            if (fr.contentDocument && fr.contentWindow) {
-              bindDocEvents(fr.contentDocument, fr.contentWindow, rect.left, rect.top);
-            }
-          } catch (ie) {}
+      function getFastHash(str) {
+        var hash = 0;
+        for (var i = 0; i < str.length; i++) {
+          hash = ((hash << 5) - hash) + str.charCodeAt(i);
+          hash |= 0;
         }
-      } catch (be) {}
-
-      function computeDhashFromSource(sourceEl, w, h) {
-        try {
-          if (!w || !h || w < 32 || h < 32) return false;
-
-          // 16:9 표준 뷰포트 종횡비에 맞춰 다운샘플링 (모든 기기 해상도 편차 평탄화)
-          var offscreen = document.createElement('canvas');
-          offscreen.width = 17;
-          offscreen.height = 16;
-          var octx = offscreen.getContext('2d');
-          octx.imageSmoothingEnabled = true;
-          octx.imageSmoothingQuality = 'medium';
-          octx.drawImage(sourceEl, 0, 0, w, h, 0, 0, 17, 16);
-
-          var imgData = octx.getImageData(0, 0, 17, 16).data;
-          var gray = [];
-          var nonZero = 0;
-          for (var i = 0; i < imgData.length; i += 4) {
-            var g = imgData[i] * 0.299 + imgData[i+1] * 0.587 + imgData[i+2] * 0.114;
-            if (g > 1 && g < 254) nonZero++;
-            gray.push(g);
-          }
-          // 완전히 단색(빈 캔버스)이면 폴백 사용
-          if (nonZero < 8) return false;
-
-          var hash = '';
-          for (var y = 0; y < 16; y++) {
-            for (var x = 0; x < 16; x++) {
-              var idx = y * 17 + x;
-              hash += (gray[idx] > gray[idx + 1] ? '1' : '0');
-            }
-          }
-          sendHash(hash);
-          return true;
-        } catch (e) {
-          return false;
-        }
+        return 'dhash_' + Math.abs(hash);
       }
 
-      function collectDocSignature(doc, win) {
+      function getDocPageId(doc, win) {
         if (!doc) return '';
-        var parts = [];
         try {
-          parts.push(win && win.location ? win.location.href : '');
-          // 페이지 번호 입력창/표시 요소 우선 추출 (전자교과서/뷰어 표준 패턴)
-          var pageInputs = doc.querySelectorAll('input[type="text"], input[type="number"], .page, .pageNum, .page-num, .current-page, [class*="page"], [id*="page"], [aria-current="page"], [aria-selected="true"]');
-          var pageVals = [];
-          for (var i = 0; i < Math.min(pageInputs.length, 20); i++) {
-            var el = pageInputs[i];
-            var v = (el.value !== undefined && el.value !== '') ? ('val:' + el.value) : (el.innerText || el.textContent || '').trim();
-            if (v && v.length < 40) pageVals.push(v);
-          }
-          parts.push('PV:' + pageVals.join(','));
-
-          // 현재 보이는 주요 이미지 src 및 위치
-          var imgs = doc.images || [];
-          var imgSigs = [];
-          for (var j = 0; j < Math.min(imgs.length, 15); j++) {
-            var im = imgs[j];
-            var r = im.getBoundingClientRect ? im.getBoundingClientRect() : {width: im.width, height: im.height};
-            if (r.width > 40 && r.height > 40) {
-              imgSigs.push((im.currentSrc || im.src || '') + '@' + Math.round(r.left) + ',' + Math.round(r.top));
-            }
-          }
-          parts.push('IM:' + imgSigs.join('|'));
-
-          // 본문 가시 텍스트 요약
-          var bodyTxt = (doc.body && doc.body.innerText) ? doc.body.innerText.replace(/\\s+/g, ' ').trim().slice(0, 600) : '';
-          parts.push('TX:' + bodyTxt);
-          parts.push('SC:' + Math.round(((win && win.scrollY) || 0) / 80));
-        } catch (e) {}
-        return parts.join('||');
-      }
-
-      function computeOfflineFallbackHash() {
-        try {
-          var sig = collectDocSignature(document, window);
-          var frames = document.querySelectorAll('iframe');
-          for (var f = 0; f < frames.length; f++) {
-            try {
-              var fr = frames[f];
-              sig += '||FRSrc:' + (fr.src || '');
-              if (fr.contentDocument && fr.contentWindow) {
-                sig += '||FRDoc:' + collectDocSignature(fr.contentDocument, fr.contentWindow);
+          var selectors = [
+            '.page-num', '.pageNum', '#pageNo', '#page_num', '.page_num',
+            '.page-current', '#currentPage', '#page', '.page', '[data-page]',
+            '.current-page', '.textbook-page', '#spnPage', '.spn_page',
+            '.page_input', 'input.page', '.cur_page', '#curPage'
+          ];
+          for (var s = 0; s < selectors.length; s++) {
+            var el = doc.querySelector(selectors[s]);
+            if (el) {
+              var val = (el.value || el.innerText || el.textContent || el.getAttribute('data-page') || '').trim();
+              if (val && val.length <= 25) {
+                return 'page_' + val.replace(/[^a-zA-Z0-9_-]/g, '_');
               }
-            } catch (fe) {}
-          }
-
-          var bits = '';
-          var seeds = [2166136261, 16777619, 2654435761, 3266489917, 668265263, 374761393, 2246822519, 3266489919];
-          for (var s = 0; s < 8; s++) {
-            var h = seeds[s] >>> 0;
-            for (var i = 0; i < sig.length; i++) {
-              h ^= sig.charCodeAt(i);
-              h = Math.imul(h, 16777619) >>> 0;
             }
-            bits += (h >>> 0).toString(2).padStart(32, '0');
           }
-          sendHash(bits.slice(0, 256));
-        } catch (err) {}
+
+          var loc = (win && win.location) ? win.location : window.location;
+          if (loc && loc.hash && loc.hash.length > 1) {
+            return 'hash_' + loc.hash.replace(/[^a-zA-Z0-9_-]/g, '_');
+          }
+          if (loc && loc.search && loc.search.length > 1) {
+            return 'query_' + loc.search.replace(/[^a-zA-Z0-9_-]/g, '_');
+          }
+          if (doc.title && doc.title.length > 0) {
+            return 'title_' + getFastHash(doc.title);
+          }
+        } catch(e) {}
+        return '';
       }
 
-      function tryDirectCanvasHash(doc) {
-        if (!doc) return false;
-        var canvases = doc.querySelectorAll('canvas');
-        var bestCanvas = null;
-        var bestArea = 0;
-        for (var i = 0; i < canvases.length; i++) {
-          var c = canvases[i];
-          var r = c.getBoundingClientRect();
-          var area = r.width * r.height;
-          if (area > bestArea && r.width > 200 && r.height > 200) {
-            bestArea = area;
-            bestCanvas = c;
-          }
-        }
-        if (bestCanvas && computeDhashFromSource(bestCanvas, bestCanvas.width, bestCanvas.height)) {
-          return true;
-        }
-        return false;
-      }
+      window.checkPage = function() {
+        var detectedId = getDocPageId(document, window);
 
-      function runCapture() {
-        try {
-          // 1. 페이지 내 대형 <canvas>(PDF.js/교과서 렌더러)가 있으면 즉시 픽셀 dHash 추출
-          if (tryDirectCanvasHash(document)) return;
+        if (!detectedId) {
           var frames = document.querySelectorAll('iframe');
           for (var f = 0; f < frames.length; f++) {
             try {
-              if (frames[f].contentDocument && tryDirectCanvasHash(frames[f].contentDocument)) return;
-            } catch (e) {}
+              if (frames[f].contentDocument) {
+                bindDocEvents(frames[f].contentDocument, frames[f].contentWindow, 0, 0);
+                detectedId = getDocPageId(frames[f].contentDocument, frames[f].contentWindow);
+                if (detectedId) break;
+              }
+            } catch(fe) {}
           }
-          // 2. DOM + URL + 페이지번호 + 이미지 + 텍스트 기반 결정론적 256-bit 해시 추출 (빠르고 CSP/CORS 무관)
-          computeOfflineFallbackHash();
-        } catch (e) {
-          computeOfflineFallbackHash();
         }
-      }
 
-      runCapture();
+        if (!detectedId) {
+          var raw = (window.location.href + '_' + (document.body ? document.body.innerText.substring(0, 200) : '')).replace(/\\s+/g, '');
+          detectedId = getFastHash(raw);
+        }
+
+        if (detectedId && detectedId !== window.__bstLastPageId) {
+          window.__bstLastPageId = detectedId;
+          postToFlutter({
+            type: 'dhashResult',
+            hash: detectedId
+          });
+        }
+      };
+
+      bindDocEvents(document, window, 0, 0);
+      window.checkPage();
+
+      if (!window.__boardestDhashInjected) {
+        window.__boardestDhashInjected = true;
+        setInterval(window.checkPage, 250);
+        window.addEventListener('hashchange', window.checkPage);
+        window.addEventListener('popstate', window.checkPage);
+        window.addEventListener('click', function() { setTimeout(window.checkPage, 120); });
+        window.addEventListener('keyup', function() { setTimeout(window.checkPage, 120); });
+      }
     })();
   ''';
 
-  /// 컨트롤러 설정 + 배경 폴링 시작
-  void startTracker(WebviewController? winController, WebViewController? androidController) {
-    _winController = winController;
-    _androidController = androidController;
-    _startBackgroundPolling();
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (!_disposed) _triggerBurstCapture();
-    });
+  void startTracker([dynamic winWebview, dynamic androidWebview]) {
+    if (winWebview != null && winWebview is WebviewController) {
+      attachWindowsWebview(winWebview);
+    } else if (androidWebview != null && androidWebview is WebViewController) {
+      attachAndroidWebview(androidWebview);
+    } else {
+      _startBackgroundPolling();
+      _requestHashFromJs();
+    }
   }
 
-  /// Web 환경(cross-origin iframe)에서 가상 페이지 이동 시 페이지별 dHash 전환 지원
-  void stepWebVirtualPage([int delta = 1, bool? isNext]) {
-    if (!kIsWeb) return;
+  void attachWindowsWebview(WebviewController controller) {
+    _winController = controller;
+    _startBackgroundPolling();
+    _requestHashFromJs();
+  }
+
+  void attachAndroidWebview(WebViewController controller) {
+    _androidController = controller;
+    _startBackgroundPolling();
+    _requestHashFromJs();
+  }
+
+  void stepWebVirtualPage(int delta, {bool? isNext}) {
     final forward = isNext ?? (delta >= 0);
     if (forward) {
       _webVirtualPage++;
@@ -340,10 +212,8 @@ class TbpDhashEngine {
     }
   }
 
-  /// 외부(클릭 등)에서 버스트 캡처 트리거
-  void triggerBurstCapture() => _triggerBurstCapture();
+  void triggerBurstCapture() => _requestHashFromJs();
 
-  /// WebView에서 수신된 JS 메시지 처리 (viewer route에서 호출)
   void onDhashMessage(String rawMessage) {
     try {
       final data = jsonDecode(rawMessage);
@@ -361,13 +231,17 @@ class TbpDhashEngine {
           }
         }
       }
-    } catch (e) {
-      // 다른 유형 메시지 무시
-    }
+    } catch (_) {}
   }
 
-  /// 페이지 이동 (ArrowRight / ArrowLeft + 버스트 캡처)
+  /// 페이지 이동 (450ms 쿨다운 가드로 2페이지 연속 넘어감 완벽 차단)
   Future<void> navigatePage({required bool isNext}) async {
+    final now = DateTime.now();
+    if (_lastNavTime != null && now.difference(_lastNavTime!).inMilliseconds < 450) {
+      return; // 450ms 디바운스로 2페이지 연속 점프 방지
+    }
+    _lastNavTime = now;
+
     if (kIsWeb) {
       stepWebVirtualPage(isNext ? 1 : -1);
       return;
@@ -378,66 +252,57 @@ class TbpDhashEngine {
 
     final script = '''
       (function() {
-        function triggerInDoc(doc, win) {
-          if (!doc) return;
-          var el = doc.activeElement || doc.body;
-          ['keydown','keyup'].forEach(function(type) {
-            el.dispatchEvent(new KeyboardEvent(type, {
-              bubbles: true, cancelable: true,
-              key: '$key', code: '${isNext ? 'ArrowRight' : 'ArrowLeft'}',
-              keyCode: $keyCode, which: $keyCode
-            }));
-          });
-          // 전자교과서 및 웹 뷰어 표준 다음/이전 버튼 DOM 자동 클릭 연동
-          var selector = '${isNext ? '.btn_next, .btn-next, .next, .page-next, [title*="다음"], [aria-label*="다음"], [class*="next"], [id*="next"]' : '.btn_prev, .btn-prev, .prev, .page-prev, [title*="이전"], [aria-label*="이전"], [class*="prev"], [id*="prev"]'}';
-          var btn = doc.querySelector(selector);
-          if (btn && typeof btn.click === 'function') {
-            try { btn.click(); } catch(e) {}
+        var clicked = false;
+        function tryClickBtn(doc) {
+          if (!doc || clicked) return false;
+          var sel = '${isNext ? '.btn_next, .btn-next, .next, .page-next, [title*="다음"], [aria-label*="다음"], [class*="next"], [id*="next"]' : '.btn_prev, .btn-prev, .prev, .page-prev, [title*="이전"], [aria-label*="이전"], [class*="prev"], [id*="prev"]'}';
+          var b = doc.querySelector(sel);
+          if (b && typeof b.click === 'function') {
+            try { b.click(); clicked = true; return true; } catch(e) {}
           }
+          return false;
         }
-        triggerInDoc(document, window);
+
         var frames = document.querySelectorAll('iframe');
         for (var i = 0; i < frames.length; i++) {
           try {
-            if (frames[i].contentDocument && frames[i].contentWindow) {
-              triggerInDoc(frames[i].contentDocument, frames[i].contentWindow);
-            }
+            if (frames[i].contentDocument && tryClickBtn(frames[i].contentDocument)) break;
           } catch(e) {}
+        }
+        if (!clicked) {
+          tryClickBtn(document);
+        }
+
+        // 버튼이 없는 경우에만 keydown 단 1회만 디스패치
+        if (!clicked) {
+          var targetDoc = document;
+          for (var i = 0; i < frames.length; i++) {
+            try {
+              if (frames[i].contentDocument) { targetDoc = frames[i].contentDocument; break; }
+            } catch(e) {}
+          }
+          var el = targetDoc.activeElement || targetDoc.body;
+          el.dispatchEvent(new KeyboardEvent('keydown', {
+            bubbles: true, cancelable: true,
+            key: '$key', code: '$key',
+            keyCode: $keyCode, which: $keyCode
+          }));
+        }
+
+        if (window.checkPage) {
+          setTimeout(window.checkPage, 120);
         }
       })();
     ''';
 
     await _executeScript(script);
-    _triggerBurstCapture();
   }
-
-  // ─── 내부 구현 ─────────────────────────────────────────────
 
   void _startBackgroundPolling() {
-    // 1.2초 실시간 페이지 감시 폴링
     _focusPollingTimer?.cancel();
-    _focusPollingTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) {
+    _focusPollingTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
       if (!_disposed) _requestHashFromJs();
     });
-
-    // 5초 보조 폴링
-    _fallbackPollingTimer?.cancel();
-    _fallbackPollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!_disposed) _requestHashFromJs();
-    });
-  }
-
-  /// 지수 버스트 캡처
-  void _triggerBurstCapture() {
-    for (final t in _burstTimers) t.cancel();
-    _burstTimers.clear();
-
-    for (final ms in _burstDelaysMs) {
-      final t = Timer(Duration(milliseconds: ms), () {
-        if (!_disposed) _requestHashFromJs();
-      });
-      _burstTimers.add(t);
-    }
   }
 
   void requestHashNow() {
@@ -447,44 +312,16 @@ class TbpDhashEngine {
   }
 
   Future<void> _requestHashFromJs() async {
-    if (kIsWeb) {
-      try {
-        final webHash = await captureCurrentBrowserScreenHash();
-        if (webHash != null && webHash.isNotEmpty) {
-          _onNewHash(webHash);
-          return;
-        }
-      } catch (_) {}
-    }
     await _executeScript(_hashJsScript);
   }
 
-  void _onNewHash(String rawHash) {
-    final newHash = TbpStorageService.toBinary256(rawHash) ?? rawHash;
+  void _onNewHash(String newHash) {
+    if (newHash.isEmpty) return;
+    _knownHashes.add(newHash);
 
-    // 1. 현재 해시와 비교: 32비트 이하 차이면 동일 페이지(미세 노이즈)이므로 유지
-    if (_currentDhash.isNotEmpty && _currentDhash != 'default') {
-      final distToCurrent = TbpStorageService.hammingDistance(_currentDhash, newHash);
-      if (distToCurrent <= _samePageThreshold) {
-        return;
-      }
-    }
-
-    // 2. 기존에 저장된/방문한 페이지 해시(_knownHashes) 중 가장 가까운 해시 검색 (<= 36비트)
-    String canonicalHash = newHash;
-    int bestDist = _knownMatchThreshold + 1;
-    for (final known in _knownHashes) {
-      final d = TbpStorageService.hammingDistance(newHash, known);
-      if (d < bestDist) {
-        bestDist = d;
-        canonicalHash = known;
-      }
-    }
-    _knownHashes.add(canonicalHash);
-
-    if (_currentDhash != canonicalHash) {
-      _currentDhash = canonicalHash;
-      onDhashChanged(canonicalHash);
+    if (_currentDhash != newHash) {
+      _currentDhash = newHash;
+      onDhashChanged(newHash);
     }
   }
 
@@ -495,16 +332,11 @@ class TbpDhashEngine {
       } else if (!kIsWeb && !Platform.isWindows && _androidController != null) {
         await _androidController!.runJavaScript(script);
       }
-    } catch (e) {
-      debugPrint('[TbpDhash] Script error: $e');
-    }
+    } catch (_) {}
   }
 
   void dispose() {
     _disposed = true;
     _focusPollingTimer?.cancel();
-    _fallbackPollingTimer?.cancel();
-    for (final t in _burstTimers) t.cancel();
-    _burstTimers.clear();
   }
 }

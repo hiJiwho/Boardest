@@ -191,10 +191,10 @@
         <div class="dl-package-item">
           <div>
             <div class="package-name">🖥️ Pro for Windows (온라인 자동 설치기)</div>
-            <div class="package-desc">초경량 온라인 설치 도구 (~570KB) · 자동 업데이트 및 바탕화면 바로가기 생성</div>
+            <div class="package-desc">초경량 통합 온라인 설치 도구 (~650KB) · 자동 업데이트 및 바탕화면 바로가기 생성</div>
           </div>
           <div class="btn-row">
-            <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-installer.exe" class="m3-btn m3-btn-filled">온라인 설치기 (.exe) 다운로드</a>
+            <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.exe" class="m3-btn m3-btn-filled">온라인 설치기 (boardest-teacher.exe) 다운로드</a>
           </div>
         </div>
 
@@ -206,7 +206,7 @@
           </div>
           <div class="btn-row">
             <a href="https://boardest-teacher.web.app/lite/" target="_blank" class="m3-btn m3-btn-outlined">Lite 웹 바로 열기</a>
-            <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-lite.apk" class="m3-btn m3-btn-filled">Lite APK 다운로드</a>
+            <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.apk" class="m3-btn m3-btn-filled">교사용 APK 다운로드</a>
           </div>
         </div>
       </div>
@@ -245,11 +245,22 @@
           <!-- 3. Pro for Windows (온라인 자동 설치기) -->
           <div class="dl-package-item">
             <div>
-              <div class="package-name">🖥️ Pro for Windows</div>
-              <div class="package-desc">윈도우 전자칠판 (원클릭 자동 설치 마법사)</div>
+              <div class="package-name">🖥️ Pro for Windows (Full)</div>
+              <div class="package-desc">윈도우 전자칠판 풀버전 (원클릭 자동 설치 마법사)</div>
             </div>
             <div class="btn-row">
-              <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-installer.exe" class="m3-btn m3-btn-filled">온라인 설치기 (.exe) 받기</a>
+              <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.exe" class="m3-btn m3-btn-filled">온라인 설치기 (boardest-class.exe) 받기</a>
+            </div>
+          </div>
+
+          <!-- 4. Class Lite for Windows (온라인 자동 설치기) -->
+          <div class="dl-package-item">
+            <div>
+              <div class="package-name">⚡ Lite for Windows (초경량)</div>
+              <div class="package-desc">저사양 전자칠판 전용 초경량 패키지 (빠른 부팅 / 판서 / 시간표)</div>
+            </div>
+            <div class="btn-row">
+              <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.exe" class="m3-btn m3-btn-filled">온라인 설치기 (boardest-class-lite.exe) 받기</a>
             </div>
           </div>
         </div>
@@ -286,7 +297,7 @@
               <div class="package-desc">일반 창틀 탑재 클라우드 전용 앱 (원클릭 자동 설치 마법사)</div>
             </div>
             <div class="btn-row">
-              <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud-installer.exe" class="m3-btn m3-btn-filled">온라인 설치기 (.exe) 받기</a>
+              <a href="https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.exe" class="m3-btn m3-btn-filled">온라인 설치기 (boardest-cloud.exe) 받기</a>
             </div>
           </div>
         </div>
@@ -356,13 +367,13 @@
       const link = document.getElementById('recommendedLink');
 
       if (isWin) {
-        osText.innerText = '🖥️ Windows PC 환경 감지 — 교사용은 초경량 온라인 설치 도구(.exe)를 추천합니다.';
-        link.href = 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-installer.exe';
-        link.innerText = '교사용 온라인 설치기 다운로드';
+        osText.innerText = '🖥️ Windows PC 환경 감지 — 초경량 통합 온라인 설치 도구(installer.exe)를 추천합니다.';
+        link.href = 'https://github.com/hiJiwho/Boardest/releases/latest/download/installer.exe';
+        link.innerText = '윈도우 통합 온라인 설치기 다운로드';
       } else if (isAndroid) {
-        osText.innerText = '📱 Android 모바일/태블릿 감지 — 모바일 현장용 Teacher Lite APK를 추천합니다.';
-        link.href = 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-lite.apk';
-        link.innerText = 'Teacher Lite APK 받기';
+        osText.innerText = '📱 Android 모바일/태블릿 감지 — Android 전용 통합 APK를 추천합니다.';
+        link.href = 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk';
+        link.innerText = 'Boardest APK 받기';
       } else {
         osText.innerText = '🌐 웹 브라우저 환경 감지 — 무설치 웹 링크로 바로 이용하실 수 있습니다.';
         link.href = 'https://boardest-teacher.web.app';

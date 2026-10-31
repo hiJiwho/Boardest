@@ -437,7 +437,14 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
     });
   }
 
+  DateTime? _lastNavigateTime;
+
   void _navigatePage(bool isNext) {
+    final now = DateTime.now();
+    if (_lastNavigateTime != null && now.difference(_lastNavigateTime!).inMilliseconds < 450) {
+      return; // 450ms 디바운스로 2페이지 연속 넘어감 차단
+    }
+    _lastNavigateTime = now;
     _dhashEngine.navigatePage(isNext: isNext);
     _showFeedback(isNext ? '다음 슬라이드 ▶' : '◀ 이전 슬라이드');
   }

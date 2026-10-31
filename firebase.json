@@ -57,6 +57,66 @@
           "type": 302
         },
         {
+          "source": "/installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/installer.exe",
+          "type": 302
+        },
+        {
+          "source": "/installer",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/installer.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-installer.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-class.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-class-lite.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-teacher.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-cloud.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-teacher-uninstaller.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-uninstaller.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-teacher-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-class-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-class-lite-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-cloud-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.exe",
+          "type": 302
+        },
+        {
           "source": "/boardest-teacher.msi",
           "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.msi",
           "type": 302
@@ -290,6 +350,66 @@
         {
           "source": "/student/**",
           "destination": "https://boardest-student.web.app",
+          "type": 302
+        },
+        {
+          "source": "/installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/installer.exe",
+          "type": 302
+        },
+        {
+          "source": "/installer",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/installer.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-installer.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-class.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-class-lite.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-teacher.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-cloud.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-teacher-uninstaller.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-uninstaller.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-teacher-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-class-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-class-lite-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-cloud-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.exe",
           "type": 302
         },
         {
@@ -883,6 +1003,66 @@
         }
       ],
       "redirects": [
+        {
+          "source": "/installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/installer.exe",
+          "type": 302
+        },
+        {
+          "source": "/installer",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/installer.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-installer.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-class.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-class-lite.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-teacher.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-cloud.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-teacher-uninstaller.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-uninstaller.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-teacher-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-class-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-class-lite-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.exe",
+          "type": 302
+        },
+        {
+          "source": "/boardest-cloud-installer.exe",
+          "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.exe",
+          "type": 302
+        },
         {
           "source": "/boardest-class-lite.apk",
           "destination": "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-class-lite.apk",
