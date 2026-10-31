@@ -28,44 +28,47 @@ namespace Boardest.Installer {
 
         [STAThread]
         public static void Main(string[] args) {
-            // 1. In-Memory Assembly Resolver for WebView2 Core and WinForms DLLs
-            AppDomain.CurrentDomain.AssemblyResolve += (sender, resolveArgs) => {
-                string resName = null;
-                if (resolveArgs.Name.StartsWith("Microsoft.Web.WebView2.Core")) resName = "Microsoft.Web.WebView2.Core.dll";
-                else if (resolveArgs.Name.StartsWith("Microsoft.Web.WebView2.WinForms")) resName = "Microsoft.Web.WebView2.WinForms.dll";
-                if (resName != null) {
-                    using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resName)) {
-                        if (stream != null) {
-                            byte[] data = new byte[stream.Length];
-                            stream.Read(data, 0, data.Length);
-                            return Assembly.Load(data);
-                        }
-                    }
-                }
-                return null;
-            };
-
-            // 2. Extract Native WebView2Loader.dll to Temp and Add to DLL search path
+            string tempDir = Path.Combine(Path.GetTempPath(), "BoardestInstallerLib");
             try {
-                string tempDir = Path.Combine(Path.GetTempPath(), "BoardestInstallerLib");
                 Directory.CreateDirectory(tempDir);
-                string loaderPath = Path.Combine(tempDir, "WebView2Loader.dll");
-                using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("WebView2Loader.dll")) {
-                    if (stream != null) {
-                        using (var fs = new FileStream(loaderPath, FileMode.Create, FileAccess.Write)) {
-                            stream.CopyTo(fs);
-                        }
-                    }
-                }
+                ExtractResourceToFile("WebView2Loader.dll", Path.Combine(tempDir, "WebView2Loader.dll"));
+                ExtractResourceToFile("Microsoft.Web.WebView2.Core.dll", Path.Combine(tempDir, "Microsoft.Web.WebView2.Core.dll"));
+                ExtractResourceToFile("Microsoft.Web.WebView2.WinForms.dll", Path.Combine(tempDir, "Microsoft.Web.WebView2.WinForms.dll"));
                 SetDllDirectory(tempDir);
             } catch (Exception ex) {
                 Debug.WriteLine("Native loader extract warning: " + ex.Message);
             }
 
-            // 3. Launch Application
+            AppDomain.CurrentDomain.AssemblyResolve += (sender, resolveArgs) => {
+                try {
+                    if (resolveArgs.Name.StartsWith("Microsoft.Web.WebView2.Core")) {
+                        string p = Path.Combine(tempDir, "Microsoft.Web.WebView2.Core.dll");
+                        if (File.Exists(p)) return Assembly.LoadFrom(p);
+                    } else if (resolveArgs.Name.StartsWith("Microsoft.Web.WebView2.WinForms")) {
+                        string p = Path.Combine(tempDir, "Microsoft.Web.WebView2.WinForms.dll");
+                        if (File.Exists(p)) return Assembly.LoadFrom(p);
+                    }
+                } catch { }
+                return null;
+            };
+
+            // Launch Application
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             RunInstaller(args);
+        }
+
+        public static void ExtractResourceToFile(string resName, string destPath) {
+            if (File.Exists(destPath)) {
+                try { File.Delete(destPath); } catch { return; }
+            }
+            using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream(resName)) {
+                if (s != null) {
+                    using (var fs = new FileStream(destPath, FileMode.Create, FileAccess.Write)) {
+                        s.CopyTo(fs);
+                    }
+                }
+            }
         }
 
         private static void RunInstaller(string[] args) {
