@@ -1,3 +1,18 @@
+## 🚀 [정식 릴리즈] Boardest v5.4.0 (2026-10-31)
+- **Windows 통합 온라인 설치 마법사 & 원격 설치 엔진 (`boardest-windows-installer.web.app`) 구축**:
+  - 단일 온라인 설치 파일(`BoardestInstaller.cs`)로 통합하고, 실행 시 자신의 파일명(`boardest-class`, `boardest-teacher`, `boardest-cloud`)을 감지하여 각각 교실용, 교사용, 클라우드용 앱 설치 모드로 자동 진입하며 그 외 이름일 경우 3종 앱 선택 화면 표시.
+  - 설치 로직(인증서 설치, GitHub 최신 릴리즈 패키지 다운로드, ZIP 압축 해제/파일 복사, MSIX 배포, 바로가기 및 레지스트리 등록)을 `https://boardest-windows-installer.web.app` (`infra/windows_installer_web/index.html`)에 탑재하고 WebView2로 임베딩.
+  - 실행 시 반드시 관리자 권한(`requireAdministrator` 매니페스트 및 런타임 `runas` 권한 상승)을 획득하도록 강제.
+  - **엄격한 URL 출처 보안 가드 (`IsTrustedOrigin`)**: 오직 `https://boardest-windows-installer.web.app` 출처에서만 WebView2 네비게이션 및 호스트 명령(`WebMessageReceived`)을 허용하고 다른 모든 URL의 명령/이동을 즉시 차단.
+  - 네이티브 창틀(`FixedSingle`) 적용 및 설치 중 닫기(`SC_CLOSE`) 비활성화로 **최소화만 가능**하도록 제어하며, **1단계: 인증서 설치(Teacher 제외) → 2단계: 다운로드 → 3단계: 앱 복사/설치**의 단계별 진행률(`0% ~ 100%`) UI 적용.
+- **TBP 스마트교과서 & Cloud 드라이브 연동 개선**:
+  - `TbpStorageService._resolveCanonicalKey` 해밍 거리 임계값을 36비트에서 **18비트**(`bestDist = 19`)로 조정하여 `TbpDhashEngine`과 일치시키고 서로 다른 페이지 간 판서/핫스팟 덮어쓰기 방지.
+  - `TbpViewerRoute`의 `TbpDhashEngine`에 `onWebContextMenu` 콜백을 연결하여 터치/스마트 조작 모드에서도 우클릭 및 롱프레스 시 핫스팟 추가 모달이 즉시 열리도록 개선하고, `HTMLP` 모드에서는 `+ 핫스팟` 버튼을 숨김 처리.
+  - 포인터 껍데기(`.tbp.bst`, `.htmlp.bst`) 생성/가져오기 시 `folderId`를 함께 기록하고 로드/내보내기/연쇄삭제 시 우선 참조하도록 최적화하여 불필요한 Drive 폴더 조회 제거.
+  - 교사용 클라우드 탐색기(`BstCloudDriveViewer`)의 `.tbp.bst` / `.htmlp.bst` 필터링·뱃지·백업 내보내기 메뉴 지원 추가 및 교실용 클라우드(`BoardestCloudView`)에서 32자리 Hex 실체 폴더 노출 차단.
+
+---
+
 ## 🚀 [정식 릴리즈] Boardest v5.3.6 (2026-10-29)
 - **TBP dHash 민감도 대폭 상향 & 16:9 다운샘플링 평탄화**:
   - `_samePageThreshold`를 32비트에서 **14비트**로 상향하여, 교과서 본문의 미세한 페이지 전환도 즉시 감지되도록 개편.

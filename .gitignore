@@ -32,6 +32,7 @@ infra/*
 !infra/class_lite_web/
 !infra/cloud_connect_web/
 !infra/student_web/
+!infra/windows_installer_web/
 
 # Release binaries are published as GitHub release assets, not source files.
 infra/download_web/*.appx

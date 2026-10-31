@@ -1142,6 +1142,8 @@ class BstCloudService {
             final lower = name.toLowerCase();
             if (lower.endsWith('.file.pen') || lower == 'classroom_mappings.json' || lower == 'subject_mappings.json') continue;
             if (lower.endsWith('.json') && !lower.endsWith('.pen.json')) continue;
+            // bst-tbp 내부의 32자리 Hex 실체 저장 폴더는 껍데기 파일(.tbp.bst / .htmlp.bst)로 표시되므로 사용자 목록에서 숨김
+            if (RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(name.trim())) continue;
             final isFolder = f['mimeType'] == 'application/vnd.google-apps.folder';
             final mimeType = (isFolder && (folderName == 'bst-tbs' || folderName == 'bst-textbookpro' || folderName == 'bst-tbp'))
                 ? 'application/x-bst-tbp-folder'
@@ -2485,14 +2487,16 @@ class BstCloudService {
       final shellFileId = shellFile.id;
       if (shellFileId.isEmpty) return false;
 
-      // 1. 껍데기 파일에서 32자리 ID 확인
+      // 1. 껍데기 파일에서 32자리 ID 및 folderId 확인
       String? target32Id;
+      String? directFolderId;
       try {
         final content = await readDriveFileText(shellFileId, token);
         if (content != null && content.isNotEmpty) {
           final parsed = jsonDecode(content);
           if (parsed is Map) {
             target32Id = (parsed['id'] ?? parsed['ID'])?.toString();
+            directFolderId = parsed['folderId']?.toString().trim();
           }
         }
       } catch (_) {}
@@ -2500,8 +2504,10 @@ class BstCloudService {
       // 2. bst-save 껍데기 파일 삭제
       final deletedShell = await deleteDriveFile(shellFileId);
 
-      // 3. 대상 32자리 ID가 있으면 bst-tbp 실체 폴더 연쇄 삭제
-      if (target32Id != null && target32Id.isNotEmpty) {
+      // 3. 실체 폴더 ID 또는 대상 32자리 ID가 있으면 bst-tbp 실체 폴더 연쇄 삭제
+      if (directFolderId != null && directFolderId.isNotEmpty && !directFolderId.startsWith('local_')) {
+        await deleteDriveFile(directFolderId);
+      } else if (target32Id != null && target32Id.isNotEmpty) {
         final realFolder = await findDriveFolderByName(target32Id, '', token);
         if (realFolder != null && realFolder.isNotEmpty) {
           await deleteDriveFile(realFolder);

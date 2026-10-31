@@ -105,7 +105,26 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
     _annotationController.toolMode = _tool;
     _annotationController.eraseEntireStroke = _eraseEntireStroke;
     _annotationController.eraserSize = _eraserSize;
-    _dhashEngine = TbpDhashEngine(onDhashChanged: _onDhashDetected);
+    _dhashEngine = TbpDhashEngine(
+      onDhashChanged: _onDhashDetected,
+      onWebContextMenu: (rx, ry) {
+        if (!mounted || widget.mode == TbpViewerMode.htmlp) return;
+        TbpHotspotOverlay.showAddHotspotModal(
+          context,
+          rx.clamp(0.05, 0.92),
+          ry.clamp(0.08, 0.88),
+          _tbpFolderPath,
+          _currentDhash,
+          _currentHotspots,
+          (updated) {
+            if (!mounted) return;
+            setState(() {
+              _currentHotspots = updated;
+            });
+          },
+        );
+      },
+    );
     _loadPackageOrUrl();
   }
 
@@ -935,41 +954,43 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                 tooltip: '다음 페이지 (→ ArrowRight / PgDn)',
                 onPressed: () => _navigatePage(true),
               ),
-              SizedBox(width: 8 * s),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.add_location_alt_rounded, size: 16),
-                label: Text(
-                  '+ 핫스팟',
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 12 * s,
-                    fontWeight: FontWeight.bold,
+              if (widget.mode == TbpViewerMode.tbp) ...[
+                SizedBox(width: 8 * s),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.add_location_alt_rounded, size: 16),
+                  label: Text(
+                    '+ 핫스팟',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 12 * s,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2EC4B6),
+                    foregroundColor: Colors.black,
+                    padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * s)),
+                  ),
+                  onPressed: () {
+                    final offsetCount = _currentHotspots.length;
+                    final rx = (0.2 + (offsetCount % 5) * 0.14).clamp(0.1, 0.88);
+                    final ry = (0.22 + (offsetCount ~/ 5) * 0.14).clamp(0.15, 0.82);
+                    TbpHotspotOverlay.showAddHotspotModal(
+                      context,
+                      rx,
+                      ry,
+                      _tbpFolderPath,
+                      _currentDhash,
+                      _currentHotspots,
+                      (updated) {
+                        setState(() {
+                          _currentHotspots = updated;
+                        });
+                      },
+                    );
+                  },
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2EC4B6),
-                  foregroundColor: Colors.black,
-                  padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * s)),
-                ),
-                onPressed: () {
-                  final offsetCount = _currentHotspots.length;
-                  final rx = (0.2 + (offsetCount % 5) * 0.14).clamp(0.1, 0.88);
-                  final ry = (0.22 + (offsetCount ~/ 5) * 0.14).clamp(0.15, 0.82);
-                  TbpHotspotOverlay.showAddHotspotModal(
-                    context,
-                    rx,
-                    ry,
-                    _tbpFolderPath,
-                    _currentDhash,
-                    _currentHotspots,
-                    (updated) {
-                      setState(() {
-                        _currentHotspots = updated;
-                      });
-                    },
-                  );
-                },
-              ),
+              ],
             ],
           ),
         ),

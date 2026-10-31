@@ -268,7 +268,12 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
 
   Widget _buildItemMenu(Map<String, dynamic> file, double s) {
     final name = (file['name'] ?? '').toString().toLowerCase();
-    final isTbpOrHtmlp = name.endsWith('.tbp') || name.endsWith('.htmlp') || name.endsWith('.bsttbp') || name.endsWith('.canva.bst');
+    final isTbpOrHtmlp = name.endsWith('.tbp') ||
+        name.endsWith('.tbp.bst') ||
+        name.endsWith('.htmlp') ||
+        name.endsWith('.htmlp.bst') ||
+        name.endsWith('.bsttbp') ||
+        name.endsWith('.canva.bst');
 
     return PopupMenuButton<String>(
       tooltip: '더보기',
@@ -375,6 +380,7 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
     final source = (file['source'] ?? '').toString();
     if (source == 'tbp' || source == 'canva' || source == 'htmlp') return true;
     if (mimeType == 'application/x-bst-tbp-folder' || mimeType == 'application/x-bst-htmlp-folder') return true;
+    if (name.endsWith('.tbp.bst') || name.endsWith('.htmlp.bst')) return true;
     if (mimeType == 'application/vnd.google-apps.folder' &&
         (name.endsWith('.tbp') || name.endsWith('.bsttbp') || name.endsWith('.htmlp') || name.endsWith('.canva.bst') || name.endsWith('.bstcanva'))) {
       return true;
@@ -403,15 +409,29 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
             !name.endsWith('.bstpen') &&
             !name.endsWith('.bsttbp') &&
             !name.endsWith('.tbp') &&
+            !name.endsWith('.tbp.bst') &&
             !name.endsWith('.htmlp') &&
+            !name.endsWith('.htmlp.bst') &&
             !name.contains('canva');
       }
       if (_categoryFilter == '📐 TBP 교과서' || _categoryFilter == 'TBP') {
-        final isTbp = isTbpFolder || name.endsWith('.bsttbp') || name.endsWith('.tbp');
+        final isHtmlpItem = file['source'] == 'htmlp' ||
+            file['source'] == 'canva' ||
+            name.endsWith('.htmlp') ||
+            name.endsWith('.htmlp.bst') ||
+            name.endsWith('.canva') ||
+            name.endsWith('.canva.bst');
+        if (isHtmlpItem) return false;
+        final isTbp = isTbpFolder || name.endsWith('.bsttbp') || name.endsWith('.tbp') || name.endsWith('.tbp.bst');
         return isTbp;
       }
       if (_categoryFilter == '🌐 HTMLP 교안' || _categoryFilter == 'HTMLP') {
-        final isHtmlp = file['source'] == 'htmlp' || file['source'] == 'canva' || name.endsWith('.htmlp') || name.endsWith('.canva') || name.endsWith('.canva.bst');
+        final isHtmlp = file['source'] == 'htmlp' ||
+            file['source'] == 'canva' ||
+            name.endsWith('.htmlp') ||
+            name.endsWith('.htmlp.bst') ||
+            name.endsWith('.canva') ||
+            name.endsWith('.canva.bst');
         return isHtmlp;
       }
 
@@ -744,7 +764,7 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
                 ),
                 SizedBox(height: 8 * s),
                 Text(
-                  name,
+                  _formatDisplayTitle(name),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.notoSansKr(
@@ -915,9 +935,21 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
     );
   }
 
+  String _formatDisplayTitle(String name) {
+    return name
+        .replaceAll(
+          RegExp(r'\.(tbp\.bst|htmlp\.bst|canva\.bst|web\.bst|bsttbp|tbp|htmlp|bstcanva)$', caseSensitive: false),
+          '',
+        )
+        .trim();
+  }
+
   _FileMeta _resolveFileMeta(String name, bool isFolder, {bool isTbpFolder = false}) {
     final lower = name.toLowerCase();
-    if (isTbpFolder || lower.endsWith('.tbp') || lower.endsWith('.bsttbp')) {
+    if (lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva') || lower.endsWith('.canva.bst') || lower.endsWith('.bstcanva')) {
+      return _FileMeta(const Color(0xFF00C4CC), Icons.slideshow_rounded, 'HTMLP');
+    }
+    if (isTbpFolder || lower.endsWith('.tbp') || lower.endsWith('.tbp.bst') || lower.endsWith('.bsttbp')) {
       return _FileMeta(const Color(0xFF7F5AF0), Icons.auto_stories_rounded, 'TBP');
     }
     if (isFolder) {
@@ -925,9 +957,6 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
     }
     if (lower.endsWith('.pdf')) {
       return _FileMeta(const Color(0xFFEF4565), Icons.picture_as_pdf_rounded, 'PDF');
-    }
-    if (lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva') || lower.endsWith('.canva.bst') || lower.endsWith('.bstcanva')) {
-      return _FileMeta(const Color(0xFF00C4CC), Icons.slideshow_rounded, 'HTMLP');
     }
     if (lower.endsWith('.ppt') || lower.endsWith('.pptx')) {
       return _FileMeta(const Color(0xFFFF8906), Icons.slideshow_rounded, 'PPT');

@@ -316,14 +316,20 @@ class TbpStorageService {
     try {
       final token = BstCloudService.instance.activeToken ?? '';
       String actualFolderId = driveFolderId;
+      if (fallbackShell != null &&
+          fallbackShell['folderId'] != null &&
+          fallbackShell['folderId'].toString().trim().isNotEmpty &&
+          !fallbackShell['folderId'].toString().startsWith('local_')) {
+        actualFolderId = fallbackShell['folderId'].toString().trim();
+      }
       final vPath = 'drive_tbp_$driveFolderId';
       String? rawJson = _webJsonCache['$vPath::info'] ?? _webJsonCache['$rawKey::info'];
 
-      // 1. 만약 driveFolderId가 32자리 고유 ID(Hex) 형태인 경우 실체 Google Drive 폴더 검색
-      if (rawJson == null && RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(driveFolderId)) {
+      // 1. 만약 actualFolderId가 32자리 고유 ID(Hex) 형태인 경우 실체 Google Drive 폴더 검색
+      if (rawJson == null && RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(actualFolderId)) {
         if (token.isNotEmpty) {
-          var realFolder = await BstCloudService.instance.findDriveFolderByName(driveFolderId, '', token);
-          realFolder ??= await BstCloudService.instance.findDriveFolderByName(driveFolderId, 'appDataFolder', token);
+          var realFolder = await BstCloudService.instance.findDriveFolderByName(actualFolderId, '', token);
+          realFolder ??= await BstCloudService.instance.findDriveFolderByName(actualFolderId, 'appDataFolder', token);
           if (realFolder != null && realFolder.isNotEmpty) {
             actualFolderId = realFolder;
           }
@@ -345,16 +351,20 @@ class TbpStorageService {
           if (fileText != null && fileText.trim().isNotEmpty) {
             final parsed = jsonDecode(fileText);
             if (parsed is Map<String, dynamic>) {
+              final directFolderId = (parsed['folderId'] ?? '').toString().trim();
               final target32Id = (parsed['id'] ?? parsed['ID'] ?? '').toString().trim();
-              if (target32Id.isNotEmpty) {
-                var realFolder = await BstCloudService.instance.findDriveFolderByName(target32Id, '', token);
+              String? realFolder = (directFolderId.isNotEmpty && !directFolderId.startsWith('local_'))
+                  ? directFolderId
+                  : null;
+              if (realFolder == null && target32Id.isNotEmpty) {
+                realFolder = await BstCloudService.instance.findDriveFolderByName(target32Id, '', token);
                 realFolder ??= await BstCloudService.instance.findDriveFolderByName(target32Id, 'appDataFolder', token);
-                if (realFolder != null && realFolder.isNotEmpty) {
-                  actualFolderId = realFolder;
-                  for (final fileName in ['manifest.json', 'meta.bstsave', 'info.json']) {
-                    rawJson = await BstCloudService.instance.fetchTbpFolderFileText(actualFolderId, fileName);
-                    if (rawJson != null && rawJson.trim().isNotEmpty) break;
-                  }
+              }
+              if (realFolder != null && realFolder.isNotEmpty) {
+                actualFolderId = realFolder;
+                for (final fileName in ['manifest.json', 'meta.bstsave', 'info.json']) {
+                  rawJson = await BstCloudService.instance.fetchTbpFolderFileText(actualFolderId, fileName);
+                  if (rawJson != null && rawJson.trim().isNotEmpty) break;
                 }
               }
 
@@ -650,7 +660,7 @@ class TbpStorageService {
     return result.toList();
   }
 
-  /// 해밍 거리 오차 범위(<= 36 bits) 내의 기존 저장된 페이지 키를 찾아 반환
+  /// 해밍 거리 오차 범위(<= 18 bits) 내의 기존 저장된 페이지 키를 찾아 반환
   Future<String> _resolveCanonicalKey(String tbpFolderPath, String rawDhash) async {
     final exactKey = sanitizeKey(rawDhash);
     if (rawDhash == 'default' || toBinary256(rawDhash) == null) {
@@ -658,7 +668,7 @@ class TbpStorageService {
     }
     final knownList = await getKnownPageHashes(tbpFolderPath);
     String? bestKey;
-    int bestDist = 37; // 36비트 이하일 때만 동일 페이지로 매칭
+    int bestDist = 19; // 18비트 이하일 때만 동일 페이지로 매칭 (TbpDhashEngine._knownMatchThreshold와 일치)
     for (final known in knownList) {
       final d = hammingDistance(rawDhash, known);
       if (d < bestDist) {

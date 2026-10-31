@@ -1723,6 +1723,7 @@ class _TeacherViewState extends State<TeacherView> {
         MaterialPageRoute(
           builder: (_) => TbpViewerRoute(
             tbpFilePath: path,
+            mode: TbpViewerMode.htmlp,
             scaleFactor: _settings.scaleFactor,
           ),
         ),

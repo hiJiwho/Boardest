@@ -49,6 +49,9 @@
         ],
         "boardest-student": [
           "boardest-student"
+        ],
+        "boardest-windows-installer": [
+          "boardest-windows-installer"
         ]
       }
     },

@@ -1080,6 +1080,33 @@
           "destination": "/index.html"
         }
       ]
+    },
+    {
+      "target": "boardest-windows-installer",
+      "public": "infra/windows_installer_web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            }
+          ]
+        }
+      ],
+      "cleanUrls": true,
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
     }
   ]
 }

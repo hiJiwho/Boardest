@@ -1,8 +1,8 @@
 # 🤖 Boardest Platform — Core Agent Memory & AI Collaboration Rules
 
-> **Current Platform Version**: `5.3.6` (App: `5.3.6`, Teacher: `5.3.6`, Web: `5.3.6`)  
+> **Current Platform Version**: `5.4.0` (App: `5.4.0`, Teacher: `5.4.0`, Web: `5.4.0`)  
 > **버전 관리 규격**: 버전 변경 이력 및 상세 수정 내역은 [Ver.md](file:///c:/Users/jiwho/Documents/boardest/Ver.md) 파일에 매 작업 완료 시마다 반드시 기록하여 유지합니다.
-> 🚀 **[최신 v5.3.6 기준]**: TBP dHash 민감도 상향(14비트) & 16:9 다운샘플링, 좌우 대형 전용 페이지 넘김 버튼 탑재, TBP 실체 폴더(`bst-tbp`) 탐색기 숨김 및 `.tbp.bst` 바로가기 연쇄 삭제, WebView 임베딩 시 창틀/최소화/닫기 숨김, 시계 중복 버그 해결, 급식 투표 하트 제거, 단발성 1회 출석(24시간 활성 윈도우), 교사 앱 급식 호출 복구, 수행평가(RTDB) 시스템 탑재, 학생용(`apps/boardest_student`) 및 HTML 플러그인 생태계 확장.
+> 🚀 **[최신 v5.4.0 기준]**: Windows 통합 온라인 설치 마법사(`boardest-windows-installer.web.app` 원격 설치 엔진 & 파일명 감지 & 관리자 권한 필수 & URL 출처 보안 가드 & 3단계 퍼센트 UI), TBP dHash 해밍 거리 정합성(18비트) 및 우클릭/롱프레스 핫스팟 모달 연동, `.tbp.bst` / `.htmlp.bst` 클라우드 직결 최적화, 좌우 대형 전용 페이지 넘김 버튼 탑재, TBP 실체 폴더(`bst-tbp`) 탐색기 숨김 및 연쇄 삭제, WebView 임베딩 시 창틀/최소화/닫기 숨김.
 
 ---
 

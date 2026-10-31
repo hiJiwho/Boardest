@@ -1,0 +1,1513 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Boardest 통합 온라인 설치 마법사 (boardest-windows-installer)</title>
+  <style>
+    :root {
+      --bg: #0B0C10;
+      --card: #16161A;
+      --card-border: rgba(255, 255, 255, 0.09);
+      --teal: #00F5D4;
+      --teal-glow: rgba(0, 245, 212, 0.25);
+      --purple: #7F5AF0;
+      --purple-glow: rgba(127, 90, 240, 0.25);
+      --text: #FFFFFE;
+      --text-muted: rgba(255, 255, 255, 0.65);
+      --green: #2CB67D;
+      --red: #EF4565;
+      --amber: #FFB703;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Main Container */
+    .container {
+      flex: 1;
+      padding: 18px 22px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Hero / Header Section */
+    .hero {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .hero-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .hero-icon-box {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(0, 245, 212, 0.15), rgba(127, 90, 240, 0.25));
+      border: 1px solid var(--teal-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      box-shadow: 0 4px 16px var(--teal-glow);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .hero-icon-box img {
+      width: 38px;
+      height: 38px;
+      object-fit: contain;
+    }
+
+    .hero-info h1 {
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hero-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(0, 245, 212, 0.15);
+      color: var(--teal);
+      border: 1px solid var(--teal-glow);
+      font-weight: 700;
+    }
+
+    .admin-badge {
+      font-size: 10.5px;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(127, 90, 240, 0.2);
+      color: #c4b5fd;
+      border: 1px solid rgba(127, 90, 240, 0.4);
+      font-weight: 700;
+    }
+
+    .hero-info p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    .change-app-btn {
+      padding: 6px 11px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .change-app-btn:hover {
+      background: rgba(0, 245, 212, 0.12);
+      border-color: var(--teal);
+      color: var(--teal);
+    }
+
+    /* Step Views */
+    .step-view {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      animation: fadeIn 0.25s ease;
+      flex: 1;
+      justify-content: space-between;
+      overflow: hidden;
+    }
+
+    .step-view.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Product Selector Cards (Step 0) */
+    .product-select-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .product-card {
+      background: var(--card);
+      border: 1.5px solid var(--card-border);
+      border-radius: 12px;
+      padding: 13px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .product-card:hover {
+      border-color: rgba(0, 245, 212, 0.5);
+      background: rgba(0, 245, 212, 0.05);
+    }
+
+    .product-card.selected {
+      border-color: var(--teal);
+      background: rgba(0, 245, 212, 0.09);
+      box-shadow: 0 4px 18px rgba(0, 245, 212, 0.14);
+    }
+
+    .product-card-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 11px;
+      background: rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 23px;
+      flex-shrink: 0;
+    }
+
+    .product-card-body {
+      flex: 1;
+    }
+
+    .product-card-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 3px;
+    }
+
+    .product-card-tag {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--teal);
+      font-weight: 700;
+    }
+
+    .product-card-desc {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    /* Feature Grid (소개 UI) */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .feature-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 9px 11px;
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+    }
+
+    .feat-icon {
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .feat-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 2px;
+    }
+
+    .feat-desc {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      line-height: 1.3;
+    }
+
+    /* Options Panel */
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .field-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .field-input-box {
+      display: flex;
+      gap: 8px;
+    }
+
+    .field-input {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--card-border);
+      border-radius: 7px;
+      padding: 7px 10px;
+      color: #fff;
+      font-size: 11.5px;
+      outline: none;
+    }
+
+    .chk-group {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .chk-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11.5px;
+      cursor: pointer;
+      color: var(--text);
+    }
+
+    .chk-label input {
+      accent-color: var(--teal);
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+
+    .prompt-box {
+      background: rgba(0, 245, 212, 0.08);
+      border: 1px solid var(--teal-glow);
+      border-radius: 9px;
+      padding: 9px 12px;
+      font-size: 12px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* 3-Stage Progress Section */
+    .stages-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .stage-card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 10px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .stage-card.active {
+      border-color: var(--teal);
+      background: rgba(0, 245, 212, 0.05);
+      box-shadow: 0 0 14px rgba(0, 245, 212, 0.12);
+    }
+
+    .stage-card.done {
+      border-color: rgba(44, 182, 125, 0.45);
+      background: rgba(44, 182, 125, 0.05);
+    }
+
+    .stage-card.skipped {
+      opacity: 0.6;
+      border-style: dashed;
+    }
+
+    .stage-card.error {
+      border-color: var(--red);
+      background: rgba(239, 69, 101, 0.08);
+    }
+
+    .stage-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .stage-title {
+      font-size: 12.5px;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .stage-pct-badge {
+      font-size: 12px;
+      font-weight: 900;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--teal);
+    }
+
+    .stage-card.done .stage-pct-badge {
+      background: rgba(44, 182, 125, 0.2);
+      color: var(--green);
+    }
+
+    .stage-card.skipped .stage-pct-badge {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+    }
+
+    .stage-card.error .stage-pct-badge {
+      background: rgba(239, 69, 101, 0.2);
+      color: var(--red);
+    }
+
+    .stage-sub {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .progress-bar-wrap {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--teal), var(--purple));
+      border-radius: 4px;
+      transition: width 0.2s ease;
+    }
+
+    .stage-card.done .progress-bar-fill {
+      background: var(--green);
+    }
+
+    .stage-card.error .progress-bar-fill {
+      background: var(--red);
+    }
+
+    .log-box {
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 7px 11px;
+      height: 66px;
+      overflow-y: auto;
+      font-family: Consolas, monospace;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.75);
+      line-height: 1.45;
+    }
+
+    /* Success / Finish Section */
+    .success-card {
+      background: var(--card);
+      border: 1px solid rgba(44, 182, 125, 0.35);
+      border-radius: 14px;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 10px;
+      box-shadow: 0 8px 30px rgba(44, 182, 125, 0.15);
+      margin: auto 0;
+    }
+
+    .success-icon {
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      background: rgba(44, 182, 125, 0.15);
+      border: 2px solid var(--green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      color: var(--green);
+      animation: pulseGreen 1.8s infinite;
+    }
+
+    @keyframes pulseGreen {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(44, 182, 125, 0.4); }
+      50% { box-shadow: 0 0 0 12px rgba(44, 182, 125, 0); }
+    }
+
+    .success-title {
+      font-size: 17px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .success-desc {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Action Buttons */
+    .btn-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .btn {
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--teal), #00c9ad);
+      color: #000;
+      box-shadow: 0 4px 14px var(--teal-glow);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      border: 1px solid var(--card-border);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.14);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, var(--red), #d42a4a);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(239, 69, 101, 0.3);
+    }
+
+    .pulse {
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.55; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Main Container -->
+  <div class="container">
+
+    <!-- Hero Header -->
+    <div class="hero">
+      <div class="hero-left">
+        <div class="hero-icon-box" id="heroIconBox">
+          <span id="heroEmoji">🎓</span>
+        </div>
+        <div class="hero-info">
+          <h1>
+            <span id="productName">Boardest 통합 온라인 설치</span>
+            <span class="hero-badge" id="productVersion">v5.4.0</span>
+            <span class="admin-badge" id="adminBadge">🛡️ 관리자 권한</span>
+          </h1>
+          <p id="productDesc">실행 파일 이름을 감지하거나 설치할 앱을 선택하여 최신 버전을 설치합니다.</p>
+        </div>
+      </div>
+      <button class="change-app-btn" id="btnChangeApp" style="display:none;" onclick="openProductSelector()">🔄 앱 변경</button>
+    </div>
+
+    <!-- Step 0: Select Product (실행 파일명이 3개 중 하나가 아닐 때 질문 화면) -->
+    <div class="step-view" id="stepSelectProduct">
+      <div style="font-size: 13px; font-weight: 700; color: var(--teal); margin-bottom: 2px;">
+        💡 어떤 Boardest 앱을 설치하시겠습니까? (아래 3개 중 하나를 선택해주세요)
+      </div>
+
+      <div class="product-select-list">
+        <div class="product-card selected" id="prodCardClass" onclick="chooseProductCard('Class')">
+          <div class="product-card-icon">🏫</div>
+          <div class="product-card-body">
+            <div class="product-card-title">
+              <span>Boardest Class (교실 전자칠판용)</span>
+              <span class="product-card-tag">boardest-class</span>
+            </div>
+            <div class="product-card-desc">교실 스마트 전자칠판 대시보드 · 급식/시간표 · 풀스크린 판서 · TBP 뷰어 (MSIX 설치)</div>
+          </div>
+        </div>
+
+        <div class="product-card" id="prodCardTeacher" onclick="chooseProductCard('Teacher')">
+          <div class="product-card-icon">🎓</div>
+          <div class="product-card-body">
+            <div class="product-card-title">
+              <span>Boardest Teacher (교사용 PC / 노트북)</span>
+              <span class="product-card-tag">boardest-teacher</span>
+            </div>
+            <div class="product-card-desc">교무실 PC 및 선생님 개인 노트북 전용 · 수업 자료 관리 · HWP/PPT 오버레이 판서</div>
+          </div>
+        </div>
+
+        <div class="product-card" id="prodCardCloud" onclick="chooseProductCard('Cloud')">
+          <div class="product-card-icon">☁️</div>
+          <div class="product-card-body">
+            <div class="product-card-title">
+              <span>Boardest Cloud (교실 클라우드 전용)</span>
+              <span class="product-card-tag">boardest-cloud</span>
+            </div>
+            <div class="product-card-desc">1초 QR 로그인 · Google Drive 수업자료 및 TBP 전자교과서 열람 전용 앱 (MSIX 설치)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="postToHost('minimize')">창 최소화</button>
+        <button class="btn btn-primary" onclick="confirmProductSelection()">
+          <span>선택한 앱 설치 준비</span> &#8594;
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 1: Ready / Intro (소개 & 설치 확인 UI) -->
+    <div class="step-view active" id="stepReady">
+      <div class="feature-grid" id="featureGrid"></div>
+
+      <div class="panel">
+        <div id="teacherInstallTypeGroup" style="display:none;">
+          <div class="field-label" style="margin-bottom: 5px;">설치 유형 선택 (Teacher 전용)</div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+            <label id="cardFull" onclick="selectScope('full')" style="display:flex; align-items:flex-start; gap:8px; padding:8px 10px; background:rgba(0,245,212,0.08); border:1px solid var(--teal); border-radius:8px; cursor:pointer;">
+              <input type="radio" name="teacherScope" id="radioFull" value="full" checked style="margin-top:2px; accent-color:var(--teal);">
+              <div>
+                <div style="font-size:12px; font-weight:700; color:#fff;">전체 설치 (권장)</div>
+                <div style="font-size:10.5px; color:var(--text-muted); line-height:1.3; margin-top:2px;">메인 앱 + HWP/PPT 오버레이 도구</div>
+              </div>
+            </label>
+            <label id="cardStandalone" onclick="selectScope('standalone')" style="display:flex; align-items:flex-start; gap:8px; padding:8px 10px; background:rgba(255,255,255,0.03); border:1px solid var(--card-border); border-radius:8px; cursor:pointer;">
+              <input type="radio" name="teacherScope" id="radioStandalone" value="standalone" style="margin-top:2px; accent-color:var(--teal);">
+              <div>
+                <div style="font-size:12px; font-weight:700; color:#fff;">단독 설치 (경량형)</div>
+                <div style="font-size:10.5px; color:var(--text-muted); line-height:1.3; margin-top:2px;">교사용 메인 앱 단독 실행 파일만 설치</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div id="dirFieldGroup">
+          <div class="field-label">설치 대상 경로</div>
+          <div class="field-input-box" style="margin-top: 3px;">
+            <input type="text" class="field-input" id="installDirInput" readonly>
+          </div>
+        </div>
+
+        <div class="chk-group" id="shortcutGroup">
+          <label class="chk-label">
+            <input type="checkbox" id="chkDesktopShortcut" checked>
+            <span>바탕화면에 바로가기 생성</span>
+          </label>
+          <label class="chk-label">
+            <input type="checkbox" id="chkStartMenu" checked>
+            <span>시작 메뉴에 프로그램 등록</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="prompt-box" id="promptText">
+        <span>⚡ <strong>설치 안내:</strong> 최신 버전을 온라인으로 다운로드하여 설치합니다.</span>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="postToHost('minimize')">창 최소화</button>
+        <button class="btn btn-primary" id="btnStartInstall" onclick="startInstall()">
+          <span>지금 온라인 설치 시작</span> &#8594;
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: 3-Stage Progress (인증서 설치 -> 다운로드 -> 앱 복사/설치 + 단계별 퍼센트) -->
+    <div class="step-view" id="stepProgress">
+      <div class="stages-container">
+        <!-- 1단계: 인증서 설치 (Teacher 제외) -->
+        <div class="stage-card" id="stageCard1">
+          <div class="stage-header">
+            <div class="stage-title">
+              <span>🔐 1단계: 보안 인증서 설치</span>
+            </div>
+            <span class="stage-pct-badge" id="stagePct1">대기 0%</span>
+          </div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="stageBar1"></div>
+          </div>
+          <div class="stage-sub">
+            <span id="stageStatus1">서명 인증서 확인 대기 중...</span>
+          </div>
+        </div>
+
+        <!-- 2단계: 패키지 온라인 다운로드 -->
+        <div class="stage-card" id="stageCard2">
+          <div class="stage-header">
+            <div class="stage-title">
+              <span>⬇️ 2단계: 최신 패키지 다운로드</span>
+            </div>
+            <span class="stage-pct-badge" id="stagePct2">대기 0%</span>
+          </div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="stageBar2"></div>
+          </div>
+          <div class="stage-sub">
+            <span id="stageStatus2">다운로드 대기 중...</span>
+            <span><strong id="bytesText" style="color:#fff;">0.0 MB / 0.0 MB</strong> · <span id="speedText" style="color:var(--teal);">0.00 MB/s</span></span>
+          </div>
+        </div>
+
+        <!-- 3단계: 앱 복사 (또는 설치) -->
+        <div class="stage-card" id="stageCard3">
+          <div class="stage-header">
+            <div class="stage-title">
+              <span id="stageTitle3">📦 3단계: 앱 복사 및 시스템 설치</span>
+            </div>
+            <span class="stage-pct-badge" id="stagePct3">대기 0%</span>
+          </div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="stageBar3"></div>
+          </div>
+          <div class="stage-sub">
+            <span id="stageStatus3">설치 대기 중...</span>
+            <span id="statusText" style="color:var(--teal); font-weight:700;">전체 진행 준비</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="log-box" id="logBox">
+        [준비] boardest-windows-installer.web.app 원격 설치 엔진이 시작되었습니다...
+      </div>
+
+      <div class="btn-row" id="progressBtnRow">
+        <button class="btn btn-secondary" onclick="postToHost('minimize')">창 최소화</button>
+        <button class="btn btn-secondary" id="progressActionBtn" style="opacity: 0.5; cursor: not-allowed;" disabled>설치 진행 중 (최소화만 가능)...</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Complete -->
+    <div class="step-view" id="stepComplete">
+      <div class="success-card">
+        <div class="success-icon">&#10003;</div>
+        <div class="success-title">설치가 모두 완료되었습니다!</div>
+        <div class="success-desc">
+          최신 버전의 <strong id="completeProductName">Boardest</strong>가 성공적으로 설치되었습니다.<br>
+          <span id="autoLaunchCountdown" style="color: var(--teal); font-weight: bold;">3초 후 자동으로 앱이 실행됩니다...</span>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="triggerLaunchApp()">
+          <span>지금 바로 앱 실행</span> &#9654;
+        </button>
+      </div>
+    </div>
+
+    <!-- ================= UNINSTALLER VIEWS ================= -->
+    <div class="step-view" id="stepUninstall1">
+      <div class="panel" style="border-color: rgba(239, 69, 101, 0.3);">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-size:32px;">⚠️</span>
+          <div>
+            <h3 style="color:#fff; font-size:15px; font-weight:800; margin-bottom:4px;">정말로 Boardest Teacher를 제거하시겠습니까?</h3>
+            <p style="color:var(--text-muted); font-size:12px; line-height:1.4;">
+              컴퓨터에 설치된 Boardest Teacher 프로그램 파일 및 바로가기가 제거됩니다.<br>
+              계속 진행하시려면 [다음 단계]를 누르세요.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="postToHost('close')">취소</button>
+        <button class="btn btn-danger" onclick="goToStep('stepUninstall2')"><span>다음 단계로</span> &#8594;</button>
+      </div>
+    </div>
+
+    <div class="step-view" id="stepUninstall2">
+      <div class="panel">
+        <div class="field-label" style="font-size:13px; font-weight:700; color:#fff; margin-bottom:6px;">
+          📁 수업 판서 데이터 및 개별 설정 처리 방식 선택
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <label class="chk-label" style="background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
+            <input type="radio" name="uninstData" id="keepDataRadio" checked>
+            <div>
+              <strong style="color:var(--teal);">프로그램 파일만 삭제 (권장)</strong>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">선생님께서 작성하신 수업 교안(bst-save) 및 판서 기록은 그대로 보존됩니다.</div>
+            </div>
+          </label>
+          <label class="chk-label" style="background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; border:1px solid var(--card-border);">
+            <input type="radio" name="uninstData" id="deleteDataRadio">
+            <div>
+              <strong style="color:var(--red);">모든 데이터 완전 삭제</strong>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">로컬에 저장된 임시 판서 데이터 및 사용자 설정을 모두 영구 삭제합니다.</div>
+            </div>
+          </label>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="goToStep('stepUninstall1')">&#8592; 이전</button>
+        <button class="btn btn-danger" onclick="goToStep('stepUninstall3')"><span>다음 단계로</span> &#8594;</button>
+      </div>
+    </div>
+
+    <div class="step-view" id="stepUninstall3">
+      <div class="panel" style="border:1px solid var(--red); background:rgba(239,69,101,0.08);">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-size:32px;">🛑</span>
+          <div>
+            <h3 style="color:#fff; font-size:15px; font-weight:800; margin-bottom:4px;">마지막 확인: 프로그램이 영구적으로 제거됩니다</h3>
+            <p style="color:rgba(255,255,255,0.85); font-size:12px; line-height:1.4;">
+              [삭제 실행] 버튼을 누르면 작업이 즉시 시작되며 취소할 수 없습니다.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="goToStep('stepUninstall2')">돌아가기</button>
+        <button class="btn btn-danger" onclick="startUninstall()"><span>🗑️ 완전 삭제 실행</span></button>
+      </div>
+    </div>
+
+    <div class="step-view" id="stepUninstallProgress">
+      <div class="stage-card active">
+        <div class="stage-header">
+          <span id="uninstStatusText" class="pulse" style="color:var(--red); font-weight:800;">프로그램을 삭제하는 중...</span>
+          <span class="stage-pct-badge" id="uninstPct" style="color:var(--red);">0%</span>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="uninstProgressBar" style="background:var(--red);"></div>
+        </div>
+      </div>
+      <div class="log-box" id="uninstLogBox">[삭제] 프로그램 제거 작업을 시작합니다...</div>
+    </div>
+
+    <div class="step-view" id="stepUninstallComplete">
+      <div class="success-card">
+        <div class="success-icon">&#10003;</div>
+        <div class="success-title">Boardest Teacher 삭제 완료</div>
+        <div class="success-desc">컴퓨터에서 Boardest Teacher가 안전하게 모두 제거되었습니다.</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="postToHost('close')">확인 (닫기)</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    /**
+     * ============================================================================
+     * Boardest Web-Driven Installer Engine (https://boardest-windows-installer.web.app)
+     * ============================================================================
+     * 이 웹앱은 C# WebView2 설치 관리자 호스트(BoardestInstaller.exe)에 임베딩되어,
+     * 실행 파일 이름 감지, 3단계 설치 레시피(인증서 설치 -> 다운로드 -> 파일 복사/MSIX 설치),
+     * 바로가기 및 레지스트리 등록 명령을 직접 호스트로 내려보내 제어합니다.
+     */
+    const INSTALL_RECIPES = {
+      Class: {
+        productType: 'Class',
+        productName: 'Boardest Class',
+        requiresCert: true,
+        certThumbprint: '006d6eb59ce360dbd15bf1367ea107b34033c7a3',
+        certUrls: [
+          'https://bst-installer.web.app/BoardestCert.cer',
+          'https://github.com/hiJiwho/Boardest/releases/latest/download/BoardestCert.cer'
+        ],
+        githubReleaseApi: 'https://api.github.com/repos/hiJiwho/Boardest/releases/latest',
+        assetRegex: 'https://github\\.com/[^"\\s]+/releases/download/[^"\\s]+/(?:boardest|bst-class)\\.(?:msix|appx)',
+        fallbackUrls: [
+          'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.msix',
+          'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.appx',
+          'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-class.appx'
+        ],
+        fileType: '.msix',
+        killProcesses: ['boardest', 'overlay_panser'],
+        installMode: 'msix',
+        removeLegacyPatterns: ['*overlaypanser*'],
+        launchPackagePattern: '*boardest*'
+      },
+      Cloud: {
+        productType: 'Cloud',
+        productName: 'Boardest Cloud',
+        requiresCert: true,
+        certThumbprint: '006d6eb59ce360dbd15bf1367ea107b34033c7a3',
+        certUrls: [
+          'https://bst-installer.web.app/BoardestCert.cer',
+          'https://github.com/hiJiwho/Boardest/releases/latest/download/BoardestCert.cer'
+        ],
+        githubReleaseApi: 'https://api.github.com/repos/hiJiwho/Boardest/releases/latest',
+        assetRegex: 'https://github\\.com/[^"\\s]+/releases/download/[^"\\s]+/(?:boardest-cloud|bcld)\\.(?:msix|appx)',
+        fallbackUrls: [
+          'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.msix',
+          'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx',
+          'https://github.com/hiJiwho/Boardest/releases/latest/download/bcld.appx'
+        ],
+        fileType: '.msix',
+        killProcesses: ['boardest_cloud', 'boardest'],
+        installMode: 'msix',
+        removeLegacyPatterns: ['*boardest*cloud*', '*bcld*'],
+        launchPackagePattern: '*boardest*cloud*'
+      },
+      Teacher: {
+        productType: 'Teacher',
+        productName: 'Boardest Teacher',
+        requiresCert: false, // 교사용(Teacher)은 인증서 설치 단계 제외!
+        githubReleaseApi: 'https://api.github.com/repos/hiJiwho/Boardest/releases/latest',
+        assetRegex: 'https://github\\.com/[^"\\s]+/releases/download/[^"\\s]+/(?:bst-teacher-windows|boardest-teacher-windows|boardest-teacher)\\.zip',
+        fallbackUrls: [
+          'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher-windows.zip',
+          'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-windows.zip',
+          'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.zip'
+        ],
+        fileType: '.zip',
+        killProcesses: ['boardest_teacher', 'overlay_panser'],
+        installMode: 'copy', // ZIP 압축 해제 및 앱 파일 복사
+        targetDirEnv: '%LOCALAPPDATA%\\Programs\\BoardestTeacher',
+        mainExe: 'boardest_teacher.exe',
+        registryKey: 'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\BoardestTeacher',
+        shortcutName: 'Boardest Teacher.lnk'
+      }
+    };
+
+    let appData = {
+      exeName: '',
+      productType: 'Teacher', // 'Class', 'Teacher', 'Cloud'
+      productName: 'Boardest Teacher',
+      productVersion: '5.4.0',
+      installDir: '',
+      teacherInstallDir: '',
+      isUninstall: false,
+      needsProductSelection: false,
+      isAdmin: true
+    };
+    let currentScope = 'full';
+    let pendingChoice = 'Class';
+    let pendingRpcMap = {};
+    let rpcSeq = 1;
+
+    // URL 쿼리 파라미터에서 초기 실행 파일명/제품 감지 (?exe=boardest-class.exe&product=Class&ver=5.3.7)
+    function detectFromQueryParams() {
+      const params = new URLSearchParams(window.location.search);
+      const exeParam = (params.get('exe') || '').toLowerCase();
+      const prodParam = params.get('product') || '';
+      const verParam = params.get('ver') || params.get('version') || '';
+      const dirParam = params.get('dir') || '';
+
+      if (verParam) appData.productVersion = verParam;
+      if (dirParam) {
+        appData.installDir = dirParam;
+        appData.teacherInstallDir = dirParam;
+      }
+      if (exeParam) appData.exeName = exeParam;
+
+      if (prodParam === 'Class' || prodParam === 'Teacher' || prodParam === 'Cloud') {
+        appData.productType = prodParam;
+        appData.needsProductSelection = false;
+      } else if (exeParam.includes('boardest-class')) {
+        appData.productType = 'Class';
+        appData.needsProductSelection = false;
+      } else if (exeParam.includes('boardest-teacher')) {
+        appData.productType = 'Teacher';
+        appData.needsProductSelection = false;
+      } else if (exeParam.includes('boardest-cloud')) {
+        appData.productType = 'Cloud';
+        appData.needsProductSelection = false;
+      } else if (exeParam || prodParam === 'Select') {
+        appData.needsProductSelection = true;
+      }
+    }
+
+    function selectScope(scope) {
+      currentScope = scope;
+      const cardFull = document.getElementById('cardFull');
+      const cardStandalone = document.getElementById('cardStandalone');
+      const radioFull = document.getElementById('radioFull');
+      const radioStandalone = document.getElementById('radioStandalone');
+      if (scope === 'full') {
+        radioFull.checked = true;
+        if (cardFull) {
+          cardFull.style.borderColor = 'var(--teal)';
+          cardFull.style.background = 'rgba(0, 245, 212, 0.08)';
+        }
+        if (cardStandalone) {
+          cardStandalone.style.borderColor = 'var(--card-border)';
+          cardStandalone.style.background = 'rgba(255, 255, 255, 0.03)';
+        }
+      } else {
+        radioStandalone.checked = true;
+        if (cardStandalone) {
+          cardStandalone.style.borderColor = 'var(--teal)';
+          cardStandalone.style.background = 'rgba(0, 245, 212, 0.08)';
+        }
+        if (cardFull) {
+          cardFull.style.borderColor = 'var(--card-border)';
+          cardFull.style.background = 'rgba(255, 255, 255, 0.03)';
+        }
+      }
+    }
+
+    function postToHost(action, data = {}) {
+      const payload = JSON.stringify({ action, ...data });
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage(payload);
+      } else {
+        console.log('[Host IPC]', payload);
+      }
+    }
+
+    // Promise 기반 원격 명령 실행기 (Web -> C# Host -> Web 콜백)
+    function invokeHostCommand(action, data = {}) {
+      return new Promise((resolve, reject) => {
+        const reqId = 'req_' + (rpcSeq++);
+        pendingRpcMap[reqId] = { resolve, reject };
+        postToHost(action, { reqId, ...data });
+      });
+    }
+
+    // C# 호스트에서 명령 완료 시 호출하는 콜백
+    window.onHostCommandResult = function(reqId, success, resultData, errorMsg) {
+      const entry = pendingRpcMap[reqId];
+      if (!entry) return;
+      delete pendingRpcMap[reqId];
+      if (success) {
+        entry.resolve(resultData || {});
+      } else {
+        entry.reject(new Error(errorMsg || '호스트 명령 실행 중 오류가 발생했습니다.'));
+      }
+    };
+
+    function goToStep(stepId) {
+      document.querySelectorAll('.step-view').forEach(el => el.classList.remove('active'));
+      const target = document.getElementById(stepId);
+      if (target) target.classList.add('active');
+    }
+
+    function chooseProductCard(type) {
+      pendingChoice = type;
+      ['Class', 'Teacher', 'Cloud'].forEach(t => {
+        const el = document.getElementById('prodCard' + t);
+        if (el) {
+          if (t === type) el.classList.add('selected');
+          else el.classList.remove('selected');
+        }
+      });
+    }
+
+    function openProductSelector() {
+      chooseProductCard(appData.productType || 'Class');
+      document.getElementById('btnChangeApp').style.display = 'none';
+      goToStep('stepSelectProduct');
+    }
+
+    function confirmProductSelection() {
+      applyProductUI(pendingChoice);
+      postToHost('selectProduct', { productType: pendingChoice });
+      goToStep('stepReady');
+    }
+
+    function applyProductUI(productType) {
+      appData.productType = productType;
+      let pName = 'Boardest Teacher';
+      let pDesc = '교사용 스마트 전자칠판 & 수업 관리 솔루션 온라인 설치';
+      let heroIcon = '🎓';
+      let hideDir = false;
+      let dirVal = appData.teacherInstallDir || appData.installDir || '%LOCALAPPDATA%\\Programs\\BoardestTeacher';
+
+      if (productType === 'Class') {
+        pName = 'Boardest Class';
+        pDesc = '초·중·고 교실 스마트 전자칠판 전용 통합 교육 솔루션 (MSIX)';
+        heroIcon = '🏫';
+        hideDir = true;
+        dirVal = 'WindowsApps (MSIX 현대 패키지 자동 배포)';
+      } else if (productType === 'Cloud') {
+        pName = 'Boardest Cloud';
+        pDesc = '수업자료 열람 및 클라우드 1초 연동 전용 솔루션 (BCLD MSIX)';
+        heroIcon = '☁️';
+        hideDir = true;
+        dirVal = 'WindowsApps (MSIX 현대 패키지 자동 배포)';
+      } else {
+        pName = 'Boardest Teacher';
+        pDesc = '교사용 스마트 전자칠판 & 수업 관리 솔루션 온라인 설치';
+        heroIcon = '🎓';
+        hideDir = false;
+      }
+
+      appData.productName = pName;
+      document.getElementById('productName').innerText = pName;
+      document.getElementById('completeProductName').innerText = pName;
+      document.getElementById('productDesc').innerText = pDesc;
+      document.getElementById('installDirInput').value = dirVal;
+
+      if (!appData.logoBase64) {
+        document.getElementById('heroEmoji').innerText = heroIcon;
+      }
+
+      document.getElementById('dirFieldGroup').style.display = hideDir ? 'none' : 'block';
+      document.getElementById('shortcutGroup').style.display = hideDir ? 'none' : 'flex';
+      const scopeGrp = document.getElementById('teacherInstallTypeGroup');
+      if (scopeGrp) scopeGrp.style.display = (productType === 'Teacher') ? 'block' : 'none';
+
+      // Configure 3-stage labels for Teacher vs Class/Cloud
+      const stage3Title = document.getElementById('stageTitle3');
+      if (stage3Title) {
+        stage3Title.innerText = (productType === 'Teacher')
+          ? '📂 3단계: 앱 파일 복사 및 바로가기 등록'
+          : '📦 3단계: 앱 설치 (Windows MSIX 배포)';
+      }
+
+      initFeatures(productType);
+      document.getElementById('promptText').innerHTML = `
+        <span>⚡ <strong>설치 안내:</strong> <strong>${pName}</strong> 최신 버전을 온라인으로 다운로드하여 설치합니다.</span>
+      `;
+      document.getElementById('btnChangeApp').style.display = 'inline-block';
+    }
+
+    function initFeatures(product) {
+      const grid = document.getElementById('featureGrid');
+      grid.innerHTML = '';
+
+      let features = [];
+      if (product === 'Class') {
+        features = [
+          { icon: '🏫', title: '교실 스마트 전자칠판', desc: '초·중·고 교실 전자칠판 전용 통합 대시보드' },
+          { icon: '⏱️', title: '교시 타이머 & 시간표', desc: '실시간 교시 알림 및 나이스 시간표 자동 연동' },
+          { icon: '🍱', title: '급식 식단 & 알레르기', desc: '오늘/내일 식단표 및 알레르기 유발 식품 표시' },
+          { icon: '📝', title: '풀스크린 펜 판서 & TBP', desc: '전자칠판 터치 최적화 필기 및 디지털 교과서' }
+        ];
+      } else if (product === 'Cloud') {
+        features = [
+          { icon: '☁️', title: 'Google Drive 1초 연동', desc: 'QR 코드를 스마트폰으로 찍어 1초 즉시 로그인' },
+          { icon: '📚', title: 'TBP 교과서 & PDF 뷰어', desc: '디지털 교과서 및 수업 PDF 원터치 열람' },
+          { icon: '🔒', title: '교실 열람 전용 모드', desc: '불필요한 파일 삭제/변조를 방지하는 보안 환경' },
+          { icon: '⚡', title: '초경량 클라우드 실행', desc: 'bcld 전용 빠른 수업자료 탐색 및 판서 연동' }
+        ];
+      } else {
+        features = [
+          { icon: '🎓', title: '선생님 PC 전용 솔루션', desc: '교무실 PC 및 노트북 전용 정식 수업 관리자' },
+          { icon: '📅', title: '나이스 & 주간 시간표', desc: '학교 시간표 및 수업 일정 자동 동기화' },
+          { icon: '✏️', title: 'HWP / PPT 오버레이 판서', desc: '한글, PPT, 웹 브라우저 위 자유로운 판서' },
+          { icon: '📐', title: 'TBP 스마트교과서 제작', desc: '8종 핫스팟 핀 및 페이지별 판서 자동 매칭' }
+        ];
+      }
+
+      features.forEach(f => {
+        const item = document.createElement('div');
+        item.className = 'feature-card';
+        item.innerHTML = `
+          <div class="feat-icon">${f.icon}</div>
+          <div>
+            <div class="feat-title">${f.title}</div>
+            <div class="feat-desc">${f.desc}</div>
+          </div>
+        `;
+        grid.appendChild(item);
+      });
+    }
+
+    // Host로부터 전달받는 초기 데이터 핸들러
+    window.receiveInitData = function(data) {
+      appData = { ...appData, ...data };
+      document.getElementById('productVersion').innerText = 'v' + (appData.productVersion || '5.4.0');
+
+      if (data.logoBase64) {
+        const heroBox = document.getElementById('heroIconBox');
+        heroBox.innerHTML = `<img src="data:image/png;base64,${data.logoBase64}" alt="Logo">`;
+      }
+
+      if (data.isUninstall) {
+        document.getElementById('productName').innerText = (data.productName || 'Boardest Teacher') + ' 제거 마법사';
+        goToStep('stepUninstall1');
+        return;
+      }
+
+      if (data.needsProductSelection) {
+        document.getElementById('productName').innerText = 'Boardest 통합 온라인 설치';
+        document.getElementById('productDesc').innerText = '설치할 앱(교실용 Class / 교사용 Teacher / 클라우드 Cloud)을 선택해주세요.';
+        chooseProductCard('Class');
+        goToStep('stepSelectProduct');
+        return;
+      }
+
+      applyProductUI(data.productType || 'Teacher');
+      goToStep('stepReady');
+    };
+
+    function resetStagesUI() {
+      const isTeacher = (appData.productType === 'Teacher');
+      [1, 2, 3].forEach(idx => {
+        const card = document.getElementById('stageCard' + idx);
+        const pct = document.getElementById('stagePct' + idx);
+        const bar = document.getElementById('stageBar' + idx);
+        const st = document.getElementById('stageStatus' + idx);
+        if (card) card.className = 'stage-card';
+        if (pct) pct.innerText = '대기 0%';
+        if (bar) bar.style.width = '0%';
+        if (st) st.innerText = '대기 중...';
+      });
+
+      if (isTeacher) {
+        const card1 = document.getElementById('stageCard1');
+        const pct1 = document.getElementById('stagePct1');
+        const bar1 = document.getElementById('stageBar1');
+        const st1 = document.getElementById('stageStatus1');
+        if (card1) card1.className = 'stage-card skipped';
+        if (pct1) pct1.innerText = '티처 제외';
+        if (bar1) bar1.style.width = '100%';
+        if (st1) st1.innerText = '교사용(Teacher) 앱은 인증서 설치 없이 바로 다운로드합니다.';
+      }
+
+      document.getElementById('bytesText').innerText = '0.0 MB / 0.0 MB';
+      document.getElementById('speedText').innerText = '0.00 MB/s';
+      document.getElementById('statusText').innerText = '설치 시작 중...';
+
+      const btnRow = document.getElementById('progressBtnRow');
+      if (btnRow) {
+        btnRow.innerHTML = `
+          <button class="btn btn-secondary" onclick="postToHost('minimize')">창 최소화</button>
+          <button class="btn btn-secondary" id="progressActionBtn" style="opacity: 0.5; cursor: not-allowed;" disabled>설치 진행 중 (최소화만 가능)...</button>
+        `;
+      }
+    }
+
+    /**
+     * 웹(boardest-windows-installer.web.app)에서 직접 3단계 설치 파이프라인을 지휘합니다.
+     * 호스트(BoardestInstaller.exe)는 오직 https://boardest-windows-installer.web.app 출처의 명령만 수행합니다.
+     */
+    async function startInstall() {
+      const createDesktop = document.getElementById('chkDesktopShortcut') ? document.getElementById('chkDesktopShortcut').checked : true;
+      const createStartMenu = document.getElementById('chkStartMenu') ? document.getElementById('chkStartMenu').checked : true;
+      const installScope = currentScope;
+      const recipe = INSTALL_RECIPES[appData.productType] || INSTALL_RECIPES.Teacher;
+
+      document.getElementById('btnChangeApp').style.display = 'none';
+      resetStagesUI();
+      goToStep('stepProgress');
+
+      // WebView2 환경이 아닌 일반 브라우저에서 열었을 때 안내
+      if (!window.chrome || !window.chrome.webview) {
+        window.showInstallError(
+          '설치 프로그램(.exe) 내부에서 실행해주세요.',
+          '이 웹페이지는 Boardest Windows 온라인 설치 관리자(boardest-class.exe / boardest-teacher.exe / boardest-cloud.exe) 전용 엔진입니다.',
+          1
+        );
+        return;
+      }
+
+      let currentStage = 1;
+      try {
+        // 0. 실행 중인 기존 프로세스 종료 명령
+        await invokeHostCommand('killProcesses', {
+          processes: recipe.killProcesses
+        });
+
+        // =========================================================================
+        // [1단계] 보안 인증서 설치 (Teacher 제외)
+        // =========================================================================
+        currentStage = 1;
+        if (recipe.requiresCert) {
+          window.updateStageProgress(1, 10, '신뢰할 수 있는 루트 인증서(LocalMachine\\Root) 확인 중...', null, null, '[1단계] 보안 서명 인증서 설치 명령 전송...');
+          await invokeHostCommand('installCertificate', {
+            certThumbprint: recipe.certThumbprint,
+            certUrls: recipe.certUrls
+          });
+          window.updateStageProgress(1, 100, '보안 인증서 설치 완료 (100%)', null, null, '[1단계 완료] 루트 인증서 등록이 완료되었습니다.');
+        }
+
+        // =========================================================================
+        // [2단계] 최신 릴리즈 패키지 온라인 다운로드
+        // =========================================================================
+        currentStage = 2;
+        window.updateStageProgress(2, 0, 'GitHub 최신 릴리즈 패키지 다운로드 시작...', '0.0 MB / 0.0 MB', '0.00 MB/s', `[2단계] ${recipe.productName} 최신 패키지 다운로드 명령 실행...`);
+        const dlResult = await invokeHostCommand('downloadPackage', {
+          productType: recipe.productType,
+          githubReleaseApi: recipe.githubReleaseApi,
+          assetRegex: recipe.assetRegex,
+          fallbackUrls: recipe.fallbackUrls,
+          fileType: recipe.fileType
+        });
+        window.updateStageProgress(2, 100, '패키지 다운로드 완료 (100%)', null, null, '[2단계 완료] 패키지 다운로드 성공: ' + (dlResult.downloadedPath || '완료'));
+
+        // =========================================================================
+        // [3단계] 앱 파일 복사 (Teacher) 또는 MSIX 시스템 배포 (Class / Cloud)
+        // =========================================================================
+        currentStage = 3;
+        if (recipe.installMode === 'copy') {
+          window.updateStageProgress(3, 5, 'ZIP 압축 해제 및 앱 파일 복사 준비 중...', null, null, '[3단계] 앱 폴더 복사 및 바로가기 생성 명령 실행...');
+          await invokeHostCommand('extractAndCopyApp', {
+            zipPath: dlResult.downloadedPath,
+            targetDir: appData.teacherInstallDir || appData.installDir || recipe.targetDirEnv,
+            mainExe: recipe.mainExe,
+            installScope: installScope,
+            createDesktop: createDesktop,
+            createStartMenu: createStartMenu,
+            registryKey: recipe.registryKey,
+            displayName: recipe.productName,
+            productVersion: appData.productVersion
+          });
+          window.updateStageProgress(3, 100, '앱 복사 및 설치 완료! (100%)', null, null, '[3단계 완료] 모든 앱 파일 복사 및 바로가기 등록이 완료되었습니다.');
+        } else {
+          window.updateStageProgress(3, 10, 'Windows AppX/MSIX 패키지 배포 중...', null, null, '[3단계] Add-AppxPackage 시스템 설치 명령 실행...');
+          await invokeHostCommand('installMsixPackage', {
+            msixPath: dlResult.downloadedPath,
+            productType: recipe.productType,
+            removeLegacyPatterns: recipe.removeLegacyPatterns
+          });
+          window.updateStageProgress(3, 100, 'MSIX 앱 시스템 설치 완료! (100%)', null, null, `[3단계 완료] ${recipe.productName} 설치가 성공적으로 완료되었습니다.`);
+        }
+      } catch (err) {
+        window.showInstallError(err.message || '설치 도중 오류가 발생했습니다.', err.message || String(err), currentStage);
+      }
+    }
+
+    function triggerLaunchApp() {
+      const recipe = INSTALL_RECIPES[appData.productType] || INSTALL_RECIPES.Teacher;
+      postToHost('launchApp', {
+        productType: appData.productType,
+        mainExe: recipe.mainExe || 'boardest_teacher.exe',
+        launchPackagePattern: recipe.launchPackagePattern || '*boardest*'
+      });
+    }
+
+    function startUninstall() {
+      const purgeData = document.getElementById('deleteDataRadio') ? document.getElementById('deleteDataRadio').checked : false;
+      goToStep('stepUninstallProgress');
+      postToHost('startUninstall', { purgeData });
+    }
+
+    // 3단계별 진행률 업데이트 (Host -> JS)
+    // stageIndex: 1 (인증서 설치), 2 (다운로드), 3 (앱 복사/설치), 4 (전체 완료)
+    window.updateStageProgress = function(stageIndex, stagePct, stageStatus, bytes, speed, log) {
+      const safePct = Math.max(0, Math.min(100, Number(stagePct) || 0));
+
+      if (stageIndex >= 1 && stageIndex <= 3) {
+        // 이전 단계들은 완료 상태로 마킹 (Teacher의 1단계 제외 상태는 유지)
+        for (let i = 1; i < stageIndex; i++) {
+          if (i === 1 && appData.productType === 'Teacher') continue;
+          const prevCard = document.getElementById('stageCard' + i);
+          const prevPct = document.getElementById('stagePct' + i);
+          const prevBar = document.getElementById('stageBar' + i);
+          if (prevCard) prevCard.className = 'stage-card done';
+          if (prevPct) prevPct.innerText = '완료 100%';
+          if (prevBar) prevBar.style.width = '100%';
+        }
+
+        const card = document.getElementById('stageCard' + stageIndex);
+        const pctEl = document.getElementById('stagePct' + stageIndex);
+        const barEl = document.getElementById('stageBar' + stageIndex);
+        const statusEl = document.getElementById('stageStatus' + stageIndex);
+
+        if (card) {
+          card.className = safePct >= 100 ? 'stage-card done' : 'stage-card active';
+        }
+        if (pctEl) {
+          pctEl.innerText = (safePct >= 100 ? '완료 ' : '') + safePct + '%';
+        }
+        if (barEl) {
+          barEl.style.width = safePct + '%';
+        }
+        if (statusEl && stageStatus) {
+          statusEl.innerText = stageStatus;
+        }
+      }
+
+      if (stageStatus) {
+        document.getElementById('statusText').innerText = stageStatus;
+      }
+      if (bytes) {
+        document.getElementById('bytesText').innerText = bytes;
+      }
+      if (speed) {
+        document.getElementById('speedText').innerText = speed;
+      }
+      if (log) {
+        const logBox = document.getElementById('logBox');
+        logBox.innerHTML += '<br>' + escapeHtml(log);
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+
+      if (stageIndex === 4 || (stageIndex === 3 && safePct >= 100)) {
+        setTimeout(() => {
+          goToStep('stepComplete');
+          startAutoLaunchCountdown();
+        }, 700);
+      }
+    };
+
+    // 설치 오류 표시 (Host -> JS)
+    window.showInstallError = function(errTitle, errLog, failedStageIndex) {
+      goToStep('stepProgress');
+      const targetStage = failedStageIndex || 2;
+      const card = document.getElementById('stageCard' + targetStage);
+      const pctEl = document.getElementById('stagePct' + targetStage);
+      const statusEl = document.getElementById('stageStatus' + targetStage);
+      if (card) card.className = 'stage-card error';
+      if (pctEl) pctEl.innerText = '오류';
+      if (statusEl) statusEl.innerText = errTitle || '설치 중 오류가 발생했습니다.';
+
+      const globalStatus = document.getElementById('statusText');
+      if (globalStatus) {
+        globalStatus.style.color = 'var(--red)';
+        globalStatus.innerText = errTitle || '설치 실패';
+      }
+
+      if (errLog) {
+        const logBox = document.getElementById('logBox');
+        logBox.innerHTML += '<br><span style="color:#ef4565;">[오류] ' + escapeHtml(errLog) + '</span>';
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+
+      const btnRow = document.getElementById('progressBtnRow');
+      if (btnRow) {
+        btnRow.innerHTML = `
+          <button class="btn btn-secondary" onclick="postToHost('close')">닫기</button>
+          <button class="btn btn-primary" onclick="startInstall()">다시 시도 &#8635;</button>
+        `;
+      }
+    };
+
+    // 기존 단일 진행률 호환 래퍼
+    window.updateProgress = function(pct, status, bytes, speed, log) {
+      if (pct < 0 || (status && String(status).indexOf('오류') >= 0)) {
+        window.showInstallError(status || '설치 오류가 발생했습니다.', log || '', 2);
+        return;
+      }
+      let stage = 2;
+      let stagePct = pct;
+      if (pct < 20) {
+        stage = 1;
+        stagePct = Math.min(100, Math.round((pct / 20) * 100));
+      } else if (pct < 65) {
+        stage = 2;
+        stagePct = Math.min(100, Math.round(((pct - 20) / 45) * 100));
+      } else {
+        stage = 3;
+        stagePct = Math.min(100, Math.round(((pct - 65) / 35) * 100));
+      }
+      window.updateStageProgress(stage, stagePct, status, bytes, speed, log);
+    };
+
+    window.updateUninstallProgress = function(pct, status, log) {
+      document.getElementById('uninstPct').innerText = pct + '%';
+      document.getElementById('uninstProgressBar').style.width = pct + '%';
+      if (status) document.getElementById('uninstStatusText').innerText = status;
+      if (log) {
+        const logBox = document.getElementById('uninstLogBox');
+        logBox.innerHTML += '<br>' + escapeHtml(log);
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+      if (pct >= 100) {
+        setTimeout(() => goToStep('stepUninstallComplete'), 800);
+      }
+    };
+
+    let countdown = 3;
+    let launchTimer = null;
+    function startAutoLaunchCountdown() {
+      countdown = 3;
+      if (launchTimer) clearInterval(launchTimer);
+      const el = document.getElementById('autoLaunchCountdown');
+      launchTimer = setInterval(() => {
+        countdown--;
+        if (countdown > 0) {
+          el.innerText = `${countdown}초 후 자동으로 앱이 실행됩니다...`;
+        } else {
+          clearInterval(launchTimer);
+          launchTimer = null;
+          el.innerText = '앱을 시작합니다...';
+          triggerLaunchApp();
+        }
+      }, 1000);
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    window.initData = window.receiveInitData;
+    window.addEventListener('DOMContentLoaded', () => {
+      detectFromQueryParams();
+      if (appData.needsProductSelection) {
+        chooseProductCard('Class');
+        goToStep('stepSelectProduct');
+      } else {
+        applyProductUI(appData.productType);
+        goToStep('stepReady');
+      }
+      postToHost('uiReady');
+    });
+  </script>
+</body>
+</html>

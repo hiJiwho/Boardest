@@ -235,6 +235,8 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
       final Map<String, BstCloudFile> fileMap = {};
       for (final list in results) {
         for (final file in list) {
+          // 32자리 Hex 실체 폴더는 사용자 목록에서 제외 (.tbp.bst 포인터 파일만 표시)
+          if (RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(file.name.trim())) continue;
           fileMap[file.id] = file;
         }
       }

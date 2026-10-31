@@ -3543,6 +3543,7 @@ class CloudDriveService with ChangeNotifier {
       final shellJson = jsonEncode({
         'type': type.toUpperCase(),
         'id': new32Id,
+        'folderId': realFolderId,
         'title': safeTitle,
         'webUrl': webUrl.trim(),
         'createdAt': DateTime.now().millisecondsSinceEpoch,
@@ -3628,12 +3629,18 @@ class CloudDriveService with ChangeNotifier {
       final content = utf8.decode(bytes);
       final shellJson = jsonDecode(content) as Map<String, dynamic>;
       final target32Id = shellJson['id']?.toString() ?? '';
+      final directFolderId = shellJson['folderId']?.toString().trim() ?? '';
 
-      if (target32Id.isEmpty) return null;
+      String? realFolderId = (directFolderId.isNotEmpty && !directFolderId.startsWith('local_'))
+          ? directFolderId
+          : null;
 
-      final tbpRootId = await getOrCreateTextbookProFolder();
-      if (tbpRootId == null) return null;
-      final realFolderId = await findFolderByName(target32Id, parentFolderId: tbpRootId);
+      if (realFolderId == null) {
+        if (target32Id.isEmpty) return null;
+        final tbpRootId = await getOrCreateTextbookProFolder();
+        if (tbpRootId == null) return null;
+        realFolderId = await findFolderByName(target32Id, parentFolderId: tbpRootId);
+      }
       if (realFolderId == null) return null;
 
       // 실체 폴더 내부 파일 목록 수집
@@ -3739,6 +3746,7 @@ class CloudDriveService with ChangeNotifier {
       final shellJson = jsonEncode({
         'type': type,
         'id': new32Id,
+        'folderId': realFolderId,
         'title': safeTitle,
         'webUrl': webUrl,
         'createdAt': DateTime.now().millisecondsSinceEpoch,

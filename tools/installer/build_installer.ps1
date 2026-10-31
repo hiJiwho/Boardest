@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '5.3.7'
+  [string]$AppVersion = '5.4.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -21,14 +21,13 @@ $LoaderDll = Join-Path $PkgDir 'build\native\x64\WebView2Loader.dll'
 $HtmlFile = Join-Path $InstallerDir 'installer.html'
 $AppLogo = Join-Path $RootDir 'apps\boardest\assets\icons\app_logo.png'
 $AppIcon = Join-Path $RootDir 'apps\boardest\windows\runner\resources\app_icon.ico'
+$AppManifest = Join-Path $InstallerDir 'app.manifest'
 
 # Source files
 $TeacherUninstCs = Join-Path $InstallerDir 'BoardestTeacherUninstaller.cs'
-$TeacherInstallCs = Join-Path $InstallerDir 'BoardestTeacherInstaller.cs'
-$ClassInstallCs = Join-Path $InstallerDir 'BoardestClassInstaller.cs'
-$CloudInstallCs = Join-Path $InstallerDir 'BoardestCloudInstaller.cs'
+$UnifiedInstallCs = Join-Path $InstallerDir 'BoardestInstaller.cs'
 
-foreach ($f in @($CoreDll, $WinFormsDll, $LoaderDll, $HtmlFile, $AppLogo, $AppIcon, $CerFile, $CSharpCompiler, $TeacherUninstCs, $TeacherInstallCs, $ClassInstallCs, $CloudInstallCs)) {
+foreach ($f in @($CoreDll, $WinFormsDll, $LoaderDll, $HtmlFile, $AppLogo, $AppIcon, $AppManifest, $CerFile, $CSharpCompiler, $TeacherUninstCs, $UnifiedInstallCs)) {
   if (-not (Test-Path $f)) {
     throw "Required file not found for installer build: $f"
   }
@@ -67,7 +66,7 @@ function Sign-File([string]$targetFile) {
   }
 }
 
-Write-Host "=== Building Dedicated Webview2 Installers & Uninstaller (v$AppVersion) ===" -ForegroundColor Cyan
+Write-Host "=== Building Boardest Unified Online Installer & Uninstaller (v$AppVersion) ===" -ForegroundColor Cyan
 
 # 1. Compile Teacher Uninstaller (uninstall.exe)
 $UninstExe = Join-Path $OutDir 'uninstall.exe'
@@ -77,68 +76,48 @@ $uninstArgs = @('/nologo', '/target:winexe', "/out:$UninstExe", "/win32icon:$App
 if ($LASTEXITCODE -ne 0) { throw "Compilation failed for uninstall.exe" }
 Sign-File $UninstExe
 
-# 2. Compile Teacher Installer (boardest-teacher-installer.exe)
-$TeacherExe = Join-Path $OutDir 'boardest-teacher-installer.exe'
-Write-Host "Compiling Teacher Installer ($TeacherExe)..." -ForegroundColor Yellow
-$teacherResources = $BaseResources + @("/resource:$UninstExe,uninstall.exe")
-$teacherArgs = @('/nologo', '/target:winexe', "/out:$TeacherExe", "/win32icon:$AppIcon") + $BaseReferences + $teacherResources + @($TeacherInstallCs)
-& $CSharpCompiler @teacherArgs
-if ($LASTEXITCODE -ne 0) { throw "Compilation failed for boardest-teacher-installer.exe" }
-Sign-File $TeacherExe
-Copy-Item $TeacherExe (Join-Path $OutDir 'Boardest-Teacher-Setup.exe') -Force
-
-# 3. Compile Class Installer (boardest-class-installer.exe with embedded MSIX)
-$ClassMsix = Join-Path $OutDir 'boardest-class.msix'
-if (-not (Test-Path $ClassMsix)) {
-  $ClassMsix = Join-Path $OutDir 'boardest.msix'
-}
-if (-not (Test-Path $ClassMsix)) {
-  throw "boardest-class.msix not found in $OutDir"
-}
-
-$ClassExe = Join-Path $OutDir 'boardest-class-installer.exe'
-Write-Host "Compiling Class Installer with embedded MSIX ($ClassExe)..." -ForegroundColor Yellow
-$classResources = $BaseResources + @(
+# 2. Compile Unified Online Installer (boardest-installer.exe) with requireAdministrator manifest
+$UnifiedExe = Join-Path $OutDir 'boardest-installer.exe'
+Write-Host "Compiling Unified Online Installer ($UnifiedExe) with Administrator Manifest..." -ForegroundColor Yellow
+$unifiedResources = $BaseResources + @(
   "/resource:$CerFile,BoardestCert.cer",
-  "/resource:$ClassMsix,package.msix"
+  "/resource:$UninstExe,uninstall.exe"
 )
-$classArgs = @('/nologo', '/target:winexe', "/out:$ClassExe", "/win32icon:$AppIcon") + $BaseReferences + $classResources + @($ClassInstallCs)
-& $CSharpCompiler @classArgs
-if ($LASTEXITCODE -ne 0) { throw "Compilation failed for boardest-class-installer.exe" }
-Sign-File $ClassExe
-Copy-Item $ClassExe (Join-Path $OutDir 'Boardest-Class-Setup.exe') -Force
+$unifiedArgs = @(
+  '/nologo',
+  '/target:winexe',
+  "/out:$UnifiedExe",
+  "/win32icon:$AppIcon",
+  "/win32manifest:$AppManifest"
+) + $BaseReferences + $unifiedResources + @($UnifiedInstallCs)
 
-# 4. Compile Cloud Installer (boardest-cloud-installer.exe with embedded MSIX)
-$CloudMsix = Join-Path $OutDir 'boardest-cloud.msix'
-if (-not (Test-Path $CloudMsix)) {
-  $CloudMsix = Join-Path $OutDir 'boardest-class-cloud.msix'
-}
-if (-not (Test-Path $CloudMsix)) {
-  throw "boardest-cloud.msix not found in $OutDir"
-}
+& $CSharpCompiler @unifiedArgs
+if ($LASTEXITCODE -ne 0) { throw "Compilation failed for boardest-installer.exe" }
+Sign-File $UnifiedExe
 
-$CloudExe = Join-Path $OutDir 'boardest-cloud-installer.exe'
-Write-Host "Compiling Cloud Installer with embedded MSIX ($CloudExe)..." -ForegroundColor Yellow
-$cloudResources = $BaseResources + @(
-  "/resource:$CerFile,BoardestCert.cer",
-  "/resource:$CloudMsix,package.msix"
+# 3. Create Named Variants (Executable name determines default app: Class / Teacher / Cloud)
+$VariantNames = @(
+  'boardest-class.exe',
+  'boardest-teacher.exe',
+  'boardest-cloud.exe',
+  'boardest-class-installer.exe',
+  'boardest-teacher-installer.exe',
+  'boardest-cloud-installer.exe',
+  'Boardest-Class-Setup.exe',
+  'Boardest-Teacher-Setup.exe',
+  'Boardest-Cloud-Setup.exe'
 )
-$cloudArgs = @('/nologo', '/target:winexe', "/out:$CloudExe", "/win32icon:$AppIcon") + $BaseReferences + $cloudResources + @($CloudInstallCs)
-& $CSharpCompiler @cloudArgs
-if ($LASTEXITCODE -ne 0) { throw "Compilation failed for boardest-cloud-installer.exe" }
-Sign-File $CloudExe
-Copy-Item $CloudExe (Join-Path $OutDir 'Boardest-Cloud-Setup.exe') -Force
 
-# 5. Distribute to web hubs
+foreach ($name in $VariantNames) {
+  $dest = Join-Path $OutDir $name
+  Copy-Item $UnifiedExe $dest -Force
+}
+
+# 4. Distribute to web hubs
 $DownloadWeb = Join-Path $RootDir 'infra\download_web'
 $DownloadsHubWeb = Join-Path $RootDir 'infra\downloads_hub_web'
 
-$FilesToDeploy = @(
-  'boardest-teacher-installer.exe', 'Boardest-Teacher-Setup.exe',
-  'boardest-class-installer.exe', 'Boardest-Class-Setup.exe',
-  'boardest-cloud-installer.exe', 'Boardest-Cloud-Setup.exe',
-  'uninstall.exe'
-)
+$FilesToDeploy = @('boardest-installer.exe', 'uninstall.exe') + $VariantNames
 
 foreach ($f in $FilesToDeploy) {
   $src = Join-Path $OutDir $f
@@ -148,4 +127,4 @@ foreach ($f in $FilesToDeploy) {
   }
 }
 
-Write-Host "=== All Dedicated Installers & Uninstaller Built and Deployed Successfully! ===" -ForegroundColor Green
+Write-Host "=== Unified Online Installer Built and Replicated Successfully! ===" -ForegroundColor Green

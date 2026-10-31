@@ -29,7 +29,7 @@ enum UpdateState {
 /// 5. 잠금 화면 필수 4대 버튼: [업데이트 다운 / 수동 설치 / 앱 런처 / 앱 삭제]
 /// 6. 윈도우: AppData에 다운로드 후 종료하지 않고 윈도우 패키지 설치 관리자(AppX) 구동 -> 새 앱 실행 시 이전 AppX 자동 삭제
 class UpdateService {
-  static const String defaultVersion = '5.3.7';
+  static const String defaultVersion = '5.4.0';
   static const String _releasesApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases?per_page=30';
   static const String _latestApi =

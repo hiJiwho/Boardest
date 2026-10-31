@@ -1,7 +1,7 @@
 name: boardest_class_cloud
 description: "Boardest Class Cloud (BCLD Classroom Cloud App)"
 publish_to: 'none'
-version: 5.3.7+5370
+version: 5.4.0+5400
 
 environment:
   sdk: ^3.11.5
