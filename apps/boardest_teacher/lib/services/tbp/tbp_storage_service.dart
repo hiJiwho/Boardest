@@ -810,6 +810,36 @@ class TbpStorageService {
     }
   }
 
+  Future<List<String>> getAvailableClasses(String tbpFolderPath) async {
+    final classes = <String>{};
+    if (!kIsWeb && tbpFolderPath.isNotEmpty) {
+      try {
+        final bbpenDir = Directory(p.join(tbpFolderPath, 'BBPen'));
+        if (bbpenDir.existsSync()) {
+          for (final entity in bbpenDir.listSync()) {
+            if (entity is Directory) {
+              final name = p.basename(entity.path);
+              if (name.isNotEmpty && !name.startsWith('.')) {
+                classes.add(name);
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    for (final k in _webJsonCache.keys) {
+      if (k.startsWith('$tbpFolderPath::BBPen::')) {
+        final parts = k.substring('$tbpFolderPath::BBPen::'.length).split('::');
+        if (parts.length >= 2 && parts[0].isNotEmpty) {
+          classes.add(parts[0]);
+        }
+      }
+    }
+    final list = classes.toList();
+    list.sort();
+    return list;
+  }
+
   // ─── 판서 스트로크 (.bstpen 우선, Drive 폴더 온디맨드 다운로드/업로드 지원) ────
 
   Future<String?> loadStrokeData({
@@ -817,16 +847,30 @@ class TbpStorageService {
     required String subFolder,
     required String scopeKey,
     String? filename,
+    String? classId,
   }) async {
     try {
       final safeKey = await _resolveCanonicalKey(tbpFolderPath, scopeKey);
       final base = filename != null && filename.isNotEmpty ? '$safeKey$filename' : safeKey;
       final rawBase = filename != null && filename.isNotEmpty ? '$scopeKey$filename' : scopeKey;
+      final classKey = (classId != null && classId.trim().isNotEmpty && classId != '전체') ? classId.trim() : null;
 
       if (kIsWeb) {
-        final cached = _webJsonCache['$tbpFolderPath::$subFolder::$base'];
+        final cachePrefix = classKey != null ? '$tbpFolderPath::BBPen::$classKey::$base' : '$tbpFolderPath::$subFolder::$base';
+        final cached = _webJsonCache[cachePrefix] ?? _webJsonCache['$tbpFolderPath::$subFolder::$base'];
         if (cached != null) return cached;
       } else {
+        if (classKey != null) {
+          final classBbpenSvg = File(p.join(tbpFolderPath, 'BBPen', classKey, '$base.svg'));
+          if (classBbpenSvg.existsSync()) return await classBbpenSvg.readAsString();
+
+          final classBbpenBstpen = File(p.join(tbpFolderPath, 'BBPen', classKey, '$base.bstpen'));
+          if (classBbpenBstpen.existsSync()) return await classBbpenBstpen.readAsString();
+
+          // 신규 반 진입 시 글로벌/기본 판서는 로드하지 않고 빈 판서로 반환 (핫스팟만 남기기)
+          return null;
+        }
+
         final bbpenSvg = File(p.join(tbpFolderPath, 'BBPen', '$base.svg'));
         if (bbpenSvg.existsSync()) return await bbpenSvg.readAsString();
 
@@ -851,14 +895,18 @@ class TbpStorageService {
 
       final driveFolderId = _driveFolderIds[tbpFolderPath];
       if (driveFolderId != null && driveFolderId.isNotEmpty) {
+        final cloudFilename = classKey != null ? 'pen_${classKey}_$base.bstpen' : 'pen_$base.bstpen';
         final remoteStr = await CloudDriveService.instance.fetchTbpFolderFileText(
           driveFolderId,
-          'pen_$base.bstpen',
+          cloudFilename,
         );
         if (remoteStr != null && remoteStr.isNotEmpty) {
-          _webJsonCache['$tbpFolderPath::$subFolder::$base'] = remoteStr;
+          final cachePrefix = classKey != null ? '$tbpFolderPath::BBPen::$classKey::$base' : '$tbpFolderPath::$subFolder::$base';
+          _webJsonCache[cachePrefix] = remoteStr;
           if (!kIsWeb) {
-            final targetDir = Directory(p.join(tbpFolderPath, subFolder));
+            final targetDir = classKey != null
+                ? Directory(p.join(tbpFolderPath, 'BBPen', classKey))
+                : Directory(p.join(tbpFolderPath, subFolder));
             if (!targetDir.existsSync()) targetDir.createSync(recursive: true);
             await File(p.join(targetDir.path, '$base.bstpen')).writeAsString(remoteStr, flush: true);
           }
@@ -866,7 +914,7 @@ class TbpStorageService {
         }
       }
 
-      return _webJsonCache['$tbpFolderPath::$subFolder::$base'];
+      return null;
     } catch (_) {
       return null;
     }
@@ -877,34 +925,48 @@ class TbpStorageService {
     required String subFolder,
     required String scopeKey,
     String? filename,
+    String? classId,
     required String strokeContent,
   }) async {
     try {
       final safeKey = sanitizeKey(scopeKey);
       final base = filename != null && filename.isNotEmpty ? '$safeKey$filename' : safeKey;
-      _webJsonCache['$tbpFolderPath::$subFolder::$base'] = strokeContent;
+      final classKey = (classId != null && classId.trim().isNotEmpty && classId != '전체') ? classId.trim() : null;
+
+      final cachePrefix = classKey != null ? '$tbpFolderPath::BBPen::$classKey::$base' : '$tbpFolderPath::$subFolder::$base';
+      _webJsonCache[cachePrefix] = strokeContent;
 
       if (!kIsWeb) {
-        // BoardBook 100% 동일 구조: BBPen/[hash].svg 저장
-        final bbpenDir = Directory(p.join(tbpFolderPath, 'BBPen'));
-        if (!await bbpenDir.exists()) await bbpenDir.create(recursive: true);
-        final bbpenFile = File(p.join(bbpenDir.path, '$base.svg'));
-        await bbpenFile.writeAsString(strokeContent, flush: true);
+        if (classKey != null) {
+          final classDir = Directory(p.join(tbpFolderPath, 'BBPen', classKey));
+          if (!await classDir.exists()) await classDir.create(recursive: true);
+          final classSvg = File(p.join(classDir.path, '$base.svg'));
+          await classSvg.writeAsString(strokeContent, flush: true);
+          final classBstpen = File(p.join(classDir.path, '$base.bstpen'));
+          await classBstpen.writeAsString(strokeContent, flush: true);
+        } else {
+          // BoardBook 100% 동일 구조: BBPen/[hash].svg 저장
+          final bbpenDir = Directory(p.join(tbpFolderPath, 'BBPen'));
+          if (!await bbpenDir.exists()) await bbpenDir.create(recursive: true);
+          final bbpenFile = File(p.join(bbpenDir.path, '$base.svg'));
+          await bbpenFile.writeAsString(strokeContent, flush: true);
 
-        final targetDir = Directory(p.join(tbpFolderPath, subFolder));
-        if (!await targetDir.exists()) await targetDir.create(recursive: true);
-        final strokeFile = File(p.join(targetDir.path, '$base.bstpen'));
-        await strokeFile.writeAsString(strokeContent, flush: true);
-        final rootStrokeFile = File(p.join(tbpFolderPath, 'pen_$base.bstpen'));
-        await rootStrokeFile.writeAsString(strokeContent, flush: true);
+          final targetDir = Directory(p.join(tbpFolderPath, subFolder));
+          if (!await targetDir.exists()) await targetDir.create(recursive: true);
+          final strokeFile = File(p.join(targetDir.path, '$base.bstpen'));
+          await strokeFile.writeAsString(strokeContent, flush: true);
+          final rootStrokeFile = File(p.join(tbpFolderPath, 'pen_$base.bstpen'));
+          await rootStrokeFile.writeAsString(strokeContent, flush: true);
+        }
       }
 
       final driveFolderId = _driveFolderIds[tbpFolderPath];
       if (driveFolderId != null && driveFolderId.isNotEmpty) {
+        final cloudFilename = classKey != null ? 'pen_${classKey}_$base.bstpen' : 'pen_$base.bstpen';
         unawaited(
           CloudDriveService.instance.saveTbpFolderFileText(
             driveFolderId,
-            'pen_$base.bstpen',
+            cloudFilename,
             strokeContent,
           ),
         );
@@ -914,8 +976,13 @@ class TbpStorageService {
     }
   }
 
-  Future<List<AnnotationStroke>> loadPenStrokes(String tbpFolderPath, String dHash) async {
-    final raw = await loadStrokeData(tbpFolderPath: tbpFolderPath, subFolder: 'PEN', scopeKey: dHash);
+  Future<List<AnnotationStroke>> loadPenStrokes(String tbpFolderPath, String dHash, {String? classId}) async {
+    final raw = await loadStrokeData(
+      tbpFolderPath: tbpFolderPath,
+      subFolder: 'PEN',
+      scopeKey: dHash,
+      classId: classId,
+    );
     if (raw == null || raw.isEmpty) return [];
     try {
       final trimmed = raw.trim();
@@ -939,7 +1006,7 @@ class TbpStorageService {
     }
   }
 
-  Future<void> savePenStrokes(String tbpFolderPath, String dHash, List<AnnotationStroke> strokes) async {
+  Future<void> savePenStrokes(String tbpFolderPath, String dHash, List<AnnotationStroke> strokes, {String? classId}) async {
     // Boardest 자체 특화 SvgStrokeConverter를 통해 순수 SVG 벡터 포맷으로 판서 저장
     final penStrokes = strokes
         .map((s) => pen.AnnotationStroke(
@@ -954,6 +1021,7 @@ class TbpStorageService {
       tbpFolderPath: tbpFolderPath,
       subFolder: 'PEN',
       scopeKey: dHash,
+      classId: classId,
       strokeContent: svgContent,
     );
   }

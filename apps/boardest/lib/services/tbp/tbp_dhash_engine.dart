@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
@@ -40,24 +40,7 @@ class TbpDhashEngine {
   /// BoardBook 오리지널 고속 JS 스크립트
   static const String _hashJsScript = '''
     (function() {
-      try {
-        var meta = document.querySelector('meta[name="viewport"]');
-        if (!meta) {
-          meta = document.createElement('meta');
-          meta.name = 'viewport';
-          document.head.appendChild(meta);
-        }
-        meta.content = 'width=1536, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-
-        var styleId = 'bst-fhd-lock-style';
-        var styleEl = document.getElementById(styleId);
-        if (!styleEl) {
-          styleEl = document.createElement('style');
-          styleEl.id = styleId;
-          document.head.appendChild(styleEl);
-        }
-        styleEl.textContent = 'html, body { width: 1536px !important; min-width: 1536px !important; max-width: 1536px !important; height: 864px !important; min-height: 864px !important; margin: 0 auto !important; text-size-adjust: 100% !important; -webkit-text-size-adjust: 100% !important; box-sizing: border-box !important; }';
-      } catch (ve) {}
+      try { if (document.body) { document.documentElement.style.margin = "0"; } } catch (ve) {}
 
       function postToFlutter(payload) {
         var msg = JSON.stringify(payload);

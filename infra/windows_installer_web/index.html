@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -604,7 +604,7 @@
         <div class="hero-info">
           <h1>
             <span id="productName">Boardest 통합 온라인 설치</span>
-            <span class="hero-badge" id="productVersion">v5.4.0</span>
+            <span class="hero-badge" id="productVersion">v5.4.2</span>
             <span class="admin-badge" id="adminBadge">🛡️ 관리자 권한</span>
           </h1>
           <p id="productDesc">실행 파일 이름을 감지하거나 설치할 앱을 선택하여 최신 버전을 설치합니다.</p>
@@ -721,7 +721,7 @@
           <div style="display:flex; align-items:center; gap:6px;">
             <span style="font-weight:600; color:#fff;">🏷️ 설치 버전:</span>
             <select id="versionSelect" onchange="onVersionChange()" style="background:#1e1e24; color:var(--teal); font-weight:700; border:1px solid var(--teal-glow); padding:2px 6px; border-radius:5px; font-size:10.5px; outline:none; cursor:pointer;">
-              <option value="latest">최신 버전 (v5.4.1 권장)</option>
+              <option value="latest">최신 버전 (v5.4.2 권장)</option>
             </select>
           </div>
           <span style="color:var(--text-muted); font-size:10px;">원하는 다른 구버전도 선택 설치 가능</span>
@@ -735,7 +735,7 @@
       <div class="btn-row">
         <button class="btn btn-secondary" onclick="postToHost('minimize')">창 최소화</button>
         <button class="btn btn-primary" id="btnStartInstall" onclick="startInstall()">
-          <span id="btnStartInstallText">최신버전 (v5.4.1) 빠른 설치</span> &#8594;
+          <span id="btnStartInstallText">최신버전 (v5.4.2) 빠른 설치</span> &#8594;
         </button>
       </div>
     </div>
@@ -1033,7 +1033,7 @@
       exeName: '',
       productType: 'Teacher', // 'Class', 'ClassLite', 'Teacher', 'Cloud'
       productName: 'Boardest Teacher',
-      productVersion: '5.4.1',
+      productVersion: '5.4.2',
       installDir: '',
       teacherInstallDir: '',
       isUninstall: false,
@@ -1044,7 +1044,7 @@
     let pendingChoice = 'Class';
     let pendingRpcMap = {};
     let rpcSeq = 1;
-    let availableVersions = ['5.4.1', '5.4.0', '5.3.7'];
+    let availableVersions = ['5.4.2', '5.4.1', '5.4.0', '5.3.7'];
     let selectedVersion = 'latest';
 
     // GitHub Releases API에서 버전 태그 목록 비동기 가져오기

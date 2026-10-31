@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'package:universal_io/io.dart';
 import 'package:flutter/foundation.dart';
@@ -201,7 +201,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
   List<Map<String, dynamic>> _currentHotspots = [];
 
   // TBP 입력 모드 및 도구
-  TbpInputMode _inputMode = TbpInputMode.smart;
+  TbpInputMode _inputMode = TbpInputMode.pen;
   ToolMode _tool = ToolMode.pen;
   Color _penColor = const Color(0xFF00F5D4);
   double _strokeWidth = 4.0;
@@ -731,10 +731,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
           children: [
             // ── 16:9 메인 프레젠테이션 컨테이너 ──
             Positioned.fill(
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: LayoutBuilder(
+              child: LayoutBuilder(
                     builder: (context, constraints) {
                       final cWidth = constraints.maxWidth > 0 ? constraints.maxWidth : MediaQuery.of(context).size.width;
                       final cHeight = constraints.maxHeight > 0 ? constraints.maxHeight : MediaQuery.of(context).size.height;
@@ -982,8 +979,6 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                       );
                     },
                   ),
-                ),
-              ),
             ),
 
             // 활동 타이머 오버레이

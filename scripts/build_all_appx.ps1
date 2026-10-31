@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '5.4.0',
+  [string]$AppVersion = '5.4.2',
   [switch]$SkipApk,
   [switch]$SkipWindowsBuild
 )
@@ -258,11 +258,13 @@ New-Item -ItemType Directory -Force -Path $DownloadDir | Out-Null
 New-Item -ItemType Directory -Force -Path $DownloadsHubWeb | Out-Null
 
 $FilesToCopy = @(
-  'boardest.msix', 'boardest-class.msix', 'boardest-cloud.msix', 'boardest-class-cloud.msix',
-  'boardest.appx', 'boardest-class.appx', 'boardest-cloud.appx', 'boardest-class-cloud.appx',
-  'boardest-teacher-installer.exe', 'Boardest-Teacher-Setup.exe',
-  'boardest-class-installer.exe', 'Boardest-Class-Setup.exe',
-  'boardest-cloud-installer.exe', 'Boardest-Cloud-Setup.exe',
+  'boardest.msix', 'boardest-class.msix', 'boardest-cloud.msix', 'boardest-class-cloud.msix', 'boardest-class-lite.msix',
+  'boardest.appx', 'boardest-class.appx', 'boardest-cloud.appx', 'boardest-class-cloud.appx', 'boardest-class-lite.appx',
+  'boardest-installer.exe', 'installer.exe',
+  'boardest-teacher-installer.exe', 'Boardest-Teacher-Setup.exe', 'boardest-teacher.exe', 'boardest-teacher-uninstaller.exe',
+  'boardest-class-installer.exe', 'Boardest-Class-Setup.exe', 'boardest-class.exe',
+  'boardest-cloud-installer.exe', 'Boardest-Cloud-Setup.exe', 'boardest-cloud.exe',
+  'boardest-class-lite-installer.exe', 'Boardest-Class-Lite-Setup.exe', 'boardest-class-lite.exe',
   'uninstall.exe',
   'boardest-teacher.msi', 'bst-teacher.msi',
   'bst-teacher-windows.zip', 'boardest-windows.zip',

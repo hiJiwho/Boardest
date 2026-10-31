@@ -64,8 +64,12 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
   late final WebViewController _androidWebview;
   bool _winWebviewInitialized = false;
 
-  // ─── 입력 모드 ──────────────────────────────────────────
-  TbpInputMode _inputMode = TbpInputMode.smart;
+  // ─── 입력 모드 (기본: pen) ──────────────────────────────
+  TbpInputMode _inputMode = TbpInputMode.pen;
+
+  // ─── 학급별 판서 분리 관리 (핫스팟은 글로벌 공통 유지) ─────
+  String _selectedClass = '기본';
+  List<String> _availableClasses = ['기본', '1반', '2반', '3반'];
 
   // ─── 판서 ───────────────────────────────────────────────
   final AnnotationController _annotationController = AnnotationController();
@@ -93,9 +97,131 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
   String _targetUrl = '';
   String _resolvedTitle = '';
 
+
+  Future<void> _loadAvailableClasses() async {
+    if (_tbpFolderPath.isNotEmpty) {
+      final list = await TbpStorageService.instance.getAvailableClasses(_tbpFolderPath);
+      if (mounted) {
+        setState(() {
+          _availableClasses = list;
+          if (!_availableClasses.contains(_selectedClass) && _availableClasses.isNotEmpty) {
+            _selectedClass = _availableClasses.first;
+          }
+        });
+      }
+    }
+  }
+
+  Future<void> _switchClass(String newClass) async {
+    if (_selectedClass == newClass) return;
+    if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty && _annotationController.strokes.isNotEmpty) {
+      await TbpStorageService.instance.savePenStrokes(
+        _tbpFolderPath,
+        _currentDhash,
+        _annotationController.strokes,
+        classId: _selectedClass,
+      );
+    }
+    setState(() {
+      _selectedClass = newClass;
+      if (!_availableClasses.contains(newClass)) {
+        _availableClasses.add(newClass);
+      }
+    });
+    final strokes = await TbpStorageService.instance.loadPenStrokes(
+      _tbpFolderPath,
+      _currentDhash,
+      classId: newClass,
+    );
+    if (mounted) {
+      _annotationController.setStrokes(strokes);
+      _showFeedback('?룶 [' + newClass + '] 諛??먯꽌濡??꾪솚 (?レ뒪???좎?)');
+    }
+  }
+
+  Widget _buildClassSelector(double s) {
+    final activeVal = _availableClasses.contains(_selectedClass) ? _selectedClass : (_availableClasses.isNotEmpty ? _availableClasses.first : '湲곕낯');
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 2 * s),
+      decoration: BoxDecoration(
+        color: const Color(0xFF24262E),
+        borderRadius: BorderRadius.circular(8 * s),
+        border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.5)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: activeVal,
+          dropdownColor: const Color(0xFF16161A),
+          icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF00F5D4), size: 18),
+          style: GoogleFonts.notoSansKr(
+            color: const Color(0xFF00F5D4),
+            fontSize: 12 * s,
+            fontWeight: FontWeight.bold,
+          ),
+          onChanged: (val) {
+            if (val == '__new__') {
+              _promptNewClass();
+            } else if (val != null) {
+              _switchClass(val);
+            }
+          },
+          items: [
+            ..._availableClasses.map((c) => DropdownMenuItem(
+              value: c,
+              child: Text('?룶 ' + c),
+            )),
+            const DropdownMenuItem(
+              value: '__new__',
+              child: Text('?????숆툒 異붽?...', style: TextStyle(color: Color(0xFFFFD166))),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _promptNewClass() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16161A),
+        title: Text('새 학급 추가', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: '예: 4반, 특별반',
+            hintStyle: TextStyle(color: Colors.white38),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF00F5D4))),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4)),
+            onPressed: () {
+              final text = controller.text.trim();
+              Navigator.pop(ctx);
+              if (text.isNotEmpty) {
+                _switchClass(text);
+              }
+            },
+            child: const Text('추가', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
+    _loadAvailableClasses();
     if (!kIsWeb && Platform.isWindows) {
       windowManager.setTitleBarStyle(TitleBarStyle.hidden);
     }
@@ -409,6 +535,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
         _tbpFolderPath,
         _currentDhash,
         _annotationController.strokes,
+        classId: _selectedClass,
       );
     }
 
@@ -422,6 +549,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
     final strokes = await TbpStorageService.instance.loadPenStrokes(
       _tbpFolderPath,
       dHash,
+      classId: _selectedClass,
     );
     if (mounted) {
       setState(() => _currentHotspots = hotspots);
@@ -455,6 +583,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
         _tbpFolderPath,
         _currentDhash,
         _annotationController.strokes,
+        classId: _selectedClass,
       );
       _showFeedback('💾 판서가 저장되었습니다');
     }
@@ -693,11 +822,8 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
             children: [
               // ── 16:9 컨테이너 (WebView + 판서 + 핫스팟) ──
               Positioned.fill(
-                child: Center(
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: Stack(
-                      children: [
+                child: Stack(
+                  children: [
                         // ── WebView 레이어 ──────────────────────────────
                         Positioned.fill(
                           child: IgnorePointer(
@@ -741,8 +867,6 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                           ),
                       ],
                     ),
-                  ),
-                ),
               ),
 
               // ── 상단 컨트롤 바 ─────────────────────────────
@@ -933,6 +1057,8 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                   fontSize: 14 * s,
                 ),
               ),
+              SizedBox(width: 8 * s),
+              _buildClassSelector(s),
             ],
           ),
         ),
