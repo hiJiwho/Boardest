@@ -710,23 +710,31 @@ class TbpStorageService {
     try {
       final key = await _resolveCanonicalKey(tbpFolderPath, dHash);
 
-      if (kIsWeb) {
-        final cached = _webJsonCache['$tbpFolderPath::hotspot::$key'];
-        if (cached != null && cached.isNotEmpty) {
-          final decoded = jsonDecode(cached);
-          if (decoded is List) return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-          if (decoded is Map && decoded['hotspots'] is List) {
-            return (decoded['hotspots'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-          }
+      final cached = _webJsonCache['$tbpFolderPath::hotspot::$key'];
+      if (cached != null && cached.isNotEmpty) {
+        final decoded = jsonDecode(cached);
+        if (decoded is List) return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        if (decoded is Map && decoded['hotspots'] is List) {
+          return (decoded['hotspots'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
         }
-      } else {
-        final candidates = [
+      }
+
+      if (!kIsWeb) {
+        final candidates = <File>[
           File(p.join(tbpFolderPath, 'BBplus', '$key.json')),
           File(p.join(tbpFolderPath, 'BBplus', '$dHash.json')),
           File(p.join(tbpFolderPath, 'HOTspot', key, 'hotspot.bstsave')),
           File(p.join(tbpFolderPath, 'hotspot_$key.bstsave')),
           File(p.join(tbpFolderPath, 'HOTspot', dHash, 'hotspot.bstsave')),
           File(p.join(tbpFolderPath, 'HOTspot', key, 'hotspot.json')),
+          if (key == 'hash__1' || key == 'ui_home') ...[
+            File(p.join(tbpFolderPath, 'BBplus', 'query__embed.json')),
+            File(p.join(tbpFolderPath, 'HOTspot', 'query__embed', 'hotspot.bstsave')),
+            File(p.join(tbpFolderPath, 'hotspot_query__embed.bstsave')),
+            File(p.join(tbpFolderPath, 'BBplus', 'default.json')),
+            File(p.join(tbpFolderPath, 'HOTspot', 'default', 'hotspot.bstsave')),
+            File(p.join(tbpFolderPath, 'hotspot_default.bstsave')),
+          ],
         ];
         for (final f in candidates) {
           if (f.existsSync()) {
@@ -855,17 +863,35 @@ class TbpStorageService {
       final rawBase = filename != null && filename.isNotEmpty ? '$scopeKey$filename' : scopeKey;
       final classKey = (classId != null && classId.trim().isNotEmpty && classId != '전체') ? classId.trim() : null;
 
-      if (kIsWeb) {
-        final cachePrefix = classKey != null ? '$tbpFolderPath::BBPen::$classKey::$base' : '$tbpFolderPath::$subFolder::$base';
-        final cached = _webJsonCache[cachePrefix] ?? _webJsonCache['$tbpFolderPath::$subFolder::$base'];
-        if (cached != null) return cached;
-      } else {
+      final cachePrefix = classKey != null ? '$tbpFolderPath::BBPen::$classKey::$base' : '$tbpFolderPath::$subFolder::$base';
+      final cached = _webJsonCache[cachePrefix] ??
+          (classKey == null ? _webJsonCache['$tbpFolderPath::$subFolder::$base'] : null);
+      if (cached != null) return cached;
+
+      final fallbackBases = (base == 'hash__1' || base == 'ui_home')
+          ? <String>['query__embed', 'default']
+          : const <String>[];
+
+      for (final fb in fallbackBases) {
+        final fbPrefix = classKey != null ? '$tbpFolderPath::BBPen::$classKey::$fb' : '$tbpFolderPath::$subFolder::$fb';
+        final fbCached = _webJsonCache[fbPrefix];
+        if (fbCached != null) return fbCached;
+      }
+
+      if (!kIsWeb) {
         if (classKey != null) {
           final classBbpenSvg = File(p.join(tbpFolderPath, 'BBPen', classKey, '$base.svg'));
           if (classBbpenSvg.existsSync()) return await classBbpenSvg.readAsString();
 
           final classBbpenBstpen = File(p.join(tbpFolderPath, 'BBPen', classKey, '$base.bstpen'));
           if (classBbpenBstpen.existsSync()) return await classBbpenBstpen.readAsString();
+
+          for (final fb in fallbackBases) {
+            final fbSvg = File(p.join(tbpFolderPath, 'BBPen', classKey, '$fb.svg'));
+            if (fbSvg.existsSync()) return await fbSvg.readAsString();
+            final fbBstpen = File(p.join(tbpFolderPath, 'BBPen', classKey, '$fb.bstpen'));
+            if (fbBstpen.existsSync()) return await fbBstpen.readAsString();
+          }
 
           // 신규 반 진입 시 글로벌/기본 판서는 로드하지 않고 빈 판서로 반환 (핫스팟만 남기기)
           return null;
@@ -891,6 +917,15 @@ class TbpStorageService {
 
         final legacyFile = File(p.join(tbpFolderPath, subFolder, '$base.iwb'));
         if (legacyFile.existsSync()) return await legacyFile.readAsString();
+
+        for (final fb in fallbackBases) {
+          final fbSvg = File(p.join(tbpFolderPath, 'BBPen', '$fb.svg'));
+          if (fbSvg.existsSync()) return await fbSvg.readAsString();
+          final fbPen = File(p.join(tbpFolderPath, subFolder, '$fb.bstpen'));
+          if (fbPen.existsSync()) return await fbPen.readAsString();
+          final fbRootPen = File(p.join(tbpFolderPath, 'pen_$fb.bstpen'));
+          if (fbRootPen.existsSync()) return await fbRootPen.readAsString();
+        }
       }
 
       final driveFolderId = _driveFolderIds[tbpFolderPath];

@@ -22,8 +22,8 @@ using Microsoft.Web.WebView2.WinForms;
 [assembly: AssemblyCompany("Boardest Team")]
 [assembly: AssemblyProduct("Boardest Online Installer")]
 [assembly: AssemblyCopyright("Copyright © 2026 Boardest. All rights reserved.")]
-[assembly: AssemblyVersion("5.4.2.0")]
-[assembly: AssemblyFileVersion("5.4.2.0")]
+[assembly: AssemblyVersion("5.4.3.0")]
+[assembly: AssemblyFileVersion("5.4.3.0")]
 
 namespace BoardestInstaller
 {
@@ -43,6 +43,9 @@ namespace BoardestInstaller
         [DllImport("user32.dll")]
         private static extern bool EnableMenuItem(IntPtr hMenu, uint uIDEnableItem, uint uEnable);
 
+        [DllImport("shell32.dll")]
+        private static extern void SHChangeNotify(int wEventId, int uFlags, IntPtr dwItem1, IntPtr dwItem2);
+
         private const uint SC_CLOSE = 0xF060;
         private const uint MF_BYCOMMAND = 0x00000000;
         private const uint MF_GRAYED = 0x00000001;
@@ -51,7 +54,7 @@ namespace BoardestInstaller
         private WebView2 _webView;
         private string _productType = "Teacher"; // "Class", "Teacher", "Cloud"
         private string _productName = "Boardest 통합 온라인 설치";
-        private string _productVersion = "5.4.2";
+        private string _productVersion = "5.4.3";
         private string _teacherInstallDir;
         private string _exeFileName = "";
         private string _lastTargetUrl = "";
@@ -1274,11 +1277,11 @@ namespace BoardestInstaller
                 candidateUrls = new string[]
                 {
                     primaryUrl,
-                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.2/boardest-class-lite.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.3/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.0/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.msix",
-                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.2/boardest-class-lite.msix",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.3/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.1/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.0/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.appx"
@@ -1289,14 +1292,14 @@ namespace BoardestInstaller
                 candidateUrls = new string[]
                 {
                     primaryUrl,
-                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.2/boardest-class.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.3/boardest-class.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/boardest-class.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.0/boardest-class.msix",
                     "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.msix",
-                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.2/boardest.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.3/boardest.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/boardest.msix",
                     "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.msix",
-                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.2/boardest-class.msix",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.3/boardest-class.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.1/boardest-class.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.0/boardest-class.msix",
                     "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.appx"
@@ -1307,11 +1310,11 @@ namespace BoardestInstaller
                 candidateUrls = new string[]
                 {
                     primaryUrl,
-                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.2/boardest-cloud.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.3/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.0/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.msix",
-                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.2/boardest-cloud.msix",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.3/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.1/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.0/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.appx"
@@ -1322,11 +1325,11 @@ namespace BoardestInstaller
                 candidateUrls = new string[]
                 {
                     primaryUrl,
-                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.2/bst-teacher-windows.zip",
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.4.3/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.0/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher-windows.zip",
-                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.2/bst-teacher-windows.zip",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.3/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.1/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.0/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-windows.zip",
@@ -1747,15 +1750,24 @@ namespace BoardestInstaller
             var startDirs = new List<string>();
             try
             {
-                string commonStart = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), "Boardest");
-                startDirs.Add(commonStart);
+                string commonPrograms = Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms);
+                if (!string.IsNullOrEmpty(commonPrograms))
+                {
+                    startDirs.Add(commonPrograms);
+                    startDirs.Add(Path.Combine(commonPrograms, "Boardest"));
+                }
             }
             catch { }
 
             try
             {
-                string userStart = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Boardest");
-                if (!startDirs.Contains(userStart)) startDirs.Add(userStart);
+                string userPrograms = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+                if (!string.IsNullOrEmpty(userPrograms))
+                {
+                    if (!startDirs.Contains(userPrograms)) startDirs.Add(userPrograms);
+                    string userSub = Path.Combine(userPrograms, "Boardest");
+                    if (!startDirs.Contains(userSub)) startDirs.Add(userSub);
+                }
             }
             catch { }
 
@@ -1769,6 +1781,13 @@ namespace BoardestInstaller
                 }
                 catch { }
             }
+
+            try
+            {
+                // SHCNE_ASSOCCHANGED (0x08000000), SHCNF_IDLIST (0x0000) -> 윈도우 시작 메뉴/앱 서랍 즉시 새로고침
+                SHChangeNotify(0x08000000, 0x0000, IntPtr.Zero, IntPtr.Zero);
+            }
+            catch { }
         }
 
         private void CreateShortcutWithFallback(string shortcutPath, string targetPath, string workingDir, string description, string args = "")

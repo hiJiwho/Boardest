@@ -1,4 +1,4 @@
-# Project-level configuration.
+﻿# Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
 project(boardest LANGUAGES CXX)
 
@@ -108,3 +108,14 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# Copy Boardest WPF tools (hwp_overlay, ppt_overlay, ppt_helper)
+set(BOARDEST_WPF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
+install(FILES 
+  "${BOARDEST_WPF_DIR}/boardest_hwp_overlay.exe"
+  "${BOARDEST_WPF_DIR}/boardest_ppt_overlay.exe"
+  "${BOARDEST_WPF_DIR}/boardest_ppt_helper.exe"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime
+  OPTIONAL
+)

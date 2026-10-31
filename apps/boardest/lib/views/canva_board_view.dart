@@ -432,51 +432,11 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
       setState(() {
         _currentHotspots = hotspots;
       });
-      _annotationController.strokes.clear();
-      _annotationController.strokes.addAll(strokes);
-    }
-  }
-
-  void _sendVirtualKey(String key, int keyCode) {
-    // Canva 및 웹 프레젠테이션 호환: PageDown/PageUp을 한 장씩 넘기는 ArrowRight/ArrowLeft로 완전 매핑
-    final effectiveKey = (key == 'PageDown')
-        ? 'ArrowRight'
-        : (key == 'PageUp')
-            ? 'ArrowLeft'
-            : key;
-    final effectiveCode = (key == 'PageDown')
-        ? 39
-        : (key == 'PageUp')
-            ? 37
-            : keyCode;
-
-    final script = '''
-      (function() {
-        const target = document.activeElement || document.body;
-        ['keydown', 'keyup'].forEach(function(type) {
-          const evt = new KeyboardEvent(type, {
-            key: '$effectiveKey',
-            code: '$effectiveKey',
-            keyCode: $effectiveCode,
-            which: $effectiveCode,
-            bubbles: true,
-            cancelable: true
-          });
-          target.dispatchEvent(evt);
-          window.dispatchEvent(evt);
-          document.dispatchEvent(evt);
-        });
-      })();
-    ''';
-    if (!kIsWeb && Platform.isWindows && _winWebviewInitialized) {
-      _winWebview.executeScript(script);
-    } else if (!kIsWeb && !Platform.isWindows) {
-      _androidWebview.runJavaScript(script);
+      _annotationController.setStrokes(strokes);
     }
   }
 
   void _navigatePage({required bool isNext}) {
-    _sendVirtualKey(isNext ? 'PageDown' : 'PageUp', isNext ? 34 : 33);
     _dhashEngine.navigatePage(isNext: isNext);
   }
 
@@ -728,7 +688,6 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(24 * s),
                                     onTap: () {
-                                      _sendVirtualKey('PageUp', 33);
                                       _dhashEngine.navigatePage(isNext: false);
                                     },
                                     child: Container(
@@ -770,7 +729,6 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(24 * s),
                                     onTap: () {
-                                      _sendVirtualKey('PageDown', 34);
                                       _dhashEngine.navigatePage(isNext: true);
                                     },
                                     child: Container(
@@ -864,9 +822,8 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                       ),
                       child: Row(
                         children: [
-                          _buildInputModeChip(TbpInputMode.touch, '🖱️ 마우스', s),
-                          _buildInputModeChip(TbpInputMode.smart, '⚡ 스마트', s),
-                          _buildInputModeChip(TbpInputMode.pen, '✏️ 주석', s),
+                          _buildInputModeChip(TbpInputMode.pen, '✏️ 펜 (기본)', s),
+                          _buildInputModeChip(TbpInputMode.touch, '👆 터치', s),
                         ],
                       ),
                     ),
@@ -887,7 +844,6 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                             icon: const Icon(Icons.navigate_before_rounded, color: Colors.white, size: 28),
                             tooltip: '이전 페이지 (PgUp)',
                             onPressed: () {
-                              _sendVirtualKey('PageUp', 33);
                               _dhashEngine.navigatePage(isNext: false);
                             },
                           ),
@@ -896,7 +852,6 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                             icon: const Icon(Icons.navigate_next_rounded, color: Colors.white, size: 28),
                             tooltip: '다음 페이지 (PgDn)',
                             onPressed: () {
-                              _sendVirtualKey('PageDown', 34);
                               _dhashEngine.navigatePage(isNext: true);
                             },
                           ),

@@ -40,7 +40,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
   Color _penColor = const Color(0xFF8B5CF6);
   double _strokeWidth = 4.0;
   ToolMode _tool = ToolMode.pen;
-  TbpInputMode _inputMode = TbpInputMode.smart;
+  TbpInputMode _inputMode = TbpInputMode.pen;
 
   TbpMetadata? _metadata;
   Map<String, dynamic>? _infoJson;
@@ -524,9 +524,8 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                     ),
                     child: Row(
                       children: [
-                        _buildInputModeChip(TbpInputMode.touch, '🖱️ 마우스', s),
-                        _buildInputModeChip(TbpInputMode.smart, '⚡ 스마트', s),
-                        _buildInputModeChip(TbpInputMode.pen, '✏️ 주석', s),
+                        _buildInputModeChip(TbpInputMode.pen, '✏️ 펜 (기본)', s),
+                        _buildInputModeChip(TbpInputMode.touch, '👆 터치', s),
                       ],
                     ),
                   ),

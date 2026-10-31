@@ -94,16 +94,32 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
 
   final FocusNode _keyboardFocus = FocusNode();
 
+  bool _isSwitchingPage = false;
   String _targetUrl = '';
   String _resolvedTitle = '';
 
+  void _onStrokesChanged() {
+    if (_isSwitchingPage) return;
+    if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty) {
+      final snapshot = List<AnnotationStroke>.from(_annotationController.strokes);
+      unawaited(
+        TbpStorageService.instance.savePenStrokes(
+          _tbpFolderPath,
+          _currentDhash,
+          snapshot,
+          classId: _selectedClass,
+        ),
+      );
+    }
+  }
 
   Future<void> _loadAvailableClasses() async {
     if (_tbpFolderPath.isNotEmpty) {
       final list = await TbpStorageService.instance.getAvailableClasses(_tbpFolderPath);
       if (mounted) {
         setState(() {
-          _availableClasses = list;
+          final merged = <String>{'기본', ..._availableClasses, ...list};
+          _availableClasses = merged.toList();
           if (!_availableClasses.contains(_selectedClass) && _availableClasses.isNotEmpty) {
             _selectedClass = _availableClasses.first;
           }
@@ -114,33 +130,40 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
 
   Future<void> _switchClass(String newClass) async {
     if (_selectedClass == newClass) return;
-    if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty && _annotationController.strokes.isNotEmpty) {
-      await TbpStorageService.instance.savePenStrokes(
+    _isSwitchingPage = true;
+    try {
+      if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty) {
+        await TbpStorageService.instance.savePenStrokes(
+          _tbpFolderPath,
+          _currentDhash,
+          List<AnnotationStroke>.from(_annotationController.strokes),
+          classId: _selectedClass,
+        );
+      }
+      setState(() {
+        _selectedClass = newClass;
+        if (!_availableClasses.contains(newClass)) {
+          _availableClasses.add(newClass);
+        }
+      });
+      final strokes = await TbpStorageService.instance.loadPenStrokes(
         _tbpFolderPath,
         _currentDhash,
-        _annotationController.strokes,
-        classId: _selectedClass,
+        classId: newClass,
       );
-    }
-    setState(() {
-      _selectedClass = newClass;
-      if (!_availableClasses.contains(newClass)) {
-        _availableClasses.add(newClass);
+      if (mounted) {
+        _annotationController.setStrokes(strokes);
+        _showFeedback('🏫 [$newClass] 학급 판서로 전환 (핫스팟 유지)');
       }
-    });
-    final strokes = await TbpStorageService.instance.loadPenStrokes(
-      _tbpFolderPath,
-      _currentDhash,
-      classId: newClass,
-    );
-    if (mounted) {
-      _annotationController.setStrokes(strokes);
-      _showFeedback('?룶 [' + newClass + '] 諛??먯꽌濡??꾪솚 (?レ뒪???좎?)');
+    } finally {
+      _isSwitchingPage = false;
     }
   }
 
   Widget _buildClassSelector(double s) {
-    final activeVal = _availableClasses.contains(_selectedClass) ? _selectedClass : (_availableClasses.isNotEmpty ? _availableClasses.first : '湲곕낯');
+    final activeVal = _availableClasses.contains(_selectedClass)
+        ? _selectedClass
+        : (_availableClasses.isNotEmpty ? _availableClasses.first : '기본');
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 2 * s),
       decoration: BoxDecoration(
@@ -168,11 +191,11 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
           items: [
             ..._availableClasses.map((c) => DropdownMenuItem(
               value: c,
-              child: Text('?룶 ' + c),
+              child: Text('🏫 $c'),
             )),
             const DropdownMenuItem(
               value: '__new__',
-              child: Text('?????숆툒 異붽?...', style: TextStyle(color: Color(0xFFFFD166))),
+              child: Text('➕ 새 학급 추가...', style: TextStyle(color: Color(0xFFFFD166))),
             ),
           ],
         ),
@@ -231,6 +254,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
     _annotationController.toolMode = _tool;
     _annotationController.eraseEntireStroke = _eraseEntireStroke;
     _annotationController.eraserSize = _eraserSize;
+    _annotationController.addListener(_onStrokesChanged);
     _dhashEngine = TbpDhashEngine(
       onDhashChanged: _onDhashDetected,
       onWebContextMenu: (rx, ry) {
@@ -413,6 +437,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
         return;
       }
 
+      await _loadAvailableClasses();
       _dhashEngine.registerKnownHashes(
         await TbpStorageService.instance.getKnownPageHashes(_tbpFolderPath),
       );
@@ -423,9 +448,12 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
       final initialStrokes = await TbpStorageService.instance.loadPenStrokes(
         _tbpFolderPath,
         _currentDhash,
+        classId: _selectedClass,
       );
       _currentHotspots = initialHotspots;
+      _isSwitchingPage = true;
       _annotationController.setStrokes(initialStrokes);
+      _isSwitchingPage = false;
 
       _targetUrl = formatPresentUrl(targetUrl);
       await _setupWebview(_targetUrl);
@@ -526,34 +554,51 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
 
   Future<void> _onDhashDetected(String dHash) async {
     if (_currentDhash == dHash) return;
+    _isSwitchingPage = true;
+    try {
+      final prevHash = _currentDhash;
+      final prevStrokes = List<AnnotationStroke>.from(_annotationController.strokes);
 
-    // 1. 이전 페이지 판서 자동 저장 (Auto-Save)
-    if (_tbpFolderPath.isNotEmpty &&
-        _currentDhash.isNotEmpty &&
-        _annotationController.strokes.isNotEmpty) {
-      await TbpStorageService.instance.savePenStrokes(
+      // 1. 이전 페이지 판서 자동 저장 (Auto-Save)
+      if (_tbpFolderPath.isNotEmpty && prevHash.isNotEmpty && prevHash != 'default') {
+        await TbpStorageService.instance.savePenStrokes(
+          _tbpFolderPath,
+          prevHash,
+          prevStrokes,
+          classId: _selectedClass,
+        );
+      }
+
+      _currentDhash = dHash;
+
+      // 2. 새 페이지의 핫스팟 및 판서 스트로크 자동 로드
+      final hotspots = await TbpStorageService.instance.loadHotspots(
         _tbpFolderPath,
-        _currentDhash,
-        _annotationController.strokes,
+        dHash,
+      );
+      var strokes = await TbpStorageService.instance.loadPenStrokes(
+        _tbpFolderPath,
+        dHash,
         classId: _selectedClass,
       );
-    }
 
-    _currentDhash = dHash;
+      // 초기 로딩 중('default') 작성한 판서가 있으면 첫 실제 페이지 해시로 이관
+      if (prevHash == 'default' && prevStrokes.isNotEmpty && strokes.isEmpty) {
+        strokes = prevStrokes;
+        await TbpStorageService.instance.savePenStrokes(
+          _tbpFolderPath,
+          dHash,
+          strokes,
+          classId: _selectedClass,
+        );
+      }
 
-    // 2. 새 페이지의 핫스팟 및 판서 스트로크 자동 로드
-    final hotspots = await TbpStorageService.instance.loadHotspots(
-      _tbpFolderPath,
-      dHash,
-    );
-    final strokes = await TbpStorageService.instance.loadPenStrokes(
-      _tbpFolderPath,
-      dHash,
-      classId: _selectedClass,
-    );
-    if (mounted) {
-      setState(() => _currentHotspots = hotspots);
-      _annotationController.setStrokes(strokes);
+      if (mounted) {
+        setState(() => _currentHotspots = hotspots);
+        _annotationController.setStrokes(strokes);
+      }
+    } finally {
+      _isSwitchingPage = false;
     }
   }
 
@@ -745,6 +790,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
         _winWebview.dispose();
       } catch (_) {}
     }
+    _annotationController.removeListener(_onStrokesChanged);
     _annotationController.dispose();
     _longPressTimer?.cancel();
     _keyboardFocus.dispose();
@@ -1044,7 +1090,8 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
                     await TbpStorageService.instance.savePenStrokes(
                       _tbpFolderPath,
                       _currentDhash,
-                      _annotationController.strokes,
+                      List<AnnotationStroke>.from(_annotationController.strokes),
+                      classId: _selectedClass,
                     );
                   }
                   if (mounted) Navigator.pop(context);
@@ -1131,15 +1178,13 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
           ),
         ),
 
-        // ── 우측: 입력 모드 토글 ────────────────────────────
+        // ── 우측: 입력 모드 토글 (Pen 기본 / Touch) ──────────
         _controlContainer(
           s,
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _modeButton(s, TbpInputMode.pen, '✏️', 'Pen\n(판서 전용)'),
-              SizedBox(width: 4 * s),
-              _modeButton(s, TbpInputMode.smart, '🧠', 'Smart\n(기본)'),
+              _modeButton(s, TbpInputMode.pen, '✏️', 'Pen\n(기본)'),
               SizedBox(width: 4 * s),
               _modeButton(s, TbpInputMode.touch, '👆', 'Touch\n(통과)'),
             ],

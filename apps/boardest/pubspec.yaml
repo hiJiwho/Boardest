@@ -1,4 +1,4 @@
-﻿name: boardest
+name: boardest
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 5.4.2+5420
+version: 5.4.3+5430
 
 environment:
   sdk: ^3.11.5
@@ -142,7 +142,7 @@ msix_config:
   display_name: Boardest
   publisher_display_name: Boardest
   identity_name: Boardest.Board
-  msix_version: 5.4.2+5420
+  msix_version: 5.4.3+5430
   logo_path: windows/runner/resources/app_icon.ico
   capabilities: internetClient, privateNetworkClientServer
   install_certificate: false

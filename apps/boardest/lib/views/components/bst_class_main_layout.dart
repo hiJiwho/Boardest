@@ -379,34 +379,59 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     _startAdSlideTimer();
   }
 
+  String get _effectiveSchoolCode =>
+      (widget.schoolCode.trim().isNotEmpty && widget.schoolCode.trim() != 'default')
+          ? widget.schoolCode.trim()
+          : widget.schoolName.trim();
+
+  int get _effectiveGrade {
+    if (widget.grade > 0) return widget.grade;
+    final nums = RegExp(r'\d+')
+        .allMatches(widget.gradeClass)
+        .map((m) => int.tryParse(m.group(0)!) ?? 0)
+        .where((n) => n > 0)
+        .toList();
+    return nums.isNotEmpty ? nums[0] : 1;
+  }
+
+  int get _effectiveClassNum {
+    if (widget.classNum > 0) return widget.classNum;
+    final nums = RegExp(r'\d+')
+        .allMatches(widget.gradeClass)
+        .map((m) => int.tryParse(m.group(0)!) ?? 0)
+        .where((n) => n > 0)
+        .toList();
+    return nums.length >= 2 ? nums[1] : 1;
+  }
+
+  int _assessmentRefreshTick = 0;
+
+  void _syncClassAssessmentsAndNotices() {
+    AssessmentService.instance.loadAssessments(
+      schoolCode: _effectiveSchoolCode,
+      grade: _effectiveGrade,
+      classNum: _effectiveClassNum,
+    );
+    SchoolNoticeService.instance.loadNotices(
+      schoolCode: _effectiveSchoolCode,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     _initCurrentPeriod();
     _loadSystemApps();
-    int g = widget.grade;
-    int c = widget.classNum;
-    if (g <= 0 || c <= 0) {
-      final m = RegExp(r'(\d+)\s*[-학년]\s*(\d+)?').firstMatch(widget.gradeClass);
-      if (m != null) {
-        g = int.tryParse(m.group(1) ?? '1') ?? 1;
-        c = int.tryParse(m.group(2) ?? '1') ?? 1;
-      }
-    }
-    final effectiveCode = widget.schoolCode.isNotEmpty && widget.schoolCode != 'default'
-        ? widget.schoolCode
-        : widget.schoolName;
-    AssessmentService.instance.loadAssessments(
-      schoolCode: effectiveCode,
-      grade: g,
-      classNum: c,
-    );
-    SchoolNoticeService.instance.loadNotices(
-      schoolCode: effectiveCode,
-    );
+    _syncClassAssessmentsAndNotices();
     _startAdSlideTimer();
     _tickerTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      _assessmentRefreshTick++;
+      if (_assessmentRefreshTick >= 30) {
+        _assessmentRefreshTick = 0;
+        _syncClassAssessmentsAndNotices();
+      }
+      setState(() {});
     });
   }
 
@@ -424,6 +449,13 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
         oldWidget.currentSubject != widget.currentSubject ||
         oldWidget.activeSpecialPeriod != widget.activeSpecialPeriod) {
       _initCurrentPeriod();
+    }
+    if (oldWidget.schoolCode != widget.schoolCode ||
+        oldWidget.schoolName != widget.schoolName ||
+        oldWidget.grade != widget.grade ||
+        oldWidget.classNum != widget.classNum ||
+        oldWidget.gradeClass != widget.gradeClass) {
+      _syncClassAssessmentsAndNotices();
     }
   }
 
@@ -1539,18 +1571,11 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 if (widget.ddayLabel != null && widget.ddayLabel!.isNotEmpty)
                   InkWell(
                     onTap: () {
-                      int grade = 1;
-                      int classNum = 1;
-                      final match = RegExp(r'(\d+)\s*[-학년]\s*(\d+)?').firstMatch(widget.gradeClass);
-                      if (match != null) {
-                        grade = int.tryParse(match.group(1) ?? '1') ?? 1;
-                        classNum = int.tryParse(match.group(2) ?? '1') ?? 1;
-                      }
                       AssessmentDialog.show(
                         context,
-                        schoolCode: widget.schoolName,
-                        grade: grade,
-                        classNum: classNum,
+                        schoolCode: _effectiveSchoolCode,
+                        grade: _effectiveGrade,
+                        classNum: _effectiveClassNum,
                       );
                     },
                     onLongPress: widget.onDdayLongPress,
@@ -2050,18 +2075,11 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 if (widget.ddayLabel != null && widget.ddayLabel!.isNotEmpty)
                   InkWell(
                     onTap: () {
-                      int grade = 1;
-                      int classNum = 1;
-                      final match = RegExp(r'(\d+)\s*[-학년]\s*(\d+)?').firstMatch(widget.gradeClass);
-                      if (match != null) {
-                        grade = int.tryParse(match.group(1) ?? '1') ?? 1;
-                        classNum = int.tryParse(match.group(2) ?? '1') ?? 1;
-                      }
                       AssessmentDialog.show(
                         context,
-                        schoolCode: widget.schoolName,
-                        grade: grade,
-                        classNum: classNum,
+                        schoolCode: _effectiveSchoolCode,
+                        grade: _effectiveGrade,
+                        classNum: _effectiveClassNum,
                       );
                     },
                     onLongPress: widget.onDdayLongPress,
@@ -2120,18 +2138,11 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 if (widget.ddayLabel != null && widget.ddayLabel!.isNotEmpty)
                   InkWell(
                     onTap: () {
-                      int grade = 1;
-                      int classNum = 1;
-                      final match = RegExp(r'(\d+)\s*[-학년]\s*(\d+)?').firstMatch(widget.gradeClass);
-                      if (match != null) {
-                        grade = int.tryParse(match.group(1) ?? '1') ?? 1;
-                        classNum = int.tryParse(match.group(2) ?? '1') ?? 1;
-                      }
                       AssessmentDialog.show(
                         context,
-                        schoolCode: widget.schoolName,
-                        grade: grade,
-                        classNum: classNum,
+                        schoolCode: _effectiveSchoolCode,
+                        grade: _effectiveGrade,
+                        classNum: _effectiveClassNum,
                       );
                     },
                     onLongPress: widget.onDdayLongPress,
@@ -4351,13 +4362,9 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
 
   /// [수행평가 공지 카드]: 마감 임박 순 리스트, 일시/교시 먼저 + D-Day 뒤로, 등록 버튼
   Widget _assessmentNoticeColumn([int totalSlides = 1]) {
-    int grade = 1;
-    int classNum = 1;
-    final match = RegExp(r'(\d+)\s*[-학년]\s*(\d+)?').firstMatch(widget.gradeClass);
-    if (match != null) {
-      grade = int.tryParse(match.group(1) ?? '1') ?? 1;
-      classNum = int.tryParse(match.group(2) ?? '1') ?? 1;
-    }
+    final grade = _effectiveGrade;
+    final classNum = _effectiveClassNum;
+    final schoolCode = _effectiveSchoolCode;
 
     return _glassTile(
       selected: false,
@@ -4422,7 +4429,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 onTap: () {
                   AssessmentDialog.show(
                     context,
-                    schoolCode: widget.schoolName,
+                    schoolCode: schoolCode,
                     grade: grade,
                     classNum: classNum,
                   );
@@ -4484,7 +4491,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                       onTap: () {
                         AssessmentDialog.show(
                           context,
-                          schoolCode: widget.schoolName,
+                          schoolCode: schoolCode,
                           grade: grade,
                           classNum: classNum,
                           initialItem: it,
@@ -4575,7 +4582,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
               onPressed: () {
                 AssessmentDialog.show(
                   context,
-                  schoolCode: widget.schoolName,
+                  schoolCode: schoolCode,
                   grade: grade,
                   classNum: classNum,
                   initialShowAdd: true,

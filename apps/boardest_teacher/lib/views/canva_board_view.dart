@@ -900,7 +900,6 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                                     child: InkWell(
                                       borderRadius: BorderRadius.circular(24 * s),
                                       onTap: () {
-                                        _sendVirtualKey('PageUp', 33);
                                         _dhashEngine.navigatePage(isNext: false);
                                       },
                                       child: Container(
@@ -946,7 +945,6 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                                     child: InkWell(
                                       borderRadius: BorderRadius.circular(24 * s),
                                       onTap: () {
-                                        _sendVirtualKey('PageDown', 34);
                                         _dhashEngine.navigatePage(isNext: true);
                                       },
                                       child: Container(
@@ -1086,9 +1084,8 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                         ),
                         child: Row(
                           children: [
-                            _buildInputModeChip(TbpInputMode.touch, '🖱️ 마우스', s),
-                            _buildInputModeChip(TbpInputMode.smart, '⚡ 스마트', s),
-                            _buildInputModeChip(TbpInputMode.pen, '✏️ 주석', s),
+                            _buildInputModeChip(TbpInputMode.pen, '✏️ 펜 (기본)', s),
+                            _buildInputModeChip(TbpInputMode.touch, '👆 터치', s),
                           ],
                         ),
                       ),
@@ -1109,7 +1106,6 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                               icon: const Icon(Icons.navigate_before_rounded, color: Colors.white, size: 28),
                               tooltip: '이전 페이지 (PgUp)',
                               onPressed: () {
-                                _sendVirtualKey('PageUp', 33);
                                 _dhashEngine.navigatePage(isNext: false);
                               },
                             ),
@@ -1118,7 +1114,6 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                               icon: const Icon(Icons.navigate_next_rounded, color: Colors.white, size: 28),
                               tooltip: '다음 페이지 (PgDn)',
                               onPressed: () {
-                                _sendVirtualKey('PageDown', 34);
                                 _dhashEngine.navigatePage(isNext: true);
                               },
                             ),
@@ -1242,7 +1237,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                           if (tool == ToolMode.pointer) {
                             _inputMode = TbpInputMode.touch;
                           } else if (_inputMode == TbpInputMode.touch) {
-                            _inputMode = TbpInputMode.smart;
+                            _inputMode = TbpInputMode.pen;
                           }
                         });
                         _syncIframePointerEvents();

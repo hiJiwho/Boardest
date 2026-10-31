@@ -32,6 +32,12 @@ class TeacherAssessmentView extends StatefulWidget {
 
 class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
   int _selectedGrade = 1;
+  int _selectedClassFilter = 0; // 0: 학년 전체, 1~12: 각 반 필터
+  Map<int, Set<int>> _installedClasses = {
+    1: <int>{},
+    2: <int>{},
+    3: <int>{},
+  };
   int _mainSubTab = 0; // 0: 수행평가 다중 공지, 1: 학교 행사 광고판 관리
   bool _isLoading = true;
   bool _isLoadingNotices = false;
@@ -56,11 +62,19 @@ class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
 
   Future<void> _loadAssessments() async {
     setState(() => _isLoading = true);
-    await AssessmentService.instance.loadAssessments(
+    final installedFuture = AssessmentService.instance.fetchInstalledClasses(widget.schoolCode);
+    final loadFuture = AssessmentService.instance.loadAssessments(
       schoolCode: widget.schoolCode,
       grade: _selectedGrade,
     );
-    if (mounted) setState(() => _isLoading = false);
+    final installedMap = await installedFuture;
+    await loadFuture;
+    if (mounted) {
+      setState(() {
+        _installedClasses = installedMap;
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _loadNotices() async {
@@ -230,7 +244,10 @@ class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
                 for (int g in [1, 2, 3]) ...[
                   InkWell(
                     onTap: () {
-                      setState(() => _selectedGrade = g);
+                      setState(() {
+                        _selectedGrade = g;
+                        _selectedClassFilter = 0;
+                      });
                       _loadAssessments();
                     },
                     borderRadius: BorderRadius.circular(8),
@@ -256,6 +273,17 @@ class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
                   ),
                   const SizedBox(width: 8),
                 ],
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: _loadAssessments,
+                  icon: const Icon(Icons.refresh_rounded, size: 15, color: Color(0xFF00F5D4)),
+                  label: Text('새로고침', style: _ts(12.5, w: FontWeight.w800, c: const Color(0xFF00F5D4))),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.white24),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
                 const Spacer(),
                 SizedBox(
                   width: 240,
@@ -276,7 +304,102 @@ class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
+            // ── 1반 ~ 12반 학급 선택 바 (설치 안 된 반 비활성화) ──
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  InkWell(
+                    onTap: () => setState(() => _selectedClassFilter = 0),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _selectedClassFilter == 0
+                            ? const Color(0xFF00F5D4)
+                            : Colors.white.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _selectedClassFilter == 0 ? const Color(0xFF00F5D4) : Colors.white12,
+                        ),
+                      ),
+                      child: Text(
+                        '전체 학급',
+                        style: _ts(
+                          12.5,
+                          w: FontWeight.w800,
+                          c: _selectedClassFilter == 0 ? Colors.black : Colors.white70,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  for (int c = 1; c <= 12; c++) ...[
+                    Builder(
+                      builder: (_) {
+                        final isInstalled = (_installedClasses[_selectedGrade] ?? const <int>{}).contains(c);
+                        final isSelected = _selectedClassFilter == c;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: Opacity(
+                            opacity: isInstalled ? 1.0 : 0.38,
+                            child: InkWell(
+                              onTap: isInstalled
+                                  ? () => setState(() => _selectedClassFilter = c)
+                                  : null,
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? const Color(0xFF00F5D4)
+                                      : (isInstalled
+                                          ? Colors.white.withOpacity(0.07)
+                                          : Colors.white.withOpacity(0.02)),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? const Color(0xFF00F5D4)
+                                        : (isInstalled
+                                            ? const Color(0xFF00F5D4).withOpacity(0.35)
+                                            : Colors.white10),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      isInstalled ? Icons.check_circle_rounded : Icons.block_rounded,
+                                      size: 12,
+                                      color: isSelected
+                                          ? Colors.black
+                                          : (isInstalled ? const Color(0xFF00F5D4) : Colors.white38),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      isInstalled ? '$c반' : '$c반(미설치)',
+                                      style: _ts(
+                                        12,
+                                        w: FontWeight.w800,
+                                        c: isSelected
+                                            ? Colors.black
+                                            : (isInstalled ? Colors.white : Colors.white38),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
 
             // ── 수행평가 목록 ──
             Expanded(
@@ -287,6 +410,11 @@ class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
                       builder: (context, items, _) {
                         var filtered = items.where((it) {
                           if (it.grade != _selectedGrade && it.grade != 0) return false;
+                          if (_selectedClassFilter > 0 &&
+                              it.classNum != 0 &&
+                              it.classNum != _selectedClassFilter) {
+                            return false;
+                          }
                           if (_searchQuery.isNotEmpty) {
                             final q = _searchQuery.toLowerCase();
                             return it.subject.toLowerCase().contains(q) || it.title.toLowerCase().contains(q);
@@ -513,13 +641,29 @@ class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
 
     int selectedGrade = _selectedGrade;
     DateTime selectedDate = DateTime.now().add(const Duration(days: 7));
-    // 대상 학급 선택 상태 (1반~6반)
-    final Set<int> selectedClasses = {1, 2, 3, 4, 5, 6};
+    // 대상 학급 선택 상태 (설치된 반만 초기 선택, 1~12반 전체 표시 및 미설치 반 비활성화)
+    final Set<int> selectedClasses = Set<int>.from(_installedClasses[selectedGrade] ?? const <int>{});
+    bool refreshedInstalled = false;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlgState) {
+          if (!refreshedInstalled) {
+            refreshedInstalled = true;
+            AssessmentService.instance.fetchInstalledClasses(widget.schoolCode).then((map) {
+              if (!mounted) return;
+              setState(() => _installedClasses = map);
+              setDlgState(() {
+                final inst = map[selectedGrade] ?? const <int>{};
+                selectedClasses.removeWhere((c) => !inst.contains(c));
+                if (selectedClasses.isEmpty && inst.isNotEmpty) {
+                  selectedClasses.addAll(inst);
+                }
+              });
+            });
+          }
+          final installedForGrade = _installedClasses[selectedGrade] ?? const <int>{};
           // 동료 교사 시간표 병합 계산
           final colleagueName = colleagueCtrl.text.trim();
           final List<Lesson> relevantLessons = [];
@@ -576,7 +720,14 @@ class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
                             selected: selectedGrade == g,
                             selectedColor: const Color(0xFF00F5D4),
                             onSelected: (val) {
-                              if (val) setDlgState(() => selectedGrade = g);
+                              if (val) {
+                                setDlgState(() {
+                                  selectedGrade = g;
+                                  selectedClasses
+                                    ..clear()
+                                    ..addAll(_installedClasses[g] ?? const <int>{});
+                                });
+                              }
                             },
                           ),
                           const SizedBox(width: 8),
@@ -688,41 +839,87 @@ class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── 공지 대상 학급 선택 ──
-                    Row(
+                    // ── 공지 대상 학급 선택 (1~12반 전체 표시, 미설치 반 비활성화) ──
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('대상 학급 선택: ', style: _ts(14, w: FontWeight.w800)),
-                        const SizedBox(width: 8),
-                        ActionChip(
-                          label: Text(selectedClasses.length == 6 ? '전체 해제' : '전체 선택'),
-                          onPressed: () {
-                            setDlgState(() {
-                              if (selectedClasses.length == 6) {
-                                selectedClasses.clear();
-                              } else {
-                                selectedClasses.addAll([1, 2, 3, 4, 5, 6]);
-                              }
-                            });
-                          },
+                        Row(
+                          children: [
+                            Text('대상 학급 선택 (1~12반): ', style: _ts(14, w: FontWeight.w800)),
+                            const SizedBox(width: 8),
+                            ActionChip(
+                              label: Text(
+                                installedForGrade.isNotEmpty &&
+                                        selectedClasses.length == installedForGrade.length
+                                    ? '설치 학급 전체 해제'
+                                    : '설치 학급 전체 선택 (${installedForGrade.length}개 반)',
+                              ),
+                              onPressed: installedForGrade.isEmpty
+                                  ? null
+                                  : () {
+                                      setDlgState(() {
+                                        if (selectedClasses.length == installedForGrade.length) {
+                                          selectedClasses.clear();
+                                        } else {
+                                          selectedClasses
+                                            ..clear()
+                                            ..addAll(installedForGrade);
+                                        }
+                                      });
+                                    },
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              '※ Boardest Class가 설치되지 않은 학급은 자동 비활성화됩니다.',
+                              style: _ts(11.5, c: Colors.white54),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        for (int c = 1; c <= 6; c++) ...[
-                          FilterChip(
-                            label: Text('$c반'),
-                            selected: selectedClasses.contains(c),
-                            selectedColor: const Color(0xFF00F5D4),
-                            onSelected: (val) {
-                              setDlgState(() {
-                                if (val) {
-                                  selectedClasses.add(c);
-                                } else {
-                                  selectedClasses.remove(c);
-                                }
-                              });
-                            },
-                          ),
-                          const SizedBox(width: 6),
-                        ],
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            for (int c = 1; c <= 12; c++)
+                              Builder(
+                                builder: (_) {
+                                  final isInstalled = installedForGrade.contains(c);
+                                  final isSel = isInstalled && selectedClasses.contains(c);
+                                  return Opacity(
+                                    opacity: isInstalled ? 1.0 : 0.38,
+                                    child: FilterChip(
+                                      label: Text(
+                                        isInstalled ? '$c반' : '$c반(미설치)',
+                                        style: TextStyle(
+                                          color: isSel
+                                              ? Colors.black
+                                              : (isInstalled ? Colors.white : Colors.white38),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12.5,
+                                        ),
+                                      ),
+                                      selected: isSel,
+                                      selectedColor: const Color(0xFF00F5D4),
+                                      disabledColor: Colors.white.withOpacity(0.03),
+                                      backgroundColor: Colors.white.withOpacity(0.08),
+                                      checkmarkColor: Colors.black,
+                                      onSelected: isInstalled
+                                          ? (val) {
+                                              setDlgState(() {
+                                                if (val) {
+                                                  selectedClasses.add(c);
+                                                } else {
+                                                  selectedClasses.remove(c);
+                                                }
+                                              });
+                                            }
+                                          : null,
+                                    ),
+                                  );
+                                },
+                              ),
+                          ],
+                        ),
                       ],
                     ),
                     const SizedBox(height: 18),
@@ -795,10 +992,24 @@ class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
                           // 실시 날짜 선택 및 [다음 주로 미루기 ⏩] 버튼
                           Row(
                             children: [
-                              Text('기준 실시 주간: ', style: _ts(13, c: Colors.white70)),
-                              Text(
-                                '${selectedDate.year}년 ${selectedDate.month}월 ${selectedDate.day}일 주간',
-                                style: _ts(13.5, w: FontWeight.w800, c: const Color(0xFF00F5D4)),
+                              Text('실시 예정일: ', style: _ts(13, c: Colors.white70)),
+                              TextButton.icon(
+                                onPressed: () async {
+                                  final picked = await showDatePicker(
+                                    context: ctx,
+                                    initialDate: selectedDate,
+                                    firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                                  );
+                                  if (picked != null) {
+                                    setDlgState(() => selectedDate = picked);
+                                  }
+                                },
+                                icon: const Icon(Icons.calendar_month_rounded, size: 16, color: Color(0xFF00F5D4)),
+                                label: Text(
+                                  '${selectedDate.year}년 ${selectedDate.month}월 ${selectedDate.day}일 (날짜 변경)',
+                                  style: _ts(13.5, w: FontWeight.w800, c: const Color(0xFF00F5D4)),
+                                ),
                               ),
                               const Spacer(),
                               ElevatedButton.icon(
@@ -830,7 +1041,19 @@ class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
               ),
               ElevatedButton.icon(
                 onPressed: () async {
-                  if (titleCtrl.text.trim().isEmpty) return;
+                  if (titleCtrl.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('수행평가 제목을 입력해주세요.')),
+                    );
+                    return;
+                  }
+                  if (selectedClasses.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('공지할 학급을 1개 이상 선택해주세요.')),
+                    );
+                    return;
+                  }
+                  final targetList = selectedClasses.toList()..sort();
                   final baseItem = AssessmentItem(
                     id: '',
                     schoolCode: widget.schoolCode,
@@ -852,21 +1075,31 @@ class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
                   );
 
                   Navigator.pop(ctx);
+                  if (_selectedGrade != selectedGrade) {
+                    setState(() {
+                      _selectedGrade = selectedGrade;
+                      _selectedClassFilter = 0;
+                    });
+                  }
                   await AssessmentService.instance.addMultiClassAssessment(
                     schoolCode: widget.schoolCode,
                     baseItem: baseItem,
-                    targetClasses: selectedClasses.toList(),
+                    targetClasses: targetList,
                   );
-                  if (mounted) setState(() {});
+                  await _loadAssessments();
+                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('${selectedClasses.length}개 학급에 수행평가가 성공적으로 일괄 공지되었습니다!'),
+                      content: Text(
+                        '$selectedGrade학년 ${targetList.map((c) => '$c반').join(', ')} (${targetList.length}개 학급)에 수행평가가 공지되었습니다!',
+                        style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                      ),
                       backgroundColor: const Color(0xFF00F5D4),
                     ),
                   );
                 },
                 icon: const Icon(Icons.send_rounded, size: 16, color: Colors.black),
-                label: Text('전 학급 즉시 공지 등록', style: _ts(14, w: FontWeight.w900, c: Colors.black)),
+                label: Text('선택 학급(${selectedClasses.length}개 반) 즉시 공지 등록', style: _ts(14, w: FontWeight.w900, c: Colors.black)),
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4)),
               ),
             ],

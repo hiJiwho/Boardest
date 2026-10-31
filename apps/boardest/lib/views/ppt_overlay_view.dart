@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'package:universal_io/io.dart';
 import 'package:flutter/material.dart';
@@ -76,49 +76,50 @@ class _PptOverlayViewState extends State<PptOverlayView> {
       final runnerDir = AppPaths.cppRunnerDirSync;
       String exePath = p.join(runnerDir, 'boardest_ppt_overlay.exe');
 
-      if (!File(exePath).existsSync()) {
-        final exeDir = File(Platform.resolvedExecutable).parent.path;
-        final candidates = [
-          p.join(exeDir, 'boardest_ppt_overlay.exe'),
-          p.join(Directory.current.path, 'boardest_ppt_overlay.exe'),
-          p.join(
-            Directory.current.path,
-            'build',
-            'windows',
-            'x64',
-            'runner',
-            'Release',
-            'boardest_ppt_overlay.exe',
-          ),
-          p.join(
-            Directory.current.path,
-            'build',
-            'windows',
-            'x64',
-            'runner',
-            'Debug',
-            'boardest_ppt_overlay.exe',
-          ),
-        ];
-        for (final cand in candidates) {
-          if (File(cand).existsSync()) {
-            try {
-              File(cand).copySync(exePath);
-            } catch (_) {}
-            break;
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      final candidates = [
+        p.join(exeDir, 'boardest_ppt_overlay.exe'),
+        p.join(Directory.current.path, 'boardest_ppt_overlay.exe'),
+        p.join(
+          Directory.current.path,
+          'build',
+          'windows',
+          'x64',
+          'runner',
+          'Release',
+          'boardest_ppt_overlay.exe',
+        ),
+        p.join(
+          Directory.current.path,
+          'build',
+          'windows',
+          'x64',
+          'runner',
+          'Debug',
+          'boardest_ppt_overlay.exe',
+        ),
+      ];
+      bool copiedFresh = false;
+      for (final cand in candidates) {
+        if (File(cand).existsSync()) {
+          try {
+            File(cand).copySync(exePath);
+            copiedFresh = true;
+          } catch (_) {
+            exePath = cand;
+            copiedFresh = true;
           }
+          break;
         }
+      }
 
-        // AppX 설치 패키지(bst-overlay-panser)에서 탐색
-        if (!File(exePath).existsSync()) {
-          final appxExe = await PanserPluginService.findExecutable('boardest_ppt_overlay.exe');
-          if (appxExe != null && File(appxExe).existsSync()) {
-            try {
-              File(appxExe).copySync(exePath);
-            } catch (_) {
-              // 샌드박스 제약으로 복사 불가 시 원본 경로 직접 사용
-              exePath = appxExe;
-            }
+      if (!copiedFresh) {
+        final appxExe = await PanserPluginService.findExecutable('boardest_ppt_overlay.exe');
+        if (appxExe != null && File(appxExe).existsSync()) {
+          try {
+            File(appxExe).copySync(exePath);
+          } catch (_) {
+            exePath = appxExe;
           }
         }
       }

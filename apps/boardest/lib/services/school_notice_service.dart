@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/school_notice.dart';
+import 'assessment_service.dart';
 
 /// 학교 행사 및 공지 광고판 서비스 (RTDB 동기화 + 48시간 경과 건 자동 삭제)
 class SchoolNoticeService {
@@ -13,10 +14,7 @@ class SchoolNoticeService {
 
   List<SchoolNotice> get notices => noticesNotifier.value;
 
-  String _cleanCode(String code) {
-    final s = code.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9_-]'), '_');
-    return s.isEmpty ? 'default' : s;
-  }
+  String _cleanCode(String code) => AssessmentService.normalizeSchoolKey(code);
 
   /// 공지 / 행사 목록 불러오기 (만료 48시간 경과 건 자동 제거 & RTDB 삭제)
   Future<List<SchoolNotice>> loadNotices({required String schoolCode}) async {

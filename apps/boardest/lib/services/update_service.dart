@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -29,7 +29,7 @@ enum UpdateState {
 /// 5. 잠금 화면 필수 4대 버튼: [업데이트 다운 / 수동 설치 / 앱 런처 / 앱 삭제]
 /// 6. 윈도우: AppData에 다운로드 후 종료하지 않고 윈도우 패키지 설치 관리자(AppX) 구동 -> 새 앱 실행 시 이전 AppX 자동 삭제
 class UpdateService {
-  static const String defaultVersion = '5.4.2';
+  static const String defaultVersion = '5.4.3';
   static const String _releasesApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases?per_page=30';
   static const String _latestApi =
@@ -246,7 +246,7 @@ class UpdateService {
               (name.contains('boardest-cloud') || name.contains('bcld') || name.contains('class-cloud'))) {
             apkDownloadUrl ??= url;
           } else if ((name.contains('boardest-cloud') || name.contains('class-cloud')) &&
-              (name.endsWith('-installer.exe') || name.endsWith('setup.exe') || name.endsWith('.msix') || name.endsWith('.appx'))) {
+              (name.endsWith('.msix') || name.endsWith('.appx'))) {
             appxDownloadUrl ??= url;
           }
         } else {
@@ -262,7 +262,7 @@ class UpdateService {
               !name.contains('cloud') &&
               !name.contains('bcld') &&
               !name.contains('overlay') &&
-              (name.endsWith('-installer.exe') || name.endsWith('setup.exe') || name.endsWith('.msix') || name.endsWith('.appx'))) {
+              (name.endsWith('.msix') || name.endsWith('.appx'))) {
             appxDownloadUrl ??= url;
           }
         }
@@ -272,8 +272,8 @@ class UpdateService {
           ? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.apk'
           : 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk';
       appxDownloadUrl ??= isCloud
-          ? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud-installer.exe'
-          : 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-installer.exe';
+          ? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.msix'
+          : 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.msix';
 
       if (_isNewerVersion(distinctNormalizedReleases.first, currentNorm)) {
         final isWindows = !kIsWeb && Platform.isWindows;
@@ -321,13 +321,19 @@ class UpdateService {
         updatesDir.createSync(recursive: true);
       }
 
-      final ext = isWindows ? 'appx' : 'apk';
+      final ext = isWindows ? 'msix' : 'apk';
       final prefix = AppConfig.isCloudMode ? 'boardest_cloud_update' : 'boardest_update';
       final fileName = '${prefix}_$version.$ext';
       final savePath = p.join(updatesDir.path, fileName);
 
+      // 과거 잘못 저장된 .appx 파일이 있다면 삭제
+      try {
+        final legacyAppx = File(p.join(updatesDir.path, '${prefix}_$version.appx'));
+        if (legacyAppx.existsSync()) legacyAppx.deleteSync();
+      } catch (_) {}
+
       final existingFile = File(savePath);
-      if (existingFile.existsSync() && existingFile.lengthSync() > 10 * 1024 * 1024) {
+      if (existingFile.existsSync() && existingFile.lengthSync() > 15 * 1024 * 1024) {
         downloadedPackagePath = savePath;
         downloadProgressNotifier.value = 1.0;
         stateNotifier.value = UpdateState.downloaded;

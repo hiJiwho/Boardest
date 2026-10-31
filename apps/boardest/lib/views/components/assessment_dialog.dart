@@ -259,7 +259,7 @@ class _AssessmentDialogState extends State<AssessmentDialog> {
                     schoolCode: widget.schoolCode,
                     item: item,
                   );
-                  if (mounted) setState(() {});
+                  await _loadData();
                 },
                 child: Text(isEdit ? '수정 완료' : '등록하기', style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
@@ -421,7 +421,16 @@ class _AssessmentDialogState extends State<AssessmentDialog> {
                   ? const Center(child: CircularProgressIndicator(color: Color(0xFF00F5D4)))
                   : ValueListenableBuilder<List<AssessmentItem>>(
                       valueListenable: AssessmentService.instance.assessmentsNotifier,
-                      builder: (ctx, items, _) {
+                      builder: (ctx, rawItems, _) {
+                        final items = rawItems.where((it) {
+                          if (it.grade != widget.grade && it.grade != 0) return false;
+                          if (widget.classNum > 0) {
+                            if (it.classNum == widget.classNum) return true;
+                            if (it.classNum == 0 && it.authorRole == 'teacher') return true;
+                            return false;
+                          }
+                          return true;
+                        }).toList();
                         if (items.isEmpty) {
                           return Center(
                             child: Column(

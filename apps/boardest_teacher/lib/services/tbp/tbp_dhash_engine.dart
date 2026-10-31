@@ -40,13 +40,46 @@ class TbpDhashEngine {
   /// BoardBook 오리지널 고속 JS 스크립트 + 1536px 고정 및 창 크기 맞춤 동적 배율(Auto-Fit Scale)
   static const String _hashJsScript = '''
     (function() {
+      if (!window.__bstNativeGettersSaved) {
+        window.__bstNativeGettersSaved = true;
+        try {
+          var dWinW = Object.getOwnPropertyDescriptor(window, 'innerWidth') || Object.getOwnPropertyDescriptor(Window.prototype, 'innerWidth');
+          var dWinH = Object.getOwnPropertyDescriptor(window, 'innerHeight') || Object.getOwnPropertyDescriptor(Window.prototype, 'innerHeight');
+          var dDocW = Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth') || Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+          var dDocH = Object.getOwnPropertyDescriptor(Element.prototype, 'clientHeight') || Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight');
+          window.__bstGetRealW = function() {
+            try {
+              if (dWinW && dWinW.get) return dWinW.get.call(window);
+              if (dDocW && dDocW.get) return dDocW.get.call(document.documentElement);
+            } catch (e) {}
+            return window.outerWidth || screen.width || 1536;
+          };
+          window.__bstGetRealH = function() {
+            try {
+              if (dWinH && dWinH.get) return dWinH.get.call(window);
+              if (dDocH && dDocH.get) return dDocH.get.call(document.documentElement);
+            } catch (e) {}
+            return window.outerHeight || screen.height || 864;
+          };
+          Object.defineProperty(window, 'innerWidth', { get: function() { return 1536; }, configurable: true });
+          Object.defineProperty(window, 'innerHeight', { get: function() { return 864; }, configurable: true });
+          Object.defineProperty(document.documentElement, 'clientWidth', { get: function() { return 1536; }, configurable: true });
+          Object.defineProperty(document.documentElement, 'clientHeight', { get: function() { return 864; }, configurable: true });
+        } catch (ge) {}
+      }
+
       function sync1536Scale() {
+        if (window.__bstInSyncScale) return;
+        window.__bstInSyncScale = true;
         try {
           var targetW = 1536;
           var targetH = 864;
-          var winW = window.innerWidth || document.documentElement.clientWidth || screen.width;
-          var winH = window.innerHeight || document.documentElement.clientHeight || screen.height;
-          if (!winW || !winH || winW <= 0 || winH <= 0) return;
+          var winW = (window.__bstGetRealW ? window.__bstGetRealW() : window.innerWidth) || screen.width || 1536;
+          var winH = (window.__bstGetRealH ? window.__bstGetRealH() : window.innerHeight) || screen.height || 864;
+          if (!winW || !winH || winW <= 0 || winH <= 0) {
+            window.__bstInSyncScale = false;
+            return;
+          }
 
           var scale = Math.min(winW / targetW, winH / targetH);
           if (scale <= 0) scale = 1.0;
@@ -55,23 +88,35 @@ class TbpDhashEngine {
           var offsetY = Math.max(0, (winH - (targetH * scale)) / 2);
 
           var meta = document.querySelector('meta[name="viewport"]');
-          if (!meta) {
+          if (!meta && document.head) {
             meta = document.createElement('meta');
             meta.name = 'viewport';
             document.head.appendChild(meta);
           }
-          meta.content = 'width=1536, initial-scale=' + scale.toFixed(4) + ', maximum-scale=' + scale.toFixed(4) + ', user-scalable=no';
+          if (meta) {
+            meta.content = 'width=1536, initial-scale=' + scale.toFixed(4) + ', maximum-scale=' + scale.toFixed(4) + ', user-scalable=no';
+          }
 
           var styleId = 'bst-1536-lock-style';
           var styleEl = document.getElementById(styleId);
-          if (!styleEl) {
+          if (!styleEl && document.head) {
             styleEl = document.createElement('style');
             styleEl.id = styleId;
             document.head.appendChild(styleEl);
           }
-          styleEl.textContent = 'html { width: 100% !important; height: 100% !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; background-color: #0F0E17 !important; } ' +
-            'body { width: 1536px !important; min-width: 1536px !important; max-width: 1536px !important; height: 864px !important; min-height: 864px !important; max-height: 864px !important; margin: 0 !important; padding: 0 !important; box-sizing: border-box !important; transform-origin: 0 0 !important; transform: translate(' + offsetX.toFixed(2) + 'px, ' + offsetY.toFixed(2) + 'px) scale(' + scale.toFixed(4) + ') !important; -webkit-text-size-adjust: 100% !important; text-size-adjust: 100% !important; }';
+          if (styleEl) {
+            styleEl.textContent = 'html { width: 100% !important; height: 100% !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; background-color: #0F0E17 !important; } ' +
+              'body { width: 1536px !important; min-width: 1536px !important; max-width: 1536px !important; height: 864px !important; min-height: 864px !important; max-height: 864px !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; box-sizing: border-box !important; transform-origin: 0 0 !important; transform: translate(' + offsetX.toFixed(2) + 'px, ' + offsetY.toFixed(2) + 'px) scale(' + scale.toFixed(4) + ') !important; -webkit-text-size-adjust: 100% !important; text-size-adjust: 100% !important; }';
+          }
+
+          if (!window.__bstInitialResizeDispatched) {
+            window.__bstInitialResizeDispatched = true;
+            setTimeout(function() {
+              try { window.dispatchEvent(new Event('resize')); } catch (re) {}
+            }, 60);
+          }
         } catch (ve) {}
+        window.__bstInSyncScale = false;
       }
 
       sync1536Scale();
@@ -97,8 +142,8 @@ class TbpDhashEngine {
         doc.addEventListener('contextmenu', function(e) {
           e.preventDefault();
           e.stopPropagation();
-          var vw = window.innerWidth || document.documentElement.clientWidth || 1;
-          var vh = window.innerHeight || document.documentElement.clientHeight || 1;
+          var vw = (window.__bstGetRealW ? window.__bstGetRealW() : window.innerWidth) || 1536;
+          var vh = (window.__bstGetRealH ? window.__bstGetRealH() : window.innerHeight) || 864;
           var cx = (e.clientX || 0) + (offsetLeft || 0);
           var cy = (e.clientY || 0) + (offsetTop || 0);
           postToFlutter({
@@ -122,31 +167,44 @@ class TbpDhashEngine {
       function getDocPageId(doc, win) {
         if (!doc) return '';
         try {
+          var w = win || window;
+          if (w.Ui && w.Ui.now) {
+            var scene = w.Ui.scene || 'home';
+            if (scene === 'home') return 'ui_home';
+            var pno = w.Ui.now.ebook_pno || '';
+            var mcode = w.Ui.now.mcode || '';
+            var pseq = w.Ui.now.std_pseq || '';
+            if (pno || mcode || pseq) {
+              return 'ui_' + scene + '_' + pno + '_' + mcode + '_' + pseq;
+            }
+          }
+
+          var loc = (w && w.location) ? w.location : window.location;
+          if (loc && loc.hostname && loc.hostname.indexOf('canva.com') !== -1) {
+            var chash = (loc.hash && loc.hash.length > 1)
+                ? loc.hash.replace(/[^a-zA-Z0-9_-]/g, '_')
+                : '_1';
+            return 'hash_' + chash;
+          }
+
           var selectors = [
             '.page-num', '.pageNum', '#pageNo', '#page_num', '.page_num',
-            '.page-current', '#currentPage', '#page', '.page', '[data-page]',
-            '.current-page', '.textbook-page', '#spnPage', '.spn_page',
-            '.page_input', 'input.page', '.cur_page', '#curPage'
+            '.page-current', '#currentPage', '.current-page', '.textbook-page',
+            '#spnPage', '.spn_page', '.page_input', 'input.page', '.cur_page', '#curPage',
+            '#txtPage', '.txt_page', '#nowPage', '.now_page'
           ];
           for (var s = 0; s < selectors.length; s++) {
             var el = doc.querySelector(selectors[s]);
-            if (el) {
-              var val = (el.value || el.innerText || el.textContent || el.getAttribute('data-page') || '').trim();
-              if (val && val.length <= 25) {
+            if (el && (el.offsetParent !== null || (el.getClientRects && el.getClientRects().length > 0))) {
+              var val = (el.value || el.innerText || el.textContent || '').trim();
+              if (val && val.length > 0 && val.length <= 25) {
                 return 'page_' + val.replace(/[^a-zA-Z0-9_-]/g, '_');
               }
             }
           }
 
-          var loc = (win && win.location) ? win.location : window.location;
           if (loc && loc.hash && loc.hash.length > 1) {
             return 'hash_' + loc.hash.replace(/[^a-zA-Z0-9_-]/g, '_');
-          }
-          if (loc && loc.search && loc.search.length > 1) {
-            return 'query_' + loc.search.replace(/[^a-zA-Z0-9_-]/g, '_');
-          }
-          if (doc.title && doc.title.length > 0) {
-            return 'title_' + getFastHash(doc.title);
           }
         } catch(e) {}
         return '';
@@ -155,8 +213,8 @@ class TbpDhashEngine {
       window.checkPage = function() {
         var detectedId = getDocPageId(document, window);
 
+        var frames = document.querySelectorAll('iframe');
         if (!detectedId) {
-          var frames = document.querySelectorAll('iframe');
           for (var f = 0; f < frames.length; f++) {
             try {
               if (frames[f].contentDocument) {
@@ -169,7 +227,26 @@ class TbpDhashEngine {
         }
 
         if (!detectedId) {
-          var raw = (window.location.href + '_' + (document.body ? document.body.innerText.substring(0, 200) : '')).replace(/\\s+/g, '');
+          var targetDoc = document;
+          for (var f2 = 0; f2 < frames.length; f2++) {
+            try {
+              if (frames[f2].contentDocument && frames[f2].contentDocument.body) {
+                targetDoc = frames[f2].contentDocument;
+                break;
+              }
+            } catch(fe2) {}
+          }
+          var bodyText = (targetDoc.body ? (targetDoc.body.innerText || '') : '').replace(/\\s+/g, '').substring(0, 400);
+          var imgSrcs = '';
+          try {
+            var imgs = targetDoc.querySelectorAll('img, canvas, iframe');
+            for (var im = 0; im < Math.min(imgs.length, 12); im++) {
+              if (imgs[im].offsetParent !== null) {
+                imgSrcs += (imgs[im].src || imgs[im].id || imgs[im].className || '');
+              }
+            }
+          } catch(ie) {}
+          var raw = window.location.pathname + '_' + window.location.search + '_' + bodyText + '_' + imgSrcs;
           detectedId = getFastHash(raw);
         }
 
@@ -276,19 +353,31 @@ class TbpDhashEngine {
         var clicked = false;
         function tryClickBtn(doc) {
           if (!doc || clicked) return false;
-          var sel = '${isNext ? '.btn_next, .btn-next, .next, .page-next, [title*="다음"], [aria-label*="다음"], [class*="next"], [id*="next"]' : '.btn_prev, .btn-prev, .prev, .page-prev, [title*="이전"], [aria-label*="이전"], [class*="prev"], [id*="prev"]'}';
-          var b = doc.querySelector(sel);
-          if (b && typeof b.click === 'function') {
-            try { b.click(); clicked = true; return true; } catch(e) {}
+          var sel = '${isNext ? '.btn_next, .btn-next, .next, .page-next, [title*="다음"], [aria-label*="다음"], [aria-label*="Next"], [class*="next"], [id*="next"]' : '.btn_prev, .btn-prev, .prev, .page-prev, [title*="이전"], [aria-label*="이전"], [aria-label*="Previous"], [class*="prev"], [id*="prev"]'}';
+          var list = doc.querySelectorAll(sel);
+          for (var i = 0; i < list.length; i++) {
+            var b = list[i];
+            if (b && typeof b.click === 'function' && (b.offsetParent !== null || (b.getClientRects && b.getClientRects().length > 0))) {
+              try { b.click(); clicked = true; return true; } catch(e) {}
+            }
           }
           return false;
         }
 
+        if (window.Ui && window.Ui.scene === 'home' && ${isNext ? 'true' : 'false'}) {
+          var firstCh = document.querySelector('#home .list li a, #home .list li, .main_list li a, .toc li a');
+          if (firstCh && typeof firstCh.click === 'function') {
+            try { firstCh.click(); clicked = true; } catch(e) {}
+          }
+        }
+
         var frames = document.querySelectorAll('iframe');
-        for (var i = 0; i < frames.length; i++) {
-          try {
-            if (frames[i].contentDocument && tryClickBtn(frames[i].contentDocument)) break;
-          } catch(e) {}
+        if (!clicked) {
+          for (var i = 0; i < frames.length; i++) {
+            try {
+              if (frames[i].contentDocument && tryClickBtn(frames[i].contentDocument)) break;
+            } catch(e) {}
+          }
         }
         if (!clicked) {
           tryClickBtn(document);

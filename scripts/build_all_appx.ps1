@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '5.4.2',
+  [string]$AppVersion = '5.4.3',
   [switch]$SkipApk,
   [switch]$SkipWindowsBuild
 )
@@ -216,6 +216,7 @@ $WpfLib = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319;$env:WINDIR\Microsof
 $WpfReferences = @(
   '/r:System.dll',
   '/r:System.Core.dll',
+  '/r:System.Windows.Forms.dll',
   '/r:WindowsBase.dll',
   '/r:PresentationCore.dll',
   '/r:PresentationFramework.dll',

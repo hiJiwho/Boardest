@@ -15,11 +15,55 @@ using System.Text.RegularExpressions;
 
 namespace BoardestPptOverlay
 {
+    [ComImport, Guid("00000016-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IOleMessageFilter
+    {
+        [PreserveSig]
+        int HandleInComingCall(int dwCallType, IntPtr hTaskCaller, int dwTickCount, IntPtr lpInterfaceInfo);
+        [PreserveSig]
+        int RetryRejectedCall(IntPtr hTaskCallee, int dwTickCount, int dwRejectType);
+        [PreserveSig]
+        int MessagePending(IntPtr hTaskCallee, int dwTickCount, int dwPendingType);
+    }
+
+    public class OleMessageFilter : IOleMessageFilter
+    {
+        [DllImport("Ole32.dll")]
+        private static extern int CoRegisterMessageFilter(IOleMessageFilter newFilter, out IOleMessageFilter oldFilter);
+
+        public static void Register()
+        {
+            try
+            {
+                IOleMessageFilter oldFilter;
+                CoRegisterMessageFilter(new OleMessageFilter(), out oldFilter);
+            }
+            catch {}
+        }
+
+        public int HandleInComingCall(int dwCallType, IntPtr hTaskCaller, int dwTickCount, IntPtr lpInterfaceInfo)
+        {
+            return 0;
+        }
+
+        public int RetryRejectedCall(IntPtr hTaskCallee, int dwTickCount, int dwRejectType)
+        {
+            if (dwRejectType == 2) return 150;
+            return -1;
+        }
+
+        public int MessagePending(IntPtr hTaskCallee, int dwTickCount, int dwPendingType)
+        {
+            return 2;
+        }
+    }
+
     public class App : Application
     {
         [STAThread]
         public static void Main(string[] args)
         {
+            OleMessageFilter.Register();
             try
             {
                 Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -148,10 +192,10 @@ namespace BoardestPptOverlay
             this.Topmost = true;
             this.ShowInTaskbar = false;
 
-            this.Left = SystemParameters.VirtualScreenLeft;
-            this.Top = SystemParameters.VirtualScreenTop;
-            this.Width = SystemParameters.VirtualScreenWidth;
-            this.Height = SystemParameters.VirtualScreenHeight;
+            this.Left = 0;
+            this.Top = 0;
+            this.Width = SystemParameters.PrimaryScreenWidth;
+            this.Height = SystemParameters.PrimaryScreenHeight;
 
             InitUI();
 
@@ -198,7 +242,7 @@ namespace BoardestPptOverlay
                 Padding = new Thickness(16, 8, 16, 8),
                 VerticalAlignment = VerticalAlignment.Bottom,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 24),
+                Margin = new Thickness(0, 0, 0, 56),
                 Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 16, ShadowDepth = 3, Opacity = 0.5 }
             };
             Grid.SetRow(toolBorder, 1);
@@ -1002,15 +1046,22 @@ namespace BoardestPptOverlay
         }
 
         // PowerPoint COM Automation details
-        private bool _isStandaloneMode = false;
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
 
-        private void OverlayWindow_Loaded(object sender, RoutedEventArgs e)
+        private int _pptMainHwnd = 0;
+        private int _pptShowHwnd = 0;
+        private bool _isStandaloneMode = false;
+        private int _reconnectTicks = 0;
+
+        private bool TryAttachToRunningPowerPoint(bool launchIfMissing)
         {
-            bool comConnected = false;
             try
             {
                 Type pptType = Type.GetTypeFromProgID("PowerPoint.Application");
-                if (pptType != null)
+                if (pptType == null) return false;
+
+                if (_pptApp == null)
                 {
                     try
                     {
@@ -1018,48 +1069,79 @@ namespace BoardestPptOverlay
                     }
                     catch
                     {
-                        try
+                        if (launchIfMissing)
                         {
-                            if (!string.IsNullOrEmpty(_pptPath) && File.Exists(_pptPath))
+                            try
                             {
-                                Process.Start(new ProcessStartInfo { FileName = _pptPath, UseShellExecute = true });
-                                Thread.Sleep(1200);
-                                _pptApp = Marshal.GetActiveObject("PowerPoint.Application");
+                                if (!string.IsNullOrEmpty(_pptPath) && File.Exists(_pptPath))
+                                {
+                                    Process.Start(new ProcessStartInfo { FileName = _pptPath, UseShellExecute = true });
+                                    for (int retry = 0; retry < 15; retry++)
+                                    {
+                                        Thread.Sleep(350);
+                                        try
+                                        {
+                                            _pptApp = Marshal.GetActiveObject("PowerPoint.Application");
+                                            if (_pptApp != null) break;
+                                        }
+                                        catch {}
+                                    }
+                                }
+                                if (_pptApp == null)
+                                {
+                                    _pptApp = Activator.CreateInstance(pptType);
+                                }
                             }
-                            else
+                            catch
                             {
-                                _pptApp = Activator.CreateInstance(pptType);
+                                try { _pptApp = Activator.CreateInstance(pptType); } catch {}
                             }
-                        }
-                        catch
-                        {
-                            _pptApp = Activator.CreateInstance(pptType);
                         }
                     }
+                }
 
-                    if (_pptApp != null)
+                if (_pptApp == null) return false;
+
+                try { _pptApp.Visible = 1; } catch {}
+                try
+                {
+                    int pptHwnd = _pptApp.HWND;
+                    if (pptHwnd != 0)
                     {
-                        try { _pptApp.Visible = 1; } catch {}
+                        _pptMainHwnd = pptHwnd;
+                        uint pid;
+                        GetWindowThreadProcessId((IntPtr)pptHwnd, out pid);
+                        _pptPid = pid;
+                    }
+                }
+                catch {}
+
+                if (_presentation == null)
+                {
+                    dynamic presentations = null;
+                    for (int retry = 0; retry < 8; retry++)
+                    {
                         try
                         {
-                            int pptHwnd = _pptApp.HWND;
-                            if (pptHwnd != 0)
-                            {
-                                uint pid;
-                                GetWindowThreadProcessId((IntPtr)pptHwnd, out pid);
-                                _pptPid = pid;
-                            }
+                            presentations = _pptApp.Presentations;
+                            if (presentations != null) break;
                         }
-                        catch {}
+                        catch { Thread.Sleep(250); }
+                    }
 
-                        dynamic presentations = _pptApp.Presentations;
-                        bool isLoaded = false;
-                        if (presentations != null && presentations.Count > 0)
+                    bool isLoaded = false;
+                    if (presentations != null)
+                    {
+                        try
                         {
-                            for (int i = 1; i <= presentations.Count; i++)
+                            int count = presentations.Count;
+                            for (int i = 1; i <= count; i++)
                             {
                                 dynamic pres = presentations.Item(i);
-                                if (Path.GetFullPath(pres.FullName).ToLower() == _pptPath.ToLower())
+                                string fullName = "";
+                                try { fullName = Path.GetFullPath(pres.FullName); } catch {}
+                                if (string.Equals(fullName, _pptPath, StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(Path.GetFileName(fullName), _fileName, StringComparison.OrdinalIgnoreCase))
                                 {
                                     _presentation = pres;
                                     isLoaded = true;
@@ -1067,43 +1149,75 @@ namespace BoardestPptOverlay
                                 }
                             }
                         }
-                        if (!isLoaded && presentations != null)
-                        {
-                            _presentation = presentations.Open(_pptPath, WithWindow: 1);
-                        }
+                        catch {}
 
-                        if (_presentation != null)
+                        if (!isLoaded)
                         {
-                            dynamic slideShowSettings = _presentation.SlideShowSettings;
-                            dynamic slideShowWindow;
+                            for (int retry = 0; retry < 8; retry++)
+                            {
+                                try
+                                {
+                                    _presentation = presentations.Open(_pptPath, WithWindow: 1);
+                                    if (_presentation != null) break;
+                                }
+                                catch { Thread.Sleep(300); }
+                            }
+                        }
+                    }
+                }
+
+                if (_presentation != null)
+                {
+                    dynamic slideShowWindow = null;
+                    try
+                    {
+                        if (_pptApp.SlideShowWindows.Count > 0)
+                        {
+                            slideShowWindow = _pptApp.SlideShowWindows.Item(1);
+                        }
+                    }
+                    catch {}
+
+                    if (slideShowWindow == null)
+                    {
+                        dynamic slideShowSettings = _presentation.SlideShowSettings;
+                        for (int retry = 0; retry < 8; retry++)
+                        {
                             try
                             {
                                 slideShowWindow = slideShowSettings.Run();
+                                if (slideShowWindow != null) break;
                             }
                             catch
                             {
-                                slideShowWindow = _pptApp.SlideShowWindows.Item(1);
+                                Thread.Sleep(300);
+                                try
+                                {
+                                    if (_pptApp.SlideShowWindows.Count > 0)
+                                    {
+                                        slideShowWindow = _pptApp.SlideShowWindows.Item(1);
+                                        break;
+                                    }
+                                }
+                                catch {}
                             }
-
-                            _slideShowView = slideShowWindow.View;
-                            int totalSlides = _presentation.Slides.Count;
-                            _slideCount = totalSlides;
-                            if (_startPage > 1 && _startPage <= totalSlides)
-                            {
-                                _slideShowView.GotoSlide(_startPage);
-                            }
-
-                            _lastSlideIndex = _slideShowView.CurrentShowPosition;
-                            LoadStrokesFromStorage(_lastSlideIndex);
-                            PopulateSlideButtons();
-                            UpdatePageIndicator(_lastSlideIndex, totalSlides);
-
-                            _pollTimer = new DispatcherTimer();
-                            _pollTimer.Interval = TimeSpan.FromMilliseconds(100);
-                            _pollTimer.Tick += PollTimer_Tick;
-                            _pollTimer.Start();
-                            comConnected = true;
                         }
+                    }
+
+                    if (slideShowWindow != null)
+                    {
+                        try { _pptShowHwnd = slideShowWindow.HWND; } catch {}
+                        _slideShowView = slideShowWindow.View;
+                        int totalSlides = _presentation.Slides.Count;
+                        _slideCount = totalSlides;
+                        if (_startPage > 1 && _startPage <= totalSlides && _lastSlideIndex <= 1)
+                        {
+                            try { _slideShowView.GotoSlide(_startPage); } catch {}
+                        }
+
+                        _lastSlideIndex = _slideShowView.CurrentShowPosition;
+                        _isStandaloneMode = false;
+                        return true;
                     }
                 }
             }
@@ -1111,23 +1225,73 @@ namespace BoardestPptOverlay
             {
                 System.Diagnostics.Debug.WriteLine("PowerPoint COM connection warning: " + ex.Message);
             }
+            return false;
+        }
+
+        private void FocusPowerPointWindow()
+        {
+            try
+            {
+                if (_pptShowHwnd != 0)
+                {
+                    SetForegroundWindow((IntPtr)_pptShowHwnd);
+                    return;
+                }
+                if (_pptMainHwnd != 0)
+                {
+                    SetForegroundWindow((IntPtr)_pptMainHwnd);
+                    return;
+                }
+                Process[] procs = Process.GetProcessesByName("POWERPNT");
+                foreach (Process p in procs)
+                {
+                    if (p.MainWindowHandle != IntPtr.Zero)
+                    {
+                        SetForegroundWindow(p.MainWindowHandle);
+                        break;
+                    }
+                }
+            }
+            catch {}
+        }
+
+        private void OverlayWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            bool comConnected = TryAttachToRunningPowerPoint(true);
 
             if (!comConnected)
             {
-                // [CO_E_SERVER_EXEC_FAILURE 80080005 ?꾩쟾?닿껐]
-                // COM ?ㅽ뙣 ???먮윭 ?앹뾽?쇰줈 二쎌? ?딄퀬 ?붾㈃ ?낅┰ ?ㅻ쾭?덉씠 紐⑤뱶濡?利됱떆 ?ㅽ뻾!
                 _isStandaloneMode = true;
                 _lastSlideIndex = (_startPage > 0) ? _startPage : 1;
                 _slideCount = Math.Max(25, _lastSlideIndex);
-                LoadStrokesFromStorage(_lastSlideIndex);
-                PopulateSlideButtons();
-                UpdatePageIndicator(_lastSlideIndex, _slideCount);
             }
+
+            LoadStrokesFromStorage(_lastSlideIndex);
+            PopulateSlideButtons();
+            UpdatePageIndicator(_lastSlideIndex, _slideCount);
+
+            _pollTimer = new DispatcherTimer();
+            _pollTimer.Interval = TimeSpan.FromMilliseconds(150);
+            _pollTimer.Tick += PollTimer_Tick;
+            _pollTimer.Start();
         }
 
         private void PollTimer_Tick(object sender, EventArgs e)
         {
-            if (_isStandaloneMode || _slideShowView == null) return;
+            if (_isStandaloneMode || _slideShowView == null)
+            {
+                _reconnectTicks++;
+                if (_reconnectTicks >= 10)
+                {
+                    _reconnectTicks = 0;
+                    if (TryAttachToRunningPowerPoint(false))
+                    {
+                        PopulateSlideButtons();
+                        UpdatePageIndicator(_lastSlideIndex, _slideCount);
+                    }
+                }
+                return;
+            }
             try
             {
                 int currentSlideIdx = _slideShowView.CurrentShowPosition;
@@ -1168,7 +1332,7 @@ namespace BoardestPptOverlay
                 _inkCanvas.Strokes.Clear();
                 LoadStrokesFromStorage(pageAfter);
                 UpdatePageIndicator(pageAfter, _slideCount);
-                try { System.Windows.Forms.SendKeys.SendWait("{RIGHT}"); } catch {}
+                try { FocusPowerPointWindow(); System.Windows.Forms.SendKeys.SendWait("{RIGHT}"); } catch {}
                 return;
             }
 
@@ -1213,7 +1377,7 @@ namespace BoardestPptOverlay
                 _inkCanvas.Strokes.Clear();
                 LoadStrokesFromStorage(pageAfter);
                 UpdatePageIndicator(pageAfter, _slideCount);
-                try { System.Windows.Forms.SendKeys.SendWait("{RIGHT}"); } catch {}
+                try { FocusPowerPointWindow(); System.Windows.Forms.SendKeys.SendWait("{RIGHT}"); } catch {}
             }
         }
 
@@ -1230,7 +1394,7 @@ namespace BoardestPptOverlay
                     _inkCanvas.Strokes.Clear();
                     LoadStrokesFromStorage(pageAfter);
                     UpdatePageIndicator(pageAfter, _slideCount);
-                    try { System.Windows.Forms.SendKeys.SendWait("{LEFT}"); } catch {}
+                    try { FocusPowerPointWindow(); System.Windows.Forms.SendKeys.SendWait("{LEFT}"); } catch {}
                 }
                 return;
             }
@@ -1263,7 +1427,7 @@ namespace BoardestPptOverlay
                     _inkCanvas.Strokes.Clear();
                     LoadStrokesFromStorage(pageAfter);
                     UpdatePageIndicator(pageAfter, _slideCount);
-                    try { System.Windows.Forms.SendKeys.SendWait("{LEFT}"); } catch {}
+                    try { FocusPowerPointWindow(); System.Windows.Forms.SendKeys.SendWait("{LEFT}"); } catch {}
                 }
             }
         }

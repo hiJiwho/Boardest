@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -76,37 +76,37 @@ class _PptOverlayViewState extends State<PptOverlayView> {
       final runnerDir = AppPaths.cppRunnerDirSync;
       String exePath = p.join(runnerDir, 'boardest_ppt_overlay.exe');
 
-      if (!File(exePath).existsSync()) {
-        final exeDir = File(Platform.resolvedExecutable).parent.path;
-        final candidates = [
-          p.join(exeDir, 'boardest_ppt_overlay.exe'),
-          p.join(Directory.current.path, 'boardest_ppt_overlay.exe'),
-          p.join(
-            Directory.current.path,
-            'build',
-            'windows',
-            'x64',
-            'runner',
-            'Release',
-            'boardest_ppt_overlay.exe',
-          ),
-          p.join(
-            Directory.current.path,
-            'build',
-            'windows',
-            'x64',
-            'runner',
-            'Debug',
-            'boardest_ppt_overlay.exe',
-          ),
-        ];
-        for (final cand in candidates) {
-          if (File(cand).existsSync()) {
-            try {
-              File(cand).copySync(exePath);
-            } catch (_) {}
-            break;
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      final candidates = [
+        p.join(exeDir, 'boardest_ppt_overlay.exe'),
+        p.join(Directory.current.path, 'boardest_ppt_overlay.exe'),
+        p.join(
+          Directory.current.path,
+          'build',
+          'windows',
+          'x64',
+          'runner',
+          'Release',
+          'boardest_ppt_overlay.exe',
+        ),
+        p.join(
+          Directory.current.path,
+          'build',
+          'windows',
+          'x64',
+          'runner',
+          'Debug',
+          'boardest_ppt_overlay.exe',
+        ),
+      ];
+      for (final cand in candidates) {
+        if (File(cand).existsSync()) {
+          try {
+            File(cand).copySync(exePath);
+          } catch (_) {
+            exePath = cand;
           }
+          break;
         }
       }
 
