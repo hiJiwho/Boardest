@@ -685,32 +685,32 @@
       <div class="panel" style="border: 1.5px solid var(--teal); background: rgba(0, 245, 212, 0.05); padding: 26px 20px; text-align: center; border-radius: 12px; margin-top: 6px;">
         <div style="font-size: 36px; margin-bottom: 6px;">✨</div>
         <h2 style="font-size: 17px; font-weight: 800; color: #fff; margin-bottom: 6px;">
-          <span id="alreadyInstalledAppName" style="color: var(--teal);">Boardest</span>이(가) 이미 설치되어 있습니다!
+          <span id="alreadyInstalledAppName" style="color: var(--teal);">Boardest</span>이(가) 이미 설치되어 있습니다.
         </h2>
         <p style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 22px;">
-          원하시는 작업을 선택해주세요.
+          진행하실 작업을 선택해 주세요.
         </p>
 
         <div style="display: flex; flex-direction: column; gap: 11px; max-width: 440px; margin: 0 auto;">
-          <!-- 1. 업데이트 하실랭? -->
+          <!-- 1. 최신 버전으로 업데이트 -->
           <button type="button" class="btn" onclick="startUpdateFromInstalled()" style="padding: 13px 18px; font-size: 14.5px; font-weight: 800; background: var(--teal); color: #000; border: none; border-radius: 9px; cursor: pointer; box-shadow: 0 0 16px rgba(0, 245, 212, 0.35); display: flex; align-items: center; justify-content: center; gap: 8px;">
             <span>🚀</span>
-            <span>업데이트 하실랭?</span>
+            <span>최신 버전으로 업데이트</span>
             <span style="font-size: 11px; font-weight: 500; opacity: 0.85;">(최신 v<span class="installedTargetVerText">5.5.1</span> 설치)</span>
           </button>
 
-          <!-- 2. 아님 지우라고? -->
+          <!-- 2. 프로그램 제거 -->
           <button type="button" class="btn" onclick="startUninstallFromInstalled()" style="padding: 12px 18px; font-size: 13.5px; font-weight: 700; background: rgba(239, 68, 68, 0.15); color: #ff6b6b; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
             <span>🗑️</span>
-            <span>아님 지우라고?</span>
-            <span style="font-size: 11px; font-weight: 500; opacity: 0.85;">(프로그램 완전 삭제)</span>
+            <span>기존 프로그램 제거</span>
+            <span style="font-size: 11px; font-weight: 500; opacity: 0.85;">(완전 삭제)</span>
           </button>
 
-          <!-- 3. 다른앱? -->
+          <!-- 3. 다른 앱 선택 -->
           <button type="button" class="btn" onclick="openProductSelectorFromInstalled()" style="padding: 11px 18px; font-size: 13px; font-weight: 600; background: rgba(255, 255, 255, 0.05); color: #ccc; border: 1px solid var(--card-border); border-radius: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
             <span>🔄</span>
-            <span>다른앱?</span>
-            <span style="font-size: 11px; font-weight: 500; opacity: 0.75;">(다른 앱 선택하기)</span>
+            <span>다른 앱 선택</span>
+            <span style="font-size: 11px; font-weight: 500; opacity: 0.75;">(Class / Cloud / Lite)</span>
           </button>
         </div>
       </div>
@@ -729,20 +729,20 @@
           <div style="display: flex; align-items: center; gap: 7px;">
             <span style="font-size: 16px;">⚠️</span>
             <span style="font-weight: 800; color: #ff6b6b; font-size: 13px;" id="legacyNoticeTitle">
-              이 인스톨러는 이전 버전의 설치로 제작 되었습니다.
+              이 인스톨러는 이전 버전의 설치 파일로 제작되었습니다.
             </span>
           </div>
           <span id="legacyNoticeBadge" style="background: rgba(239, 68, 68, 0.25); color: #ff8787; font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 10px;">구버전 인스톨러(v<span id="legacyIncomingVerText"></span>) 감지</span>
         </div>
         <p style="font-size: 11px; color: #fca5a5; margin: 0 0 8px 0; line-height: 1.35;">
-          실행 중인 인스톨러(.exe)에 내장된 버전은 구버전입니다. 아래 옵션 중 설치할 버전을 선택해주세요.
+          실행 중인 인스톨러(.exe)에 내장된 버전은 구버전입니다. 아래 옵션 중 설치할 버전을 선택해 주세요.
         </p>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
           <button type="button" class="btn" id="btnUseLegacyVer" onclick="useLegacyInstallerVersion()" style="padding: 5px 11px; font-size: 11px; font-weight: 600; background: rgba(255, 255, 255, 0.07); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.45); border-radius: 6px; cursor: pointer; transition: all 0.2s;">
-            이 인스톨러에 저장된 안전하지 않은 버전 사용
+            이 인스톨러에 포함된 버전 사용
           </button>
           <button type="button" class="btn" id="btnUseLatestVer" onclick="useLatestRecommendedVersion()" style="padding: 5px 13px; font-size: 11px; font-weight: 800; background: var(--teal); color: #000; border: none; border-radius: 6px; cursor: pointer; box-shadow: 0 0 10px rgba(0, 245, 212, 0.35); transition: all 0.2s;">
-            새 버전 사용 (추천)
+            최신 버전 사용 (권장)
           </button>
         </div>
       </div>
@@ -1302,13 +1302,13 @@
         if (!optExists) {
           const opt = document.createElement('option');
           opt.value = incomingVer;
-          opt.innerText = `v${incomingVer} (안전하지 않음)`;
+          opt.innerText = `v${incomingVer} (이전 버전)`;
           select.appendChild(opt);
         }
         select.value = incomingVer;
       }
       onVersionChange();
-      document.getElementById('productVersion').innerText = 'v' + incomingVer + ' (안전하지 않음)';
+      document.getElementById('productVersion').innerText = 'v' + incomingVer;
 
       const notice = document.getElementById('legacyInstallerNotice');
       const title = document.getElementById('legacyNoticeTitle');
@@ -1319,7 +1319,7 @@
         notice.style.borderColor = '#ef4444';
       }
       if (title) {
-        title.innerText = `⚠️ 인스톨러에 저장된 안전하지 않은 버전(v${incomingVer})이 선택되었습니다.`;
+        title.innerText = `⚠️ 인스톨러에 포함된 이전 버전(v${incomingVer})이 선택되었습니다.`;
         title.style.color = '#ff6b6b';
       }
       if (btnLegacy) {
