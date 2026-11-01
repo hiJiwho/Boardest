@@ -133,6 +133,7 @@ class TbpHotspotOverlay extends StatefulWidget {
   final TbpInputMode inputMode;
   final bool longPressActive;
   final Function(List<Map<String, dynamic>> updatedHotspots)? onHotspotsUpdated;
+  final Function(Map<String, dynamic> spot)? onHotspotTap;
 
   const TbpHotspotOverlay({
     super.key,
@@ -143,6 +144,7 @@ class TbpHotspotOverlay extends StatefulWidget {
     required this.inputMode,
     required this.longPressActive,
     this.onHotspotsUpdated,
+    this.onHotspotTap,
   });
 
   /// 우클릭 또는 상단 버튼으로 핫스팟 핀 추가 / 편집 모달
@@ -413,6 +415,7 @@ class _TbpHotspotOverlayState extends State<TbpHotspotOverlay> {
     BuildContext context,
     Map<String, dynamic> hotspot,
   ) async {
+    widget.onHotspotTap?.call(hotspot);
     final type = HotspotTypeExt.fromString(hotspot['type'] as String?);
     final value = (hotspot['value'] as String? ?? '').trim();
 

@@ -1,6 +1,6 @@
 name: bst_core
 description: Core models and utilities for Boardest.
-version: 5.5.0
+version: 5.5.1
 publish_to: none
 
 environment:

@@ -1,7 +1,5 @@
 {
-  "app_name": "boardest",
-  "version": "5.5.0",
-  "build_number": "5500",
-  "buildNumber": "5500",
-  "fullVersion": "5.5.0+5500"
+  "version": "5.5.1",
+  "buildNumber": "5510",
+  "fullVersion": "5.5.1+5510"
 }

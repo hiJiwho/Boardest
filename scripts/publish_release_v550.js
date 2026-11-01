@@ -59,6 +59,7 @@ const releaseAssets = [
 
 const existingAssets = releaseAssets.filter(f => fs.existsSync(f));
 console.log(`Found ${existingAssets.length} of ${releaseAssets.length} release assets.`);
+const assetsArg = existingAssets.map(f => `"${f}"`).join(' ');
 
 const notesPath = path.join(ROOT, 'scripts', 'release_notes_v550.md');
 if (!fs.existsSync(notesPath)) {
@@ -66,21 +67,23 @@ if (!fs.existsSync(notesPath)) {
   process.exit(1);
 }
 
-try {
-  console.log(`Checking if tag v${VERSION} already exists...`);
+for (const repo of ['hiJiwho/Boardest', 'hiJiwho/Boardest-Source-code']) {
+  console.log(`\n========================================`);
+  console.log(`Publishing release v${VERSION} to ${repo}...`);
+  console.log(`========================================`);
   try {
-    execSync(`gh release view v${VERSION}`, { stdio: 'pipe' });
-    console.log(`Tag v${VERSION} exists. Uploading/updating assets...`);
-    const uploadCmd = `gh release upload v${VERSION} ${existingAssets.map(a => `"${a}"`).join(' ')} --clobber`;
-    execSync(uploadCmd, { stdio: 'inherit' });
-    console.log(`Successfully updated release v${VERSION}!`);
-  } catch (e) {
-    console.log(`Creating fresh release v${VERSION}...`);
-    const createCmd = `gh release create v${VERSION} ${existingAssets.map(a => `"${a}"`).join(' ')} --title "🚀 Boardest v${VERSION} Official Ecosystem Overhaul Release" --notes-file "${notesPath}"`;
+    try {
+      execSync(`gh release view v${VERSION} -R ${repo}`, { stdio: 'pipe' });
+      console.log(`Tag v${VERSION} exists on ${repo}. Deleting to recreate fresh...`);
+      execSync(`gh release delete v${VERSION} -R ${repo} -y`, { stdio: 'inherit' });
+    } catch (_) {}
+
+    const createCmd = `gh release create v${VERSION} -R ${repo} -F "${notesPath}" -t "🚀 Boardest v${VERSION} Official Ecosystem Overhaul Release" ${assetsArg}`;
     execSync(createCmd, { stdio: 'inherit' });
-    console.log(`Successfully created release v${VERSION}!`);
+    console.log(`Successfully published release v${VERSION} to ${repo}!`);
+  } catch (err) {
+    console.error(`Error publishing to ${repo}:`, err.message);
   }
-} catch (err) {
-  console.error('Failed to publish release:', err.message);
-  process.exit(1);
 }
+
+console.log(`\nAll releases published successfully!`);

@@ -54,6 +54,11 @@ void main(List<String> args) async {
     debugPrint('[Pdfrx] initialization notice: $e');
   }
   AppConfig.initDemoMode(args);
+  try {
+    await UpdateService.initVersion();
+  } catch (e) {
+    debugPrint('[UpdateService] initVersion error: $e');
+  }
   
   try {
     await Firebase.initializeApp(

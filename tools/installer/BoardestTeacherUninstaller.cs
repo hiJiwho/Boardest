@@ -160,7 +160,7 @@ namespace Boardest.Uninstaller {
             }
 
             string json = string.Format(
-                "{{\"productName\":\"Boardest Teacher\",\"productType\":\"Teacher\",\"productVersion\":\"5.5.0\",\"productDesc\":\"선생님 교무실 PC 전용 수업 관리자 프로그램 제거\",\"heroIcon\":\"🎓\",\"installDir\":\"{0}\",\"hideDirField\":true,\"isUninstall\":true,\"logoBase64\":\"{1}\"}}",
+                "{{\"productName\":\"Boardest Teacher\",\"productType\":\"Teacher\",\"productVersion\":\"5.5.1\",\"productDesc\":\"선생님 교무실 PC 전용 수업 관리자 프로그램 제거\",\"heroIcon\":\"🎓\",\"installDir\":\"{0}\",\"hideDirField\":true,\"isUninstall\":true,\"logoBase64\":\"{1}\"}}",
                 EscapeJson(_installDir),
                 logoB64
             );
