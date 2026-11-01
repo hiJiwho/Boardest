@@ -673,8 +673,56 @@
       </div>
     </div>
 
+    <!-- Step: Checking (초기 설치 환경 확인) -->
+    <div class="step-view active" id="stepChecking" style="text-align: center; padding: 60px 20px;">
+      <div style="font-size: 32px; margin-bottom: 12px; animation: bounce 1.5s infinite;">🔍</div>
+      <div style="font-size: 15px; font-weight: 800; color: var(--teal); margin-bottom: 6px;">설치 환경을 확인하는 중...</div>
+      <div style="font-size: 12px; color: var(--text-muted);">이미 설치된 앱 여부를 확인하고 있습니다.</div>
+    </div>
+
+    <!-- Step: Already Installed (이미 설치된 앱 감지 시 빠른 분기) -->
+    <div class="step-view" id="stepAlreadyInstalled">
+      <div class="panel" style="border: 1.5px solid var(--teal); background: rgba(0, 245, 212, 0.05); padding: 26px 20px; text-align: center; border-radius: 12px; margin-top: 6px;">
+        <div style="font-size: 36px; margin-bottom: 6px;">✨</div>
+        <h2 style="font-size: 17px; font-weight: 800; color: #fff; margin-bottom: 6px;">
+          <span id="alreadyInstalledAppName" style="color: var(--teal);">Boardest</span>이(가) 이미 설치되어 있습니다!
+        </h2>
+        <p style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 22px;">
+          원하시는 작업을 선택해주세요.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 11px; max-width: 440px; margin: 0 auto;">
+          <!-- 1. 업데이트 하실랭? -->
+          <button type="button" class="btn" onclick="startUpdateFromInstalled()" style="padding: 13px 18px; font-size: 14.5px; font-weight: 800; background: var(--teal); color: #000; border: none; border-radius: 9px; cursor: pointer; box-shadow: 0 0 16px rgba(0, 245, 212, 0.35); display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span>🚀</span>
+            <span>업데이트 하실랭?</span>
+            <span style="font-size: 11px; font-weight: 500; opacity: 0.85;">(최신 v<span class="installedTargetVerText">5.5.1</span> 설치)</span>
+          </button>
+
+          <!-- 2. 아님 지우라고? -->
+          <button type="button" class="btn" onclick="startUninstallFromInstalled()" style="padding: 12px 18px; font-size: 13.5px; font-weight: 700; background: rgba(239, 68, 68, 0.15); color: #ff6b6b; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span>🗑️</span>
+            <span>아님 지우라고?</span>
+            <span style="font-size: 11px; font-weight: 500; opacity: 0.85;">(프로그램 완전 삭제)</span>
+          </button>
+
+          <!-- 3. 다른앱? -->
+          <button type="button" class="btn" onclick="openProductSelectorFromInstalled()" style="padding: 11px 18px; font-size: 13px; font-weight: 600; background: rgba(255, 255, 255, 0.05); color: #ccc; border: 1px solid var(--card-border); border-radius: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span>🔄</span>
+            <span>다른앱?</span>
+            <span style="font-size: 11px; font-weight: 500; opacity: 0.75;">(다른 앱 선택하기)</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="btn-row" style="margin-top: 16px;">
+        <button class="btn btn-secondary" onclick="postToHost('minimize')">창 최소화</button>
+        <button class="btn btn-secondary" onclick="postToHost('close')">닫기</button>
+      </div>
+    </div>
+
     <!-- Step 1: Ready / Intro (소개 & 설치 확인 UI) -->
-    <div class="step-view active" id="stepReady">
+    <div class="step-view" id="stepReady">
       <!-- 구버전 인스톨러 감지 경고 배너 -->
       <div id="legacyInstallerNotice" style="display:none; margin-bottom: 12px; background: rgba(239, 68, 68, 0.12); border: 1.5px solid #ef4444; border-radius: 9px; padding: 10px 14px;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
@@ -1108,6 +1156,99 @@
       }
     }
 
+    async function checkIsAppAlreadyInstalled(productType) {
+      if (!window.chrome || !window.chrome.webview) return false;
+
+      let psCheck = '';
+      if (productType === 'Teacher') {
+        psCheck = "if ((Test-Path '$env:LOCALAPPDATA\\Programs\\BoardestTeacher\\boardest_teacher.exe') -or (Test-Path 'C:\\Program Files\\BoardestTeacher\\boardest_teacher.exe') -or (Get-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\BoardestTeacher' -ErrorAction SilentlyContinue) -or (Get-ItemProperty -Path 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\BoardestTeacher' -ErrorAction SilentlyContinue)) { exit 0 } else { exit 1 }";
+      } else if (productType === 'Class') {
+        psCheck = "if (Get-AppxPackage *boardest* | Where-Object { $_.Name -like '*boardest*' -and $_.Name -notlike '*cloud*' -and $_.Name -notlike '*lite*' }) { exit 0 } else { exit 1 }";
+      } else if (productType === 'ClassLite') {
+        psCheck = "if (Get-AppxPackage *class*lite*) { exit 0 } else { exit 1 }";
+      } else if (productType === 'Cloud') {
+        psCheck = "if ((Get-AppxPackage *boardest*cloud*) -or (Get-AppxPackage *bcld*)) { exit 0 } else { exit 1 }";
+      } else {
+        return false;
+      }
+
+      try {
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000));
+        await Promise.race([
+          invokeHostCommand('runPowerShell', { command: psCheck }),
+          timeoutPromise
+        ]);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    async function verifyAndRouteInstalledApp(productType) {
+      if (appData.isUninstall) {
+        goToStep('stepUninstall1');
+        return;
+      }
+      if (appData.needsProductSelection) {
+        chooseProductCard('Class');
+        goToStep('stepSelectProduct');
+        return;
+      }
+
+      const isInstalled = await checkIsAppAlreadyInstalled(productType);
+      if (isInstalled) {
+        showAlreadyInstalledUI(productType);
+      } else {
+        goToStep('stepReady');
+      }
+    }
+
+    function showAlreadyInstalledUI(productType) {
+      const pName = appData.productName || 'Boardest ' + productType;
+      const appNameEl = document.getElementById('alreadyInstalledAppName');
+      if (appNameEl) appNameEl.innerText = pName;
+
+      const latestVer = (availableVersions && availableVersions.length > 0) ? availableVersions[0] : (appData.productVersion || '5.5.1');
+      document.querySelectorAll('.installedTargetVerText').forEach(el => el.innerText = latestVer);
+
+      const btnChangeApp = document.getElementById('btnChangeApp');
+      if (btnChangeApp) btnChangeApp.style.display = 'inline-block';
+
+      goToStep('stepAlreadyInstalled');
+    }
+
+    async function startUpdateFromInstalled() {
+      useLatestRecommendedVersion();
+      await startInstall();
+    }
+
+    async function startUninstallFromInstalled() {
+      if (appData.productType === 'Teacher') {
+        goToStep('stepUninstall1');
+      } else {
+        if (confirm(`${appData.productName}을(를) 시스템에서 완전히 삭제하시겠습니까?`)) {
+          resetStagesUI();
+          goToStep('stepProgress');
+          window.updateStageProgress(3, 30, `${appData.productName} 시스템 패키지 삭제 중...`, null, null, 'Remove-AppxPackage 실행...');
+          try {
+            const pattern = (appData.productType === 'Cloud')
+              ? '*boardest*cloud*'
+              : (appData.productType === 'ClassLite' ? '*class*lite*' : '*boardest*');
+            await invokeHostCommand('runPowerShell', {
+              command: `Get-AppxPackage ${pattern} | Remove-AppxPackage`
+            });
+            window.updateStageProgress(3, 100, `${appData.productName} 삭제 완료!`, null, null, '프로그램이 성공적으로 삭제되었습니다.');
+          } catch (e) {
+            window.showInstallError('삭제 실패', e.message || String(e), 3);
+          }
+        }
+      }
+    }
+
+    function openProductSelectorFromInstalled() {
+      openProductSelector();
+    }
+
     function useLatestRecommendedVersion() {
       const latestVer = (availableVersions && availableVersions.length > 0) ? availableVersions[0] : (appData.productVersion || '5.5.1');
       selectedVersion = 'latest';
@@ -1378,10 +1519,10 @@
       goToStep('stepSelectProduct');
     }
 
-    function confirmProductSelection() {
+    async function confirmProductSelection() {
       applyProductUI(pendingChoice);
       postToHost('selectProduct', { productType: pendingChoice });
-      goToStep('stepReady');
+      await verifyAndRouteInstalledApp(pendingChoice);
     }
 
     function applyProductUI(productType) {
@@ -1535,7 +1676,7 @@
 
       applyProductUI(data.productType || 'Teacher');
       checkLegacyInstallerNotice();
-      goToStep('stepReady');
+      verifyAndRouteInstalledApp(data.productType || 'Teacher');
     };
 
     function resetStagesUI() {
@@ -1937,7 +2078,7 @@
         goToStep('stepSelectProduct');
       } else {
         applyProductUI(appData.productType);
-        goToStep('stepReady');
+        verifyAndRouteInstalledApp(appData.productType);
       }
       postToHost('uiReady');
     });
