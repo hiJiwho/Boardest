@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '5.5.1',
+  [string]$AppVersion = '5.5.3',
   [switch]$SkipApk,
   [switch]$SkipWindowsBuild
 )
@@ -190,8 +190,12 @@ if (-not $SkipApk) {
   Build-Apk (Join-Path $RootDir 'apps\boardest') 'boardest-cloud.apk' '--dart-define=BC_CLOUD_MODE=true'
   Copy-Item (Join-Path $OutDir 'boardest-cloud.apk') (Join-Path $OutDir 'boardest-class-cloud.apk') -Force
   Build-Apk (Join-Path $RootDir 'apps\boardest_teacher') 'bst-teacher.apk'
+  Build-Apk (Join-Path $RootDir 'apps\boardest_teacher_lite') 'boardest-teacher-lite.apk'
+  Copy-Item (Join-Path $OutDir 'boardest-teacher-lite.apk') (Join-Path $OutDir 'bst-teacher-lite.apk') -Force
   Build-Apk (Join-Path $RootDir 'apps\boardest_class_lite') 'bst-class-lite.apk'
   Copy-Item (Join-Path $OutDir 'bst-class-lite.apk') (Join-Path $OutDir 'boardest-class-lite.apk') -Force
+  Build-Apk (Join-Path $RootDir 'apps\boardest_student') 'boardest-student.apk'
+  Copy-Item (Join-Path $OutDir 'boardest-student.apk') (Join-Path $OutDir 'bst-student.apk') -Force
 } else {
   $boardestFreshApk = Join-Path $RootDir 'apps\boardest\build\app\outputs\flutter-apk\app-release.apk'
   if ((Test-Path $boardestFreshApk) -and (-not (Test-Path (Join-Path $OutDir 'boardest.apk')))) {
@@ -272,6 +276,7 @@ $FilesToCopy = @(
   'boardest.apk', 'boardest-class.apk', 'boardest-cloud.apk', 'boardest-class-cloud.apk',
   'bst-teacher.apk', 'boardest-teacher.apk', 'bst-teacher-lite.apk', 'boardest-teacher-lite.apk',
   'bst-class-lite.apk', 'boardest-class-lite.apk',
+  'boardest-student.apk', 'bst-student.apk',
   'BoardestCert.cer', 'install_certificate.bat', 'install_certificate.ps1'
 )
 foreach ($file in $FilesToCopy) {

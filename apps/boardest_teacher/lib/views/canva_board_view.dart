@@ -199,6 +199,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
 
   String _currentDhash = 'default';
   List<Map<String, dynamic>> _currentHotspots = [];
+  String _pageTurnMode = 'arrow'; // 'arrow' (Canva) | 'pageUpDown' (전자저작물/교과서)
 
   // 학급별 판서 관리
   String _selectedClass = '기본';
@@ -370,6 +371,9 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
       if (parsed['title'] != null && parsed['title'].toString().trim().isNotEmpty && widget.title == null) {
         _displayTitle = parsed['title'].toString().trim();
       }
+      if (parsed['pageTurnMode'] != null) {
+        _pageTurnMode = parsed['pageTurnMode'].toString();
+      }
       return (parsed['embedUrl'] ?? parsed['url'] ?? parsed['webUrl'] ?? parsed['canvaUrl'] ?? parsed['link'] ?? '').toString().trim();
     } catch (_) {
       if (trimmed.startsWith('http') || trimmed.contains('<iframe')) {
@@ -407,12 +411,18 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
           if (content != null && content.isNotEmpty) {
             final shell = TbpStorageService.parsePointerShell(content);
             if (shell != null) {
+              if (shell['pageTurnMode'] != null) {
+                _pageTurnMode = shell['pageTurnMode'].toString();
+              }
               final meta = await TbpStorageService.instance.loadTbpFile(fp);
               if (meta != null) {
                 if (meta.title.isNotEmpty && widget.title == null) {
                   _displayTitle = meta.title;
                 }
                 final infoJson = await TbpStorageService.instance.loadInfoJson('drive://tbp/${meta.folderId}');
+                if (infoJson?['pageTurnMode'] != null) {
+                  _pageTurnMode = infoJson!['pageTurnMode'].toString();
+                }
                 final mUrl = (infoJson?['webUrl'] ?? infoJson?['targetUrl'] ?? shell['webUrl'] ?? '').toString().trim();
                 if (mUrl.isNotEmpty) {
                   rawUrl = mUrl;
@@ -500,6 +510,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
       await _winWebview.initialize();
       await _winWebview.setBackgroundColor(Colors.transparent);
       await _winWebview.loadUrl(url);
+      await _winWebview.executeScript(_getClickerInterceptorJs());
 
       _winWebview.loadingState.listen((state) {
         if (state == LoadingState.navigationCompleted) {
@@ -637,10 +648,128 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
     }
     _lastNavigateTime = now;
     if (kIsWeb) {
-      _sendVirtualKey(isNext ? 'PageDown' : 'PageUp', isNext ? 34 : 33);
+      if (_pageTurnMode == 'pageUpDown') {
+        _sendVirtualKey(isNext ? 'PageDown' : 'PageUp', isNext ? 34 : 33);
+      } else {
+        _sendVirtualKey(isNext ? 'ArrowRight' : 'ArrowLeft', isNext ? 39 : 37);
+      }
     } else {
-      _dhashEngine.navigatePage(isNext: isNext);
+      _dhashEngine.navigatePage(isNext: isNext, pageTurnMode: _pageTurnMode);
     }
+  }
+
+  String _getClickerInterceptorJs() {
+    if (_pageTurnMode == 'pageUpDown') {
+      // 전자저작물 모드: 화살표 키를 PgDn/PgUp으로도 연동하여 리모컨 호환성 보장
+      return '''
+        (function() {
+          if (window.__boardbook_clicker_hooked) return;
+          window.__boardbook_clicker_hooked = true;
+
+          function interceptClicker(e) {
+            if (e.__bstSynthetic) return;
+            if (e.key === 'ArrowRight' || e.keyCode === 39) {
+              if (e.type === 'keydown') {
+                const target = document.activeElement || document.body;
+                ['keydown', 'keyup'].forEach(function(type) {
+                  const evt = new KeyboardEvent(type, {
+                    key: 'PageDown',
+                    code: 'PageDown',
+                    keyCode: 34,
+                    which: 34,
+                    bubbles: true,
+                    cancelable: true
+                  });
+                  evt.__bstSynthetic = true;
+                  target.dispatchEvent(evt);
+                  window.dispatchEvent(evt);
+                });
+              }
+            } else if (e.key === 'ArrowLeft' || e.keyCode === 37) {
+              if (e.type === 'keydown') {
+                const target = document.activeElement || document.body;
+                ['keydown', 'keyup'].forEach(function(type) {
+                  const evt = new KeyboardEvent(type, {
+                    key: 'PageUp',
+                    code: 'PageUp',
+                    keyCode: 33,
+                    which: 33,
+                    bubbles: true,
+                    cancelable: true
+                  });
+                  evt.__bstSynthetic = true;
+                  target.dispatchEvent(evt);
+                  window.dispatchEvent(evt);
+                });
+              }
+            }
+          }
+
+          window.addEventListener('keydown', interceptClicker, true);
+          window.addEventListener('keyup', interceptClicker, true);
+          document.addEventListener('keydown', interceptClicker, true);
+          document.addEventListener('keyup', interceptClicker, true);
+        })();
+      ''';
+    }
+
+    // Canva 모드 (기본): 프리젠터 리모컨의 PageDown/PageUp을 ArrowRight/ArrowLeft로 매핑
+    return '''
+      (function() {
+        if (window.__boardbook_clicker_hooked) return;
+        window.__boardbook_clicker_hooked = true;
+
+        function interceptClicker(e) {
+          if (e.__bstSynthetic) return;
+          if (e.key === 'PageDown' || e.keyCode === 34) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            if (e.type === 'keydown') {
+              const target = document.activeElement || document.body;
+              ['keydown', 'keyup'].forEach(function(type) {
+                const evt = new KeyboardEvent(type, {
+                  key: 'ArrowRight',
+                  code: 'ArrowRight',
+                  keyCode: 39,
+                  which: 39,
+                  bubbles: true,
+                  cancelable: true
+                });
+                evt.__bstSynthetic = true;
+                target.dispatchEvent(evt);
+                window.dispatchEvent(evt);
+              });
+            }
+          } else if (e.key === 'PageUp' || e.keyCode === 33) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            if (e.type === 'keydown') {
+              const target = document.activeElement || document.body;
+              ['keydown', 'keyup'].forEach(function(type) {
+                const evt = new KeyboardEvent(type, {
+                  key: 'ArrowLeft',
+                  code: 'ArrowLeft',
+                  keyCode: 37,
+                  which: 37,
+                  bubbles: true,
+                  cancelable: true
+                });
+                evt.__bstSynthetic = true;
+                target.dispatchEvent(evt);
+                window.dispatchEvent(evt);
+              });
+            }
+          }
+        }
+
+        window.addEventListener('keydown', interceptClicker, true);
+        window.addEventListener('keyup', interceptClicker, true);
+        document.addEventListener('keydown', interceptClicker, true);
+        document.addEventListener('keyup', interceptClicker, true);
+      })();
+    ''';
   }
 
   void _sendVirtualKey(String key, int keyCode) {
@@ -679,8 +808,8 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
         target.dispatchEvent(upEvt);
         window.dispatchEvent(upEvt);
 
-        // Fallback arrow keys for presentation frameworks (HTML Present, Slides, etc)
-        if ('$key' === 'PageDown' || '$key' === 'PageUp') {
+        // Fallback arrow keys for presentation frameworks (HTML Present, Slides, etc) only in arrow mode
+        if ('$_pageTurnMode' !== 'pageUpDown' && ('$key' === 'PageDown' || '$key' === 'PageUp')) {
           const arrowKey = '$key' === 'PageDown' ? 'ArrowRight' : 'ArrowLeft';
           const arrowCode = '$key' === 'PageDown' ? 39 : 37;
           const aEvt = new KeyboardEvent('keydown', {

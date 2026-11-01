@@ -39,21 +39,21 @@ packages:
       path: "../../packages/common/bst_auth"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "5.5.1"
   bst_core:
     dependency: "direct main"
     description:
       path: "../../packages/common/bst_core"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "5.5.1"
   bst_ui:
     dependency: "direct main"
     description:
       path: "../../packages/common/bst_ui"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "5.5.1"
   characters:
     dependency: transitive
     description:

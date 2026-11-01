@@ -142,7 +142,7 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
             Icon(isTbpOrHtmlp ? Icons.warning_amber_rounded : Icons.delete_outline_rounded,
                  color: isTbpOrHtmlp ? const Color(0xFFEF4565) : Colors.white),
             const SizedBox(width: 8),
-            Text(isTbpOrHtmlp ? 'TBP / HTMLP 영구 삭제 확인' : '파일 삭제',
+            Text(isTbpOrHtmlp ? 'TBP 교안 영구 삭제 확인' : '파일 삭제',
                  style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
@@ -391,6 +391,16 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
   List<Map<String, dynamic>> get _filteredFiles {
     return _files.where((file) {
       final name = (file['name'] ?? '').toString().toLowerCase();
+      // 0. 판서 파일(.pen, .bstpen, .iwb, pen_*)은 파일함(내 드라이브)에서 완전 제외 -> 판서 보관함으로 격리
+      if (name.endsWith('.pen') ||
+          name.endsWith('.bstpen') ||
+          name.endsWith('.iwb') ||
+          name.endsWith('.pen.json') ||
+          name.endsWith('.pen.save.bst') ||
+          name.startsWith('pen_')) {
+        return false;
+      }
+
       final isTbpFolder = _isTbpFolderItem(file);
       final isFolder = file['mimeType'] == 'application/vnd.google-apps.folder' && !isTbpFolder;
 
@@ -415,24 +425,18 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
             !name.contains('canva');
       }
       if (_categoryFilter == '📐 TBP 교과서' || _categoryFilter == 'TBP') {
-        final isHtmlpItem = file['source'] == 'htmlp' ||
+        final isTbp = isTbpFolder ||
+            name.endsWith('.bsttbp') ||
+            name.endsWith('.tbp') ||
+            name.endsWith('.tbp.bst') ||
+            file['source'] == 'tbp' ||
+            file['source'] == 'htmlp' ||
             file['source'] == 'canva' ||
             name.endsWith('.htmlp') ||
             name.endsWith('.htmlp.bst') ||
             name.endsWith('.canva') ||
             name.endsWith('.canva.bst');
-        if (isHtmlpItem) return false;
-        final isTbp = isTbpFolder || name.endsWith('.bsttbp') || name.endsWith('.tbp') || name.endsWith('.tbp.bst');
         return isTbp;
-      }
-      if (_categoryFilter == '🌐 HTMLP 교안' || _categoryFilter == 'HTMLP') {
-        final isHtmlp = file['source'] == 'htmlp' ||
-            file['source'] == 'canva' ||
-            name.endsWith('.htmlp') ||
-            name.endsWith('.htmlp.bst') ||
-            name.endsWith('.canva') ||
-            name.endsWith('.canva.bst');
-        return isHtmlp;
       }
 
       return true;
@@ -611,7 +615,7 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
 
   // ─── 2. 검색 & 필터 ───
   Widget _buildSearchAndFilters(double s) {
-    final categories = ['전체', '📁 수업 자료', '📐 TBP 교과서', '🌐 HTMLP 교안'];
+    final categories = ['전체', '📁 수업 자료', '📐 TBP 교과서'];
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16 * s, vertical: 8 * s),
@@ -947,7 +951,7 @@ class _BstCloudDriveViewerState extends State<BstCloudDriveViewer> {
   _FileMeta _resolveFileMeta(String name, bool isFolder, {bool isTbpFolder = false}) {
     final lower = name.toLowerCase();
     if (lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva') || lower.endsWith('.canva.bst') || lower.endsWith('.bstcanva')) {
-      return _FileMeta(const Color(0xFF00C4CC), Icons.slideshow_rounded, 'HTMLP');
+      return _FileMeta(const Color(0xFF7F5AF0), Icons.auto_stories_rounded, 'TBP');
     }
     if (isTbpFolder || lower.endsWith('.tbp') || lower.endsWith('.tbp.bst') || lower.endsWith('.bsttbp')) {
       return _FileMeta(const Color(0xFF7F5AF0), Icons.auto_stories_rounded, 'TBP');

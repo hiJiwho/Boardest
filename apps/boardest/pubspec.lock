@@ -63,77 +63,77 @@ packages:
       path: "../../packages/common/bst_auth"
       relative: true
     source: path
-    version: "5.5.0"
+    version: "5.5.1"
   bst_canva:
     dependency: "direct main"
     description:
       path: "../../packages/plugins/bst_canva"
       relative: true
     source: path
-    version: "5.5.0"
+    version: "5.5.1"
   bst_cast:
     dependency: "direct main"
     description:
       path: "../../packages/common/bst_cast"
       relative: true
     source: path
-    version: "5.5.0"
+    version: "5.5.1"
   bst_cloud:
     dependency: "direct overridden"
     description:
       path: "../../packages/common/bst_cloud"
       relative: true
     source: path
-    version: "5.5.0"
+    version: "5.5.1"
   bst_core:
     dependency: "direct main"
     description:
       path: "../../packages/common/bst_core"
       relative: true
     source: path
-    version: "5.5.0"
+    version: "5.5.1"
   bst_pdf:
     dependency: "direct main"
     description:
       path: "../../packages/plugins/bst_pdf"
       relative: true
     source: path
-    version: "5.5.0"
+    version: "5.5.1"
   bst_pen:
     dependency: "direct main"
     description:
       path: "../../packages/plugins/bst_pen"
       relative: true
     source: path
-    version: "5.5.0"
+    version: "5.5.1"
   bst_tbp:
     dependency: "direct main"
     description:
       path: "../../packages/plugins/bst_tbp"
       relative: true
     source: path
-    version: "5.5.0"
+    version: "5.5.1"
   bst_timetable:
     dependency: "direct main"
     description:
       path: "../../packages/common/bst_timetable"
       relative: true
     source: path
-    version: "5.5.0"
+    version: "5.5.1"
   bst_ui:
     dependency: "direct main"
     description:
       path: "../../packages/common/bst_ui"
       relative: true
     source: path
-    version: "5.5.0"
+    version: "5.5.1"
   bst_video:
     dependency: "direct main"
     description:
       path: "../../packages/plugins/bst_video"
       relative: true
     source: path
-    version: "5.5.0"
+    version: "5.5.1"
   characters:
     dependency: transitive
     description:

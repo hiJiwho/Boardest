@@ -17,6 +17,7 @@ import 'system_app_scanner.dart';
 
 enum UpdateState {
   idle,
+  checking,
   downloading,
   downloaded,
   installing,
@@ -30,9 +31,9 @@ enum UpdateState {
 /// 5. 잠금 화면 필수 4대 버튼: [업데이트 다운 / 수동 설치 / 앱 런처 / 앱 삭제]
 /// 6. 윈도우: AppData에 다운로드 후 종료하지 않고 윈도우 패키지 설치 관리자(AppX) 구동 -> 새 앱 실행 시 이전 AppX 자동 삭제
 class UpdateService {
-  static const String defaultVersion = '5.5.1';
-  static const String defaultBuildNumber = '5510';
-  static const String defaultFullVersion = '5.5.1+5510';
+  static const String defaultVersion = '5.5.3';
+  static const String defaultBuildNumber = '5530';
+  static const String defaultFullVersion = '5.5.3+5530';
   static const String _releasesApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases?per_page=30';
   static const String downloadPage = 'https://boardest-downloads.web.app';
@@ -321,6 +322,9 @@ class UpdateService {
 
     _isChecking = true;
     _lastSilentCheckTime = DateTime.now();
+    if (!silent || force) {
+      stateNotifier.value = UpdateState.checking;
+    }
 
     try {
       final response = await http.get(Uri.parse(_releasesApi), headers: {
@@ -434,6 +438,9 @@ class UpdateService {
       _lastSilentCheckTime = null; // 부팅 시 네트워크 미연결로 인한 실패 시 쿨다운 리셋하여 재시도 허용
     } finally {
       _isChecking = false;
+      if (stateNotifier.value == UpdateState.checking) {
+        stateNotifier.value = UpdateState.idle;
+      }
     }
   }
 
@@ -551,10 +558,10 @@ class UpdateService {
   /// 다운로드된 패키지 설치 실행 (윈도우: 윈도우 패키지 설치 관리자 호출, 앱 종료 안 함)
   static Future<void> executeInstall(BuildContext context) async {
     final savePath = downloadedPackagePath;
-    // Reset state to idle so subsequent app resumes do not re-prompt/re-install
-    stateNotifier.value = UpdateState.idle;
+    stateNotifier.value = UpdateState.installing;
 
     if (savePath == null || !File(savePath).existsSync()) {
+      stateNotifier.value = UpdateState.idle;
       // 다운로드된 파일이 없으면 바로 다운로드 사이트 열기
       await launchUrl(Uri.parse(downloadPage), mode: LaunchMode.externalApplication);
       return;

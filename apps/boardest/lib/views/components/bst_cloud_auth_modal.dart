@@ -131,15 +131,28 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
             _isApproved = true;
           });
 
-          // Cloud 토큰 활성화 (1회성 세션만 연결, 자동 기기 등록 하지 않음 — 등록 버튼 클릭 시에만 등록)
-          BstCloudService.instance.setDirectAccessToken(
-            event.accessToken!,
-            teacherName: event.teacherName ?? '선생님',
-            ownerEmail: event.email ?? '',
-          );
+          String validToken = event.accessToken!;
           if (event.refreshToken != null && event.refreshToken!.isNotEmpty) {
             BstCloudService.instance.activeRefreshToken = event.refreshToken;
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('bst_active_refresh_token', event.refreshToken!);
+              final refreshed = await BstCloudService.instance.exchangeRefreshTokenForAccessToken(event.refreshToken!);
+              if (refreshed != null && refreshed.isNotEmpty) {
+                validToken = refreshed;
+              }
+            } catch (tokenErr) {
+              debugPrint('[BstCloudAuthModal] Token refresh note: $tokenErr');
+            }
           }
+
+          // Cloud 토큰 활성화 (1회성 세션만 연결, 자동 기기 등록 하지 않음 — 등록 버튼 클릭 시에만 등록)
+          BstCloudService.instance.setDirectAccessToken(
+            validToken,
+            teacherName: event.teacherName ?? '선생님',
+            ownerEmail: event.email ?? '',
+            folderId: event.folderId,
+          );
 
           await Future.delayed(const Duration(milliseconds: 700));
           if (mounted) {

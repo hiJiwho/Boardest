@@ -337,9 +337,10 @@ class AnnotationStorageService {
         await metaFile.writeAsString(json.encode(metadata), flush: true);
       }
 
-      // 3. Cloud (Google Drive) 저장
+      // 3. [요구사항 4 & 5] PPT/HWP/PDF 파일 오버레이 판서는 교실 로컬에만 저장, 기본 판서는 Cloud 연결 시 교사 계정 bst-pen으로 저장
+      final isOverlayFileAnnotation = type == 'ppt' || type == 'hwp' || type == 'pdf';
       final cloud = CloudDriveService.instance;
-      final shouldSaveCloud = isCloud || cloud.isLoggedIn || (fullFilePath != null && fullFilePath.startsWith('cloud:'));
+      final shouldSaveCloud = !isOverlayFileAnnotation && (isCloud || cloud.isLoggedIn || (fullFilePath != null && fullFilePath.startsWith('cloud:')));
 
       if (shouldSaveCloud && cloud.isLoggedIn) {
         try {

@@ -146,8 +146,8 @@ void main(List<String> args) async {
       final email = params['email'] ?? '';
       final token = params['token'] ?? params['access_token'] ?? '';
       String teacherName = params['teacherName'] ?? '';
-      String schoolName = params['schoolName'] ?? (AppConfig.isDemoMode ? '데모중학교' : '양동중학교');
-      if (AppConfig.isDemoMode && schoolName == '양동중학교') {
+      String schoolName = params['schoolName'] ?? (AppConfig.isDemoMode ? '데모중학교' : '');
+      if (AppConfig.isDemoMode && schoolName.isEmpty) {
         schoolName = '데모중학교';
       }
 
@@ -405,9 +405,13 @@ void main(List<String> args) async {
           final pData = jsonDecode(pRes.body);
           final fields = pData['fields'] as Map<String, dynamic>?;
           if (fields != null) {
-            final tName = (fields['teacherName'] as Map?)?['stringValue']?.toString() ?? '박지후';
-            final sName = (fields['schoolName'] as Map?)?['stringValue']?.toString() ?? '양동중학교';
-            final sCode = int.tryParse((fields['schoolCode'] as Map?)?['stringValue']?.toString() ?? '44134') ?? 44134;
+            final curSettings = await storage.getSettings();
+            final tName = (fields['teacherName'] as Map?)?['stringValue']?.toString() ??
+                (curSettings.selectedTeacherName.isNotEmpty ? curSettings.selectedTeacherName : '선생님');
+            final sName = (fields['schoolName'] as Map?)?['stringValue']?.toString() ??
+                (curSettings.selectedSchool?.name.isNotEmpty == true ? curSettings.selectedSchool!.name : '보데스트 중학교');
+            final sCode = int.tryParse((fields['schoolCode'] as Map?)?['stringValue']?.toString() ?? '') ??
+                (curSettings.selectedSchool?.code ?? 11111);
 
             await prefs.setString('bst_google_user_email', 'hijiwho@gmail.com');
             await prefs.setString('bst_user_email', 'hijiwho@gmail.com');
@@ -415,18 +419,17 @@ void main(List<String> args) async {
             await prefs.setString('bst_user_name', tName);
             await prefs.setString('bst_school_name', sName);
 
-            final school = School(id: sCode, code: sCode, name: sName, region: '서울');
-            final curSettings = await storage.getSettings();
+            final school = School(id: sCode, code: sCode, name: sName, region: curSettings.selectedSchool?.region ?? '서울');
             final fixedSettings = curSettings.copyWith(
               selectedSchool: school,
-              schoolId: '44134',
-              selectedGrade: 1,
-              selectedClass: 1,
-              selectedTeacher: '1',
-              selectedTeacherId: '1',
+              schoolId: curSettings.schoolId.isNotEmpty ? curSettings.schoolId : sCode.toString(),
+              selectedGrade: curSettings.selectedGrade > 0 ? curSettings.selectedGrade : 1,
+              selectedClass: curSettings.selectedClass > 0 ? curSettings.selectedClass : 1,
+              selectedTeacher: curSettings.selectedTeacher.isNotEmpty ? curSettings.selectedTeacher : '1',
+              selectedTeacherId: curSettings.selectedTeacherId.isNotEmpty ? curSettings.selectedTeacherId : '1',
               selectedTeacherName: tName,
-              cafeteriaNum: '1',
-              isHomeroom: true,
+              cafeteriaNum: curSettings.cafeteriaNum.isNotEmpty ? curSettings.cafeteriaNum : '1',
+              isHomeroom: curSettings.isHomeroom,
               isSetupComplete: true,
             );
             await storage.saveSettings(fixedSettings);
@@ -443,12 +446,12 @@ void main(List<String> args) async {
   final savedName = prefs.getString('bst_google_user_name') ?? prefs.getString('bst_user_name') ?? CloudDriveService.instance.userName ?? '';
   final savedSchool = prefs.getString('bst_school_name') ?? CloudDriveService.instance.schoolName ?? '';
   if (savedEmail.isNotEmpty && (!settings.isSetupComplete || settings.selectedSchool == null)) {
-    final sName = savedSchool.isNotEmpty ? savedSchool : (AppConfig.isDemoMode ? '데모중학교' : '양동중학교');
-    final sCode = AppConfig.isDemoMode ? 11111 : 44134;
-    final school = School(id: sCode, code: sCode, name: sName, region: '서울');
+    final sName = savedSchool.isNotEmpty ? savedSchool : (AppConfig.isDemoMode ? '데모중학교' : '학교');
+    final sCode = AppConfig.isDemoMode ? 11111 : 0;
+    final school = School(id: sCode, code: sCode, name: sName, region: '전국');
     settings = settings.copyWith(
       selectedSchool: school,
-      schoolId: settings.schoolId.isNotEmpty ? settings.schoolId : (AppConfig.isDemoMode ? 'Demo' : '44134'),
+      schoolId: settings.schoolId.isNotEmpty ? settings.schoolId : (AppConfig.isDemoMode ? 'Demo' : ''),
       selectedTeacherName: savedName.isNotEmpty ? savedName : settings.selectedTeacherName,
       isSetupComplete: true,
     );

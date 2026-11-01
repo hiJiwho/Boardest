@@ -420,7 +420,8 @@ class TbpDhashEngine {
   }
 
   /// 페이지 이동 (350ms 쿨다운 가드로 2페이지 연속 넘어감 완벽 차단 및 50ms 초고속 감지)
-  Future<void> navigatePage({required bool isNext}) async {
+  /// pageTurnMode: 'arrow' (화살표 키, Canva 추천) 또는 'pageUpDown' (PgUp/PgDn, 전자저작물/교과서 추천)
+  Future<void> navigatePage({required bool isNext, String pageTurnMode = 'arrow'}) async {
     final now = DateTime.now();
     if (_lastNavTime != null && now.difference(_lastNavTime!).inMilliseconds < 350) {
       return; // 350ms 디바운스로 2페이지 연속 점프 방지 (1키 1페이지 정밀 이동)
@@ -432,8 +433,13 @@ class TbpDhashEngine {
       return;
     }
 
-    final key = isNext ? 'ArrowRight' : 'ArrowLeft';
-    final keyCode = isNext ? 39 : 37;
+    final isPageUpDown = pageTurnMode == 'pageUpDown';
+    final key = isPageUpDown
+        ? (isNext ? 'PageDown' : 'PageUp')
+        : (isNext ? 'ArrowRight' : 'ArrowLeft');
+    final keyCode = isPageUpDown
+        ? (isNext ? 34 : 33)
+        : (isNext ? 39 : 37);
 
     final script = '''
       (function() {

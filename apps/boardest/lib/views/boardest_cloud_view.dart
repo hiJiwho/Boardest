@@ -151,14 +151,27 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
           .listen((event) async {
         if (!mounted) return;
         if (event.approved && event.accessToken != null) {
+          String validToken = event.accessToken!;
+          if (event.refreshToken != null && event.refreshToken!.isNotEmpty) {
+            BstCloudService.instance.activeRefreshToken = event.refreshToken;
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('bst_active_refresh_token', event.refreshToken!);
+              final refreshed = await BstCloudService.instance.exchangeRefreshTokenForAccessToken(event.refreshToken!);
+              if (refreshed != null && refreshed.isNotEmpty) {
+                validToken = refreshed;
+              }
+            } catch (tokenErr) {
+              debugPrint('[BoardestCloudView] Token refresh note: $tokenErr');
+            }
+          }
+
           BstCloudService.instance.setDirectAccessToken(
-            event.accessToken!,
+            validToken,
             teacherName: event.teacherName ?? '선생님',
             ownerEmail: event.email ?? '',
+            folderId: event.folderId,
           );
-          if (event.refreshToken != null) {
-            BstCloudService.instance.activeRefreshToken = event.refreshToken;
-          }
 
           setState(() {
             _isConnected = true;
@@ -575,6 +588,54 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
                               style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontSize: 12, fontWeight: FontWeight.w900),
                             ),
                           ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                if (state == UpdateState.checking) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF141721),
+                    ),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00F5D4)),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          '🔄 최신 업데이트 버전 확인 중...',
+                          style: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4), fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                if (state == UpdateState.installing) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF00F5D4), Color(0xFF7F5AF0)],
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          '🚀 새 버전 업데이트 설치 진행 중...',
+                          style: GoogleFonts.notoSansKr(color: Colors.black, fontSize: 12, fontWeight: FontWeight.w900),
                         ),
                       ],
                     ),

@@ -69,19 +69,32 @@ class _BstPasskeyQrDialogState extends State<BstPasskeyQrDialog> {
     _isExpired = false;
 
     final token = CloudDriveService.instance.accessToken ?? '';
+    final refreshToken = CloudDriveService.instance.refreshToken ?? '';
+    final folderId = CloudDriveService.instance.bstSaveFolderId ?? CloudDriveService.instance.boardestFolderId ?? '';
+    final email = CloudDriveService.instance.userEmail ?? '';
+
     final encToken = token.isNotEmpty ? '&token=${Uri.encodeComponent(token)}' : '';
+    final encRefresh = refreshToken.isNotEmpty ? '&refreshToken=${Uri.encodeComponent(refreshToken)}' : '';
+    final encFolder = folderId.isNotEmpty ? '&folderId=${Uri.encodeComponent(folderId)}' : '';
+    final encEmail = email.isNotEmpty ? '&email=${Uri.encodeComponent(email)}' : '';
 
     // Boardest Cloud Connect 등록 주소 (클라우드 연동 전용, 2분 유효 파라미터 및 인증 토큰 포함)
     final encTeacher = Uri.encodeComponent(widget.teacherName);
     final encSchool = Uri.encodeComponent(widget.schoolName);
     final encDevice = Uri.encodeComponent(widget.homeroomClass);
-    _registrationUrl = 'https://boardest-cloud-connect.web.app/?action=register&key=$_challengeId&teacher=$encTeacher&school=$encSchool&device=$encDevice&t=$now$encToken';
+    _registrationUrl = 'https://boardest-cloud-connect.web.app/?action=register&key=$_challengeId&teacher=$encTeacher&school=$encSchool&device=$encDevice&t=$now$encToken$encRefresh$encFolder$encEmail';
 
-    if (token.isNotEmpty) {
+    if (token.isNotEmpty || refreshToken.isNotEmpty) {
       final vaultPayload = jsonEncode({
         'credId': 'passkey_qr',
         'teacher': widget.teacherName,
+        'teacherName': widget.teacherName,
         'token': token,
+        'accessToken': token,
+        'refreshToken': refreshToken,
+        'folderId': folderId,
+        'bstCloudFolderId': folderId,
+        'email': email,
         'updatedAt': now,
       });
       http.put(

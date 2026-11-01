@@ -352,71 +352,81 @@ class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  for (int c = 1; c <= 12; c++) ...[
-                    Builder(
-                      builder: (_) {
-                        final isInstalled = (_installedClasses[_selectedGrade] ?? const <int>{}).contains(c);
-                        final isSelected = _selectedClassFilter == c;
+                  Builder(
+                    builder: (ctx) {
+                      final activeClasses = (_installedClasses[_selectedGrade] ?? const <int>{}).toList()..sort();
+                      if (activeClasses.isEmpty) {
                         return Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: Opacity(
-                            opacity: isSelected ? 1.0 : (isInstalled ? 1.0 : 0.8),
-                            child: InkWell(
-                              onTap: () {
-                                setState(() => _selectedClassFilter = c);
-                                AssessmentService.instance.updateFilter(
-                                  grade: _selectedGrade,
-                                  classNum: c,
-                                );
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? const Color(0xFF00F5D4)
-                                      : (isInstalled
-                                          ? Colors.white.withOpacity(0.07)
-                                          : Colors.white.withOpacity(0.03)),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? const Color(0xFF00F5D4)
-                                        : (isInstalled
-                                            ? const Color(0xFF00F5D4).withOpacity(0.35)
-                                            : Colors.amber.withOpacity(0.25)),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      isInstalled ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-                                      size: 12,
-                                      color: isSelected
-                                          ? Colors.black
-                                          : (isInstalled ? const Color(0xFF00F5D4) : Colors.amberAccent),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      isInstalled ? '$c반' : '$c반(미설치)',
-                                      style: _ts(
-                                        12,
-                                        w: FontWeight.w800,
-                                        c: isSelected
-                                            ? Colors.black
-                                            : (isInstalled ? Colors.white : Colors.white70),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          child: Text(
+                            '(최근 24시간 내 신호가 감지된 학급이 없습니다)',
+                            style: _ts(12, w: FontWeight.w600, c: Colors.white38),
                           ),
                         );
-                      },
-                    ),
-                  ],
+                      }
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final c in activeClasses) ...[
+                            Builder(
+                              builder: (_) {
+                                final isSelected = _selectedClassFilter == c;
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: InkWell(
+                                    onTap: () {
+                                      setState(() => _selectedClassFilter = c);
+                                      AssessmentService.instance.updateFilter(
+                                        grade: _selectedGrade,
+                                        classNum: c,
+                                      );
+                                    },
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? const Color(0xFF00F5D4)
+                                            : Colors.white.withOpacity(0.07),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: isSelected
+                                              ? const Color(0xFF00F5D4)
+                                              : const Color(0xFF00F5D4).withOpacity(0.35),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Container(
+                                            width: 6,
+                                            height: 6,
+                                            decoration: BoxDecoration(
+                                              color: isSelected ? Colors.black : const Color(0xFF00F5D4),
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 5),
+                                          Text(
+                                            '$c반',
+                                            style: _ts(
+                                              12,
+                                              w: FontWeight.w800,
+                                              c: isSelected ? Colors.black : Colors.white,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -937,46 +947,25 @@ class _TeacherAssessmentViewState extends State<TeacherAssessmentView> {
                           spacing: 6,
                           runSpacing: 6,
                           children: [
-                            for (int c = 1; c <= 12; c++)
+                            for (int c in (installedForGrade.isNotEmpty ? (installedForGrade.toList()..sort()) : List.generate(12, (i) => i + 1)))
                               Builder(
                                 builder: (_) {
-                                  final isInstalled = installedForGrade.contains(c);
+                                  final isInstalled = installedForGrade.isEmpty || installedForGrade.contains(c);
                                   final isSel = selectedClasses.contains(c);
                                   return FilterChip(
-                                    label: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (!isInstalled) ...[
-                                          Icon(
-                                            Icons.info_outline_rounded,
-                                            size: 13,
-                                            color: isSel ? Colors.black87 : Colors.amberAccent,
-                                          ),
-                                          const SizedBox(width: 4),
-                                        ],
-                                        Text(
-                                          isInstalled ? '$c반' : '$c반(미설치)',
-                                          style: TextStyle(
-                                            color: isSel
-                                                ? Colors.black
-                                                : (isInstalled ? Colors.white : Colors.white70),
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12.5,
-                                          ),
-                                        ),
-                                      ],
+                                    label: Text(
+                                      '$c반',
+                                      style: TextStyle(
+                                        color: isSel ? Colors.black : Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12.5,
+                                      ),
                                     ),
                                     selected: isSel,
-                                    selectedColor: isInstalled
-                                        ? const Color(0xFF00F5D4)
-                                        : const Color(0xFFFFD166),
-                                    backgroundColor: isInstalled
-                                        ? Colors.white.withOpacity(0.08)
-                                        : Colors.white.withOpacity(0.04),
+                                    selectedColor: const Color(0xFF00F5D4),
+                                    backgroundColor: Colors.white.withOpacity(0.08),
                                     side: BorderSide(
-                                      color: isSel
-                                          ? (isInstalled ? const Color(0xFF00F5D4) : const Color(0xFFFFD166))
-                                          : (isInstalled ? Colors.white12 : Colors.amber.withOpacity(0.3)),
+                                      color: isSel ? const Color(0xFF00F5D4) : Colors.white12,
                                       width: 1,
                                     ),
                                     checkmarkColor: Colors.black,

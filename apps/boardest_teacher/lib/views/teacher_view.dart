@@ -47,6 +47,7 @@ import 'canva_board_view.dart';
 import 'canva_library_view.dart';
 import 'tbp/tbp_creator_dialog.dart';
 import 'tbp/tbp_viewer_route.dart';
+import '../services/tbp/tbp_storage_service.dart';
 import 'meal_view.dart';
 import 'message_view.dart';
 import 'teacher_assessment_view.dart';
@@ -174,6 +175,12 @@ class _TeacherViewState extends State<TeacherView> {
   String _currentTeacherTab = 'dashboard'; // 'dashboard', 'timetable', 'create', 'files', 'meal', 'memo', 'archive'
   bool _guestBypassLogin = false; // 게스트 모드 둘러보기 허용
 
+  // 인라인 TBP 생성기 상태 (새로 만들기 탭 직접 입력)
+  final TextEditingController _inlineTbpTitleController = TextEditingController();
+  final TextEditingController _inlineTbpUrlController = TextEditingController();
+  String _inlineTbpPageTurnMode = 'arrow'; // 'arrow' (<- / -> Canva 추천) vs 'pageUpDown' (PgUp / PgDn 전자저작물 추천)
+  bool _isCreatingInlineTbp = false;
+
   // 플로팅 타이머 상태
   bool _showMiniTimer = false;
   int _timerSecondsElapsed = 0;
@@ -300,6 +307,8 @@ class _TeacherViewState extends State<TeacherView> {
 
   @override
   void dispose() {
+    _inlineTbpTitleController.dispose();
+    _inlineTbpUrlController.dispose();
     _stopFolderWatchers();
     if (TeacherView.onWindowClosePressed != null) {
       TeacherView.onWindowClosePressed = null;
@@ -2404,76 +2413,67 @@ class _TeacherViewState extends State<TeacherView> {
                     style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
                   ),
                   Text(
-                    '교안 제작(TBP), 웹 프레젠테이션(HTML Present), 파일 업로드 및 자유 판서를 시작합니다.',
+                    '스마트 교안 제작(TBP), 교안 복원, 파일 클라우드 업로드 및 자유 판서를 시작합니다.',
                     style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
                   ),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
+          // 1. TBP 가로 확장 인라인 생성 카드 (생성 버튼 누르지 않아도 그 칸에서 바로 입력!)
+          _buildInlineTbpCreatorCard(scale),
+          const SizedBox(height: 16),
+          // 2. 하단 액션 카드 3개 나란히 배치
           Expanded(
-            child: GridView.count(
-              crossAxisCount: 2,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: 1.8,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 1. TBP & HTML Present 통합 교안 생성기
-                _buildCreateActionCard(
-                  icon: Icons.auto_stories_rounded,
-                  iconColor: const Color(0xFF00F5D4),
-                  title: 'TBP & HTML Present 통합 교안 생성',
-                  desc: 'Canva, 슬라이드, 웹 링크 교안과 인터랙티브 핫스팟이 결합된 전자칠판 전용 수업 패키지를 만듭니다.',
-                  buttonLabel: '교안 생성기 열기',
-                  onTap: () async {
-                    final createdPath = await showDialog<String>(
-                      context: context,
-                      builder: (ctx) => TbpCreatorDialog(scaleFactor: scale),
-                    );
-                    if (createdPath != null && createdPath.isNotEmpty && mounted) {
-                      unawaited(_refreshDriveFiles());
-                      _openFile(createdPath);
-                    }
-                  },
+                // 기존 TBP 교안 패키지 복원 & 열기
+                Expanded(
+                  child: _buildCreateActionCard(
+                    icon: Icons.auto_stories_rounded,
+                    iconColor: const Color(0xFF7F5AF0),
+                    title: '기존 TBP 교안 복원 & 열기',
+                    desc: '저장해 둔 .tbp, .save 패키지를 불러와 클라우드에 등록하고 수업을 시작합니다.',
+                    buttonLabel: '교안 패키지 열기',
+                    onTap: () async {
+                      final createdPath = await showDialog<String>(
+                        context: context,
+                        builder: (ctx) => TbpCreatorDialog(scaleFactor: scale),
+                      );
+                      if (createdPath != null && createdPath.isNotEmpty && mounted) {
+                        unawaited(_refreshDriveFiles());
+                        _openFile(createdPath);
+                      }
+                    },
+                  ),
                 ),
-                // 2. 기존 교안 패키지 복원 & 열기
-                _buildCreateActionCard(
-                  icon: Icons.slideshow_rounded,
-                  iconColor: const Color(0xFF7F5AF0),
-                  title: '기존 교안 파일(.TBP, .HTMLP) 복원 & 열기',
-                  desc: '저장해 둔 .tbp, .htmlp, .save 패키지를 불러와 클라우드에 등록하고 수업을 시작합니다.',
-                  buttonLabel: '교안 패키지 열기',
-                  onTap: () async {
-                    final createdPath = await showDialog<String>(
-                      context: context,
-                      builder: (ctx) => TbpCreatorDialog(scaleFactor: scale),
-                    );
-                    if (createdPath != null && createdPath.isNotEmpty && mounted) {
-                      unawaited(_refreshDriveFiles());
-                      _openFile(createdPath);
-                    }
-                  },
+                const SizedBox(width: 16),
+                // 파일 클라우드 업로드
+                Expanded(
+                  child: _buildCreateActionCard(
+                    icon: Icons.cloud_upload_rounded,
+                    iconColor: const Color(0xFF38BDF8),
+                    title: '내 PC 파일 Cloud 업로드',
+                    desc: 'PDF, PPT, HWP 교안 파일을 클라우드 드라이브에 안전하게 올립니다.',
+                    buttonLabel: '파일 선택 & 업로드',
+                    onTap: _uploadLocalFileToDrive,
+                  ),
                 ),
-                // 3. 파일 클라우드 업로드
-                _buildCreateActionCard(
-                  icon: Icons.cloud_upload_rounded,
-                  iconColor: const Color(0xFF38BDF8),
-                  title: '내 PC 파일 Cloud 업로드',
-                  desc: 'PDF, PPT, HWP 교안 파일을 클라우드 드라이브에 안전하게 올립니다.',
-                  buttonLabel: '파일 선택 & 업로드',
-                  onTap: _uploadLocalFileToDrive,
-                ),
-                // 4. 새 노트북 자유 판서
-                _buildCreateActionCard(
-                  icon: Icons.edit_note_rounded,
-                  iconColor: const Color(0xFFFFB703),
-                  title: '새 노트북 자유 판서 시작',
-                  desc: '빈 칠판에서 수업 필기를 진행하고 .pen 파일로 저장합니다.',
-                  buttonLabel: '판서 시작',
-                  onTap: () {
-                    setState(() => _currentTeacherTab = 'lesson');
-                  },
+                const SizedBox(width: 16),
+                // 새 노트북 자유 판서
+                Expanded(
+                  child: _buildCreateActionCard(
+                    icon: Icons.edit_note_rounded,
+                    iconColor: const Color(0xFFFFB703),
+                    title: '새 노트북 자유 판서 시작',
+                    desc: '빈 칠판에서 수업 필기를 진행하고 .pen 파일로 저장합니다.',
+                    buttonLabel: '판서 시작',
+                    onTap: () {
+                      setState(() => _currentTeacherTab = 'lesson');
+                    },
+                  ),
                 ),
               ],
             ),
@@ -2481,6 +2481,334 @@ class _TeacherViewState extends State<TeacherView> {
         ],
       ),
     );
+  }
+
+  Widget _buildInlineTbpCreatorCard(double scale) {
+    const accentColor = Color(0xFF00F5D4);
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141721).withOpacity(0.92),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accentColor.withOpacity(0.35), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withOpacity(0.08),
+            blurRadius: 18,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: accentColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.auto_stories_rounded, color: accentColor, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        'TBP 스마트 교안 만들기',
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: accentColor.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: accentColor.withOpacity(0.3)),
+                        ),
+                        child: const Text('원클릭 생성', style: TextStyle(color: accentColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Canva, 구글 슬라이드, 웹 교안 링크를 입력하여 즉시 인터랙티브 전자칠판 교안을 생성합니다.',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // 입력 필드 행
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 4,
+                child: TextField(
+                  controller: _inlineTbpTitleController,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: '교안 제목',
+                    hintText: '예: 2학기 삼각비 개념 수업',
+                    labelStyle: const TextStyle(color: Color(0xFF00F5D4), fontSize: 13),
+                    hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
+                    prefixIcon: const Icon(Icons.title_rounded, color: Color(0xFF00F5D4), size: 18),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.04),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.white12)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00F5D4))),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 6,
+                child: TextField(
+                  controller: _inlineTbpUrlController,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: '웹 교안 / Canva 링크 URL',
+                    hintText: 'Canva 공유 링크, 구글 슬라이드, 웹 프레젠테이션 주소...',
+                    labelStyle: const TextStyle(color: Color(0xFF7F5AF0), fontSize: 13),
+                    hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
+                    prefixIcon: const Icon(Icons.link_rounded, color: Color(0xFF7F5AF0), size: 18),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.04),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.white12)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF7F5AF0))),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // 옵션 및 생성 버튼 행
+          Row(
+            children: [
+              const Text(
+                '페이지 넘김:',
+                style: TextStyle(color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 8),
+              // Option 1: <- -> (Canva 추천)
+              InkWell(
+                onTap: () => setState(() => _inlineTbpPageTurnMode = 'arrow'),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _inlineTbpPageTurnMode == 'arrow' ? accentColor.withOpacity(0.2) : Colors.white.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _inlineTbpPageTurnMode == 'arrow' ? accentColor : Colors.white12,
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _inlineTbpPageTurnMode == 'arrow' ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                        size: 14,
+                        color: _inlineTbpPageTurnMode == 'arrow' ? accentColor : Colors.white54,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '← / → (Canva 추천)',
+                        style: TextStyle(
+                          color: _inlineTbpPageTurnMode == 'arrow' ? Colors.white : Colors.white70,
+                          fontSize: 12,
+                          fontWeight: _inlineTbpPageTurnMode == 'arrow' ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Option 2: PgUp, PgDn (전자저작물 추천)
+              InkWell(
+                onTap: () => setState(() => _inlineTbpPageTurnMode = 'pageUpDown'),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _inlineTbpPageTurnMode == 'pageUpDown' ? const Color(0xFF7F5AF0).withOpacity(0.2) : Colors.white.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _inlineTbpPageTurnMode == 'pageUpDown' ? const Color(0xFF7F5AF0) : Colors.white12,
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _inlineTbpPageTurnMode == 'pageUpDown' ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                        size: 14,
+                        color: _inlineTbpPageTurnMode == 'pageUpDown' ? const Color(0xFF7F5AF0) : Colors.white54,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'PgUp, PgDn (전자저작물 추천)',
+                        style: TextStyle(
+                          color: _inlineTbpPageTurnMode == 'pageUpDown' ? Colors.white : Colors.white70,
+                          fontSize: 12,
+                          fontWeight: _inlineTbpPageTurnMode == 'pageUpDown' ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: _isCreatingInlineTbp ? null : _handleCreateInlineTbp,
+                icon: _isCreatingInlineTbp
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                    : const Icon(Icons.rocket_launch_rounded, size: 16, color: Colors.black),
+                label: Text(
+                  _isCreatingInlineTbp ? '생성 중...' : '🚀 TBP 스마트 교안 즉시 생성',
+                  style: const TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.w900),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentColor,
+                  elevation: 2,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleCreateInlineTbp() async {
+    final title = _inlineTbpTitleController.text.trim();
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('⚠️ 교안 제목을 입력해주세요.')),
+      );
+      return;
+    }
+    var webUrl = _inlineTbpUrlController.text.trim();
+    if (webUrl.isNotEmpty && !webUrl.startsWith('http://') && !webUrl.startsWith('https://')) {
+      webUrl = 'https://$webUrl';
+    }
+
+    setState(() => _isCreatingInlineTbp = true);
+    try {
+      final cloud = CloudDriveService.instance;
+      final safeTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      final new32Id = CloudDriveService.generate32DigitId();
+      final shellFileName = '$safeTitle.tbp.bst';
+
+      final fullMeta = <String, dynamic>{
+        'version': '5.5.3',
+        'id': new32Id,
+        'folderId': new32Id,
+        'title': safeTitle,
+        'type': 'TBP',
+        'webUrl': webUrl,
+        'pagesCount': 0,
+        'pageTurnMode': _inlineTbpPageTurnMode,
+        'createdAt': DateTime.now().toIso8601String(),
+      };
+
+      String? realFolderId;
+      if (cloud.isLoggedIn) {
+        final tbpRootId = await cloud.getOrCreateTextbookProFolder();
+        if (tbpRootId != null) {
+          realFolderId = await cloud.createFolderInDrive(new32Id, parentFolderId: tbpRootId);
+          if (realFolderId != null) {
+            fullMeta['folderId'] = realFolderId;
+            final updatedMetaStr = jsonEncode(fullMeta);
+            await cloud.uploadBytesToDrive(
+              Uint8List.fromList(utf8.encode(updatedMetaStr)),
+              'manifest.json',
+              folderId: realFolderId,
+            );
+            await cloud.uploadBytesToDrive(
+              Uint8List.fromList(utf8.encode(updatedMetaStr)),
+              'meta.bstsave',
+              folderId: realFolderId,
+            );
+          }
+        }
+
+        final saveRootId = await cloud.getOrCreateConnectFolder();
+        final shellJson = jsonEncode({
+          'type': 'TBP',
+          'id': new32Id,
+          'folderId': realFolderId ?? new32Id,
+          'title': safeTitle,
+          'webUrl': webUrl,
+          'pageTurnMode': _inlineTbpPageTurnMode,
+          'createdAt': DateTime.now().millisecondsSinceEpoch,
+        });
+        await cloud.uploadBytesToDrive(
+          Uint8List.fromList(utf8.encode(shellJson)),
+          shellFileName,
+          folderId: saveRootId,
+        );
+      }
+
+      String? localDummyPath;
+      if (!kIsWeb) {
+        final boardDir = await BstSaveService.instance.directoryFor(BstSaveService.subBoard);
+        final dummyFile = File(p.join(boardDir.path, shellFileName));
+        final shellJson = jsonEncode({
+          'type': 'TBP',
+          'id': new32Id,
+          'folderId': realFolderId ?? new32Id,
+          'title': safeTitle,
+          'webUrl': webUrl,
+          'pageTurnMode': _inlineTbpPageTurnMode,
+          'createdAt': DateTime.now().millisecondsSinceEpoch,
+        });
+        await dummyFile.writeAsString(shellJson, flush: true);
+        localDummyPath = dummyFile.path;
+      }
+
+      final resultPath = await TbpStorageService.instance.registerCreatedTbpProject(
+        meta: fullMeta,
+        driveFolderId: realFolderId ?? new32Id,
+        localDirPath: localDummyPath,
+      );
+
+      _inlineTbpTitleController.clear();
+      _inlineTbpUrlController.clear();
+      unawaited(_refreshDriveFiles());
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('🎉 TBP 교안 "$safeTitle" 이(가) 성공적으로 생성되었습니다!'),
+            backgroundColor: const Color(0xFF00F5D4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        _openFile(localDummyPath ?? resultPath);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('⚠️ 교안 생성 중 오류: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCreatingInlineTbp = false);
+    }
   }
 
   Widget _buildCloudSettingsWorkspace(double scale) {
@@ -6211,7 +6539,7 @@ class _TeacherViewState extends State<TeacherView> {
             const Icon(Icons.slideshow_rounded, color: Color(0xFF00F5D4), size: 28),
             const SizedBox(width: 10),
             Text(
-              '🌐 HTML Present (.HTMLP)',
+              '🌐 TBP 웹 교안',
               style: GoogleFonts.notoSansKr(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -6261,7 +6589,7 @@ class _TeacherViewState extends State<TeacherView> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '✨ 새 HTML Present URL로 시작 (.HTMLP)',
+                            '✨ 새 TBP 웹 교안 URL로 시작',
                             style: GoogleFonts.notoSansKr(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -6358,7 +6686,7 @@ class _TeacherViewState extends State<TeacherView> {
             const Icon(Icons.folder_open_rounded, color: Color(0xFF00F5D4)),
             const SizedBox(width: 8),
             Text(
-              '📂 최근 HTML Present (.HTMLP)',
+              '📂 최근 TBP 웹 교안',
               style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold),
             ),
           ],
@@ -6453,7 +6781,7 @@ class _TeacherViewState extends State<TeacherView> {
             children: [
               const Icon(Icons.slideshow_rounded, color: Color(0xFF00F5D4)),
               const SizedBox(width: 8),
-              Text('✨ HTML Present (.HTMLP) 등록', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
+              Text('✨ TBP 웹 교안 등록', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold)),
             ],
           ),
           content: SingleChildScrollView(
@@ -6461,13 +6789,13 @@ class _TeacherViewState extends State<TeacherView> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Canva, 구글 슬라이드, 미리캔버스, Figma, Prezi, 유튜브 등 공유 URL이나 <iframe> 코드를 입력하면 자동으로 임베드 주소로 변환하여 .HTMLP 파일로 저장 & 실행합니다.', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13, height: 1.4)),
+              Text('Canva, 구글 슬라이드, 미리캔버스, Figma, Prezi, 유튜브 등 공유 URL이나 <iframe> 코드를 입력하면 자동으로 임베드 주소로 변환하여 TBP 교안으로 저장 & 실행합니다.', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13, height: 1.4)),
               const SizedBox(height: 12),
               TextField(
                 controller: titleCtrl,
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
-                  labelText: '파일 이름 (.HTMLP 자동 부착)',
+                  labelText: '교안 이름',
                   labelStyle: TextStyle(color: Colors.white60),
                   hintText: '예: 2단원 1차시 과학 탐구',
                   hintStyle: TextStyle(color: Colors.white38),
@@ -6500,7 +6828,7 @@ class _TeacherViewState extends State<TeacherView> {
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
                 dense: true,
-                title: Text('내 드라이브에 .HTMLP 파일로 저장', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12.5)),
+                title: Text('내 드라이브에 TBP 교안으로 저장', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12.5)),
               ),
               const SizedBox(height: 6),
               Text('💾 자주 쓰는 사이트 바로가기:', style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -6562,14 +6890,14 @@ class _TeacherViewState extends State<TeacherView> {
                 await prefs.setString('last_canva_url', val);
                 if (saveToDrive && CloudDriveService.instance.isLoggedIn) {
                   final res = await CloudDriveService.instance.createTbpOrHtmlpPointerProject(
-                    title: name.isNotEmpty ? name : 'HTML Present',
+                    title: name.isNotEmpty ? name : 'TBP 교안',
                     webUrl: val,
-                    type: 'HTMLP',
+                    type: 'TBP',
                   );
                   final ok = res != null;
                   if (mounted) {
                     ScaffoldMessenger.of(this.context).showSnackBar(
-                      SnackBar(content: Text(ok ? '☁️ "${name.isNotEmpty ? name : 'HTML Present'}.htmlp" 이(가) 내 드라이브에 저장되었습니다.' : '⚠️ 드라이브 저장에 실패했습니다.')),
+                      SnackBar(content: Text(ok ? '☁️ "${name.isNotEmpty ? name : 'TBP 교안'}.tbp" 이(가) 내 드라이브에 저장되었습니다.' : '⚠️ 드라이브 저장에 실패했습니다.')),
                     );
                     if (ok) _refreshDriveFiles();
                   }
@@ -9199,8 +9527,10 @@ class _AuthManagementDialogState extends State<_AuthManagementDialog> {
   void _openPasskeyQrDialog() {
     final cloud = CloudDriveService.instance;
     final name = (cloud.userName != null && cloud.userName!.isNotEmpty) ? cloud.userName! : '선생님';
-    final school = cloud.schoolName ?? '양동중학교';
-    const homeroom = '1학년 1반';
+    final school = (cloud.schoolName != null && cloud.schoolName!.isNotEmpty)
+        ? cloud.schoolName!
+        : (_settings.selectedSchool?.name ?? '학교');
+    final homeroom = '${_settings.selectedGrade}학년 ${_settings.selectedClass}반';
     BstPasskeyQrDialog.show(
       context,
       teacherName: name,
@@ -9573,10 +9903,12 @@ class _AuthManagementDialogState extends State<_AuthManagementDialog> {
                         await cloud.ensureValidAccessToken();
                         final token = cloud.accessToken ?? cloud.refreshToken ?? '';
                         if (token.isNotEmpty) {
+                          final folderId = cloud.bstSaveFolderId ?? cloud.boardestFolderId ?? await cloud.getOrCreateConnectFolder();
                           ok = await PasskeyService.instance.approveBoardSession(
                             sessionId: docId,
                             accessToken: token,
                             refreshToken: cloud.refreshToken,
+                            folderId: folderId,
                             teacherName: (cloud.userName != null && cloud.userName!.isNotEmpty) ? cloud.userName! : '선생님',
                             email: cloud.userEmail ?? '',
                             schoolId: _settings.schoolId,

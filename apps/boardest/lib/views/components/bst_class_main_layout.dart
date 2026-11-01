@@ -742,6 +742,54 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                     ),
                   );
                 }
+                if (state == UpdateState.checking) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF141721),
+                    ),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00F5D4)),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          '🔄 최신 업데이트 버전 확인 중...',
+                          style: _ts(12, w: FontWeight.bold, c: const Color(0xFF00F5D4)),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                if (state == UpdateState.installing) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF00F5D4), Color(0xFF7F5AF0)],
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          '🚀 새 버전 업데이트 설치 진행 중...',
+                          style: _ts(12, w: FontWeight.w900, c: Colors.black),
+                        ),
+                      ],
+                    ),
+                  );
+                }
                 if (state != UpdateState.downloading) return const SizedBox.shrink();
                 return ValueListenableBuilder<double>(
                   valueListenable: UpdateService.downloadProgressNotifier,

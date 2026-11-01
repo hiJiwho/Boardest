@@ -1962,14 +1962,17 @@ class CloudDriveService with ChangeNotifier {
     if (!isGoogleDriveConnected) {
       final demoFiles = await getDemoDriveFiles();
       return demoFiles
-          .where((f) => !f.name.toLowerCase().endsWith('.pen'))
+          .where((f) {
+            final l = f.name.toLowerCase();
+            return !l.endsWith('.pen') && !l.endsWith('.bstpen') && !l.endsWith('.iwb') && !l.endsWith('.pen.json') && !l.startsWith('pen_');
+          })
           .map((f) {
         String src = 'cloud';
         String label = '☁️ 교안';
         final lower = f.name.toLowerCase();
         if (lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva') || lower.endsWith('.canva.bst')) {
-          src = 'htmlp';
-          label = '🌐 HTMLP';
+          src = 'tbp';
+          label = '📐 TBP';
         } else if (lower.endsWith('.tbp') || lower.endsWith('.tbp.bst') || lower.endsWith('.bsttbp')) {
           src = 'tbp';
           label = '📐 TBP';
@@ -1995,16 +1998,16 @@ class CloudDriveService with ChangeNotifier {
         for (final f in files) {
           final lower = f.name.toLowerCase();
           if (f.name == 'subject_mappings.json' || f.name == 'classroom_mappings.json' || lower == 'bst-tbp' || lower == 'bst-textbookpro' || lower == 'bst-tbs') continue;
-          // 판서(.pen) 파일은 교안 파일 목록에 노출하지 않고 Bst-pen 판서 보관함으로 별도 취급!
-          if (lower.endsWith('.pen')) continue;
+          // 판서(.pen/.bstpen) 파일은 교안 파일 목록(내 드라이브)에 절대 노출하지 않고 판서 보관함으로 전용 취급!
+          if (lower.endsWith('.pen') || lower.endsWith('.bstpen') || lower.endsWith('.iwb') || lower.endsWith('.pen.json') || lower.endsWith('.pen.save.bst') || lower.startsWith('pen_')) continue;
 
           if (seenIds.add(f.id)) {
             String src = 'cloud';
             String label = '☁️ 교안';
             final lower = f.name.toLowerCase();
             if (lower.endsWith('.htmlp') || lower.endsWith('.htmlp.bst') || lower.endsWith('.canva') || lower.endsWith('.canva.bst')) {
-              src = 'htmlp';
-              label = '🌐 HTMLP';
+              src = 'tbp';
+              label = '📐 TBP';
             } else if (lower.endsWith('.tbp') || lower.endsWith('.tbp.bst') || lower.endsWith('.bsttbp')) {
               src = 'tbp';
               label = '📐 TBP';
@@ -2406,7 +2409,16 @@ class CloudDriveService with ChangeNotifier {
           for (final item in filesJson) {
             final f = CloudDriveFile.fromJson(item as Map<String, dynamic>);
             final lower = f.name.toLowerCase();
-            if (lower.endsWith('.file.pen') || lower == 'classroom_mappings.json' || lower == 'subject_mappings.json' || lower == 'bst-tbp' || lower == 'bst-textbookpro' || lower == 'bst-tbs') continue;
+            if (lower.endsWith('.file.pen') ||
+                lower.endsWith('.pen') ||
+                lower.endsWith('.bstpen') ||
+                lower.startsWith('pen_') ||
+                lower.endsWith('.iwb') ||
+                lower == 'classroom_mappings.json' ||
+                lower == 'subject_mappings.json' ||
+                lower == 'bst-tbp' ||
+                lower == 'bst-textbookpro' ||
+                lower == 'bst-tbs') continue;
             if (!allFiles.any((existing) => existing.id == f.id)) {
               allFiles.add(f);
             }
@@ -3109,37 +3121,101 @@ class CloudDriveService with ChangeNotifier {
     final List<Map<String, dynamic>> result = [];
     try {
       final penFolderId = await getOrCreatePenFolder();
-      if (penFolderId == null) return [];
+      if (penFolderId != null) {
+        // 1. bst-pen 내 폴더형 판서 ([반ID] 교안명.pen)
+        final folders = await fetchDriveFoldersInParent(penFolderId);
+        for (final f in folders) {
+          final folderName = f.name;
+          if (!folderName.endsWith('.pen')) continue;
 
-      final folders = await fetchDriveFoldersInParent(penFolderId);
-      for (final f in folders) {
-        final folderName = f.name;
-        if (!folderName.endsWith('.pen')) continue;
-
-        String classCode = '[Teacher]';
-        String rawFileName = folderName.substring(0, folderName.length - 4);
-        if (folderName.startsWith('[')) {
-          final closeIdx = folderName.indexOf(']');
-          if (closeIdx > 0) {
-            classCode = folderName.substring(0, closeIdx + 1);
-            rawFileName = folderName.substring(closeIdx + 1).trim();
-            if (rawFileName.endsWith('.pen')) {
-              rawFileName = rawFileName.substring(0, rawFileName.length - 4).trim();
+          String classCode = '[Teacher]';
+          String rawFileName = folderName.substring(0, folderName.length - 4);
+          if (folderName.startsWith('[')) {
+            final closeIdx = folderName.indexOf(']');
+            if (closeIdx > 0) {
+              classCode = folderName.substring(0, closeIdx + 1);
+              rawFileName = folderName.substring(closeIdx + 1).trim();
+              if (rawFileName.endsWith('.pen')) {
+                rawFileName = rawFileName.substring(0, rawFileName.length - 4).trim();
+              }
             }
           }
+
+          result.add({
+            'id': f.id,
+            'folderId': f.id,
+            'name': folderName,
+            'rawFileName': rawFileName,
+            'classCode': classCode,
+            'isCloud': true,
+            'isFolderDoc': true,
+            'modifiedTime': f.modifiedTime ?? DateTime.now(),
+            'source': 'Google Drive (bst-pen)',
+          });
         }
 
-        result.add({
-          'id': f.id,
-          'folderId': f.id,
-          'name': folderName,
-          'rawFileName': rawFileName,
-          'classCode': classCode,
-          'isCloud': true,
-          'isFolderDoc': true,
-          'modifiedTime': f.modifiedTime ?? DateTime.now(),
-          'source': 'Google Drive (bst-pen)',
-        });
+        // 2. bst-pen 내 단일 파일형 판서 (*.pen, *.bstpen)
+        final penFiles = await fetchDriveFiles(folderId: penFolderId);
+        for (final f in penFiles) {
+          final lower = f.name.toLowerCase();
+          if (!lower.endsWith('.pen') && !lower.endsWith('.bstpen') && !lower.endsWith('.iwb')) continue;
+
+          String classCode = '[Teacher]';
+          String rawFileName = f.name;
+          if (rawFileName.endsWith('.pen')) rawFileName = rawFileName.substring(0, rawFileName.length - 4);
+          if (rawFileName.endsWith('.bstpen')) rawFileName = rawFileName.substring(0, rawFileName.length - 7);
+
+          if (rawFileName.startsWith('[')) {
+            final closeIdx = rawFileName.indexOf(']');
+            if (closeIdx > 0) {
+              classCode = rawFileName.substring(0, closeIdx + 1);
+              rawFileName = rawFileName.substring(closeIdx + 1).trim();
+            }
+          }
+
+          result.add({
+            'id': f.id,
+            'fileId': f.id,
+            'name': f.name,
+            'rawFileName': rawFileName,
+            'classCode': classCode,
+            'isCloud': true,
+            'isFolderDoc': false,
+            'modifiedTime': f.modifiedTime ?? DateTime.now(),
+            'size': f.size,
+            'source': 'Google Drive (bst-pen)',
+          });
+        }
+      }
+
+      // 3. bst-save 내 잔존 판서 파일 (*.bstpen / pen_*) 흡수 노출 (절대 누락 방지)
+      final saveFolderId = await getOrCreateConnectFolder();
+      if (saveFolderId != null) {
+        final saveFiles = await fetchDriveFiles(folderId: saveFolderId);
+        for (final f in saveFiles) {
+          final lower = f.name.toLowerCase();
+          if (!lower.endsWith('.pen') && !lower.endsWith('.bstpen') && !lower.startsWith('pen_')) continue;
+          if (result.any((item) => item['id'] == f.id || item['name'] == f.name)) continue;
+
+          String classCode = '[Cloud]';
+          String rawFileName = f.name;
+          if (rawFileName.endsWith('.pen')) rawFileName = rawFileName.substring(0, rawFileName.length - 4);
+          if (rawFileName.endsWith('.bstpen')) rawFileName = rawFileName.substring(0, rawFileName.length - 7);
+          if (rawFileName.startsWith('pen_')) rawFileName = rawFileName.substring(4);
+
+          result.add({
+            'id': f.id,
+            'fileId': f.id,
+            'name': f.name,
+            'rawFileName': rawFileName,
+            'classCode': classCode,
+            'isCloud': true,
+            'isFolderDoc': false,
+            'modifiedTime': f.modifiedTime ?? DateTime.now(),
+            'size': f.size,
+            'source': 'Google Drive (bst-pen)',
+          });
+        }
       }
     } catch (e) {
       debugPrint('[CloudDriveService] fetchSavedPenFoldersFromDrive error: $e');

@@ -94,6 +94,22 @@ class AssessmentService {
               return;
             }
 
+            // [급식 & 쪽지와 동일]: 최근 24시간 안에 신호가 있었던 학급만 필터링
+            final activeTimeVal = val['registeredAt'] ?? val['lastActive'];
+            if (activeTimeVal != null) {
+              final nowMs = DateTime.now().millisecondsSinceEpoch;
+              int regMs = 0;
+              if (activeTimeVal is num) {
+                regMs = activeTimeVal.toInt();
+              } else {
+                regMs = DateTime.tryParse(activeTimeVal.toString())?.millisecondsSinceEpoch ?? 0;
+              }
+              if (regMs > 0) {
+                final diffHours = (nowMs - regMs).abs() / (1000 * 60 * 60);
+                if (diffHours > 24) return; // 24시간 지난 학급 제외
+              }
+            }
+
             int grade = int.tryParse(val['grade']?.toString() ?? '') ?? 0;
             int cls = int.tryParse(val['classNum']?.toString() ?? val['class']?.toString() ?? '') ?? 0;
 
@@ -111,18 +127,18 @@ class AssessmentService {
           });
         }
       } else {
-        debugPrint('[Teacher AssessmentService] fetchInstalledClasses non-200 or empty, using fallback');
-        return allAvailableClassesFallback();
+        debugPrint('[Teacher AssessmentService] fetchInstalledClasses non-200 or empty');
+        return result;
       }
     } catch (e) {
-      debugPrint('[Teacher AssessmentService] fetchInstalledClasses error: $e, using fallback');
-      return allAvailableClassesFallback();
+      debugPrint('[Teacher AssessmentService] fetchInstalledClasses error: $e');
+      return result;
     }
 
     final bool allEmpty = result.values.every((s) => s.isEmpty);
     if (allEmpty) {
-      debugPrint('[Teacher AssessmentService] No installed classes found, using fallback for 1~12 classes');
-      return allAvailableClassesFallback();
+      debugPrint('[Teacher AssessmentService] No active installed classes found in 24h window');
+      return result;
     }
 
     return result;

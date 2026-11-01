@@ -10,20 +10,22 @@ import '../../services/tbp/tbp_storage_service.dart';
 import '../../services/bst_save_service.dart';
 import '../../services/cloud_drive_service.dart';
 
-/// TBP & HTML Present 통합 교안 생성 및 등록 다이얼로그
-/// 1. TBP와 HTMLp를 하나로 통합하여 제목과 Web URL을 즉시 입력
-/// 2. 파일 드래그앤드롭 / 업로드 상자를 통해 기존 교안 패키지(.tbp, .htmlp, .save, .bst) 복원 지원
-/// 3. 대상 학년 제거 & 더미 포인터(.tbp.bst) 저장 위치 지정 (찐 데이터는 bst-tbp에 32자리 고유 ID로 별개 저장)
+/// TBP 스마트 교안 생성 및 등록 다이얼로그
+/// 1. TBP 교안 제목, Web URL 및 페이지 넘김 방식(Canva vs 전자저작물) 설정
+/// 2. 파일 드래그앤드롭 / 업로드 상자를 통해 기존 교안 패키지(.tbp, .save, .bst) 복원 지원
+/// 3. 더미 포인터(.tbp.bst) 저장 위치 지정 (실제 데이터는 bst-tbp에 32자리 고유 ID로 별개 저장)
 class TbpCreatorDialog extends StatefulWidget {
   final double scaleFactor;
   final String? initialUrl;
   final String? initialTitle;
+  final String? initialPageTurnMode;
 
   const TbpCreatorDialog({
     super.key,
     required this.scaleFactor,
     this.initialUrl,
     this.initialTitle,
+    this.initialPageTurnMode,
   });
 
   @override
@@ -37,6 +39,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
   late final TextEditingController _webUrlController;
   final TextEditingController _targetDirController = TextEditingController();
 
+  String _pageTurnMode = 'arrow';
   bool _isCreating = false;
   String? _errorMessage;
   String? _droppedFileName;
@@ -46,6 +49,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
     super.initState();
     _titleController = TextEditingController(text: widget.initialTitle ?? '');
     _webUrlController = TextEditingController(text: widget.initialUrl ?? '');
+    _pageTurnMode = widget.initialPageTurnMode ?? 'arrow';
     _initDefaultTargetDir();
   }
 
@@ -90,7 +94,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
     try {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['tbp', 'htmlp', 'save', 'bst', 'json'],
+        allowedExtensions: ['tbp', 'save', 'bst', 'json'],
         withData: true,
       );
       if (result != null && result.files.isNotEmpty) {
@@ -101,7 +105,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
 
         // 파일 이름에서 제목 추출
         String baseName = file.name;
-        for (final ext in ['.tbp.bst', '.htmlp.bst', '.tbp.save', '.htmlp.save', '.tbp', '.htmlp', '.save', '.bst', '.json']) {
+        for (final ext in ['.tbp.bst', '.tbp.save', '.tbp', '.save', '.bst', '.json']) {
           if (baseName.toLowerCase().endsWith(ext)) {
             baseName = baseName.substring(0, baseName.length - ext.length);
             break;
@@ -124,6 +128,12 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
               final title = data['title'] ?? data['name'];
               if (title != null && title.toString().isNotEmpty) {
                 _titleController.text = title.toString();
+              }
+              final turnMode = data['pageTurnMode'];
+              if (turnMode == 'arrow' || turnMode == 'pageUpDown') {
+                setState(() {
+                  _pageTurnMode = turnMode;
+                });
               }
             }
           } catch (_) {}
@@ -154,12 +164,13 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
       final shellFileName = '$safeTitle.tbp.bst';
 
       final fullMeta = <String, dynamic>{
-        'version': '5.3.6',
+        'version': '5.5.3',
         'id': new32Id,
         'folderId': new32Id,
         'title': safeTitle,
         'type': 'TBP',
         'webUrl': webUrl,
+        'pageTurnMode': _pageTurnMode,
         'pagesCount': 0,
         'createdAt': DateTime.now().toIso8601String(),
       };
@@ -197,8 +208,9 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
           'folderId': realFolderId ?? new32Id,
           'title': safeTitle,
           'webUrl': webUrl,
+          'pageTurnMode': _pageTurnMode,
           'createdAt': DateTime.now().millisecondsSinceEpoch,
-          'version': '5.3.6',
+          'version': '5.5.3',
         });
         await cloud.uploadBytesToDrive(
           Uint8List.fromList(utf8.encode(shellJson)),
@@ -224,8 +236,9 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
           'folderId': realFolderId ?? new32Id,
           'title': safeTitle,
           'webUrl': webUrl,
+          'pageTurnMode': _pageTurnMode,
           'createdAt': DateTime.now().millisecondsSinceEpoch,
-          'version': '5.3.6',
+          'version': '5.5.3',
         }));
         localDummyPath = dummyFile.path;
       }
@@ -302,7 +315,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '✨ TBP & HTML Present 통합 교안 생성',
+                            '✨ TBP 스마트 교안 생성',
                             style: GoogleFonts.notoSansKr(
                               color: Colors.white,
                               fontSize: 18 * s,
@@ -367,7 +380,127 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
                 ),
                 SizedBox(height: 16 * s),
 
-                // 3. 업로드 및 드래그 앤 드롭 박스
+                // 3. 페이지 넘김 키 설정 (Canva vs 전자저작물)
+                _buildLabel('페이지 넘김 키 모드 선택'),
+                SizedBox(height: 6 * s),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() => _pageTurnMode = 'arrow'),
+                        borderRadius: BorderRadius.circular(10 * s),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 10 * s),
+                          decoration: BoxDecoration(
+                            color: _pageTurnMode == 'arrow'
+                                ? accentColor.withOpacity(0.12)
+                                : Colors.white.withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(10 * s),
+                            border: Border.all(
+                              color: _pageTurnMode == 'arrow'
+                                  ? accentColor
+                                  : Colors.white.withOpacity(0.1),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _pageTurnMode == 'arrow'
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_off,
+                                color: _pageTurnMode == 'arrow' ? accentColor : Colors.white38,
+                                size: 16 * s,
+                              ),
+                              SizedBox(width: 8 * s),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '← / → 화살표 키',
+                                      style: GoogleFonts.notoSansKr(
+                                        color: Colors.white,
+                                        fontSize: 12 * s,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Canva, 슬라이드 추천',
+                                      style: GoogleFonts.notoSansKr(
+                                        color: accentColor,
+                                        fontSize: 10.5 * s,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 10 * s),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() => _pageTurnMode = 'pageUpDown'),
+                        borderRadius: BorderRadius.circular(10 * s),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: 12 * s, vertical: 10 * s),
+                          decoration: BoxDecoration(
+                            color: _pageTurnMode == 'pageUpDown'
+                                ? accentColor.withOpacity(0.12)
+                                : Colors.white.withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(10 * s),
+                            border: Border.all(
+                              color: _pageTurnMode == 'pageUpDown'
+                                  ? accentColor
+                                  : Colors.white.withOpacity(0.1),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _pageTurnMode == 'pageUpDown'
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_off,
+                                color: _pageTurnMode == 'pageUpDown' ? accentColor : Colors.white38,
+                                size: 16 * s,
+                              ),
+                              SizedBox(width: 8 * s),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'PgUp / PgDn 키',
+                                      style: GoogleFonts.notoSansKr(
+                                        color: Colors.white,
+                                        fontSize: 12 * s,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      '디지털 교과서/전자저작물 추천',
+                                      style: GoogleFonts.notoSansKr(
+                                        color: accentColor,
+                                        fontSize: 10.5 * s,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 16 * s),
+
+                // 4. 업로드 및 드래그 앤 드롭 박스
                 _buildLabel('기존 교안 업로드 (선택)'),
                 SizedBox(height: 6 * s),
                 InkWell(
@@ -396,7 +529,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
                         Text(
                           _droppedFileName != null
                               ? '선택된 파일: $_droppedFileName'
-                              : '기존 교안 파일(.tbp, .htmlp, .save, .bst)을 드래그하거나 클릭하여 선택',
+                              : '기존 교안 파일(.tbp, .save, .bst)을 드래그하거나 클릭하여 선택',
                           style: GoogleFonts.notoSansKr(
                             color: _droppedFileName != null ? accentColor : Colors.white70,
                             fontSize: 12 * s,
@@ -418,7 +551,7 @@ class _TbpCreatorDialogState extends State<TbpCreatorDialog> {
                 ),
                 SizedBox(height: 16 * s),
 
-                // 4. 더미 포인터 (.tbp.bst) 저장 위치
+                // 5. 더미 포인터 (.tbp.bst) 저장 위치
                 _buildLabel('더미 포인터 (.tbp.bst) 저장 위치'),
                 SizedBox(height: 6 * s),
                 Container(

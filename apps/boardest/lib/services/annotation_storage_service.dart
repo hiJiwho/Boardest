@@ -286,23 +286,26 @@ class AnnotationStorageService {
         await metaFile.writeAsString(json.encode(metadata), flush: true);
       }
 
-      // 3. BstCloudService 실시간 동기화 상태 갱신 및 Cloud 연결 시 교사 드라이브의 bst-pen 폴더로 즉시 백그라운드 업로드
-      try {
-        BstCloudService.instance.saveSyncState(formattedPenName, penData);
-        if (BstCloudService.instance.activeToken != null) {
-          final penJsonBytes = Uint8List.fromList(utf8.encode(json.encode(penData)));
-          BstCloudService.instance.uploadPenBytesDirectly(
-            fileName: formattedPenName,
-            bytes: penJsonBytes,
-            targetFolderName: 'bst-pen',
-          ).then((ok) {
-            if (ok) {
-              debugPrint('[AnnotationStorageService] ☁️ Uploaded $formattedPenName to teacher bst-pen folder successfully');
-            }
-          });
+      // 3. [요구사항 4 & 5] PPT/HWP/PDF 파일 오버레이 판서는 교실 로컬에만 저장, 기본 판서는 Cloud 연결 시 교사 계정 bst-pen에 자동 저장
+      final isOverlayFileAnnotation = type == 'ppt' || type == 'hwp' || type == 'pdf';
+      if (!isOverlayFileAnnotation) {
+        try {
+          BstCloudService.instance.saveSyncState(formattedPenName, penData);
+          if (BstCloudService.instance.activeToken != null) {
+            final penJsonBytes = Uint8List.fromList(utf8.encode(json.encode(penData)));
+            BstCloudService.instance.uploadPenBytesDirectly(
+              fileName: formattedPenName,
+              bytes: penJsonBytes,
+              targetFolderName: 'bst-pen',
+            ).then((ok) {
+              if (ok) {
+                debugPrint('[AnnotationStorageService] ☁️ Uploaded basic pen $formattedPenName to teacher bst-pen folder successfully');
+              }
+            });
+          }
+        } catch (e) {
+          debugPrint('[AnnotationStorageService] Cloud pen sync error: $e');
         }
-      } catch (e) {
-        debugPrint('[AnnotationStorageService] Cloud pen sync error: $e');
       }
 
       debugPrint('[AnnotationStorageService] Saved .pen: $formattedPenName ($type)');

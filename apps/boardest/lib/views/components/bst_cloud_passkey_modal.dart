@@ -117,11 +117,27 @@ class _BstCloudPasskeyModalState extends State<BstCloudPasskeyModal> {
             );
           }
 
+          String validToken = result.accessToken!;
+          if (result.refreshToken != null && result.refreshToken!.isNotEmpty) {
+            BstCloudService.instance.activeRefreshToken = result.refreshToken;
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('bst_active_refresh_token', result.refreshToken!);
+              final refreshed = await BstCloudService.instance.exchangeRefreshTokenForAccessToken(result.refreshToken!);
+              if (refreshed != null && refreshed.isNotEmpty) {
+                validToken = refreshed;
+              }
+            } catch (tokenErr) {
+              debugPrint('[BstCloudPasskeyModal] Token refresh note: $tokenErr');
+            }
+          }
+
           // Cloud Service 활성화
           BstCloudService.instance.setDirectAccessToken(
-            result.accessToken!,
+            validToken,
             teacherName: result.teacherName ?? '선생님',
             ownerEmail: result.email ?? '',
+            folderId: result.folderId,
           );
 
           await Future.delayed(const Duration(milliseconds: 600));

@@ -655,7 +655,7 @@ class BstTeacherMainLayout extends StatelessWidget {
   Widget _chipsAndSearchRow() {
     return Row(
       children: [
-        for (final t in ['전체', 'PDF', 'PPT', 'HWP', 'TBP 교과서', 'HTMLP', '판서'])
+        for (final t in ['전체', 'PDF', 'PPT', 'HWP', 'TBP 교과서', '판서'])
           Padding(
             padding: const EdgeInsets.only(right: 6),
             child: Container(

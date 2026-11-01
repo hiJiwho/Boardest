@@ -1,4 +1,4 @@
-package com.example.boardest_teacher_lite
+package kr.boardest.boardest_teacher_lite
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -257,10 +257,19 @@
         if (incomingToken) {
           try { localStorage.setItem('bst_teacher_token', incomingToken); } catch(_) {}
         }
+        if (incomingRefreshToken) {
+          try { localStorage.setItem('bst_teacher_refresh_token', incomingRefreshToken); } catch(_) {}
+        }
+        if (incomingFolderId) {
+          try { localStorage.setItem('bst_teacher_folder_id', incomingFolderId); } catch(_) {}
+        }
+        if (incomingEmail) {
+          try { localStorage.setItem('bst_teacher_email', incomingEmail); } catch(_) {}
+        }
         document.getElementById('iconBadge').innerText = '🛡️';
         document.getElementById('titleText').innerText = '교사 패스키 등록';
         document.getElementById('descText').innerText = '이 스마트폰을 [' + teacherName + '] 선생님의 공인 패스키 인증 기기로 등록합니다.';
-        document.getElementById('targetInfo').innerText = teacherName;
+        document.getElementById('targetInfo').innerHTML = `${teacherName} <a href="#" onclick="localStorage.clear(); location.reload();" style="font-size:11px; color:#00F5D4; margin-left:8px; text-decoration:none;">(다른 계정)</a>`;
         document.getElementById('actionBtn').className = 'btn btn-purple';
         document.getElementById('actionBtn').innerHTML = '<span>📱 내 폰에 패스키 등록하기</span>';
       } else if (reversePairSecret) {
@@ -365,7 +374,13 @@
           const vaultPayload = {
             credId: credId,
             teacher: teacherName,
+            teacherName: teacherName,
             token: incomingToken,
+            accessToken: incomingToken,
+            refreshToken: incomingRefreshToken || '',
+            folderId: incomingFolderId || '',
+            bstCloudFolderId: incomingFolderId || '',
+            email: incomingEmail || '',
             registeredAt: Date.now()
           };
           await Promise.allSettled([
@@ -411,7 +426,10 @@
         // 2. 전자칠판 로그인 승인 (WebAuthn Get)
         status.innerText = "생체인식 확인 중...";
         try {
-          let tokenToSend = incomingToken;
+          let tokenToSend = incomingToken || localStorage.getItem('bst_teacher_token') || '';
+          let refreshTokenToSend = incomingRefreshToken || localStorage.getItem('bst_teacher_refresh_token') || '';
+          let folderIdToSend = incomingFolderId || localStorage.getItem('bst_teacher_folder_id') || '';
+          let emailToSend = incomingEmail || localStorage.getItem('bst_teacher_email') || '';
           
           // 패스키 생체인증 요구 (사용자 취소 시 승인 중단 보안 강화)
           if (window.PublicKeyCredential) {
@@ -440,7 +458,12 @@
               const vRes = await fetch(`${RTDB_URL}/passkey/vaults/${enc}.json`);
               if (vRes.ok) {
                 const vData = await vRes.json();
-                if (vData && vData.token) tokenToSend = vData.token;
+                if (vData) {
+                  if (vData.token) tokenToSend = vData.token;
+                  if (vData.refreshToken && !incomingRefreshToken) incomingRefreshToken = vData.refreshToken;
+                  if (vData.email && !incomingEmail) incomingEmail = vData.email;
+                  if (vData.folderId && !incomingFolderId) incomingFolderId = vData.folderId;
+                }
               }
             } catch (_) {}
             if (!tokenToSend) {
@@ -448,14 +471,19 @@
                 const vRes2 = await fetch(`${RTDB_URL}/passkey_vaults/${enc}.json`);
                 if (vRes2.ok) {
                   const vData2 = await vRes2.json();
-                  if (vData2 && vData2.token) tokenToSend = vData2.token;
+                  if (vData2) {
+                    if (vData2.token) tokenToSend = vData2.token;
+                    if (vData2.refreshToken && !incomingRefreshToken) incomingRefreshToken = vData2.refreshToken;
+                    if (vData2.email && !incomingEmail) incomingEmail = vData2.email;
+                    if (vData2.folderId && !incomingFolderId) incomingFolderId = vData2.folderId;
+                  }
                 }
               } catch (_) {}
             }
           }
 
           // 2. Fallback: Fetch token from Firestore teacher_cloud_tokens (데모 및 가상 계정 완전 배제)
-          if (!tokenToSend) {
+          if (!tokenToSend || !incomingRefreshToken) {
             try {
               const fsRes = await fetch(`${FIRESTORE_BASE}/teacher_cloud_tokens`);
               if (fsRes.ok) {
@@ -466,12 +494,19 @@
                   const docEmail = fields.email?.stringValue || '';
                   const docTeacher = fields.teacherName?.stringValue || fields.name?.stringValue || '';
                   const docToken = fields.accessToken?.stringValue || '';
+                  const docRefresh = fields.refreshToken?.stringValue || '';
+                  const docFolder = fields.bstCloudFolderId?.stringValue || fields.folderId?.stringValue || '';
+                  const docTotp = fields.totpSecret?.stringValue || '';
                   
                   // 데모 계정 및 더미 교사(이수학 등)는 실사용자 인증으로 절대 채택하지 않음
                   if (docEmail.includes('demo') || docTeacher === '이수학' || docToken.startsWith('demo_token')) continue;
 
                   if (docToken && (docTeacher === teacherName || (!teacherName || teacherName === '선생님') || (!savedTeacherName && docs.length === 1))) {
-                    tokenToSend = docToken;
+                    if (!tokenToSend) tokenToSend = docToken;
+                    if (docRefresh && !incomingRefreshToken) incomingRefreshToken = docRefresh;
+                    if (docEmail && !incomingEmail) incomingEmail = docEmail;
+                    if (docFolder && !incomingFolderId) incomingFolderId = docFolder;
+                    if (docTotp && !incomingTotpSecret) incomingTotpSecret = docTotp;
                     if (docTeacher && docTeacher !== '선생님') {
                       try { localStorage.setItem('bst_teacher_name', docTeacher); } catch(_) {}
                     }
@@ -504,8 +539,10 @@
             teacherName: teacherName,
             accessToken: tokenToSend,
             token: tokenToSend,
-            refreshToken: incomingRefreshToken || '',
-            email: incomingEmail || '',
+            refreshToken: refreshTokenToSend || incomingRefreshToken || '',
+            folderId: folderIdToSend || incomingFolderId || '',
+            bstCloudFolderId: folderIdToSend || incomingFolderId || '',
+            email: emailToSend || incomingEmail || '',
             schoolId: params.get('schoolId') || '',
             schoolName: school || '',
             proof: proof,
@@ -541,7 +578,10 @@
       } else if (reversePairSecret) {
         status.innerText = "선생님 인증 확인 중...";
         try {
-          let tokenToSend = incomingToken;
+          let tokenToSend = incomingToken || localStorage.getItem('bst_teacher_token') || '';
+          let refreshTokenToSend = incomingRefreshToken || localStorage.getItem('bst_teacher_refresh_token') || '';
+          let folderIdToSend = incomingFolderId || localStorage.getItem('bst_teacher_folder_id') || '';
+          let emailToSend = incomingEmail || localStorage.getItem('bst_teacher_email') || '';
           let teacherNameToSend = teacherName;
           let emailToSend = incomingEmail || '';
           let refreshTokenToSend = incomingRefreshToken || '';

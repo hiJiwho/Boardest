@@ -22,8 +22,8 @@ using Microsoft.Web.WebView2.WinForms;
 [assembly: AssemblyCompany("Boardest Team")]
 [assembly: AssemblyProduct("Boardest Online Installer")]
 [assembly: AssemblyCopyright("Copyright © 2026 Boardest. All rights reserved.")]
-[assembly: AssemblyVersion("5.5.1.0")]
-[assembly: AssemblyFileVersion("5.5.1.0")]
+[assembly: AssemblyVersion("5.5.3.0")]
+[assembly: AssemblyFileVersion("5.5.3.0")]
 
 namespace BoardestInstaller
 {
@@ -54,7 +54,7 @@ namespace BoardestInstaller
         private WebView2 _webView;
         private string _productType = "Teacher"; // "Class", "Teacher", "Cloud"
         private string _productName = "Boardest 통합 온라인 설치";
-        private string _productVersion = "5.5.1";
+        private string _productVersion = "5.5.3";
         private string _teacherInstallDir;
         private string _exeFileName = "";
         private string _lastTargetUrl = "";
@@ -1423,10 +1423,16 @@ namespace BoardestInstaller
             if (createStartMenu)
             {
                 CreateStartMenuShortcutsMultiLocations("Boardest Teacher.lnk", mainExePath, _teacherInstallDir, "Boardest Teacher");
-                if (File.Exists(uninstallerPath))
+                // [요구사항] Teacher 제거는 앱 메뉴(시작 메뉴)에는 넣지 않고 Windows 설정 및 앱 내부 설정에서만 제공
+                try
                 {
-                    CreateStartMenuShortcutsMultiLocations("Boardest Teacher 제거.lnk", uninstallerPath, _teacherInstallDir, "Boardest Teacher 제거", "--uninstall");
+                    foreach (string sDir in GetCandidateStartMenuDirectories())
+                    {
+                        string oldLnk = Path.Combine(sDir, "Boardest Teacher 제거.lnk");
+                        if (File.Exists(oldLnk)) File.Delete(oldLnk);
+                    }
                 }
+                catch { }
             }
 
             RegisterUninstallRegistry(mainExePath, uninstallerPath);
@@ -1667,7 +1673,7 @@ namespace BoardestInstaller
             }
         }
 
-        private void CreateStartMenuShortcutsMultiLocations(string shortcutName, string targetPath, string workingDir, string description, string args = "")
+        private List<string> GetCandidateStartMenuDirectories()
         {
             var startDirs = new List<string>();
             try
@@ -1692,6 +1698,12 @@ namespace BoardestInstaller
                 }
             }
             catch { }
+            return startDirs;
+        }
+
+        private void CreateStartMenuShortcutsMultiLocations(string shortcutName, string targetPath, string workingDir, string description, string args = "")
+        {
+            var startDirs = GetCandidateStartMenuDirectories();
 
             foreach (string dir in startDirs)
             {

@@ -197,6 +197,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
 
   String _currentDhash = 'default';
   List<Map<String, dynamic>> _currentHotspots = [];
+  String _pageTurnMode = 'arrow'; // 'arrow' (Canva) | 'pageUpDown' (전자저작물/교과서)
 
   // 학급별 판서 관리
   String _selectedClass = '기본';
@@ -359,6 +360,9 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
       if (parsed['title'] != null && parsed['title'].toString().trim().isNotEmpty && widget.title == null) {
         _displayTitle = parsed['title'].toString().trim();
       }
+      if (parsed['pageTurnMode'] != null) {
+        _pageTurnMode = parsed['pageTurnMode'].toString();
+      }
       return (parsed['embedUrl'] ?? parsed['url'] ?? parsed['webUrl'] ?? parsed['canvaUrl'] ?? parsed['link'] ?? '').toString().trim();
     } catch (_) {
       if (trimmed.startsWith('http') || trimmed.contains('<iframe')) {
@@ -372,7 +376,8 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
     try {
       var rawUrl = (widget.embedUrl ?? widget.initialUrl ?? '').trim();
 
-      // 파일 경로에서 URL 읽기 지원
+      // 파일 경로에서 URL 및 포인터 읽기 지원
+      String? resolvedPointerFolderPath;
       if (rawUrl.isEmpty && widget.filePath != null && widget.filePath!.isNotEmpty) {
         final fp = widget.filePath!.trim();
         if (fp.startsWith('http://') || fp.startsWith('https://') || fp.contains('<iframe')) {
@@ -382,7 +387,30 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
             final f = File(fp);
             if (await f.exists()) {
               final content = await f.readAsString();
-              rawUrl = _extractUrlFromRawContent(content);
+              final shell = TbpStorageService.parsePointerShell(content);
+              if (shell != null) {
+                if (shell['pageTurnMode'] != null) {
+                  _pageTurnMode = shell['pageTurnMode'].toString();
+                }
+                final meta = await TbpStorageService.instance.loadTbpFile(fp);
+                if (meta != null) {
+                  if (meta.title.isNotEmpty && widget.title == null) {
+                    _displayTitle = meta.title;
+                  }
+                  final infoJson = await TbpStorageService.instance.loadInfoJson('drive://tbp/${meta.folderId}');
+                  if (infoJson?['pageTurnMode'] != null) {
+                    _pageTurnMode = infoJson!['pageTurnMode'].toString();
+                  }
+                  final mUrl = (infoJson?['webUrl'] ?? infoJson?['targetUrl'] ?? shell['webUrl'] ?? '').toString().trim();
+                  if (mUrl.isNotEmpty) {
+                    rawUrl = mUrl;
+                  }
+                  resolvedPointerFolderPath = TbpStorageService.instance.getTbpFolderPath(fp, meta.folderId);
+                }
+              }
+              if (rawUrl.isEmpty) {
+                rawUrl = _extractUrlFromRawContent(content);
+              }
             }
           } catch (_) {}
         }
@@ -390,7 +418,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
 
       if (rawUrl.isEmpty) {
         setState(() {
-          _errorMessage = '프레젠테이션 URL을 찾을 수 없습니다. 올바른 .HTMLP 파일 또는 URL을 열어주세요.';
+          _errorMessage = '프레젠테이션 URL을 찾을 수 없습니다. 올바른 .tbp.bst / .HTMLP 파일 또는 URL을 열어주세요.';
           _isLoading = false;
         });
         return;
@@ -398,21 +426,25 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
 
       _targetUrl = HtmlPresentView.formatPresentUrl(rawUrl);
 
-      // 프로젝트 고유 식별키 생성 (URL 해시 기반)
-      final safeUrlKey = _targetUrl.replaceAll(RegExp(r'[^\w-]'), '_');
-      _projectKey = 'html_present_${safeUrlKey.length > 32 ? safeUrlKey.substring(0, 32) : safeUrlKey}';
+      if (resolvedPointerFolderPath != null && resolvedPointerFolderPath.isNotEmpty) {
+        _tbpFolderPath = resolvedPointerFolderPath;
+      } else {
+        // 프로젝트 고유 식별키 생성 (URL 해시 기반)
+        final safeUrlKey = _targetUrl.replaceAll(RegExp(r'[^\w-]'), '_');
+        _projectKey = 'html_present_${safeUrlKey.length > 32 ? safeUrlKey.substring(0, 32) : safeUrlKey}';
 
-      // TBP 가상 프로젝트 등록 (Dhash별 판서 및 핫스팟 보관용)
-      _tbpFolderPath = await TbpStorageService.instance.registerCreatedTbpProject(
-        meta: {
-          'title': _displayTitle,
-          'folderId': _projectKey,
-          'webUrl': _targetUrl,
-          'scopeKey': 'HTMLP',
-          'createdAt': DateTime.now().toIso8601String(),
-        },
-        localDirPath: kIsWeb ? 'web://tbp/$_projectKey' : null,
-      );
+        // TBP 가상 프로젝트 등록 (Dhash별 판서 및 핫스팟 보관용)
+        _tbpFolderPath = await TbpStorageService.instance.registerCreatedTbpProject(
+          meta: {
+            'title': _displayTitle,
+            'folderId': _projectKey,
+            'webUrl': _targetUrl,
+            'scopeKey': 'HTMLP',
+            'createdAt': DateTime.now().toIso8601String(),
+          },
+          localDirPath: kIsWeb ? 'web://tbp/$_projectKey' : null,
+        );
+      }
 
       // 초기 Dhash ('default') 핫스팟 및 판서 스트로크 로드
       _currentHotspots = await TbpStorageService.instance.loadHotspots(_tbpFolderPath, _currentDhash);
@@ -455,7 +487,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
       await _winWebview.initialize();
       await _winWebview.setBackgroundColor(Colors.transparent);
       await _winWebview.loadUrl(url);
-      await _winWebview.executeScript(_clickerInterceptorJs);
+      await _winWebview.executeScript(_getClickerInterceptorJs());
 
       _winWebview.loadingState.listen((state) {
         if (state == LoadingState.navigationCompleted) {
@@ -592,62 +624,122 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
       return;
     }
     _lastNavigateTime = now;
-    _dhashEngine.navigatePage(isNext: isNext);
+    _dhashEngine.navigatePage(isNext: isNext, pageTurnMode: _pageTurnMode);
   }
 
-  static const String _clickerInterceptorJs = '''
-    (function() {
-      if (window.__boardbook_clicker_hooked) return;
-      window.__boardbook_clicker_hooked = true;
+  String _getClickerInterceptorJs() {
+    if (_pageTurnMode == 'pageUpDown') {
+      // 전자저작물 모드: 화살표 키를 PgDn/PgUp으로도 연동하여 리모컨 호환성 보장
+      return '''
+        (function() {
+          if (window.__boardbook_clicker_hooked) return;
+          window.__boardbook_clicker_hooked = true;
 
-      function interceptClicker(e) {
-        if (e.key === 'PageDown' || e.keyCode === 34) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          if (e.type === 'keydown') {
-            const target = document.activeElement || document.body;
-            ['keydown', 'keyup'].forEach(function(type) {
-              const evt = new KeyboardEvent(type, {
-                key: 'ArrowRight',
-                code: 'ArrowRight',
-                keyCode: 39,
-                which: 39,
-                bubbles: true,
-                cancelable: true
-              });
-              target.dispatchEvent(evt);
-              window.dispatchEvent(evt);
-            });
+          function interceptClicker(e) {
+            if (e.__bstSynthetic) return;
+            if (e.key === 'ArrowRight' || e.keyCode === 39) {
+              if (e.type === 'keydown') {
+                const target = document.activeElement || document.body;
+                ['keydown', 'keyup'].forEach(function(type) {
+                  const evt = new KeyboardEvent(type, {
+                    key: 'PageDown',
+                    code: 'PageDown',
+                    keyCode: 34,
+                    which: 34,
+                    bubbles: true,
+                    cancelable: true
+                  });
+                  evt.__bstSynthetic = true;
+                  target.dispatchEvent(evt);
+                  window.dispatchEvent(evt);
+                });
+              }
+            } else if (e.key === 'ArrowLeft' || e.keyCode === 37) {
+              if (e.type === 'keydown') {
+                const target = document.activeElement || document.body;
+                ['keydown', 'keyup'].forEach(function(type) {
+                  const evt = new KeyboardEvent(type, {
+                    key: 'PageUp',
+                    code: 'PageUp',
+                    keyCode: 33,
+                    which: 33,
+                    bubbles: true,
+                    cancelable: true
+                  });
+                  evt.__bstSynthetic = true;
+                  target.dispatchEvent(evt);
+                  window.dispatchEvent(evt);
+                });
+              }
+            }
           }
-        } else if (e.key === 'PageUp' || e.keyCode === 33) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          if (e.type === 'keydown') {
-            const target = document.activeElement || document.body;
-            ['keydown', 'keyup'].forEach(function(type) {
-              const evt = new KeyboardEvent(type, {
-                key: 'ArrowLeft',
-                code: 'ArrowLeft',
-                keyCode: 37,
-                which: 37,
-                bubbles: true,
-                cancelable: true
+
+          window.addEventListener('keydown', interceptClicker, true);
+          window.addEventListener('keyup', interceptClicker, true);
+          document.addEventListener('keydown', interceptClicker, true);
+          document.addEventListener('keyup', interceptClicker, true);
+        })();
+      ''';
+    }
+
+    // Canva 모드 (기본): 프리젠터 리모컨의 PageDown/PageUp을 ArrowRight/ArrowLeft로 매핑
+    return '''
+      (function() {
+        if (window.__boardbook_clicker_hooked) return;
+        window.__boardbook_clicker_hooked = true;
+
+        function interceptClicker(e) {
+          if (e.__bstSynthetic) return;
+          if (e.key === 'PageDown' || e.keyCode === 34) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            if (e.type === 'keydown') {
+              const target = document.activeElement || document.body;
+              ['keydown', 'keyup'].forEach(function(type) {
+                const evt = new KeyboardEvent(type, {
+                  key: 'ArrowRight',
+                  code: 'ArrowRight',
+                  keyCode: 39,
+                  which: 39,
+                  bubbles: true,
+                  cancelable: true
+                });
+                evt.__bstSynthetic = true;
+                target.dispatchEvent(evt);
+                window.dispatchEvent(evt);
               });
-              target.dispatchEvent(evt);
-              window.dispatchEvent(evt);
-            });
+            }
+          } else if (e.key === 'PageUp' || e.keyCode === 33) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            if (e.type === 'keydown') {
+              const target = document.activeElement || document.body;
+              ['keydown', 'keyup'].forEach(function(type) {
+                const evt = new KeyboardEvent(type, {
+                  key: 'ArrowLeft',
+                  code: 'ArrowLeft',
+                  keyCode: 37,
+                  which: 37,
+                  bubbles: true,
+                  cancelable: true
+                });
+                evt.__bstSynthetic = true;
+                target.dispatchEvent(evt);
+                window.dispatchEvent(evt);
+              });
+            }
           }
         }
-      }
 
-      window.addEventListener('keydown', interceptClicker, true);
-      window.addEventListener('keyup', interceptClicker, true);
-      document.addEventListener('keydown', interceptClicker, true);
-      document.addEventListener('keyup', interceptClicker, true);
-    })();
-  ''';
+        window.addEventListener('keydown', interceptClicker, true);
+        window.addEventListener('keyup', interceptClicker, true);
+        document.addEventListener('keydown', interceptClicker, true);
+        document.addEventListener('keyup', interceptClicker, true);
+      })();
+    ''';
+  }
 
   void _onPointerDown(PointerDownEvent event) {
     _touchDhashTimer?.cancel();

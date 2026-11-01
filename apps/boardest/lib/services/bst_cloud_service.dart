@@ -1097,6 +1097,13 @@ class BstCloudService {
 
       String currentToken = accessToken;
       final List<({String id, String? space})> folderTargets = [];
+
+      // 0. 만약 로그인 시 교사 전용 폴더 ID(activeFolderId)가 주어졌다면 최우선 대상에 등록
+      if (folderName == 'bst-save' && activeFolderId != null && activeFolderId!.isNotEmpty) {
+        folderTargets.add((id: activeFolderId!, space: 'appDataFolder'));
+        folderTargets.add((id: activeFolderId!, space: null));
+      }
+
       for (final fn in targetFolderNames) {
         if (_hasAuthError) break;
         final adfId = await findDriveFolderByName(fn, 'appDataFolder', currentToken);
@@ -1140,6 +1147,9 @@ class BstCloudService {
           for (final f in (data['files'] as List? ?? [])) {
             final name = (f['name'] ?? '').toString();
             final lower = name.toLowerCase();
+            if (folderName != 'bst-pen') {
+              if (lower.endsWith('.pen') || lower.endsWith('.bstpen') || lower.startsWith('pen_') || lower.endsWith('.iwb')) continue;
+            }
             if (lower.endsWith('.file.pen') || lower == 'classroom_mappings.json' || lower == 'subject_mappings.json') continue;
             if (lower.endsWith('.json') && !lower.endsWith('.pen.json')) continue;
             // bst-tbp 내부의 32자리 Hex 실체 저장 폴더는 껍데기 파일(.tbp.bst / .htmlp.bst)로 표시되므로 사용자 목록에서 숨김
@@ -1212,6 +1222,9 @@ class BstCloudService {
             for (final f in (data['files'] as List? ?? [])) {
               final name = (f['name'] ?? '').toString();
               final lower = name.toLowerCase();
+              if (folderName != 'bst-pen') {
+                if (lower.endsWith('.pen') || lower.endsWith('.bstpen') || lower.startsWith('pen_') || lower.endsWith('.iwb')) continue;
+              }
               if (lower.endsWith('.file.pen') || lower == 'classroom_mappings.json' || lower == 'subject_mappings.json') continue;
               final isFolder = f['mimeType'] == 'application/vnd.google-apps.folder';
               final mimeType = (isFolder && (folderName == 'bst-tbs' || folderName == 'bst-textbookpro'))

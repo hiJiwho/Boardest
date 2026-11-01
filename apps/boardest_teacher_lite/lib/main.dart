@@ -84,6 +84,8 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
 
   String _googleEmail = '';
   String _googleToken = '';
+  String _refreshToken = '';
+  String _folderId = '';
   String? _totpSecret;
 
   bool _isGoogleLoggedIn = false;
@@ -340,6 +342,8 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
     _googleEmail = prefs.getString('bst_google_email') ?? '';
     _cloudId = prefs.getString('bst_teacher_short_id') ?? prefs.getString('bst_cloud_id') ?? (_googleEmail.startsWith('01') ? '11' : (_googleEmail.startsWith('02') ? '12' : '11'));
     _googleToken = prefs.getString('bst_google_token') ?? '';
+    _refreshToken = prefs.getString('bst_refresh_token') ?? '';
+    _folderId = prefs.getString('bst_folder_id') ?? '';
     _totpSecret = prefs.getString('bst_totp_secret') ?? prefs.getString('bst_totp_secret_key');
 
     final qSchool = query['school'] ?? query['schoolId'] ?? query['schoolCode'];
@@ -370,6 +374,8 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
 
     if (query['auth'] == 'success' || query.containsKey('token') || query.containsKey('access_token')) {
       _googleToken = query['token'] ?? query['access_token'] ?? _googleToken;
+      _refreshToken = query['refreshToken'] ?? query['refresh_token'] ?? _refreshToken;
+      _folderId = query['folderId'] ?? query['bstCloudFolderId'] ?? _folderId;
       _googleEmail = query['email'] ?? _googleEmail;
       _teacherName = query['teacherName'] ?? _teacherName;
       _teacherId = query['teacherId'] ?? _teacherId;
@@ -385,6 +391,8 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
       if (mounted) setState(() {});
 
       await prefs.setString('bst_google_token', _googleToken);
+      if (_refreshToken.isNotEmpty) await prefs.setString('bst_refresh_token', _refreshToken);
+      if (_folderId.isNotEmpty) await prefs.setString('bst_folder_id', _folderId);
       await prefs.setString('bst_google_email', _googleEmail);
 
       // 실시간 Firestore 프로필 조회하여 서버 데이터로 자동 동기화
@@ -508,10 +516,26 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
       final docId = _googleEmail.replaceAll('.', '_').replaceAll('@', '_').replaceAll('+', '_');
       final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents/teacher_cloud_tokens/$docId?key=$_apiKey';
       
-      // 기존 Secret 보존
+      // 기존 Secret, RefreshToken, FolderId 보존
       if (_totpSecret == null || _totpSecret!.isEmpty) {
         _totpSecret = _generateDeterministicSecret(_googleEmail);
       }
+
+      String existingRefresh = _refreshToken;
+      String existingFolder = _folderId;
+      try {
+        final existingRes = await http.get(Uri.parse(firestoreUrl)).timeout(const Duration(seconds: 3));
+        if (existingRes.statusCode == 200) {
+          final existingData = json.decode(existingRes.body);
+          final eFields = existingData['fields'] as Map<String, dynamic>?;
+          if (existingRefresh.isEmpty) {
+            existingRefresh = eFields?['refreshToken']?['stringValue']?.toString() ?? '';
+          }
+          if (existingFolder.isEmpty) {
+            existingFolder = (eFields?['folderId']?['stringValue'] ?? eFields?['bstCloudFolderId']?['stringValue'])?.toString() ?? '';
+          }
+        }
+      } catch (_) {}
 
       final payload = {
         'fields': {
@@ -521,12 +545,12 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
           'school': {'stringValue': _schoolName},
           'schoolId': {'stringValue': _schoolId},
           'accessToken': {'stringValue': _googleToken},
-          'refreshToken': {'stringValue': ''},
+          'refreshToken': {'stringValue': existingRefresh},
           'totpSecret': {'stringValue': _totpSecret ?? ''},
           'trustDeviceEnabled': {'booleanValue': _trustDeviceEnabled},
           'autoLessonFlowEnabled': {'booleanValue': _autoPtEnabled},
-          'folderId': {'stringValue': ''},
-          'bstCloudFolderId': {'stringValue': ''},
+          'folderId': {'stringValue': existingFolder},
+          'bstCloudFolderId': {'stringValue': existingFolder},
           'bstPenFolderId': {'stringValue': ''},
           'lastConsumedWindow': {'integerValue': '0'},
           'updatedAt': {'timestampValue': DateTime.now().toUtc().toIso8601String()},
