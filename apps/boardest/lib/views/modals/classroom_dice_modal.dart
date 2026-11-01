@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -12,6 +13,7 @@ class _ClassroomDiceModalState extends State<ClassroomDiceModal> {
   int _diceCount = 1;
   List<int> _diceValues = [1];
   bool _isRolling = false;
+  final Random _rng = Random.secure();
 
   void _rollDice() async {
     if (_isRolling) return;
@@ -25,7 +27,7 @@ class _ClassroomDiceModalState extends State<ClassroomDiceModal> {
       setState(() {
         _diceValues = List.generate(
           _diceCount,
-          (_) => (1 + (DateTime.now().microsecondsSinceEpoch % 6)),
+          (_) => _rng.nextInt(6) + 1,
         );
       });
     }

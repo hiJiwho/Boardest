@@ -417,4 +417,46 @@ class StorageService {
       debugPrint('[StorageService] Error clearing USB file history: $e');
     }
   }
+
+  static const String _keyTimetableCachePrefix = 'timetable_cache_';
+
+  /// 시간표 오프라인 캐시 저장 (SharedPreferences 및 디스크 파일 백업)
+  Future<void> saveCachedTimetable(int schoolCode, Map<String, dynamic> data) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = json.encode(data);
+      await prefs.setString('$_keyTimetableCachePrefix$schoolCode', jsonStr);
+
+      if (!kIsWeb) {
+        final cacheFile = File(p.join(AppPaths.configDir, 'timetable_cache_$schoolCode.json'));
+        await cacheFile.parent.create(recursive: true);
+        await cacheFile.writeAsString(jsonStr);
+      }
+      debugPrint('[StorageService] Cached timetable for school $schoolCode');
+    } catch (e) {
+      debugPrint('[StorageService] Error saving timetable cache: $e');
+    }
+  }
+
+  /// 시간표 오프라인 캐시 조회
+  Future<Map<String, dynamic>?> getCachedTimetable(int schoolCode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString('$_keyTimetableCachePrefix$schoolCode');
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        return json.decode(jsonStr) as Map<String, dynamic>;
+      }
+
+      if (!kIsWeb) {
+        final cacheFile = File(p.join(AppPaths.configDir, 'timetable_cache_$schoolCode.json'));
+        if (await cacheFile.exists()) {
+          final content = await cacheFile.readAsString();
+          return json.decode(content) as Map<String, dynamic>;
+        }
+      }
+    } catch (e) {
+      debugPrint('[StorageService] Error retrieving timetable cache: $e');
+    }
+    return null;
+  }
 }

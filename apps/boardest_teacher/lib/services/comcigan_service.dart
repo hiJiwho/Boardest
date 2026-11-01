@@ -7,6 +7,7 @@ import 'package:cp949_codec/cp949_codec.dart';
 import '../models/school.dart';
 import '../models/lesson.dart';
 import '../config/app_config.dart';
+import 'storage_service.dart';
 
 class TimetableResult {
   final String schoolName;
@@ -483,7 +484,9 @@ class ComciganService {
     return rawList.map((raw) => School.fromRawList(raw)).toList();
   }
 
-  /// Fetches raw JSON timetable data from the server.
+  static final Map<int, Map<String, dynamic>> _inMemoryTimetableCache = {};
+
+  /// Fetches raw JSON timetable data from the server with offline local caching.
   Future<Map<String, dynamic>> fetchTimetableRaw(int schoolCode, {int weekOffset = 0}) async {
     // 1. Cloudflare Worker API 우선 시도 (Web & Desktop 공통 고속/안정)
     try {
@@ -506,36 +509,75 @@ class ComciganService {
           else if (k.contains('481')) normalized['자료481'] = v;
           else if (k.contains('542')) normalized['자료542'] = v;
           else if (k.contains('245')) normalized['자료245'] = v;
-          else if (k.contains('학급수') || (v is List && v.length == 4 && v[1] is num)) normalized['학급수'] = v;
+          else if (k.contains('학급수') || (v is List && v.length >= 4 && v.length <= 10 && v[1] is num)) normalized['학급수'] = v;
           else if (k.contains('분리') || v == 100 || v == 1000) normalized['분리'] = v;
           else if (k.contains('일과시간') || (v is List && v.isNotEmpty && v.first.toString().contains('('))) normalized['일과시간'] = v;
           else if (k.contains('학교명')) normalized['학교명'] = v;
           else normalized[k] = v;
         });
-        if (normalized.isNotEmpty) return normalized;
+        if (normalized.isNotEmpty) {
+          _inMemoryTimetableCache[schoolCode] = normalized;
+          try {
+            StorageService().saveCachedTimetable(schoolCode, normalized);
+          } catch (_) {}
+          return normalized;
+        }
       }
     } catch (e) {
       debugPrint('[ComciganService] Worker lookup fallback: $e');
     }
 
     if (kIsWeb) {
-      throw Exception('Cloudflare Worker request failed on Web platform.');
+      if (_inMemoryTimetableCache.containsKey(schoolCode)) {
+        return _inMemoryTimetableCache[schoolCode]!;
+      }
+      try {
+        final diskCached = await StorageService().getCachedTimetable(schoolCode);
+        if (diskCached != null) return diskCached;
+      } catch (_) {}
+      return {'학교명': 'School_$schoolCode'};
     }
 
     // 2. Desktop 네이티브 컴시간 직접 파싱 (Fallback)
-    await init();
+    try {
+      await init();
 
-    final String da1 = weekOffset.toString();
-    final String s7 = '${_scData![0]}$schoolCode';
-    final String payload = '${s7}_${da1}_${_scData![2]}';
-    final String base64Payload = base64.encode(utf8.encode(payload));
+      final String da1 = weekOffset.toString();
+      final String s7 = '${_scData![0]}$schoolCode';
+      final String payload = '${s7}_${da1}_${_scData![2]}';
+      final String base64Payload = base64.encode(utf8.encode(payload));
 
-    final String path = _extractCode!.split('?')[0];
-    final String url = '${_baseUrl!}$path?$base64Payload';
+      final String path = _extractCode!.split('?')[0];
+      final String url = '${_baseUrl!}$path?$base64Payload';
 
-    final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 7));
-    final String body = _cleanJsonBody(_decodeBody(response.bodyBytes));
-    return json.decode(body) as Map<String, dynamic>;
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 7));
+      final String body = _cleanJsonBody(_decodeBody(response.bodyBytes));
+      final result = json.decode(body) as Map<String, dynamic>;
+      _inMemoryTimetableCache[schoolCode] = result;
+      try {
+        StorageService().saveCachedTimetable(schoolCode, result);
+      } catch (_) {}
+      return result;
+    } catch (e) {
+      debugPrint('[ComciganService] Direct native fetch fallback failed: $e');
+    }
+
+    // 3. OFFLINE CACHE FALLBACK
+    if (_inMemoryTimetableCache.containsKey(schoolCode)) {
+      debugPrint('[ComciganService] Returning in-memory cached timetable for $schoolCode');
+      return _inMemoryTimetableCache[schoolCode]!;
+    }
+
+    try {
+      final diskCached = await StorageService().getCachedTimetable(schoolCode);
+      if (diskCached != null) {
+        debugPrint('[ComciganService] Returning disk-cached timetable for $schoolCode');
+        _inMemoryTimetableCache[schoolCode] = diskCached;
+        return diskCached;
+      }
+    } catch (_) {}
+
+    return {'학교명': 'School_$schoolCode'};
   }
 
   /// Fetches the list of teacher names for the specified school.
@@ -558,8 +600,31 @@ class ComciganService {
   }
 
   Future<TimetableResult> getTimetable(int schoolCode) async {
-    final raw = await fetchTimetableRaw(schoolCode);
-    return parseTimetable(raw);
+    try {
+      final raw = await fetchTimetableRaw(schoolCode);
+      final result = parseTimetable(raw);
+      if (result.lessons.isNotEmpty) {
+        return result;
+      }
+    } catch (e) {
+      debugPrint('[ComciganService] getTimetable online fetch error: $e');
+    }
+
+    // Disk cache fallback for offline teacher
+    try {
+      final diskCached = await StorageService().getCachedTimetable(schoolCode);
+      if (diskCached != null) {
+        final result = parseTimetable(diskCached);
+        if (result.lessons.isNotEmpty) {
+          debugPrint('[ComciganService] ✅ Loaded timetable from offline cache');
+          return result;
+        }
+      }
+    } catch (_) {}
+
+    // Safe demo fallback to prevent blank or crash
+    debugPrint('[ComciganService] ⚠️ Returning fallback demo timetable');
+    return TimetableResult.generateDemo('');
   }
 
   /// Decodes and parses raw JSON timetable data into the custom TimetableResult model.
@@ -646,7 +711,7 @@ class ComciganService {
     for (int grade = 1; grade <= (classCounts.isEmpty ? 3 : classCounts.length); grade++) {
       final int numClasses = classCounts[grade] ?? (grade < rawClassCounts.length ? (rawClassCounts[grade] as num?)?.toInt() ?? 10 : 10);
       for (int classNum = 1; classNum <= numClasses; classNum++) {
-        for (int weekday = 1; weekday <= 5; weekday++) {
+        for (int weekday = 1; weekday <= 7; weekday++) {
           for (int period = 1; period <= 8; period++) {
             int dailyVal = _getValue(rawDaily, grade, classNum, weekday, period);
             final int origVal = _getValue(rawOriginal, grade, classNum, weekday, period);
@@ -720,7 +785,7 @@ class ComciganService {
               subjectName = subjectList[sbForIndex].toString();
             }
 
-            if (subjectName.contains('자율') || subjectName.contains('동아리') || sbForIndex == 30 || sbForIndex == 35) {
+            if (teacherName.isEmpty || subjectName.contains('자율') || subjectName.contains('동아리') || sbForIndex == 30 || sbForIndex == 35) {
               final hrTeacher = homeroomTeachers[grade]?[classNum];
               if (hrTeacher != null && hrTeacher.isNotEmpty) {
                 teacherName = hrTeacher;

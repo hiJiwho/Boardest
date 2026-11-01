@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bst_tbp/bst_tbp.dart';
+import 'package:bst_pen/bst_pen.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
@@ -76,6 +78,59 @@ void main() {
       expect(loaded.first['value'], 'https://naver.com');
       expect(loaded.first['rx'], 0.5);
     });
+    test('getPenFileName follows [교실ID]dhash.pen convention', () {
+      expect(TbpStorageService.getPenFileName(null, 'abc123'), '기본_abc123.pen');
+      expect(TbpStorageService.getPenFileName('', 'abc123'), '기본_abc123.pen');
+      expect(TbpStorageService.getPenFileName('기본', 'abc123'), '기본_abc123.pen');
+      expect(TbpStorageService.getPenFileName('1반', 'abc123'), '[1반]abc123.pen');
+      expect(TbpStorageService.getPenFileName('[2반]', 'abc123'), '[2반]abc123.pen');
+    });
+
+    test('savePenStrokes and loadPenStrokes round-trip with classId and fallback', () async {
+      final tbpFolder = tempDir.path;
+      const dhash = 'test_hash_456';
+      final strokes = [
+        AnnotationStroke(
+          color: const Color(0xFF00F5D4),
+          strokeWidth: 4.0,
+          points: [
+            const Offset(100.0, 200.0),
+            const Offset(110.0, 210.0),
+          ],
+        ),
+      ];
+
+      // 1. [1반] 학급 저장 및 로드 확인
+      await TbpStorageService.instance.savePenStrokes(
+        tbpFolder,
+        dhash,
+        strokes,
+        classId: '1반',
+      );
+
+      final expectedFile = File(p.join(tbpFolder, 'PEN', '[1반]$dhash.pen'));
+      expect(expectedFile.existsSync(), isTrue);
+
+      final loaded = await TbpStorageService.instance.loadPenStrokes(
+        tbpFolder,
+        dhash,
+        classId: '1반',
+      );
+      expect(loaded.length, 1);
+      expect(loaded.first.color, const Color(0xFF00F5D4));
+
+      // 2. 하위 호환 폴백 탐색 확인 (루트에 legacy_dhash.pen이 있는 경우)
+      const legacyHash = 'legacy_789';
+      final legacyFile = File(p.join(tbpFolder, '$legacyHash.pen'));
+      await legacyFile.writeAsString(jsonEncode(strokes.map((s) => s.toJson()).toList()));
+
+      final loadedFallback = await TbpStorageService.instance.loadPenStrokes(
+        tbpFolder,
+        legacyHash,
+      );
+      expect(loadedFallback.length, 1);
+      expect(loadedFallback.first.color, const Color(0xFF00F5D4));
+    });
   });
 
   group('TbpDhashEngine Message Processing Tests', () {
@@ -91,6 +146,23 @@ void main() {
       engine.onDhashMessage(jsonMsg);
 
       expect(detectedHash, 'ff00ff00ff00ff00');
+      engine.dispose();
+    });
+
+    test('onDhashMessage parses requestNavigation correctly', () {
+      bool? navigatedNext;
+      final engine = TbpDhashEngine(
+        onDhashChanged: (_) {},
+        onNavigationRequested: (isNext) {
+          navigatedNext = isNext;
+        },
+      );
+
+      engine.onDhashMessage('{"type":"requestNavigation","isNext":true}');
+      expect(navigatedNext, isTrue);
+
+      engine.onDhashMessage('{"type":"requestNavigation","isNext":false}');
+      expect(navigatedNext, isFalse);
       engine.dispose();
     });
   });

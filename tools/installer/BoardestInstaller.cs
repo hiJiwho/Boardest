@@ -22,8 +22,8 @@ using Microsoft.Web.WebView2.WinForms;
 [assembly: AssemblyCompany("Boardest Team")]
 [assembly: AssemblyProduct("Boardest Online Installer")]
 [assembly: AssemblyCopyright("Copyright © 2026 Boardest. All rights reserved.")]
-[assembly: AssemblyVersion("5.4.3.0")]
-[assembly: AssemblyFileVersion("5.4.3.0")]
+[assembly: AssemblyVersion("5.5.0.0")]
+[assembly: AssemblyFileVersion("5.5.0.0")]
 
 namespace BoardestInstaller
 {
@@ -54,7 +54,7 @@ namespace BoardestInstaller
         private WebView2 _webView;
         private string _productType = "Teacher"; // "Class", "Teacher", "Cloud"
         private string _productName = "Boardest 통합 온라인 설치";
-        private string _productVersion = "5.4.3";
+        private string _productVersion = "5.5.0";
         private string _teacherInstallDir;
         private string _exeFileName = "";
         private string _lastTargetUrl = "";
@@ -1277,10 +1277,12 @@ namespace BoardestInstaller
                 candidateUrls = new string[]
                 {
                     primaryUrl,
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.5.0/boardest-class-lite.msix",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.5.0/boardest-class-lite.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.3/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.0/boardest-class-lite.msix",
-                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.3/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.1/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.0/boardest-class-lite.msix",
@@ -1292,10 +1294,13 @@ namespace BoardestInstaller
                 candidateUrls = new string[]
                 {
                     primaryUrl,
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.5.0/boardest-class.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.5.0/boardest.msix",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.5.0/boardest-class.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.3/boardest-class.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/boardest-class.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.0/boardest-class.msix",
-                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.3/boardest.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/boardest.msix",
                     "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.msix",
@@ -1310,10 +1315,12 @@ namespace BoardestInstaller
                 candidateUrls = new string[]
                 {
                     primaryUrl,
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.5.0/boardest-cloud.msix",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.5.0/boardest-cloud.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.3/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.0/boardest-cloud.msix",
-                    "https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.3/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.1/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.0/boardest-cloud.msix",
@@ -1325,10 +1332,12 @@ namespace BoardestInstaller
                 candidateUrls = new string[]
                 {
                     primaryUrl,
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.5.0/bst-teacher-windows.zip",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.5.0/bst-teacher-windows.zip",
+                    "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.3/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.1/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.4.0/bst-teacher-windows.zip",
-                    "https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.3/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.1/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.4.0/bst-teacher-windows.zip",

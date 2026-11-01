@@ -871,11 +871,30 @@
         "**/*.appx",
         "**/*.msix",
         "**/*.bat",
-        "**/*.cmd",
-        "**/*.bat",
         "**/*.cmd"
       ],
-      "cleanUrls": true
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate, max-age=0"
+            },
+            {
+              "key": "Access-Control-Allow-Origin",
+              "value": "*"
+            }
+          ]
+        }
+      ],
+      "cleanUrls": true,
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
     },
     {
       "target": "boardest-eat",

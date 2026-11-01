@@ -1,0 +1,590 @@
+import 'package:flutter/material.dart';
+import '../models/meal_models.dart';
+import '../services/neis_meal_service.dart';
+
+/// 교사용 Lite 앱용 월간 급식 식단표 달력 모달 다이얼로그
+class LiteMonthlyMealCalendarDialog extends StatefulWidget {
+  final String schoolQuery;
+  final String schoolName;
+  final DateTime initialDate;
+
+  const LiteMonthlyMealCalendarDialog({
+    super.key,
+    required this.schoolQuery,
+    required this.schoolName,
+    required this.initialDate,
+  });
+
+  static Future<void> show(
+    BuildContext context, {
+    required String schoolQuery,
+    required String schoolName,
+    DateTime? initialDate,
+  }) {
+    return showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => LiteMonthlyMealCalendarDialog(
+        schoolQuery: schoolQuery,
+        schoolName: schoolName,
+        initialDate: initialDate ?? DateTime.now(),
+      ),
+    );
+  }
+
+  @override
+  State<LiteMonthlyMealCalendarDialog> createState() => _LiteMonthlyMealCalendarDialogState();
+}
+
+class _LiteMonthlyMealCalendarDialogState extends State<LiteMonthlyMealCalendarDialog> {
+  late int _year;
+  late int _month;
+  int? _selectedAllergyFilter;
+  Future<Map<int, LiteMealDayInfo>>? _mealsFuture;
+
+  static const List<String> _weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+
+  static const Map<int, String> _allergyLabels = {
+    1: '1.난류',
+    2: '2.우유',
+    3: '3.메밀',
+    4: '4.땅콩',
+    5: '5.대두',
+    6: '6.밀',
+    7: '7.고등어',
+    8: '8.게',
+    9: '9.새우',
+    10: '10.돼지',
+    11: '11.복숭아',
+    12: '12.토마토',
+    13: '13.아황산',
+    14: '14.호두',
+    15: '15.닭',
+    16: '16.소',
+    17: '17.오징어',
+    18: '18.조개',
+    19: '19.잣',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _year = widget.initialDate.year;
+    _month = widget.initialDate.month;
+    _fetchMeals();
+  }
+
+  void _fetchMeals() {
+    _mealsFuture = LiteNeisMealService().fetchMonthMeals(widget.schoolQuery, _year, _month);
+  }
+
+  void _prevMonth() {
+    setState(() {
+      if (_month == 1) {
+        _year--;
+        _month = 12;
+      } else {
+        _month--;
+      }
+      _fetchMeals();
+    });
+  }
+
+  void _nextMonth() {
+    setState(() {
+      if (_month == 12) {
+        _year++;
+        _month = 1;
+      } else {
+        _month++;
+      }
+      _fetchMeals();
+    });
+  }
+
+  void _goToday() {
+    final now = DateTime.now();
+    setState(() {
+      _year = now.year;
+      _month = now.month;
+      _fetchMeals();
+    });
+  }
+
+  void _showDayMealDetail(BuildContext context, int day, LiteMealDayInfo? info) {
+    if (info == null || info.dishes.isEmpty) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF16161A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.restaurant_menu_rounded, color: Color(0xFFFF8906), size: 24),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$_month월 $day일 급식 상세',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                  if (info.calories.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF8906).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        info.calories,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFFF8906)),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ...info.dishes.map((dish) {
+                final isMatch = _selectedAllergyFilter != null &&
+                    dish.matchesAllergy(_selectedAllergyFilter);
+                return Container(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isMatch ? const Color(0xFFFFD166).withOpacity(0.18) : Colors.white.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(8),
+                    border: isMatch ? Border.all(color: const Color(0xFFFFD166), width: 1.5) : null,
+                  ),
+                  child: Row(
+                    children: [
+                      if (isMatch)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 6),
+                          child: Text('⚠️', style: TextStyle(fontSize: 14)),
+                        ),
+                      Expanded(
+                        child: Text(
+                          dish.name,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: isMatch ? FontWeight.bold : FontWeight.w600,
+                            color: isMatch ? const Color(0xFFFFD166) : Colors.white,
+                          ),
+                        ),
+                      ),
+                      if (dish.allergies.isNotEmpty)
+                        Wrap(
+                          spacing: 4,
+                          children: dish.allergies.map((a) {
+                            final isBadgeMatch = _selectedAllergyFilter != null &&
+                                dish.matchesAllergy(_selectedAllergyFilter) &&
+                                (a == LiteMealDayInfo.allergyBadgeShortMap[_selectedAllergyFilter] ||
+                                    a == LiteMealDayInfo.allergyCodeMap[_selectedAllergyFilter] ||
+                                    a.contains(LiteMealDayInfo.allergyBadgeShortMap[_selectedAllergyFilter] ?? ''));
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isBadgeMatch
+                                    ? const Color(0xFFFFD166)
+                                    : const Color(0xFFFF8906).withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: isBadgeMatch
+                                      ? const Color(0xFFFFD166)
+                                      : const Color(0xFFFF8906).withOpacity(0.4),
+                                ),
+                              ),
+                              child: Text(
+                                a,
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: isBadgeMatch ? Colors.black : const Color(0xFFFF8906),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                    ],
+                  ),
+                );
+              }),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF8906),
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('닫기', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final firstDayWeekday = DateTime(_year, _month, 1).weekday % 7; // 0=Sun..6=Sat
+    final daysInMonth = DateTime(_year, _month + 1, 0).day;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: Container(
+        width: 1000,
+        height: 700,
+        decoration: BoxDecoration(
+          color: const Color(0xFF16161A),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFFF8906).withOpacity(0.3), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.6),
+              blurRadius: 30,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // Header Bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.03),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_month_rounded, color: Color(0xFFFF8906), size: 24),
+                  const SizedBox(width: 10),
+                  Text(
+                    '${widget.schoolName.isNotEmpty ? widget.schoolName : "학교"} 월간 급식 달력',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left_rounded, color: Colors.white70, size: 28),
+                    onPressed: _prevMonth,
+                    tooltip: '이전 달',
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF8906).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFFF8906).withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      '$_year년 $_month월',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFFF8906),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right_rounded, color: Colors.white70, size: 28),
+                    onPressed: _nextMonth,
+                    tooltip: '다음 달',
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: _goToday,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFFF8906),
+                      side: BorderSide(color: const Color(0xFFFF8906).withOpacity(0.5)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      minimumSize: Size.zero,
+                    ),
+                    child: const Text('오늘', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+                  const SizedBox(width: 16),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 24),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+
+            // Allergy Filter Bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.white.withOpacity(0.015),
+              child: Row(
+                children: [
+                  const Text('알레르기 강조: ', style: TextStyle(fontSize: 12, color: Colors.white60, fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: _allergyLabels.entries.map((e) {
+                          final isSelected = _selectedAllergyFilter == e.key;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: FilterChip(
+                              label: Text(
+                                e.value,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isSelected ? Colors.black : Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              selected: isSelected,
+                              selectedColor: const Color(0xFFFFD166),
+                              backgroundColor: Colors.white.withOpacity(0.05),
+                              onSelected: (val) {
+                                setState(() {
+                                  _selectedAllergyFilter = val ? e.key : null;
+                                });
+                              },
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Weekday Header
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              color: Colors.white.withOpacity(0.04),
+              child: Row(
+                children: List.generate(7, (i) {
+                  Color textColor = Colors.white70;
+                  if (i == 0) textColor = const Color(0xFFFF6B6B);
+                  if (i == 6) textColor = const Color(0xFF4D96FF);
+                  return Expanded(
+                    child: Text(
+                      _weekdays[i],
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: textColor,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+
+            // Calendar Grid
+            Expanded(
+              child: FutureBuilder<Map<int, LiteMealDayInfo>>(
+                future: _mealsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: Color(0xFFFF8906)),
+                    );
+                  }
+
+                  final meals = snapshot.data ?? {};
+                  final totalCells = firstDayWeekday + daysInMonth;
+                  final rows = (totalCells / 7).ceil();
+
+                  return GridView.builder(
+                    padding: const EdgeInsets.all(8),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 7,
+                      childAspectRatio: 1.15,
+                      crossAxisSpacing: 6,
+                      mainAxisSpacing: 6,
+                    ),
+                    itemCount: rows * 7,
+                    itemBuilder: (ctx, index) {
+                      final dayNum = index - firstDayWeekday + 1;
+                      if (dayNum < 1 || dayNum > daysInMonth) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.01),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        );
+                      }
+
+                      final dayOfWeek = index % 7;
+                      final isSunday = dayOfWeek == 0;
+                      final isSaturday = dayOfWeek == 6;
+                      final isWeekend = isSunday || isSaturday;
+                      final isToday = _year == now.year && _month == now.month && dayNum == now.day;
+
+                      final dayMeal = meals[dayNum];
+                      final dishes = dayMeal?.dishes ?? [];
+                      final hasMeal = dishes.isNotEmpty;
+
+                      final hasAllergyMatch = _selectedAllergyFilter != null &&
+                          (dayMeal?.hasAllergy(_selectedAllergyFilter) ?? false);
+
+                      Color numColor = Colors.white;
+                      if (isSunday) numColor = const Color(0xFFFF6B6B);
+                      if (isSaturday) numColor = const Color(0xFF4D96FF);
+
+                      return InkWell(
+                        onTap: hasMeal ? () => _showDayMealDetail(context, dayNum, dayMeal) : null,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: hasAllergyMatch
+                                ? const Color(0xFFFFD166).withOpacity(0.2)
+                                : (isToday
+                                    ? const Color(0xFFFF8906).withOpacity(0.1)
+                                    : (isWeekend
+                                        ? Colors.white.withOpacity(0.015)
+                                        : Colors.white.withOpacity(0.035))),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: hasAllergyMatch
+                                  ? const Color(0xFFFFD166)
+                                  : (isToday
+                                      ? const Color(0xFFFF8906)
+                                      : Colors.white.withOpacity(0.08)),
+                              width: (isToday || hasAllergyMatch) ? 1.8 : 0.8,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        '$dayNum',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: (isToday || hasAllergyMatch) ? FontWeight.w900 : FontWeight.bold,
+                                          color: isToday ? const Color(0xFFFF8906) : (hasAllergyMatch ? const Color(0xFFFFD166) : numColor),
+                                        ),
+                                      ),
+                                      if (hasAllergyMatch) ...[
+                                        const SizedBox(width: 4),
+                                        const Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFFFFD166)),
+                                      ],
+                                    ],
+                                  ),
+                                  if (isToday)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFF8906),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        '오늘',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w900,
+                                          color: Colors.black,
+                                        ),
+                                      ),
+                                    ),
+                                  if (!isToday && dayMeal != null && dayMeal.calories.isNotEmpty)
+                                    Text(
+                                      dayMeal.calories.replaceAll('kcal', 'k').trim(),
+                                      style: TextStyle(fontSize: 9, color: Colors.white.withOpacity(0.4)),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Expanded(
+                                child: hasMeal
+                                    ? ListView.builder(
+                                        physics: const NeverScrollableScrollPhysics(),
+                                        itemCount: dishes.length > 4 ? 4 : dishes.length,
+                                        itemBuilder: (_, dIdx) {
+                                          final d = dishes[dIdx];
+                                          final match = _selectedAllergyFilter != null &&
+                                              d.matchesAllergy(_selectedAllergyFilter);
+                                          final dishText = Text(
+                                            d.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              height: 1.25,
+                                              fontWeight: match ? FontWeight.w900 : FontWeight.w500,
+                                              color: match
+                                                  ? const Color(0xFF1E1B18)
+                                                  : (isToday ? Colors.white : const Color(0xFFCBD5E1)),
+                                            ),
+                                          );
+                                          if (match) {
+                                            return Container(
+                                              margin: const EdgeInsets.symmetric(vertical: 0.5),
+                                              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 0.5),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFFEE55),
+                                                borderRadius: BorderRadius.circular(3),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: const Color(0xFFFFEE55).withOpacity(0.5),
+                                                    blurRadius: 4,
+                                                    spreadRadius: 1,
+                                                  ),
+                                                ],
+                                              ),
+                                              child: dishText,
+                                            );
+                                          }
+                                          return dishText;
+                                        },
+                                      )
+                                    : (isWeekend
+                                        ? const SizedBox()
+                                        : Center(
+                                            child: Text(
+                                              '급식 없음',
+                                              style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.2)),
+                                            ),
+                                          )),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

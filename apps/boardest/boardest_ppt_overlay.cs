@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text;
 using System.Collections.Generic;
@@ -48,7 +48,11 @@ namespace BoardestPptOverlay
 
         public int RetryRejectedCall(IntPtr hTaskCallee, int dwTickCount, int dwRejectType)
         {
-            if (dwRejectType == 2) return 150;
+            // dwRejectType: 1 = SERVERCALL_REJECTED, 2 = SERVERCALL_RETRYLATER
+            if ((dwRejectType == 1 || dwRejectType == 2) && dwTickCount < 10000)
+            {
+                return 150;
+            }
             return -1;
         }
 
@@ -134,7 +138,6 @@ namespace BoardestPptOverlay
         private Border _btnPen;
         private Border _btnEraser;
         private Border _btnShape;
-        private Border _btnLasso;
         private Border _btnStrokeEraser;
         private Border _btnPointEraser;
 
@@ -206,13 +209,13 @@ namespace BoardestPptOverlay
         private void InitUI()
         {
             _mainGrid = new Grid();
-            _mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            _mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             _mainGrid.Background = Brushes.Transparent;
 
             _inkCanvas = new InkCanvas
             {
                 Background = Brushes.Transparent,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
                 DefaultDrawingAttributes = new DrawingAttributes
                 {
                     Color = _whiteColor,
@@ -222,6 +225,7 @@ namespace BoardestPptOverlay
                     StylusTip = StylusTip.Ellipse
                 }
             };
+            Panel.SetZIndex(_inkCanvas, 0);
             _mainGrid.Children.Add(_inkCanvas);
 
             // Shape drawing & floating cards close triggers
@@ -232,7 +236,7 @@ namespace BoardestPptOverlay
             _inkCanvas.PreviewTouchDown += InkCanvas_PreviewTouchDown;
             _inkCanvas.TouchUp += InkCanvas_TouchUp;
 
-            // Bottom toolbar border
+            // Bottom toolbar border (Floating bottom dock)
             Border toolBorder = new Border
             {
                 Background = new SolidColorBrush(Color.FromArgb(240, 19, 23, 31)),
@@ -242,10 +246,10 @@ namespace BoardestPptOverlay
                 Padding = new Thickness(16, 8, 16, 8),
                 VerticalAlignment = VerticalAlignment.Bottom,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 56),
+                Margin = new Thickness(0, 0, 0, 48),
                 Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 16, ShadowDepth = 3, Opacity = 0.5 }
             };
-            Grid.SetRow(toolBorder, 1);
+            Panel.SetZIndex(toolBorder, 100);
 
             _toolbar = new StackPanel { Orientation = Orientation.Horizontal };
 
@@ -313,8 +317,8 @@ namespace BoardestPptOverlay
                 Width = 240,
                 VerticalAlignment = VerticalAlignment.Bottom,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(190, 0, 0, 84),
-                Visibility = Visibility.Visible,
+                Margin = new Thickness(190, 0, 0, 112),
+                Visibility = Visibility.Collapsed,
                 Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 15, ShadowDepth = 2, Opacity = 0.5 }
             };
 
@@ -347,6 +351,7 @@ namespace BoardestPptOverlay
             thicknessStack.Children.Add(_thicknessSlider);
             penCardStack.Children.Add(thicknessStack);
             _penDetailsCard.Child = penCardStack;
+            Panel.SetZIndex(_penDetailsCard, 200);
             _mainGrid.Children.Add(_penDetailsCard);
 
             // Floating Eraser settings card
@@ -359,7 +364,7 @@ namespace BoardestPptOverlay
                 Padding = new Thickness(8, 6, 8, 6),
                 VerticalAlignment = VerticalAlignment.Bottom,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(250, 0, 0, 84),
+                Margin = new Thickness(250, 0, 0, 112),
                 Visibility = Visibility.Collapsed,
                 Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 15, ShadowDepth = 2, Opacity = 0.5 }
             };
@@ -384,6 +389,7 @@ namespace BoardestPptOverlay
             });
             eraserCardStack.Children.Add(btnClear);
             _eraserDetailsCard.Child = eraserCardStack;
+            Panel.SetZIndex(_eraserDetailsCard, 200);
             _mainGrid.Children.Add(_eraserDetailsCard);
 
             // Floating Shape settings card
@@ -397,7 +403,7 @@ namespace BoardestPptOverlay
                 Width = 320,
                 VerticalAlignment = VerticalAlignment.Bottom,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(310, 0, 0, 84),
+                Margin = new Thickness(310, 0, 0, 112),
                 Visibility = Visibility.Collapsed,
                 Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 15, ShadowDepth = 2, Opacity = 0.5 }
             };
@@ -423,6 +429,7 @@ namespace BoardestPptOverlay
             shapeWrap.Children.Add(_btnShapeCylinder);
             shapeCardStack.Children.Add(shapeWrap);
             _shapeDetailsCard.Child = shapeCardStack;
+            Panel.SetZIndex(_shapeDetailsCard, 200);
             _mainGrid.Children.Add(_shapeDetailsCard);
 
             // Floating Slide Page Picker above the Page Label
@@ -436,7 +443,7 @@ namespace BoardestPptOverlay
                 Height = 260,
                 VerticalAlignment = VerticalAlignment.Bottom,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(-180, 0, 0, 144),
+                Margin = new Thickness(-180, 0, 0, 112),
                 Visibility = Visibility.Collapsed,
                 Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 20, ShadowDepth = 3, Opacity = 0.6 }
             };
@@ -466,6 +473,7 @@ namespace BoardestPptOverlay
             jumpGrid.Children.Add(scrollViewer);
 
             _jumpBorder.Child = jumpGrid;
+            Panel.SetZIndex(_jumpBorder, 200);
             _mainGrid.Children.Add(_jumpBorder);
 
             this.Content = _mainGrid;
@@ -1053,6 +1061,7 @@ namespace BoardestPptOverlay
         private int _pptShowHwnd = 0;
         private bool _isStandaloneMode = false;
         private int _reconnectTicks = 0;
+        private int _consecutiveComErrors = 0;
 
         private bool TryAttachToRunningPowerPoint(bool launchIfMissing)
         {
@@ -1217,6 +1226,7 @@ namespace BoardestPptOverlay
 
                         _lastSlideIndex = _slideShowView.CurrentShowPosition;
                         _isStandaloneMode = false;
+                        _consecutiveComErrors = 0;
                         return true;
                     }
                 }
@@ -1295,6 +1305,7 @@ namespace BoardestPptOverlay
             try
             {
                 int currentSlideIdx = _slideShowView.CurrentShowPosition;
+                _consecutiveComErrors = 0;
                 if (currentSlideIdx != _lastSlideIndex)
                 {
                     SaveStrokesToStorage(_lastSlideIndex);
@@ -1307,7 +1318,11 @@ namespace BoardestPptOverlay
             }
             catch
             {
-                _isStandaloneMode = true;
+                _consecutiveComErrors++;
+                if (_consecutiveComErrors >= 5)
+                {
+                    _isStandaloneMode = true;
+                }
             }
         }
 

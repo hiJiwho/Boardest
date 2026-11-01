@@ -42,6 +42,21 @@ class TbpStorageService {
     return null;
   }
 
+  /// [교실ID]dhash.pen 표준 파일명 규약 생성 (예: 기본_dhash.pen, [1반]dhash.pen)
+  static String getPenFileName(String? classId, String dHash) {
+    final rawClass = (classId != null && classId.trim().isNotEmpty && classId != '전체')
+        ? classId.trim()
+        : '기본';
+    final safeHash = sanitizeKey(dHash);
+    if (rawClass == '기본') {
+      return '기본_$safeHash.pen';
+    } else if (rawClass.startsWith('[') && rawClass.endsWith(']')) {
+      return '$rawClass$safeHash.pen';
+    } else {
+      return '[$rawClass]$safeHash.pen';
+    }
+  }
+
   static final TbpStorageService instance = TbpStorageService._internal();
   TbpStorageService._internal();
 
@@ -700,7 +715,7 @@ class TbpStorageService {
           File(p.join(tbpFolderPath, 'hotspot_$key.bstsave')),
           File(p.join(tbpFolderPath, 'HOTspot', dHash, 'hotspot.bstsave')),
           File(p.join(tbpFolderPath, 'HOTspot', key, 'hotspot.json')),
-          if (key == 'hash__1' || key == 'ui_home') ...[
+          if (key == 'ui_home') ...[
             File(p.join(tbpFolderPath, 'BBplus', 'query__embed.json')),
             File(p.join(tbpFolderPath, 'HOTspot', 'query__embed', 'hotspot.bstsave')),
             File(p.join(tbpFolderPath, 'hotspot_query__embed.bstsave')),
@@ -798,6 +813,20 @@ class TbpStorageService {
             }
           }
         }
+        final penDir = Directory(p.join(tbpFolderPath, 'PEN'));
+        if (penDir.existsSync()) {
+          for (final entity in penDir.listSync()) {
+            if (entity is File) {
+              final baseName = p.basename(entity.path);
+              final matchBracket = RegExp(r'^\[(.*?)\]').firstMatch(baseName);
+              if (matchBracket != null && matchBracket.group(1) != null) {
+                classes.add(matchBracket.group(1)!);
+              } else if (baseName.startsWith('기본_')) {
+                classes.add('기본');
+              }
+            }
+          }
+        }
       } catch (_) {}
     }
     for (final k in _webJsonCache.keys) {
@@ -805,6 +834,12 @@ class TbpStorageService {
         final parts = k.substring('$tbpFolderPath::BBPen::'.length).split('::');
         if (parts.length >= 2 && parts[0].isNotEmpty) {
           classes.add(parts[0]);
+        }
+      } else if (k.startsWith('$tbpFolderPath::PEN::')) {
+        final parts = k.substring('$tbpFolderPath::PEN::'.length).split('::');
+        if (parts.length >= 2 && parts[0].isNotEmpty) {
+          final c = parts[0].replaceAll('[', '').replaceAll(']', '');
+          if (c.isNotEmpty) classes.add(c);
         }
       }
     }
@@ -833,8 +868,9 @@ class TbpStorageService {
           (classKey == null ? _webJsonCache['$tbpFolderPath::$subFolder::$base'] : null);
       if (cached != null) return cached;
 
-      final fallbackBases = (base == 'hash__1' || base == 'ui_home')
-          ? <String>['query__embed', 'default']
+      // hash__1 -> default 강제 리다이렉트 제거 (ui_home만 유지)
+      final fallbackBases = (base == 'ui_home')
+          ? <String>['default']
           : const <String>[];
 
       for (final fb in fallbackBases) {
@@ -844,12 +880,38 @@ class TbpStorageService {
       }
 
       if (!kIsWeb) {
+        final penFileName = getPenFileName(classId, base);
+        final safeClass = classKey ?? '기본';
+
+        // 1. [교실ID]dhash.pen 최우선 로드 (신규 표준 규약)
+        final stdPenFile = File(p.join(tbpFolderPath, 'PEN', penFileName));
+        if (stdPenFile.existsSync()) return await stdPenFile.readAsString();
+
+        final rootPenFile = File(p.join(tbpFolderPath, penFileName));
+        if (rootPenFile.existsSync()) return await rootPenFile.readAsString();
+
+        // 2. 다중 경로 호환성 탐색
+        final altPenFile = File(p.join(tbpFolderPath, 'PEN', '${safeClass}_$base.pen'));
+        if (altPenFile.existsSync()) return await altPenFile.readAsString();
+
+        final altBstpenFile = File(p.join(tbpFolderPath, 'PEN', '${safeClass}_$base.bstpen'));
+        if (altBstpenFile.existsSync()) return await altBstpenFile.readAsString();
+
+        final basePenFile = File(p.join(tbpFolderPath, 'PEN', '$base.pen'));
+        if (basePenFile.existsSync()) return await basePenFile.readAsString();
+
+        final rootBasePenFile = File(p.join(tbpFolderPath, '$base.pen'));
+        if (rootBasePenFile.existsSync()) return await rootBasePenFile.readAsString();
+
         if (classKey != null) {
           final classBbpenSvg = File(p.join(tbpFolderPath, 'BBPen', classKey, '$base.svg'));
           if (classBbpenSvg.existsSync()) return await classBbpenSvg.readAsString();
 
           final classBbpenBstpen = File(p.join(tbpFolderPath, 'BBPen', classKey, '$base.bstpen'));
           if (classBbpenBstpen.existsSync()) return await classBbpenBstpen.readAsString();
+
+          final classBbpenPen = File(p.join(tbpFolderPath, 'BBPen', classKey, '$base.pen'));
+          if (classBbpenPen.existsSync()) return await classBbpenPen.readAsString();
 
           for (final fb in fallbackBases) {
             final fbSvg = File(p.join(tbpFolderPath, 'BBPen', classKey, '$fb.svg'));
@@ -874,8 +936,8 @@ class TbpStorageService {
         final newFile = File(p.join(tbpFolderPath, subFolder, '$base.bstpen'));
         if (newFile.existsSync()) return await newFile.readAsString();
 
-        final rootPenFile = File(p.join(tbpFolderPath, 'pen_$base.bstpen'));
-        if (rootPenFile.existsSync()) return await rootPenFile.readAsString();
+        final legacyRootPenFile = File(p.join(tbpFolderPath, 'pen_$base.bstpen'));
+        if (legacyRootPenFile.existsSync()) return await legacyRootPenFile.readAsString();
 
         final rawNewFile = File(p.join(tbpFolderPath, subFolder, '$rawBase.bstpen'));
         if (rawNewFile.existsSync()) return await rawNewFile.readAsString();
@@ -937,6 +999,14 @@ class TbpStorageService {
       _webJsonCache[cachePrefix] = strokeContent;
 
       if (!kIsWeb) {
+        // [교실ID]dhash.pen 표준 파일명 규약 적용 (예: 기본_dhash.pen, [1반]dhash.pen)
+        final penFileName = getPenFileName(classId, base);
+        final penDir = Directory(p.join(tbpFolderPath, 'PEN'));
+        if (!await penDir.exists()) await penDir.create(recursive: true);
+        final penFile = File(p.join(penDir.path, penFileName));
+        await penFile.writeAsString(strokeContent, flush: true);
+
+        // 하위 호환성 유지: 기존 BBPen 및 subFolder 구조도 함께 보존
         if (classKey != null) {
           final classDir = Directory(p.join(tbpFolderPath, 'BBPen', classKey));
           if (!await classDir.exists()) await classDir.create(recursive: true);
@@ -1047,7 +1117,6 @@ class TbpStorageService {
       }
 
       final encodedBytes = ZipEncoder().encode(archive);
-      if (encodedBytes == null) return false;
       await File(outputBstTbpPath).writeAsBytes(encodedBytes);
       return true;
     } catch (e) {

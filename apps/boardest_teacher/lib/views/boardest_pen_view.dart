@@ -146,9 +146,13 @@ class _BoardestPenViewState extends State<BoardestPenView>
   bool _isMenuOpen = false;
   bool _isPenDetailsOpen = false;
 
-  // ── Timers / Keys ──────────────────────────────────────
+  // ── Timers / Keys / Split Screen ───────────────────────
   final GlobalKey _canvasKey = GlobalKey();
   final Map<String, Timer> _activeTimers = {};
+  bool _isSplitScreen = false;
+  late final SplitBoardController _splitController = SplitBoardController(
+    initialMode: SplitMode.twoVertical,
+  );
 
   @override
   void initState() {
@@ -479,6 +483,7 @@ class _BoardestPenViewState extends State<BoardestPenView>
 
   @override
   void dispose() {
+    _splitController.dispose();
     for (final t in _activeTimers.values) t.cancel();
     unawaited(_autoSaveBoard());
     super.dispose();
@@ -906,27 +911,34 @@ class _BoardestPenViewState extends State<BoardestPenView>
       backgroundColor: _boardBgColor,
       body: Stack(
         children: [
-          // 1. Drawing Canvas
+          // 1. Drawing Canvas (Single or Split Screen Dual Board)
           Positioned.fill(
-            child: GestureDetector(
-              key: _canvasKey,
-              onPanStart: _onPanStart,
-              onPanUpdate: _onPanUpdate,
-              onPanEnd: _onPanEnd,
-              child: ClipRect(
-                child: CustomPaint(
-                  painter: _InfiniteBoardPainter(
-                    strokes: _strokes,
-                    activePoints: _activePoints,
-                    canvasOffset: _canvasOffset,
-                    bgPattern: _bgPattern,
-                    boardBgColor: _boardBgColor,
-                    lassoPoints: _isLassoActive ? _lassoPolygon : null,
-                    selectedIndices: _selectedStrokeIndices,
+            child: _isSplitScreen
+                ? SplitBoardView(
+                    controller: _splitController,
+                    showHeaderToolbar: true,
+                    scaleFactor: scale,
+                    onClose: () => setState(() => _isSplitScreen = false),
+                  )
+                : GestureDetector(
+                    key: _canvasKey,
+                    onPanStart: _onPanStart,
+                    onPanUpdate: _onPanUpdate,
+                    onPanEnd: _onPanEnd,
+                    child: ClipRect(
+                      child: CustomPaint(
+                        painter: _InfiniteBoardPainter(
+                          strokes: _strokes,
+                          activePoints: _activePoints,
+                          canvasOffset: _canvasOffset,
+                          bgPattern: _bgPattern,
+                          boardBgColor: _boardBgColor,
+                          lassoPoints: _isLassoActive ? _lassoPolygon : null,
+                          selectedIndices: _selectedStrokeIndices,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ),
           ),
 
           // 2. HSL Pen Details Card
@@ -1143,6 +1155,31 @@ class _BoardestPenViewState extends State<BoardestPenView>
           IconButton(
             icon: const Icon(Icons.redo_rounded, color: Colors.white70),
             onPressed: _redo,
+          ),
+
+          Container(
+            width: 1,
+            height: 24,
+            color: Colors.white12,
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+          ),
+
+          // Split Screen Dual Board Toggle
+          IconButton(
+            tooltip: _isSplitScreen ? '화면 분할 종료 (단일 칠판 복귀)' : '화면 분할 칠판 (2분할/4분할)',
+            icon: Icon(
+              Icons.splitscreen_rounded,
+              color: _isSplitScreen ? const Color(0xFF00F5D4) : Colors.white70,
+            ),
+            onPressed: () {
+              setState(() {
+                _isSplitScreen = !_isSplitScreen;
+                if (_isSplitScreen) {
+                  _isPenDetailsOpen = false;
+                  _isMenuOpen = false;
+                }
+              });
+            },
           ),
         ],
       ),

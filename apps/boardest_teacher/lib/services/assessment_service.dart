@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -16,6 +17,14 @@ class AssessmentService {
   final List<AssessmentItem> _rawGradeItems = [];
 
   List<AssessmentItem> get assessments => assessmentsNotifier.value;
+
+  // ─── RTDB Server-Sent Events (SSE) Realtime Stream ───
+  http.Client? _sseClient;
+  StreamSubscription? _sseSubscription;
+  Timer? _reconnectTimer;
+  String? _streamingSchoolCode;
+  int? _streamingGrade;
+  int? _streamingClassNum;
 
   /// 학교 코드/학교명을 표준 RTDB 키로 정규화 (예: '양동중학교', '48588', '44134', 'ydm' -> 'ydm')
   static String normalizeSchoolKey(String raw) {
@@ -42,18 +51,26 @@ class AssessmentService {
     return 'sch_$h';
   }
 
-  /// 학교 내 설치된 학급(1~12반) 목록을 학년별(1~3학년)로 조회
+  /// 네트워크 장애, 타임아웃, 미등록 상태 시 1~12반 공지 잠금(Lockout)을 방지하는 안전 폴백
+  static Map<int, Set<int>> allAvailableClassesFallback() {
+    return {
+      for (int g = 1; g <= 6; g++)
+        g: {for (int c = 1; c <= 12; c++) c},
+    };
+  }
+
+  /// 학교 내 설치된 학급(1~12반) 목록을 학년별(1~6학년)로 조회
+  /// 타임아웃, 네트워크 오류, 또는 감지된 학급이 0개인 경우 1~12반 전체 활성화 폴백을 반환하여
+  /// 교사의 공지 작성이 차단(Lockout)되지 않도록 보장합니다.
   Future<Map<int, Set<int>>> fetchInstalledClasses(String schoolCode) async {
     final effectiveCode = normalizeSchoolKey(schoolCode);
     final Map<int, Set<int>> result = {
-      1: <int>{},
-      2: <int>{},
-      3: <int>{},
+      for (int g = 1; g <= 6; g++) g: <int>{},
     };
 
     try {
       final res = await http.get(Uri.parse(_eatCallsUrl)).timeout(const Duration(seconds: 4));
-      if (res.statusCode == 200 && res.body != 'null') {
+      if (res.statusCode == 200 && res.body != 'null' && res.body.isNotEmpty) {
         final data = json.decode(res.body);
         if (data is Map) {
           data.forEach((key, val) {
@@ -88,17 +105,189 @@ class AssessmentService {
               }
             }
 
-            if (grade >= 1 && grade <= 3 && cls >= 1 && cls <= 12) {
+            if (grade >= 1 && grade <= 6 && cls >= 1 && cls <= 12) {
               result[grade]!.add(cls);
             }
           });
         }
+      } else {
+        debugPrint('[Teacher AssessmentService] fetchInstalledClasses non-200 or empty, using fallback');
+        return allAvailableClassesFallback();
       }
     } catch (e) {
-      debugPrint('[Teacher AssessmentService] fetchInstalledClasses error: $e');
+      debugPrint('[Teacher AssessmentService] fetchInstalledClasses error: $e, using fallback');
+      return allAvailableClassesFallback();
+    }
+
+    final bool allEmpty = result.values.every((s) => s.isEmpty);
+    if (allEmpty) {
+      debugPrint('[Teacher AssessmentService] No installed classes found, using fallback for 1~12 classes');
+      return allAvailableClassesFallback();
     }
 
     return result;
+  }
+
+  /// RTDB SSE 실시간 스트림 연결 시작 (수행평가 변경 사항 0.1초 내 즉시 화면 반영)
+  void startStreaming({
+    required String schoolCode,
+    required int grade,
+    int? classNum,
+  }) {
+    final effectiveCode = normalizeSchoolKey(schoolCode);
+    if (_streamingSchoolCode == effectiveCode &&
+        _streamingGrade == grade &&
+        _sseSubscription != null) {
+      _streamingClassNum = classNum;
+      _filterAndNotify(_rawGradeItems, grade, classNum);
+      return;
+    }
+
+    stopStreaming();
+    _streamingSchoolCode = effectiveCode;
+    _streamingGrade = grade;
+    _streamingClassNum = classNum;
+
+    _sseClient = http.Client();
+    _connectRtdbSse(effectiveCode, grade);
+  }
+
+  /// 실시간 스트림 해제
+  void stopStreaming() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    try {
+      _sseSubscription?.cancel();
+    } catch (_) {}
+    _sseSubscription = null;
+    try {
+      _sseClient?.close();
+    } catch (_) {}
+    _sseClient = null;
+  }
+
+  /// 필터링 학급 업데이트 (스트림 유지 상태에서 선택 반 변경)
+  void updateFilter({required int grade, int? classNum}) {
+    _streamingGrade = grade;
+    _streamingClassNum = classNum;
+    _filterAndNotify(_rawGradeItems, grade, classNum);
+  }
+
+  Future<void> _connectRtdbSse(String schoolKey, int grade) async {
+    try {
+      final url = Uri.parse('$_rtdbBase/$schoolKey/$grade.json');
+      final request = http.Request('GET', url);
+      request.headers['Accept'] = 'text/event-stream';
+      request.headers['Cache-Control'] = 'no-cache';
+
+      final response = await _sseClient?.send(request);
+      if (response == null || response.statusCode != 200) {
+        _retryRtdbSse(schoolKey, grade);
+        return;
+      }
+
+      String eventType = 'message';
+      _sseSubscription = response.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen((line) {
+        if (line.startsWith('event: ')) {
+          eventType = line.substring(7).trim();
+        } else if (line.startsWith('data: ')) {
+          final dataStr = line.substring(6).trim();
+          if (dataStr.isNotEmpty && dataStr != 'null') {
+            try {
+              final jsonObj = json.decode(dataStr);
+              _handleRtdbEvent(eventType, jsonObj);
+            } catch (_) {}
+          }
+        }
+      }, onDone: () {
+        debugPrint('[Teacher AssessmentService] RTDB SSE stream closed, reconnecting...');
+        _retryRtdbSse(schoolKey, grade);
+      }, onError: (e) {
+        debugPrint('[Teacher AssessmentService] RTDB SSE stream error: $e, reconnecting...');
+        _retryRtdbSse(schoolKey, grade);
+      });
+      debugPrint('[Teacher AssessmentService] ⚡ Connected to RTDB SSE stream for $schoolKey/$grade');
+    } catch (e) {
+      debugPrint('[Teacher AssessmentService] RTDB SSE connection error: $e');
+      _retryRtdbSse(schoolKey, grade);
+    }
+  }
+
+  void _retryRtdbSse(String schoolKey, int grade) {
+    if (_sseClient == null) return;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(const Duration(seconds: 4), () {
+      if (_streamingSchoolCode == schoolKey && _streamingGrade == grade) {
+        _sseClient?.close();
+        _sseClient = http.Client();
+        _connectRtdbSse(schoolKey, grade);
+      }
+    });
+  }
+
+  void _handleRtdbEvent(String eventType, dynamic jsonObj) {
+    if (jsonObj is! Map) return;
+    final path = jsonObj['path']?.toString() ?? '/';
+    final data = jsonObj['data'];
+
+    if (eventType == 'put') {
+      if (path == '/' || path.isEmpty) {
+        final List<AssessmentItem> newItems = [];
+        if (data is Map) {
+          data.forEach((key, val) {
+            if (val is Map) {
+              final map = Map<String, dynamic>.from(val);
+              if ((map['id']?.toString() ?? '').isEmpty) {
+                map['id'] = key.toString();
+              }
+              newItems.add(AssessmentItem.fromJson(map));
+            }
+          });
+        }
+        newItems.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+        _rawGradeItems
+          ..clear()
+          ..addAll(newItems);
+        _filterAndNotify(_rawGradeItems, _streamingGrade ?? 1, _streamingClassNum);
+      } else {
+        final itemId = path.startsWith('/') ? path.substring(1) : path;
+        if (data == null) {
+          _rawGradeItems.removeWhere((e) => e.id == itemId);
+        } else if (data is Map) {
+          final map = Map<String, dynamic>.from(data);
+          if ((map['id']?.toString() ?? '').isEmpty) {
+            map['id'] = itemId;
+          }
+          final item = AssessmentItem.fromJson(map);
+          _rawGradeItems.removeWhere((e) => e.id == itemId);
+          _rawGradeItems.add(item);
+          _rawGradeItems.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+        }
+        _filterAndNotify(_rawGradeItems, _streamingGrade ?? 1, _streamingClassNum);
+      }
+    } else if (eventType == 'patch') {
+      if (data is Map) {
+        data.forEach((key, val) {
+          final itemId = key.toString();
+          if (val == null) {
+            _rawGradeItems.removeWhere((e) => e.id == itemId);
+          } else if (val is Map) {
+            final map = Map<String, dynamic>.from(val);
+            if ((map['id']?.toString() ?? '').isEmpty) {
+              map['id'] = itemId;
+            }
+            final item = AssessmentItem.fromJson(map);
+            _rawGradeItems.removeWhere((e) => e.id == itemId);
+            _rawGradeItems.add(item);
+          }
+        });
+        _rawGradeItems.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+        _filterAndNotify(_rawGradeItems, _streamingGrade ?? 1, _streamingClassNum);
+      }
+    }
   }
 
   Future<List<AssessmentItem>> loadAssessments({
@@ -106,6 +295,8 @@ class AssessmentService {
     required int grade,
     int? classNum,
   }) async {
+    _streamingGrade = grade;
+    _streamingClassNum = classNum;
     final effectiveCode = normalizeSchoolKey(schoolCode);
     final cacheKey = 'cached_teacher_assessments_${effectiveCode}_$grade';
 
@@ -190,7 +381,7 @@ class AssessmentService {
         _rawGradeItems.removeWhere((e) => e.id == normalizedItem.id);
         _rawGradeItems.add(normalizedItem);
         _rawGradeItems.sort((a, b) => a.dueDate.compareTo(b.dueDate));
-        assessmentsNotifier.value = List<AssessmentItem>.from(_rawGradeItems);
+        _filterAndNotify(_rawGradeItems, _streamingGrade ?? normalizedItem.grade, _streamingClassNum);
         return true;
       }
     } catch (e) {
@@ -222,7 +413,7 @@ class AssessmentService {
       final ok = await addAssessment(schoolCode: effectiveCode, item: item);
       if (!ok) allSuccess = false;
     }
-    await loadAssessments(schoolCode: effectiveCode, grade: baseItem.grade);
+    await loadAssessments(schoolCode: effectiveCode, grade: baseItem.grade, classNum: _streamingClassNum);
     return allSuccess;
   }
 
@@ -238,9 +429,7 @@ class AssessmentService {
       final res = await http.delete(Uri.parse(url)).timeout(const Duration(seconds: 4));
       if (res.statusCode == 200 || res.statusCode == 204) {
         _rawGradeItems.removeWhere((e) => e.id == itemId);
-        final current = List<AssessmentItem>.from(assessmentsNotifier.value);
-        current.removeWhere((e) => e.id == itemId);
-        assessmentsNotifier.value = current;
+        _filterAndNotify(_rawGradeItems, _streamingGrade ?? grade, _streamingClassNum);
         return true;
       }
     } catch (e) {

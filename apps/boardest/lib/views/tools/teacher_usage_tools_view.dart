@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:bst_pen/bst_pen.dart';
 
 /// 교사도구 - [사용 (수업 진행)] 전담 뷰
 /// - 0: 판서 칠판 (Whiteboard)
@@ -22,6 +23,10 @@ class TeacherUsageToolsView extends StatefulWidget {
 
 class _TeacherUsageToolsViewState extends State<TeacherUsageToolsView> {
   // ────────────── 1. Whiteboard State ──────────────
+  bool _isSplitMode = false;
+  late final SplitBoardController _splitBoardController = SplitBoardController(
+    initialMode: SplitMode.twoVertical,
+  );
   final List<List<DrawingPoint?>> _strokes = [];
   List<DrawingPoint?> _currentStroke = [];
   Color _penColor = const Color(0xFF00F5D4);
@@ -58,6 +63,7 @@ class _TeacherUsageToolsViewState extends State<TeacherUsageToolsView> {
   @override
   void dispose() {
     _tickerTimer?.cancel();
+    _splitBoardController.dispose();
     super.dispose();
   }
 
@@ -202,7 +208,7 @@ class _TeacherUsageToolsViewState extends State<TeacherUsageToolsView> {
   void _rollDice() {
     if (_isRollingDice) return;
     setState(() => _isRollingDice = true);
-    final rng = Random();
+    final rng = Random.secure();
     int ticks = 0;
     Timer.periodic(const Duration(milliseconds: 70), (t) {
       ticks++;
@@ -222,8 +228,17 @@ class _TeacherUsageToolsViewState extends State<TeacherUsageToolsView> {
 
   void _pickRandomNumber() {
     if (_isPickingNumber || _pickerMin > _pickerMax) return;
+    final allNumbers = [for (int i = _pickerMin; i <= _pickerMax; i++) i];
+    final remaining = allNumbers.where((n) => !_pickedHistory.contains(n)).toList();
+    if (remaining.isEmpty) {
+      // 모든 학생 추첨 완료 시 사이클 초기화
+      setState(() => _pickedHistory.clear());
+      _pickRandomNumber();
+      return;
+    }
+
     setState(() => _isPickingNumber = true);
-    final rng = Random();
+    final rng = Random.secure();
     int ticks = 0;
     Timer.periodic(const Duration(milliseconds: 60), (t) {
       ticks++;
@@ -232,15 +247,15 @@ class _TeacherUsageToolsViewState extends State<TeacherUsageToolsView> {
         return;
       }
       setState(() {
-        _pickedNumber = _pickerMin + rng.nextInt(_pickerMax - _pickerMin + 1);
+        _pickedNumber = remaining[rng.nextInt(remaining.length)];
       });
       if (ticks > 12) {
         t.cancel();
         setState(() {
           _isPickingNumber = false;
-          if (_pickedNumber != null && !_pickedHistory.contains(_pickedNumber)) {
+          if (_pickedNumber != null) {
             _pickedHistory.insert(0, _pickedNumber!);
-            if (_pickedHistory.length > 20) _pickedHistory.removeLast();
+            if (_pickedHistory.length > 50) _pickedHistory.removeLast();
           }
         });
       }
@@ -262,6 +277,13 @@ class _TeacherUsageToolsViewState extends State<TeacherUsageToolsView> {
 
   // ════════════════ 1. WHITEBOARD PANEL ════════════════
   Widget _buildWhiteboardPanel() {
+    if (_isSplitMode) {
+      return SplitBoardView(
+        controller: _splitBoardController,
+        showHeaderToolbar: true,
+        onClose: () => setState(() => _isSplitMode = false),
+      );
+    }
     Color bg;
     switch (_boardBackground) {
       case 1:
@@ -397,6 +419,12 @@ class _TeacherUsageToolsViewState extends State<TeacherUsageToolsView> {
                     onPressed: () {
                       setState(() => _strokes.clear());
                     },
+                  ),
+                  Container(width: 1, height: 24, color: Colors.white24, margin: const EdgeInsets.symmetric(horizontal: 8)),
+                  IconButton(
+                    icon: Icon(Icons.splitscreen_rounded, color: _isSplitMode ? const Color(0xFF00F5D4) : Colors.white70),
+                    tooltip: '화면 분할 칠판 (2분할/4분할)',
+                    onPressed: () => setState(() => _isSplitMode = !_isSplitMode),
                   ),
                 ],
               ),

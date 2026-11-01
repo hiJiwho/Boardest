@@ -12,10 +12,12 @@ import 'package:webview_flutter/webview_flutter.dart';
 class TbpDhashEngine {
   final Function(String dHash) onDhashChanged;
   final Function(double rx, double ry)? onWebContextMenu;
+  final Function(bool isNext)? onNavigationRequested;
 
   TbpDhashEngine({
     required this.onDhashChanged,
     this.onWebContextMenu,
+    this.onNavigationRequested,
   });
 
   WebviewController? _winController;
@@ -46,56 +48,47 @@ class TbpDhashEngine {
     return dist;
   }
 
-  /// BoardBook 오리지널 고속 JS 스크립트 + 1536px 고정 및 창 크기 맞춤 동적 배율(Auto-Fit Scale)
+  /// BoardBook 오리지널 고속 JS 스크립트 + 1536px 네이티브 줌 팩터 및 고속 페이지 감지
   static const String _hashJsScript = '''
     (function() {
+      var isCanva = (window.location && window.location.hostname && window.location.hostname.indexOf('canva.com') !== -1);
+
       if (!window.__bstNativeGettersSaved) {
         window.__bstNativeGettersSaved = true;
         try {
-          var dWinW = Object.getOwnPropertyDescriptor(window, 'innerWidth') || Object.getOwnPropertyDescriptor(Window.prototype, 'innerWidth');
-          var dWinH = Object.getOwnPropertyDescriptor(window, 'innerHeight') || Object.getOwnPropertyDescriptor(Window.prototype, 'innerHeight');
-          var dDocW = Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth') || Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
-          var dDocH = Object.getOwnPropertyDescriptor(Element.prototype, 'clientHeight') || Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight');
-          window.__bstGetRealW = function() {
-            try {
-              if (dWinW && dWinW.get) return dWinW.get.call(window);
-              if (dDocW && dDocW.get) return dDocW.get.call(document.documentElement);
-            } catch (e) {}
-            return window.outerWidth || screen.width || 1536;
-          };
-          window.__bstGetRealH = function() {
-            try {
-              if (dWinH && dWinH.get) return dWinH.get.call(window);
-              if (dDocH && dDocH.get) return dDocH.get.call(document.documentElement);
-            } catch (e) {}
-            return window.outerHeight || screen.height || 864;
-          };
-          Object.defineProperty(window, 'innerWidth', { get: function() { return 1536; }, configurable: true });
-          Object.defineProperty(window, 'innerHeight', { get: function() { return 864; }, configurable: true });
-          Object.defineProperty(document.documentElement, 'clientWidth', { get: function() { return 1536; }, configurable: true });
-          Object.defineProperty(document.documentElement, 'clientHeight', { get: function() { return 864; }, configurable: true });
+          if (!isCanva) {
+            var dWinW = Object.getOwnPropertyDescriptor(window, 'innerWidth') || Object.getOwnPropertyDescriptor(Window.prototype, 'innerWidth');
+            var dWinH = Object.getOwnPropertyDescriptor(window, 'innerHeight') || Object.getOwnPropertyDescriptor(Window.prototype, 'innerHeight');
+            var dDocW = Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth') || Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+            var dDocH = Object.getOwnPropertyDescriptor(Element.prototype, 'clientHeight') || Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight');
+            window.__bstGetRealW = function() {
+              try {
+                if (dWinW && dWinW.get) return dWinW.get.call(window);
+                if (dDocW && dDocW.get) return dDocW.get.call(document.documentElement);
+              } catch (e) {}
+              return window.outerWidth || screen.width || 1536;
+            };
+            window.__bstGetRealH = function() {
+              try {
+                if (dWinH && dWinH.get) return dWinH.get.call(window);
+                if (dDocH && dDocH.get) return dDocH.get.call(document.documentElement);
+              } catch (e) {}
+              return window.outerHeight || screen.height || 864;
+            };
+          }
         } catch (ge) {}
       }
 
       function sync1536Scale() {
+        if (isCanva) {
+          // Canva의 경우 자체 반응형 레이아웃 엔진 보존을 위해 bst-1536-lock-style 주입 제외
+          var oldStyle = document.getElementById('bst-1536-lock-style');
+          if (oldStyle && oldStyle.parentNode) oldStyle.parentNode.removeChild(oldStyle);
+          return;
+        }
         if (window.__bstInSyncScale) return;
         window.__bstInSyncScale = true;
         try {
-          var targetW = 1536;
-          var targetH = 864;
-          var winW = (window.__bstGetRealW ? window.__bstGetRealW() : window.innerWidth) || screen.width || 1536;
-          var winH = (window.__bstGetRealH ? window.__bstGetRealH() : window.innerHeight) || screen.height || 864;
-          if (!winW || !winH || winW <= 0 || winH <= 0) {
-            window.__bstInSyncScale = false;
-            return;
-          }
-
-          var scale = Math.min(winW / targetW, winH / targetH);
-          if (scale <= 0) scale = 1.0;
-
-          var offsetX = Math.max(0, (winW - (targetW * scale)) / 2);
-          var offsetY = Math.max(0, (winH - (targetH * scale)) / 2);
-
           var meta = document.querySelector('meta[name="viewport"]');
           if (!meta && document.head) {
             meta = document.createElement('meta');
@@ -103,7 +96,7 @@ class TbpDhashEngine {
             document.head.appendChild(meta);
           }
           if (meta) {
-            meta.content = 'width=1536, initial-scale=' + scale.toFixed(4) + ', maximum-scale=' + scale.toFixed(4) + ', user-scalable=no';
+            meta.content = 'width=1536, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
           }
 
           var styleId = 'bst-1536-lock-style';
@@ -114,8 +107,8 @@ class TbpDhashEngine {
             document.head.appendChild(styleEl);
           }
           if (styleEl) {
-            styleEl.textContent = 'html { width: 100% !important; height: 100% !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; background-color: #0F0E17 !important; } ' +
-              'body { width: 1536px !important; min-width: 1536px !important; max-width: 1536px !important; height: 864px !important; min-height: 864px !important; max-height: 864px !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; box-sizing: border-box !important; transform-origin: 0 0 !important; transform: translate(' + offsetX.toFixed(2) + 'px, ' + offsetY.toFixed(2) + 'px) scale(' + scale.toFixed(4) + ') !important; -webkit-text-size-adjust: 100% !important; text-size-adjust: 100% !important; }';
+            // CSS transform: scale() 래스터화 확대 제거 -> 네이티브 WebView2 setZoomFactor에 의해 100% 벡터 선명도로 렌더링됨
+            styleEl.textContent = 'html, body { width: 100% !important; height: 100% !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; background-color: #0F0E17 !important; box-sizing: border-box !important; }';
           }
 
           if (!window.__bstInitialResizeDispatched) {
@@ -144,9 +137,38 @@ class TbpDhashEngine {
         }
       }
 
+      function interceptNavKey(e) {
+        if (['ArrowRight', 'ArrowLeft', 'PageDown', 'PageUp', 'Space'].indexOf(e.key) !== -1 ||
+            [39, 37, 34, 33, 32].indexOf(e.keyCode) !== -1) {
+          if (!e.__bstSynthetic) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            if (e.type === 'keydown') {
+              var isNext = (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === 'Space' || e.keyCode === 39 || e.keyCode === 34 || e.keyCode === 32);
+              postToFlutter({
+                type: 'requestNavigation',
+                isNext: isNext
+              });
+            }
+          }
+        }
+      }
+
+      if (!window.__bstKeyBound) {
+        window.__bstKeyBound = true;
+        window.addEventListener('keydown', interceptNavKey, true);
+        window.addEventListener('keyup', interceptNavKey, true);
+        document.addEventListener('keydown', interceptNavKey, true);
+        document.addEventListener('keyup', interceptNavKey, true);
+      }
+
       function bindDocEvents(doc, win, offsetLeft, offsetTop) {
         if (!doc || doc.__bstBound) return;
         doc.__bstBound = true;
+
+        doc.addEventListener('keydown', interceptNavKey, true);
+        doc.addEventListener('keyup', interceptNavKey, true);
 
         doc.addEventListener('contextmenu', function(e) {
           e.preventDefault();
@@ -190,17 +212,65 @@ class TbpDhashEngine {
 
           var loc = (w && w.location) ? w.location : window.location;
           if (loc && loc.hostname && loc.hostname.indexOf('canva.com') !== -1) {
-            var chash = (loc.hash && loc.hash.length > 1)
-                ? loc.hash.replace(/[^a-zA-Z0-9_-]/g, '_')
-                : '_1';
-            return 'hash_' + chash;
+            // 1. Canva 슬라이드 카운터 정규식 탐색 (예: "3 / 15", "1/10")
+            var allEls = doc.querySelectorAll('button, div, span, p, [role="button"]');
+            for (var i = 0; i < allEls.length; i++) {
+              var t = (allEls[i].innerText || allEls[i].textContent || '').trim();
+              if (t.length >= 3 && t.length <= 15) {
+                var m = t.match(/\\b(\\d+)\\s*\\/\\s*(\\d+)\\b/);
+                if (m && m[1]) {
+                  var pNum = parseInt(m[1], 10);
+                  if (!isNaN(pNum) && pNum > 0) {
+                    window.__bstCanvaPage = pNum;
+                    return 'canva_p' + pNum;
+                  }
+                }
+              }
+            }
+
+            // 2. Canva aria 속성 및 슬라이드 속성 탐색
+            var activeSlide = doc.querySelector('[aria-current="step"], [data-testid="page-number"], [aria-roledescription*="slide"][aria-hidden="false"], [role="option"][aria-selected="true"]');
+            if (activeSlide) {
+              var pAttr = activeSlide.getAttribute('aria-valuenow') || activeSlide.getAttribute('data-page') || activeSlide.innerText || '';
+              var pNum2 = parseInt(pAttr.replace(/[^0-9]/g, ''), 10);
+              if (!isNaN(pNum2) && pNum2 > 0) {
+                window.__bstCanvaPage = pNum2;
+                return 'canva_p' + pNum2;
+              }
+            }
+
+            // 3. 네비게이션 가상 인덱스 연동
+            if (window.__bstCanvaPage) {
+              return 'canva_p' + window.__bstCanvaPage;
+            }
+
+            if (loc.hash && loc.hash.length > 1) {
+              return 'canva_h_' + loc.hash.replace(/[^a-zA-Z0-9_-]/g, '_');
+            }
+
+            return 'canva_p1';
           }
 
+          // 전자저작물 전역 JS 객체 감지
+          if (w.ebook && (w.ebook.currentPage || w.ebook.pageNo || w.ebook.curPage)) {
+            var ep = w.ebook.currentPage || w.ebook.pageNo || w.ebook.curPage;
+            return 'ebook_p' + ep;
+          }
+          if (w.curPage || w.pageNo || w.currentPage) {
+            var cp = w.curPage || w.pageNo || w.currentPage;
+            return 'page_' + cp;
+          }
+
+          // 다중 출판사(천재, 비상, 미래엔, 동아, 금성, YBM, EBS 등) DOM 셀렉터 확장
           var selectors = [
             '.page-num', '.pageNum', '#pageNo', '#page_num', '.page_num',
             '.page-current', '#currentPage', '.current-page', '.textbook-page',
             '#spnPage', '.spn_page', '.page_input', 'input.page', '.cur_page', '#curPage',
-            '#txtPage', '.txt_page', '#nowPage', '.now_page'
+            '#txtPage', '.txt_page', '#nowPage', '.now_page',
+            '[data-page]', '[data-page-no]', '[data-current-page]', '.num', '.page_info',
+            'span.page', 'span.cur', '.pagination .active', '.page_no', '#page_info',
+            '.viewer-page-number', '.page-index', '#currPage', '.ebook-page',
+            '.current_page_no', '#current_page_no', '.curr_page', '#pageBox'
           ];
           for (var s = 0; s < selectors.length; s++) {
             var el = doc.querySelector(selectors[s]);
@@ -226,6 +296,14 @@ class TbpDhashEngine {
         if (!detectedId) {
           for (var f = 0; f < frames.length; f++) {
             try {
+              var fSrc = frames[f].src || '';
+              if (fSrc) {
+                var matchSrc = fSrc.match(/(?:page|p|slide|ebook|view)[/=_=-]?(\\d+)/i);
+                if (matchSrc && matchSrc[1]) {
+                  detectedId = 'frame_p' + matchSrc[1];
+                  break;
+                }
+              }
               if (frames[f].contentDocument) {
                 bindDocEvents(frames[f].contentDocument, frames[f].contentWindow, 0, 0);
                 detectedId = getDocPageId(frames[f].contentDocument, frames[f].contentWindow);
@@ -273,11 +351,17 @@ class TbpDhashEngine {
 
       if (!window.__boardestDhashInjected) {
         window.__boardestDhashInjected = true;
-        setInterval(window.checkPage, 250);
+        setInterval(window.checkPage, 150);
         window.addEventListener('hashchange', window.checkPage);
         window.addEventListener('popstate', window.checkPage);
-        window.addEventListener('click', function() { setTimeout(window.checkPage, 120); });
-        window.addEventListener('keyup', function() { setTimeout(window.checkPage, 120); });
+        window.addEventListener('click', function() {
+          setTimeout(window.checkPage, 50);
+          setTimeout(window.checkPage, 150);
+        });
+        window.addEventListener('keyup', function() {
+          setTimeout(window.checkPage, 50);
+          setTimeout(window.checkPage, 150);
+        });
       }
     })();
   ''';
@@ -330,6 +414,9 @@ class TbpDhashEngine {
           if (hash != null && hash.isNotEmpty) {
             _onNewHash(hash);
           }
+        } else if (data['type'] == 'requestNavigation') {
+          final isNext = data['isNext'] == true;
+          onNavigationRequested?.call(isNext);
         } else if (data['type'] == 'hotspotContext' && onWebContextMenu != null) {
           final rx = (data['rx'] as num?)?.toDouble();
           final ry = (data['ry'] as num?)?.toDouble();
@@ -341,11 +428,11 @@ class TbpDhashEngine {
     } catch (_) {}
   }
 
-  /// 페이지 이동 (450ms 쿨다운 가드로 2페이지 연속 넘어감 완벽 차단)
+  /// 페이지 이동 (350ms 쿨다운 가드로 2페이지 연속 넘어감 완벽 차단 및 50ms 초고속 감지)
   Future<void> navigatePage({required bool isNext}) async {
     final now = DateTime.now();
-    if (_lastNavTime != null && now.difference(_lastNavTime!).inMilliseconds < 450) {
-      return; // 450ms 디바운스로 2페이지 연속 점프 방지
+    if (_lastNavTime != null && now.difference(_lastNavTime!).inMilliseconds < 350) {
+      return; // 350ms 디바운스로 2페이지 연속 점프 방지 (1키 1페이지 정밀 이동)
     }
     _lastNavTime = now;
 
@@ -359,6 +446,15 @@ class TbpDhashEngine {
 
     final script = '''
       (function() {
+        if (window.location && window.location.hostname && window.location.hostname.indexOf('canva.com') !== -1) {
+          if (typeof window.__bstCanvaPage !== 'number') window.__bstCanvaPage = 1;
+          if (${isNext ? 'true' : 'false'}) {
+            window.__bstCanvaPage++;
+          } else if (window.__bstCanvaPage > 1) {
+            window.__bstCanvaPage--;
+          }
+        }
+
         var clicked = false;
         function tryClickBtn(doc) {
           if (!doc || clicked) return false;
@@ -392,7 +488,7 @@ class TbpDhashEngine {
           tryClickBtn(document);
         }
 
-        // 버튼이 없는 경우에만 keydown 단 1회만 디스패치
+        // 버튼이 없는 경우에만 keydown 단 1회만 디스패치 (합성 이벤트 플래그 마킹으로 캡처 인터셉터 통과)
         if (!clicked) {
           var targetDoc = document;
           for (var i = 0; i < frames.length; i++) {
@@ -401,20 +497,26 @@ class TbpDhashEngine {
             } catch(e) {}
           }
           var el = targetDoc.activeElement || targetDoc.body;
-          el.dispatchEvent(new KeyboardEvent('keydown', {
+          var evt = new KeyboardEvent('keydown', {
             bubbles: true, cancelable: true,
             key: '$key', code: '$key',
             keyCode: $keyCode, which: $keyCode
-          }));
+          });
+          evt.__bstSynthetic = true;
+          el.dispatchEvent(evt);
         }
 
         if (window.checkPage) {
-          setTimeout(window.checkPage, 120);
+          setTimeout(window.checkPage, 50);
+          setTimeout(window.checkPage, 150);
+          setTimeout(window.checkPage, 300);
         }
       })();
     ''';
 
     await _executeScript(script);
+    Future.delayed(const Duration(milliseconds: 50), () => _requestHashFromJs());
+    Future.delayed(const Duration(milliseconds: 150), () => _requestHashFromJs());
   }
 
   void _startBackgroundPolling() {

@@ -46,6 +46,21 @@ class TbpStorageService {
     return null;
   }
 
+  /// [교실ID]dhash.pen 표준 파일명 규약 생성 (예: 기본_dhash.pen, [1반]dhash.pen)
+  static String getPenFileName(String? classId, String dHash) {
+    final rawClass = (classId != null && classId.trim().isNotEmpty && classId != '전체')
+        ? classId.trim()
+        : '기본';
+    final safeHash = sanitizeKey(dHash);
+    if (rawClass == '기본') {
+      return '기본_$safeHash.pen';
+    } else if (rawClass.startsWith('[') && rawClass.endsWith(']')) {
+      return '$rawClass$safeHash.pen';
+    } else {
+      return '[$rawClass]$safeHash.pen';
+    }
+  }
+
   static final TbpStorageService instance = TbpStorageService._internal();
   TbpStorageService._internal();
 
@@ -297,11 +312,35 @@ class TbpStorageService {
     required String subFolder,
     required String scopeKey,
     String? filename,
+    String? classId,
   }) async {
     try {
       final safeKey = sanitizeKey(scopeKey);
       final base = filename != null && filename.isNotEmpty ? '$safeKey$filename' : safeKey;
       final rawBase = filename != null && filename.isNotEmpty ? '$scopeKey$filename' : scopeKey;
+
+      final penFileName = getPenFileName(classId, base);
+      final safeClass = (classId != null && classId.trim().isNotEmpty && classId != '전체') ? classId.trim() : '기본';
+
+      // 1. [교실ID]dhash.pen 최우선 로드 (신규 표준 규약)
+      final stdPenFile = File(p.join(tbpFolderPath, 'PEN', penFileName));
+      if (stdPenFile.existsSync()) return await stdPenFile.readAsString();
+
+      final rootPenFile = File(p.join(tbpFolderPath, penFileName));
+      if (rootPenFile.existsSync()) return await rootPenFile.readAsString();
+
+      // 2. 다중 경로 호환성 탐색
+      final altPenFile = File(p.join(tbpFolderPath, 'PEN', '${safeClass}_$base.pen'));
+      if (altPenFile.existsSync()) return await altPenFile.readAsString();
+
+      final altBstpenFile = File(p.join(tbpFolderPath, 'PEN', '${safeClass}_$base.bstpen'));
+      if (altBstpenFile.existsSync()) return await altBstpenFile.readAsString();
+
+      final basePenFile = File(p.join(tbpFolderPath, 'PEN', '$base.pen'));
+      if (basePenFile.existsSync()) return await basePenFile.readAsString();
+
+      final rootBasePenFile = File(p.join(tbpFolderPath, '$base.pen'));
+      if (rootBasePenFile.existsSync()) return await rootBasePenFile.readAsString();
 
       // 축소 형식: .bstpen
       final newFile = File(p.join(tbpFolderPath, subFolder, '$base.bstpen'));
@@ -326,6 +365,7 @@ class TbpStorageService {
     required String subFolder,
     required String scopeKey,
     String? filename,
+    String? classId,
     required String strokeContent,
   }) async {
     try {
@@ -334,6 +374,14 @@ class TbpStorageService {
 
       final safeKey = sanitizeKey(scopeKey);
       final base = filename != null && filename.isNotEmpty ? '$safeKey$filename' : safeKey;
+
+      // [교실ID]dhash.pen 표준 파일명 규약 적용 (예: 기본_dhash.pen, [1반]dhash.pen)
+      final penFileName = getPenFileName(classId, base);
+      final penDir = Directory(p.join(tbpFolderPath, 'PEN'));
+      if (!await penDir.exists()) await penDir.create(recursive: true);
+      final penFile = File(p.join(penDir.path, penFileName));
+      await penFile.writeAsString(strokeContent, flush: true);
+
       final strokeFile = File(p.join(targetDir.path, '$base.bstpen'));
       await strokeFile.writeAsString(strokeContent, flush: true);
     } catch (e) {
@@ -341,9 +389,14 @@ class TbpStorageService {
     }
   }
 
-  Future<List<AnnotationStroke>> loadPenStrokes(String tbpFolderPath, String dHash) async {
+  Future<List<AnnotationStroke>> loadPenStrokes(String tbpFolderPath, String dHash, {String? classId}) async {
     final resolvedDhash = await resolveSimilarHash(tbpFolderPath, 'PEN', dHash);
-    final raw = await loadStrokeData(tbpFolderPath: tbpFolderPath, subFolder: 'PEN', scopeKey: resolvedDhash);
+    final raw = await loadStrokeData(
+      tbpFolderPath: tbpFolderPath,
+      subFolder: 'PEN',
+      scopeKey: resolvedDhash,
+      classId: classId,
+    );
     if (raw == null || raw.isEmpty) return [];
     try {
       final list = jsonDecode(raw) as List;
@@ -353,13 +406,14 @@ class TbpStorageService {
     }
   }
 
-  Future<void> savePenStrokes(String tbpFolderPath, String dHash, List<AnnotationStroke> strokes) async {
+  Future<void> savePenStrokes(String tbpFolderPath, String dHash, List<AnnotationStroke> strokes, {String? classId}) async {
     final resolvedDhash = await resolveSimilarHash(tbpFolderPath, 'PEN', dHash);
     final jsonList = strokes.map((s) => s.toJson()).toList();
     await saveStrokeData(
       tbpFolderPath: tbpFolderPath,
       subFolder: 'PEN',
       scopeKey: resolvedDhash,
+      classId: classId,
       strokeContent: jsonEncode(jsonList),
     );
   }

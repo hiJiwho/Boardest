@@ -26,16 +26,32 @@ class AnnotationStroke {
     final rawList = json['points'] as List? ?? [];
     final pts = rawList.map((p) {
       if (p is Map) {
-        final x = ((p['dx'] ?? p['x'] ?? 0.0) as num).toDouble();
-        final y = ((p['dy'] ?? p['y'] ?? 0.0) as num).toDouble();
+        final dynamic rawX = p['dx'] ?? p['x'];
+        final dynamic rawY = p['dy'] ?? p['y'];
+        final double x = rawX is num
+            ? rawX.toDouble()
+            : (double.tryParse(rawX?.toString() ?? '') ?? 0.0);
+        final double y = rawY is num
+            ? rawY.toDouble()
+            : (double.tryParse(rawY?.toString() ?? '') ?? 0.0);
         return Offset(x, y);
       }
       return Offset.zero;
     }).toList();
+    final rawColor = json['color'];
+    final int colorVal = rawColor is num
+        ? rawColor.toInt()
+        : (int.tryParse(rawColor?.toString() ?? '') ?? 0xFF000000);
+
+    final rawWidth = json['strokeWidth'];
+    final double strokeWidthVal = rawWidth is num
+        ? rawWidth.toDouble()
+        : (double.tryParse(rawWidth?.toString() ?? '') ?? 3.0);
+
     return AnnotationStroke(
       points: pts,
-      color: Color(json['color'] as int? ?? 0xFF000000),
-      strokeWidth: (json['strokeWidth'] as num?)?.toDouble() ?? 3.0,
+      color: Color(colorVal),
+      strokeWidth: strokeWidthVal,
       isEraser: json['isEraser'] as bool? ?? false,
     );
   }
@@ -48,6 +64,30 @@ class AnnotationStroke {
       isEraser: isEraser,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! AnnotationStroke) return false;
+    if (other.color != color ||
+        other.strokeWidth != strokeWidth ||
+        other.isEraser != isEraser ||
+        other.points.length != points.length) {
+      return false;
+    }
+    for (int i = 0; i < points.length; i++) {
+      if (points[i] != other.points[i]) return false;
+    }
+    return true;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        Object.hashAll(points),
+        color,
+        strokeWidth,
+        isEraser,
+      );
 }
 
 class AnnotationController extends ChangeNotifier {

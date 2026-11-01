@@ -1,6 +1,6 @@
 name: bst_tbp
 description: "TextBook Plus (.TBP) engine and viewer for Boardest."
-version: 0.0.1
+version: 5.5.0
 publish_to: none
 
 environment:

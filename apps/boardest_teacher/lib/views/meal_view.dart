@@ -629,6 +629,47 @@ class _MealViewState extends State<MealView> {
                         spacing: 8 * s,
                         runSpacing: 6 * s,
                         children: _mealMenu.map((m) {
+                          final parenIdx = m.lastIndexOf('(');
+                          if (parenIdx > 0 && m.endsWith(')')) {
+                            final name = m.substring(0, parenIdx).trim();
+                            final allergy = m.substring(parenIdx + 1, m.length - 1).trim();
+                            return Container(
+                              padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 6 * s),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F0E17),
+                                borderRadius: BorderRadius.circular(10 * s),
+                                border: Border.all(color: Colors.white.withOpacity(0.12)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    name,
+                                    style: TextStyle(color: Colors.white, fontSize: 12 * s, fontWeight: FontWeight.w600),
+                                  ),
+                                  if (allergy.isNotEmpty) ...[
+                                    SizedBox(width: 6 * s),
+                                    Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 6 * s, vertical: 2 * s),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFF8906).withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(6 * s),
+                                        border: Border.all(color: const Color(0xFFFF8906).withOpacity(0.5)),
+                                      ),
+                                      child: Text(
+                                        allergy,
+                                        style: TextStyle(
+                                          color: const Color(0xFFFF8906),
+                                          fontSize: 10 * s,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            );
+                          }
                           return Chip(
                             backgroundColor: const Color(0xFF0F0E17),
                             side: BorderSide(color: Colors.white.withOpacity(0.1)),

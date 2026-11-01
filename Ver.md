@@ -1,3 +1,19 @@
+## 🚀 [정식 릴리즈] Boardest v5.5.0 (2026-11-01)
+- **전체 생태계 v5.5.0 (5.5.0+5500) 일괄 버전 동기화**:
+  - 모노레포 루트 `pubspec.yaml`, 5대 핵심 앱(`boardest`, `boardest_teacher`, `boardest_teacher_lite`, `boardest_class_lite`, `boardest_class_cloud`), 학생용 앱(`boardest_student`), 15개 공유 패키지(`packages/**`) 버전 `5.5.0` / `5.5.0+5500` 일괄 통일.
+  - Windows C# 통합 온라인 설치 마법사(`BoardestInstaller.cs`, `BoardestClassInstaller.cs`, `BoardestCloudInstaller.cs`, `app.manifest`, `installer.html`, `build_installer.ps1`) 및 AppX/MSIX 패키징 템플릿(`scripts/appx_templates/**`) 어셈블리 및 패키지 버전을 `5.5.0.0` / `5.5.0`으로 정합.
+  - Web 에셋 및 배포 인프라(`infra/windows_installer_web`, `infra/hub_web`, `infra/demo_web`, `infra/teacher_timetable_web`)의 버전 메타데이터를 `5.5.0` / `5500`으로 완전 갱신.
+- **Class 앱 QR Cloud 원격 접속 복구**:
+  - Firebase Realtime Database 보안 규칙(`database.rules.json`)에 `cloud_pair_sessions` 노드의 읽기/쓰기 권한을 정규 부여하여 원격 인증 세션 차단 해소.
+  - 스마트폰 브라우저(`boardest-cloud-connect.web.app`) 로그인 시 RTDB `cloud_pair_sessions/${reversePairSecret}.json`에 무기록(Zero-Persistence) 1회성 토큰을 안전하게 전달하고 전자칠판에서 1초 내 즉시 수신 및 연동 보장.
+- **Android 환경 앱 업데이트 무한 루프 버그 원천 해결**:
+  - Android 네이티브 `MainActivity.kt`에 `getAppVersion` / `getPackageInfo` MethodChannel을 추가하여 OS 패키지 매니저가 실제로 설치된 APK의 `versionName`(`5.5.0`)을 정확히 반환하도록 구현.
+  - `apps/boardest/lib/services/update_service.dart`의 `initVersion()`에서 Android 구동 시 MethodChannel을 호출하여 실제 설치된 버전 문자열을 캐싱하고 GitHub Releases 태그와의 의미론적 버전 비교(Semantic Versioning) 정합성을 보장하여 업데이트 완료 후에도 알림/잠금이 반복되는 무한 루프 완벽 차단.
+- **25개 전 컴포넌트(C01~C25) E2E 및 마일스톤(M1~M6) 무결성 100% 검증 통과**:
+  - TBP 디지털 교과서(C01), 캔바 뷰어(C02), 전자칠판 캔버스(C03), 플로팅 독(C04), 타이머/스톱워치(C05), 주사위/발표자 뽑기(C06), 스포트라이트(C07), 듀얼 분할 보드(C08), 수행평가 격리(C09), 수행평가 실시간 동기화(C10), NEIS 시간표(C11), NEIS 급식(C12), 컴시간 엔진(C13), 학사일정(C14), PPT COM 컨트롤러(C15), HWP 투명 오버레이(C16), 화면 녹화/캡처(C17), 클라우드 드라이브 동기화(C18), DriveCast OTP 페어링(C19), Class Lite(C20), Teacher Lite(C21), MSIX 자동 업데이트(C22), 통합 온라인 인스톨러(C23), 교사용 언인스톨러(C24), TOTP 보안 엔진(C25) 전 항목 검증 통과(44개 E2E 테스트 100% 성공).
+
+---
+
 ## 🚀 [정식 릴리즈] Boardest v5.4.0 (2026-10-31)
 - **Windows 통합 온라인 설치 마법사 & 원격 설치 엔진 (`boardest-windows-installer.web.app`) 구축**:
   - 단일 온라인 설치 파일(`BoardestInstaller.cs`)로 통합하고, 실행 시 자신의 파일명(`boardest-class`, `boardest-teacher`, `boardest-cloud`)을 감지하여 각각 교실용, 교사용, 클라우드용 앱 설치 모드로 자동 진입하며 그 외 이름일 경우 3종 앱 선택 화면 표시.
@@ -103,7 +119,7 @@
 
 # 📜 Boardest Platform — Version Release & Change Log
 
-> **현재 시스템 버전**: **v5.0.10 (Boardest 5.0.10)** (App: v5.0.9 / Teacher: v5.0.9 / Lite: v5.0.9 / Web: v5.0.9)  
+> **현재 시스템 버전**: **v5.5.0 (Boardest 5.5.0+5500)** (App: v5.5.0+5500 / Teacher: v5.5.0+5500 / Lite: v5.5.0+5500 / Web: v5.5.0)  
 > *이 문서는 각 패치 및 메이저 업데이트 시 수행된 핵심 작업 내역을 종합 기록합니다.*
 
 ---

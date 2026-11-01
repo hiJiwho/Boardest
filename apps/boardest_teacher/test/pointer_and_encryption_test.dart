@@ -61,7 +61,7 @@ void main() {
       final encoder = ZipEncoder(password: password);
       final zipBytes = encoder.encode(archive);
       expect(zipBytes, isNotNull);
-      expect(zipBytes!.isNotEmpty, isTrue);
+      expect(zipBytes.isNotEmpty, isTrue);
 
       // Decrypt with correct password
       final decoder = ZipDecoder();
@@ -89,7 +89,7 @@ void main() {
       // Decrypt with WRONG password: decoding or reading content must fail
       final decoder = ZipDecoder();
       expect(() {
-        final decoded = decoder.decodeBytes(Uint8List.fromList(zipBytes!), password: 'wrongpassword');
+        final decoded = decoder.decodeBytes(Uint8List.fromList(zipBytes), password: 'wrongpassword');
         for (final f in decoded) {
           final _ = f.content;
         }

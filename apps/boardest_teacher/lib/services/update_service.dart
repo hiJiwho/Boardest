@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle, MethodChannel;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,7 +48,9 @@ class UpdateService {
   UpdateService._internal();
   static final instance = UpdateService._internal();
 
-  static const String defaultVersion = '5.4.3';
+  static const String defaultVersion = '5.5.0';
+  static const String defaultBuildNumber = '5500';
+  static const String defaultFullVersion = '5.5.0+5500';
   static const String _releasesApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases?per_page=30';
   static const String downloadPage = 'https://boardest-downloads.web.app';
@@ -85,19 +88,126 @@ class UpdateService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('bst_installed_version');
     } catch (_) {}
-    try {
-      final jsonStr = await rootBundle.loadString('version.json');
-      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-      final v = data['version'] as String?;
-      if (v != null && v.isNotEmpty) {
-        _resolvedVersion = v.trim();
+
+    // 1) On Android, try MethodChannel first to query native package version (versionName)
+    if (!kIsWeb && Platform.isAndroid) {
+      final channels = ['boardest/version', 'com.boardest/launch_args'];
+      for (final chName in channels) {
+        try {
+          final channel = MethodChannel(chName);
+          final res = await channel.invokeMethod<dynamic>('getAppVersion') ??
+              await channel.invokeMethod<dynamic>('getPackageInfo');
+          if (res is Map) {
+            final v = (res['versionName'] ?? res['version'])?.toString();
+            final b = (res['versionCode'] ?? res['buildNumber'])?.toString();
+            if (v != null && v.trim().isNotEmpty) {
+              final vTrim = v.trim();
+              _resolvedVersion = (b != null && b.trim().isNotEmpty) ? '$vTrim+$b' : vTrim;
+              debugPrint('[UpdateService] Resolved Android version from MethodChannel ($chName): $_resolvedVersion');
+              return;
+            }
+          } else if (res is String && res.trim().isNotEmpty) {
+            _resolvedVersion = res.trim();
+            debugPrint('[UpdateService] Resolved Android version from MethodChannel string ($chName): $_resolvedVersion');
+            return;
+          }
+        } catch (_) {}
       }
-    } catch (_) {}
+    }
+
+    // 2) Try PackageInfo.fromPlatform()
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final v = info.version.trim();
+      final b = info.buildNumber.trim();
+      if (v.isNotEmpty) {
+        _resolvedVersion = b.isNotEmpty ? '$v+$b' : v;
+        debugPrint('[UpdateService] Resolved version from PackageInfo: $_resolvedVersion');
+        return;
+      }
+    } catch (e) {
+      debugPrint('[UpdateService] PackageInfo lookup error: $e');
+    }
+
+    // 3) Try Windows MSIX executable path regex
+    if (!kIsWeb && Platform.isWindows) {
+      final match = RegExp(
+        r'jiwho\.boardest\.(?:teacher|bst|class-lite|overlay-panser)_([0-9.]+)_',
+        caseSensitive: false,
+      ).firstMatch(Platform.resolvedExecutable);
+      if (match?.group(1) != null) {
+        final v = match!.group(1)!;
+        final parts = v.split('.');
+        if (parts.length == 4 && parts[3] == '0') {
+          _resolvedVersion = '${parts[0]}.${parts[1]}.${parts[2]}';
+          return;
+        }
+        _resolvedVersion = v;
+        return;
+      }
+    }
+
+    // 4) Try version.json from rootBundle
+    for (final path in ['assets/version.json', 'version.json']) {
+      try {
+        final jsonStr = await rootBundle.loadString(path);
+        final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+        final v = (data['version'] as String?)?.trim();
+        final b = (data['build_number'] ?? data['buildNumber'])?.toString().trim();
+        if (v != null && v.isNotEmpty) {
+          _resolvedVersion = (b != null && b.isNotEmpty) ? '$v+$b' : v;
+          debugPrint('[UpdateService] Resolved version from $path: $_resolvedVersion');
+          return;
+        }
+      } catch (_) {}
+    }
+
+    // 5) Cache fallback
+    _resolvedVersion = defaultFullVersion;
   }
 
-  /// 4번째 자리를 제거하고 앞 3자리만 반환
+  /// 이전 다운로드된 임시 설치 파일 자동 삭제
+  static Future<void> cleanupOldUpdates() async {
+    if (kIsWeb) return;
+    try {
+      final dirsToClean = <Directory>[];
+
+      try {
+        final appSupport = await getApplicationSupportDirectory();
+        dirsToClean.add(Directory(p.join(appSupport.path, 'Updates')));
+      } catch (_) {}
+
+      try {
+        final tempDir = await getTemporaryDirectory();
+        dirsToClean.add(Directory(p.join(tempDir.path, 'Updates')));
+        dirsToClean.add(tempDir);
+      } catch (_) {}
+
+      for (final targetDir in dirsToClean) {
+        if (!targetDir.existsSync()) continue;
+        for (final entity in targetDir.listSync()) {
+          if (entity is File) {
+            final ext = p.extension(entity.path).toLowerCase();
+            final base = p.basename(entity.path).toLowerCase();
+            final isInstaller = ext == '.appx' || ext == '.msix' || ext == '.apk' || ext == '.exe' || ext == '.msi';
+            final isLegacyTemp = base.startsWith('boardest_') || base.startsWith('bst_');
+            if (isInstaller || isLegacyTemp) {
+              try {
+                entity.deleteSync();
+                debugPrint('[UpdateService] 🧹 Old installer package removed: ${entity.path}');
+              } catch (_) {}
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[UpdateService] cleanupOldUpdates error: $e');
+    }
+  }
+
+  /// 4번째 자리를 제거하고 앞 3자리만 반환 (빌드 번호 및 v 접두사 제거)
   static String normalizeVersion(String v) {
-    final clean = v.replaceFirst(RegExp(r'^v'), '').trim();
+    final clean = v.replaceFirst(RegExp(r'^[vV]'), '').split('+').first.trim();
     final parts = clean.split('.');
     if (parts.length >= 3) {
       return '${parts[0]}.${parts[1]}.${parts[2]}';
@@ -105,16 +215,34 @@ class UpdateService {
     return clean;
   }
 
-  static bool _isNewer(String target, String current) {
-    final t = target.split('.').map((v) => int.tryParse(v) ?? 0).toList();
-    final c = current.split('.').map((v) => int.tryParse(v) ?? 0).toList();
-    for (var i = 0; i < (t.length > c.length ? t.length : c.length); i++) {
-      final tv = i < t.length ? t[i] : 0;
-      final cv = i < c.length ? c[i] : 0;
+  static bool isNewerVersion(String target, String current) {
+    final tClean = target.replaceFirst(RegExp(r'^[vV]'), '').trim();
+    final cClean = current.replaceFirst(RegExp(r'^[vV]'), '').trim();
+
+    final tParts = tClean.split('+');
+    final cParts = cClean.split('+');
+
+    final tSem = tParts.first.split('.').map((v) => int.tryParse(v) ?? 0).toList();
+    final cSem = cParts.first.split('.').map((v) => int.tryParse(v) ?? 0).toList();
+
+    final maxLen = tSem.length > cSem.length ? tSem.length : cSem.length;
+    for (var i = 0; i < maxLen; i++) {
+      final tv = i < tSem.length ? tSem[i] : 0;
+      final cv = i < cSem.length ? cSem[i] : 0;
       if (tv != cv) return tv > cv;
     }
+
+    if (tParts.length > 1 && cParts.length > 1) {
+      final tb = int.tryParse(tParts[1].trim()) ?? 0;
+      final cb = int.tryParse(cParts[1].trim()) ?? 0;
+      if (tb != cb) return tb > cb;
+    }
+
     return false;
   }
+
+  static bool _isNewer(String target, String current) => isNewerVersion(target, current);
+  static bool _isNewerVersion(String target, String current) => isNewerVersion(target, current);
 
   /// 앱 삭제 (안드로이드 OS 제거 / 윈도우 앱 및 기능 설정 실행)
   static Future<void> uninstallApp([BuildContext? context]) async {
@@ -191,6 +319,7 @@ class UpdateService {
     }
 
     await initVersion();
+    await cleanupOldUpdates();
 
     _checking = true;
     _lastSilentCheckTime = DateTime.now();
@@ -211,7 +340,7 @@ class UpdateService {
       Map<String, dynamic>? latestReleaseData;
 
       for (final r in releases) {
-        final tag = (r['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^v'), '').trim();
+        final tag = (r['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^[vV]'), '').trim();
         if (tag.isEmpty) continue;
         latestFullTag ??= tag;
         latestReleaseData ??= r as Map<String, dynamic>;

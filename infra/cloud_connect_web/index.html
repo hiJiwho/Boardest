@@ -152,6 +152,9 @@
   </div>
 
   <script>
+    if (window.location.pathname.startsWith('/edit')) {
+      window.location.replace(`https://boardest-teacher-oauth.web.app/edit${window.location.search}`);
+    }
     const RTDB_URL = "https://jiwhosboardest-default-rtdb.firebaseio.com";
     const FIRESTORE_BASE = "https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents";
     const PROOF_SALT = "bst_passkey_v2_hmac_guard";
@@ -196,8 +199,12 @@
       }
     } catch (_) {}
 
-    const teacherName = params.get('teacher') || savedTeacherName || '선생님';
-    let incomingToken = params.get('token') || savedToken || '';
+    const teacherName = params.get('teacherName') || params.get('teacher') || savedTeacherName || '선생님';
+    let incomingToken = params.get('token') || params.get('accessToken') || savedToken || '';
+    const incomingEmail = params.get('email') || '';
+    const incomingRefreshToken = params.get('refreshToken') || '';
+    const incomingFolderId = params.get('folderId') || params.get('bstCloudFolderId') || '';
+    const incomingTotpSecret = params.get('totpSecret') || params.get('totp') || '';
     const timestampStr = params.get('t') || params.get('time') || '';
     const reqTimestamp = timestampStr ? parseInt(timestampStr, 10) : null;
     let isExpired = false;
@@ -483,7 +490,9 @@
               }
             } catch(_) {}
           } else {
-            throw new Error("등록된 교사 인증 토큰이 없습니다. 먼저 교사용 앱의 [패스키 등록] QR을 이 스마트폰으로 1회 스캔해주세요.");
+            status.innerHTML = `등록된 교사 토큰이 없습니다.<br><a href="https://boardest-teacher-oauth.web.app?return_url=${encodeURIComponent(window.location.href)}" class="btn btn-purple" style="margin-top:12px;padding:12px 18px;text-decoration:none;display:inline-block;">🔑 교사 계정 1초 로그인 후 전자칠판 승인</a>`;
+            btn.disabled = false;
+            return;
           }
 
           const proof = await sha256Hex(`${key}:${qrChallenge}:${tokenToSend}:${PROOF_SALT}`);
@@ -495,6 +504,10 @@
             teacherName: teacherName,
             accessToken: tokenToSend,
             token: tokenToSend,
+            refreshToken: incomingRefreshToken || '',
+            email: incomingEmail || '',
+            schoolId: params.get('schoolId') || '',
+            schoolName: school || '',
             proof: proof,
             timestamp: Date.now()
           };
@@ -530,10 +543,10 @@
         try {
           let tokenToSend = incomingToken;
           let teacherNameToSend = teacherName;
-          let emailToSend = '';
-          let refreshTokenToSend = '';
-          let folderIdToSend = '';
-          let totpSecretToSend = '';
+          let emailToSend = incomingEmail || '';
+          let refreshTokenToSend = incomingRefreshToken || '';
+          let folderIdToSend = incomingFolderId || '';
+          let totpSecretToSend = incomingTotpSecret || '';
 
           // 1. Fetch token from RTDB vaults
           if (!tokenToSend && teacherNameToSend && teacherNameToSend !== '선생님') {

@@ -39,12 +39,23 @@ class _MonthlyMealCalendarDialogState extends State<MonthlyMealCalendarDialog> {
   static const Map<int, String> _allergyLabels = {
     1: '1.난류',
     2: '2.우유',
+    3: '3.메밀',
+    4: '4.땅콩',
     5: '5.대두',
     6: '6.밀',
-    9: '9.토마토',
+    7: '7.고등어',
+    8: '8.게',
+    9: '9.새우',
     10: '10.돼지',
+    11: '11.복숭아',
+    12: '12.토마토',
+    13: '13.아황산',
+    14: '14.호두',
     15: '15.닭',
     16: '16.소',
+    17: '17.오징어',
+    18: '18.조개',
+    19: '19.잣',
   };
 
   @override
@@ -138,34 +149,64 @@ class _MonthlyMealCalendarDialogState extends State<MonthlyMealCalendarDialog> {
               const SizedBox(height: 16),
               ...info.dishes.map((dish) {
                 final isMatch = _selectedAllergyFilter != null &&
-                    dish.allergies.any((a) => a.contains('$_selectedAllergyFilter'));
+                    dish.matchesAllergy(_selectedAllergyFilter);
                 return Container(
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: isMatch ? const Color(0xFFFFD166).withOpacity(0.18) : Colors.white.withOpacity(0.04),
                     borderRadius: BorderRadius.circular(8),
-                    border: isMatch ? Border.all(color: const Color(0xFFFFD166), width: 1.2) : null,
+                    border: isMatch ? Border.all(color: const Color(0xFFFFD166), width: 1.5) : null,
                   ),
                   child: Row(
                     children: [
+                      if (isMatch)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 6),
+                          child: Text('⚠️', style: TextStyle(fontSize: 14)),
+                        ),
                       Expanded(
                         child: Text(
                           dish.name,
                           style: TextStyle(
                             fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: isMatch ? FontWeight.bold : FontWeight.w600,
                             color: isMatch ? const Color(0xFFFFD166) : Colors.white,
                           ),
                         ),
                       ),
                       if (dish.allergies.isNotEmpty)
-                        Text(
-                          '알레르기: ${dish.allergies.join(", ")}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isMatch ? const Color(0xFFFFD166) : Colors.white54,
-                          ),
+                        Wrap(
+                          spacing: 4,
+                          children: dish.allergies.map((a) {
+                            final isBadgeMatch = _selectedAllergyFilter != null &&
+                                dish.matchesAllergy(_selectedAllergyFilter) &&
+                                (a == MealDayInfo.allergyBadgeShortMap[_selectedAllergyFilter] ||
+                                    a == MealDayInfo.allergyCodeMap[_selectedAllergyFilter] ||
+                                    a.contains(MealDayInfo.allergyBadgeShortMap[_selectedAllergyFilter] ?? ''));
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isBadgeMatch
+                                    ? const Color(0xFFFFD166)
+                                    : const Color(0xFF2EC4B6).withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: isBadgeMatch
+                                      ? const Color(0xFFFFD166)
+                                      : const Color(0xFF2EC4B6).withOpacity(0.4),
+                                ),
+                              ),
+                              child: Text(
+                                a,
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: isBadgeMatch ? Colors.black : const Color(0xFF2EC4B6),
+                                ),
+                              ),
+                            );
+                          }).toList(),
                         ),
                     ],
                   ),
@@ -397,7 +438,7 @@ class _MonthlyMealCalendarDialogState extends State<MonthlyMealCalendarDialog> {
                       final hasMeal = dishes.isNotEmpty;
 
                       final hasAllergyMatch = _selectedAllergyFilter != null &&
-                          dishes.any((d) => d.allergies.any((a) => a.contains('$_selectedAllergyFilter')));
+                          (dayMeal?.hasAllergy(_selectedAllergyFilter) ?? false);
 
                       Color numColor = Colors.white;
                       if (isSunday) numColor = const Color(0xFFFF6B6B);
@@ -410,7 +451,7 @@ class _MonthlyMealCalendarDialogState extends State<MonthlyMealCalendarDialog> {
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             color: hasAllergyMatch
-                                ? const Color(0xFFFFD166).withOpacity(0.12)
+                                ? const Color(0xFFFFD166).withOpacity(0.2)
                                 : (isToday
                                     ? const Color(0xFF2EC4B6).withOpacity(0.1)
                                     : (isWeekend
@@ -418,12 +459,12 @@ class _MonthlyMealCalendarDialogState extends State<MonthlyMealCalendarDialog> {
                                         : Colors.white.withOpacity(0.035))),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: isToday
-                                  ? const Color(0xFF2EC4B6)
-                                  : (hasAllergyMatch
-                                      ? const Color(0xFFFFD166)
+                              color: hasAllergyMatch
+                                  ? const Color(0xFFFFD166)
+                                  : (isToday
+                                      ? const Color(0xFF2EC4B6)
                                       : Colors.white.withOpacity(0.08)),
-                              width: isToday ? 1.8 : 0.8,
+                              width: (isToday || hasAllergyMatch) ? 1.8 : 0.8,
                             ),
                           ),
                           child: Column(
@@ -432,13 +473,21 @@ class _MonthlyMealCalendarDialogState extends State<MonthlyMealCalendarDialog> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    '$dayNum',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: isToday ? FontWeight.w900 : FontWeight.bold,
-                                      color: isToday ? const Color(0xFF2EC4B6) : numColor,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        '$dayNum',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: (isToday || hasAllergyMatch) ? FontWeight.w900 : FontWeight.bold,
+                                          color: isToday ? const Color(0xFF2EC4B6) : (hasAllergyMatch ? const Color(0xFFFFD166) : numColor),
+                                        ),
+                                      ),
+                                      if (hasAllergyMatch) ...[
+                                        const SizedBox(width: 4),
+                                        const Icon(Icons.warning_amber_rounded, size: 13, color: Color(0xFFFFD166)),
+                                      ],
+                                    ],
                                   ),
                                   if (isToday)
                                     Container(
@@ -472,8 +521,8 @@ class _MonthlyMealCalendarDialogState extends State<MonthlyMealCalendarDialog> {
                                         itemBuilder: (_, dIdx) {
                                           final d = dishes[dIdx];
                                           final match = _selectedAllergyFilter != null &&
-                                              d.allergies.any((a) => a.contains('$_selectedAllergyFilter'));
-                                          return Text(
+                                              d.matchesAllergy(_selectedAllergyFilter);
+                                          final dishText = Text(
                                             d.name,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
@@ -482,10 +531,29 @@ class _MonthlyMealCalendarDialogState extends State<MonthlyMealCalendarDialog> {
                                               height: 1.25,
                                               fontWeight: match ? FontWeight.w900 : FontWeight.w500,
                                               color: match
-                                                  ? const Color(0xFFFFD166)
+                                                  ? const Color(0xFF1E1B18)
                                                   : (isToday ? Colors.white : const Color(0xFFCBD5E1)),
                                             ),
                                           );
+                                          if (match) {
+                                            return Container(
+                                              margin: const EdgeInsets.symmetric(vertical: 0.5),
+                                              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 0.5),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFFEE55),
+                                                borderRadius: BorderRadius.circular(3),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: const Color(0xFFFFEE55).withOpacity(0.5),
+                                                    blurRadius: 4,
+                                                    spreadRadius: 1,
+                                                  ),
+                                                ],
+                                              ),
+                                              child: dishText,
+                                            );
+                                          }
+                                          return dishText;
                                         },
                                       )
                                     : (isWeekend

@@ -57,12 +57,16 @@ class _TeacherTimetablePopupDialogState
 
   Future<void> _loadData() async {
     try {
-      final s = await _storage.getSettings() ?? AppSettings();
+      final s = await _storage.getSettings();
       _settings = s;
 
       if (s.selectedSchool != null) {
         final res = await _comcigan.getTimetable(s.selectedSchool!.code);
         _timetableResult = res;
+      } else {
+        _timetableResult = TimetableResult.generateDemo(
+          s.selectedTeacherName.isNotEmpty ? s.selectedTeacherName : '김윤리',
+        );
       }
 
       if (mounted) {
@@ -72,6 +76,11 @@ class _TeacherTimetablePopupDialogState
       if (mounted) {
         setState(() {
           _error = '시간표 데이터를 불러오지 못했습니다: $e';
+          _timetableResult ??= TimetableResult.generateDemo(
+            _settings?.selectedTeacherName.isNotEmpty == true
+                ? _settings!.selectedTeacherName
+                : '김윤리',
+          );
           _loading = false;
         });
       }
@@ -457,8 +466,9 @@ class _TeacherTimetablePopupDialogState
   }
 
   Widget _buildTimetableGrid(double s) {
-    final days = ['월', '화', '수', '목', '금'];
-    final currentDayIndex = _now.weekday; // 1: Mon ~ 5: Fri
+    final hasWeekendLessons = _timetableResult?.lessons.any((l) => l.weekday >= 6) ?? false;
+    final days = hasWeekendLessons ? ['월', '화', '수', '목', '금', '토'] : ['월', '화', '수', '목', '금'];
+    final currentDayIndex = _now.weekday; // 1: Mon ~ 7: Sun
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -474,7 +484,7 @@ class _TeacherTimetablePopupDialogState
             Row(
               children: [
                 _buildHeaderCell('교시', 50 * s, s),
-                for (int i = 0; i < 5; i++)
+                for (int i = 0; i < days.length; i++)
                   _buildHeaderCell(
                     days[i],
                     120 * s,
@@ -494,7 +504,7 @@ class _TeacherTimetablePopupDialogState
                 return Row(
                   children: [
                     _buildHeaderCell(pLabel, 50 * s, s),
-                    for (int d = 1; d <= 5; d++)
+                    for (int d = 1; d <= days.length; d++)
                       _buildLessonCell(d, p, 120 * s, s),
                   ],
                 );

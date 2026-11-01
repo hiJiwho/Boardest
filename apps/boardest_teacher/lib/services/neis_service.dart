@@ -12,8 +12,11 @@ class NeisService {
   // In-memory cache for resolved school codes: schoolName -> { officeCode, schoolCode }
   static final Map<String, Map<String, String>> _schoolCodesCache = {};
 
-  // In-memory cache for meal string: 'schoolName-dateStr' -> String
-  static final Map<String, String> _mealDayMemoryCache = {};
+  // In-memory cache for meal info: 'schoolName-dateStr' -> MealDayInfo
+  static final Map<String, MealDayInfo> _mealInfoMemoryCache = {};
+
+  // In-memory cache for month meals: 'schoolName-year-month' -> Map<int, MealDayInfo>
+  static final Map<String, Map<int, MealDayInfo>> _monthMealsMemoryCache = {};
 
   /// Normalizes school names into search candidates
   static List<String> _getSchoolNameCandidates(String schoolName) {
@@ -24,11 +27,11 @@ class NeisService {
     for (final name in [stripped, raw]) {
       if (name.isEmpty) continue;
       if (name.endsWith('초')) {
-        candidates.add('${name}등학교');
+        candidates.add('$name등학교');
       } else if (name.endsWith('중')) {
-        candidates.add('${name}학교');
+        candidates.add('$name학교');
       } else if (name.endsWith('고')) {
-        candidates.add('${name}등학교');
+        candidates.add('$name등학교');
       } else if (name.endsWith('초등학교')) {
         candidates.add(name.substring(0, name.length - 2));
       } else if (name.endsWith('중학교')) {
@@ -95,34 +98,46 @@ class NeisService {
     return null;
   }
 
-  /// Fetches lunch meal menu for a specific date (YYYYMMDD) and cleans allergy indexes
-  Future<String> fetchTodayMeal(String schoolName, DateTime date) async {
+  /// Fetches lunch meal menu as structured MealDayInfo with allergy annotations
+  Future<MealDayInfo> fetchMealDayInfo(String schoolName, DateTime date) async {
+    if (schoolName == 'Demo' || schoolName.toLowerCase().contains('demo') || schoolName.contains('데모')) {
+      return MealDayInfo.generateDemo(date);
+    }
+
     final year = date.year.toString();
     final month = date.month.toString().padLeft(2, '0');
     final day = date.day.toString().padLeft(2, '0');
     final dateStr = '$year$month$day';
     final cacheKey = '$schoolName-$dateStr';
 
-    if (_mealDayMemoryCache.containsKey(cacheKey)) {
-      return _mealDayMemoryCache[cacheKey]!;
+    // 1) In-memory cache check
+    if (_mealInfoMemoryCache.containsKey(cacheKey)) {
+      return _mealInfoMemoryCache[cacheKey]!;
     }
 
     // Helper to read offline persistent cache
-    Future<String?> loadOfflineCache() async {
+    Future<MealDayInfo?> loadOfflineCache() async {
       try {
         final prefs = await SharedPreferences.getInstance();
-        final raw = prefs.getString('bst_meal_today_$cacheKey');
-        if (raw != null && raw.isNotEmpty) return raw;
+        final raw = prefs.getString('bst_meal_info_$cacheKey');
+        if (raw != null && raw.isNotEmpty) {
+          final decoded = json.decode(raw);
+          if (decoded is Map<String, dynamic>) {
+            final info = MealDayInfo.fromJson(decoded);
+            _mealInfoMemoryCache[cacheKey] = info;
+            return info;
+          }
+        }
       } catch (_) {}
       return null;
     }
 
     // Helper to save offline persistent cache
-    void saveOfflineCache(String text) async {
+    void saveOfflineCache(MealDayInfo info) async {
       try {
-        _mealDayMemoryCache[cacheKey] = text;
+        _mealInfoMemoryCache[cacheKey] = info;
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('bst_meal_today_$cacheKey', text);
+        await prefs.setString('bst_meal_info_$cacheKey', json.encode(info.toJson()));
       } catch (_) {}
     }
 
@@ -130,7 +145,7 @@ class NeisService {
     if (codes == null) {
       final cached = await loadOfflineCache();
       if (cached != null) return cached;
-      return '학교 기본 정보를 나이스 API에서 찾을 수 없습니다.';
+      return MealDayInfo(date: date, dishes: [], footnotes: ['학교 기본 정보를 찾을 수 없습니다.']);
     }
 
     final officeCode = codes['officeCode']!;
@@ -182,7 +197,7 @@ class NeisService {
       if (rows.isEmpty) {
         final cached = await loadOfflineCache();
         if (cached != null) return cached;
-        return '오늘 등록된 급식 메뉴가 없습니다.';
+        return MealDayInfo(date: date, dishes: [], footnotes: ['오늘 등록된 급식 메뉴가 없습니다.']);
       }
 
       final mealRow = (rows.firstWhere(
@@ -191,22 +206,32 @@ class NeisService {
       )) as Map<String, dynamic>;
 
       final rawDdish = mealRow['DDISH_NM']?.toString() ?? '';
-      final cleaned = _cleanMealMenu(rawDdish);
-      saveOfflineCache(cleaned);
-      return cleaned;
+      final rawCal = (mealRow['CAL_INFO'] as String? ?? '').replaceAll('Kcal', 'kcal').trim();
+      final info = MealDayInfo.fromNeisRaw(date, rawDdish, calories: rawCal);
+      saveOfflineCache(info);
+      return info;
     } catch (_) {
       final cached = await loadOfflineCache();
       if (cached != null) return cached;
-      return '급식 정보를 받아오는 중 오류가 발생했습니다.';
+      return MealDayInfo(date: date, dishes: [], footnotes: ['급식 정보를 불러오는 중 일시적 오류가 발생했습니다.']);
     }
   }
 
+  /// Fetches lunch meal menu for a specific date (YYYYMMDD) and formats with allergy badges
+  Future<String> fetchTodayMeal(String schoolName, DateTime date) async {
+    final info = await fetchMealDayInfo(schoolName, date);
+    if (info.dishes.isEmpty) {
+      return info.footnotes.isNotEmpty ? info.footnotes.first : '오늘 등록된 급식 메뉴가 없습니다.';
+    }
+    return info.dishes.map((d) => '${d.name} ${d.allergyDisplay}'.trim()).join('\n');
+  }
+
   /// Cleans HTML breaks and strips allergy index numbers (e.g. "(1.5.13.)")
-  String _cleanMealMenu(String rawMenu) {
+  static String cleanMealMenu(String rawMenu) {
     if (rawMenu.isEmpty) return '급식 메뉴가 비어 있습니다.';
 
     var cleaned = rawMenu.replaceAll(RegExp(r'<br\s*/?>'), '\n');
-    final RegExp allergyRegExp = RegExp(r'\([0-9. \t\n]+\)');
+    final RegExp allergyRegExp = RegExp(r'\([0-9. \t\n*]+\)');
     cleaned = cleaned.replaceAll(allergyRegExp, '');
 
     final lines = cleaned
@@ -217,7 +242,7 @@ class NeisService {
     return lines.join('\n');
   }
 
-  /// Fetches lunch meals for an entire month
+  /// Fetches lunch meals for an entire month with persistent offline cache
   Future<Map<int, MealDayInfo>> fetchMonthMeals(String schoolName, int year, int month) async {
     if (schoolName == 'Demo' || schoolName.toLowerCase().contains('demo') || schoolName.contains('데모')) {
       final Map<int, MealDayInfo> map = {};
@@ -229,8 +254,51 @@ class NeisService {
       return map;
     }
 
+    final cacheKey = '$schoolName-$year-$month';
+    if (_monthMealsMemoryCache.containsKey(cacheKey)) {
+      return _monthMealsMemoryCache[cacheKey]!;
+    }
+
+    // Helper to read offline persistent monthly cache
+    Future<Map<int, MealDayInfo>?> loadOfflineMonthCache() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString('bst_month_meals_$cacheKey');
+        if (raw != null && raw.isNotEmpty) {
+          final decoded = json.decode(raw);
+          if (decoded is Map) {
+            final Map<int, MealDayInfo> restored = {};
+            decoded.forEach((key, val) {
+              final day = int.tryParse(key.toString());
+              if (day != null && val is Map<String, dynamic>) {
+                restored[day] = MealDayInfo.fromJson(val);
+              }
+            });
+            if (restored.isNotEmpty) {
+              _monthMealsMemoryCache[cacheKey] = restored;
+              return restored;
+            }
+          }
+        }
+      } catch (_) {}
+      return null;
+    }
+
+    // Helper to save offline persistent monthly cache
+    void saveOfflineMonthCache(Map<int, MealDayInfo> map) async {
+      try {
+        _monthMealsMemoryCache[cacheKey] = map;
+        final prefs = await SharedPreferences.getInstance();
+        final encodable = map.map((k, v) => MapEntry(k.toString(), v.toJson()));
+        await prefs.setString('bst_month_meals_$cacheKey', json.encode(encodable));
+      } catch (_) {}
+    }
+
     final codes = await _resolveSchoolCodes(schoolName);
-    if (codes == null) return {};
+    if (codes == null) {
+      final cached = await loadOfflineMonthCache();
+      return cached ?? {};
+    }
 
     final officeCode = codes['officeCode']!;
     final schoolCode = codes['schoolCode']!;
@@ -298,9 +366,17 @@ class NeisService {
           }
         }
       }
-      return map;
+
+      if (map.isNotEmpty) {
+        saveOfflineMonthCache(map);
+        return map;
+      }
+
+      final cached = await loadOfflineMonthCache();
+      return cached ?? {};
     } catch (_) {
-      return {};
+      final cached = await loadOfflineMonthCache();
+      return cached ?? {};
     }
   }
 

@@ -62,6 +62,10 @@ import 'package:path/path.dart' as p;
 import '../services/bst_save_service.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_acrylic/flutter_acrylic.dart' as acrylic;
+import '../models/lesson_tools.dart';
+import '../widgets/classroom_dice_overlay.dart';
+import '../widgets/spotlight_magnifier_overlay.dart';
+import 'package:bst_pen/bst_pen.dart';
 
 /// Boardest Teacher View
 /// - 좌측(flex 2): 오늘의 시간표 / 클릭 시 주간 시간표 격자 토글. 담임인 경우 하단에 담임 학급 상태 및 주간 시간표 전환 제공.
@@ -173,8 +177,9 @@ class _TeacherViewState extends State<TeacherView> {
   // 플로팅 타이머 상태
   bool _showMiniTimer = false;
   int _timerSecondsElapsed = 0;
-  int _timerTargetSeconds = 0;
+  int _timerTargetSeconds = 300;
   bool _timerRunning = false;
+  bool _timerIsStopwatch = false;
   Timer? _miniTimerInstance;
   // 우측 상단 기본 위치 (build 시 화면 크기 기준으로 조정)
   Offset _timerWindowOffset = const Offset(-1, -1); // -1: unset, build 시 초기화
@@ -186,12 +191,20 @@ class _TeacherViewState extends State<TeacherView> {
   String _calcExpression = '';
   String _calcResult = '';
 
-  // 플로팅 발표자 상태
+  // 플로팅 발표자 상태 (중복 방지 사이클)
   bool _showMiniPicker = false;
   Offset _pickerWindowOffset = const Offset(-1, -1);
   int _pickerMaxStudents = 30;
   int? _pickerWinner;
   bool _pickerRolling = false;
+  final Set<int> _pickerDrawnStudents = {};
+
+  // 플로팅 주사위 상태
+  bool _showMiniDice = false;
+  Offset _diceWindowOffset = const Offset(-1, -1);
+
+  // 스포트라이트 상태
+  bool _showSpotlight = false;
 
   // 인라인 보드 뷰 상태
   String? _activeInlineView; // 'whiteboard', 'pdf', 'website', null
@@ -1512,11 +1525,86 @@ class _TeacherViewState extends State<TeacherView> {
       return;
     }
   }
-  void _toggleMiniTimer() {}
-  void _pauseMiniTimer() {}
-  void _startMiniTimer() {}
-  void _resetMiniTimer() {}
-  void _adjustMiniTimer(int seconds) {}
+  void _toggleMiniTimer() {
+    setState(() {
+      _showMiniTimer = !_showMiniTimer;
+      if (_showMiniTimer && _timerWindowOffset.dx < 0) {
+        final sz = MediaQuery.of(context).size;
+        _timerWindowOffset = Offset(sz.width - 280 * _settings.scaleFactor, 60 * _settings.scaleFactor);
+      }
+    });
+  }
+
+  void _startMiniTimer() {
+    if (_timerRunning) return;
+    _miniTimerInstance?.cancel();
+    setState(() {
+      _timerRunning = true;
+    });
+    _miniTimerInstance = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        if (_timerIsStopwatch) {
+          _timerSecondsElapsed++;
+        } else {
+          if (_timerTargetSeconds > 0) {
+            _timerTargetSeconds--;
+            if (_timerTargetSeconds == 0) {
+              _timerRunning = false;
+              timer.cancel();
+              _playTimerAlarm();
+            }
+          } else {
+            _timerRunning = false;
+            timer.cancel();
+          }
+        }
+      });
+    });
+  }
+
+  void _pauseMiniTimer() {
+    _miniTimerInstance?.cancel();
+    setState(() {
+      _timerRunning = false;
+    });
+  }
+
+  void _resetMiniTimer() {
+    _miniTimerInstance?.cancel();
+    setState(() {
+      _timerRunning = false;
+      if (_timerIsStopwatch) {
+        _timerSecondsElapsed = 0;
+      } else {
+        _timerTargetSeconds = 300;
+      }
+    });
+  }
+
+  void _adjustMiniTimer(int seconds) {
+    setState(() {
+      if (_timerIsStopwatch) {
+        _timerSecondsElapsed = (_timerSecondsElapsed + seconds).clamp(0, 36000);
+      } else {
+        _timerTargetSeconds = (_timerTargetSeconds + seconds).clamp(0, 7200);
+      }
+    });
+  }
+
+  void _playTimerAlarm() {
+    try {
+      SystemSound.play(SystemSoundType.alert);
+      Future.delayed(const Duration(milliseconds: 300), () {
+        try {
+          SystemSound.play(SystemSoundType.alert);
+        } catch (_) {}
+      });
+    } catch (_) {}
+  }
   Future<void> _enterMiniMode() async {
     if (kIsWeb) {
       _triggerWebPip();
@@ -1814,13 +1902,50 @@ class _TeacherViewState extends State<TeacherView> {
     }
   }
   void _openUsbFormat() {}
-  void _openRandomPicker() {}
+  void _openRandomPicker() {
+    setState(() {
+      _showMiniPicker = !_showMiniPicker;
+      if (_showMiniPicker && _pickerWindowOffset.dx < 0) {
+        final sz = MediaQuery.of(context).size;
+        _pickerWindowOffset = Offset(sz.width - 300 * _settings.scaleFactor, 60 * _settings.scaleFactor);
+      }
+    });
+  }
+
+  void _openDice() {
+    setState(() {
+      _showMiniDice = !_showMiniDice;
+      if (_showMiniDice && _diceWindowOffset.dx < 0) {
+        final sz = MediaQuery.of(context).size;
+        _diceWindowOffset = Offset(sz.width - 340 * _settings.scaleFactor, 120 * _settings.scaleFactor);
+      }
+    });
+  }
+
+  void _openSpotlight() {
+    setState(() {
+      _showSpotlight = !_showSpotlight;
+    });
+  }
   void _openWhiteboard() {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => BoardestPenView(
           filePath: '',
           scaleFactor: _settings.scaleFactor,
+        ),
+      ),
+    );
+  }
+  void _openSplitBoard() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          body: SplitBoardView(
+            scaleFactor: _settings.scaleFactor,
+            showHeaderToolbar: true,
+            onClose: () => Navigator.of(context).pop(),
+          ),
         ),
       ),
     );
@@ -2631,6 +2756,7 @@ class _TeacherViewState extends State<TeacherView> {
       _timerWindowOffset = Offset(sz.width - 280 * scale, 60 * scale);
       _calculatorWindowOffset = Offset(sz.width - 320 * scale, 60 * scale);
       _pickerWindowOffset = Offset(sz.width - 300 * scale, 60 * scale);
+      _diceWindowOffset = Offset(sz.width - 340 * scale, 120 * scale);
     }
 
     if (_isLoading) {
@@ -2826,6 +2952,17 @@ class _TeacherViewState extends State<TeacherView> {
               if (_showMiniTimer) _buildFloatingTimer(scale),
               if (_showMiniCalculator) _buildMiniCalculatorWindow(scale),
               if (_showMiniPicker) _buildMiniPickerWindow(scale),
+              if (_showMiniDice)
+                ClassroomDiceOverlay(
+                  scale: scale,
+                  initialOffset: _diceWindowOffset,
+                  onClose: () => setState(() => _showMiniDice = false),
+                ),
+              if (_showSpotlight)
+                SpotlightMagnifierOverlay(
+                  scale: scale,
+                  onClose: () => setState(() => _showSpotlight = false),
+                ),
             ],
           ),
         ),
@@ -4812,6 +4949,14 @@ class _TeacherViewState extends State<TeacherView> {
           onBack: onBack,
         );
         break;
+      case 'split_board':
+        boardWidget = SplitBoardView(
+          key: const ValueKey('split_board'),
+          scaleFactor: s,
+          showHeaderToolbar: true,
+          onClose: onBack,
+        );
+        break;
       default:
         boardWidget = const SizedBox.shrink();
     }
@@ -5600,6 +5745,8 @@ class _TeacherViewState extends State<TeacherView> {
         return Icons.note_alt_rounded;
       case 'whiteboard':
         return Icons.draw_rounded;
+      case 'split_board':
+        return Icons.splitscreen_rounded;
       case 'document_board':
         return Icons.description_rounded;
       case 'website_board':
@@ -5636,6 +5783,10 @@ class _TeacherViewState extends State<TeacherView> {
         return Icons.folder_open_rounded;
       case 'timetable':
         return Icons.calendar_view_week_rounded;
+      case 'dice':
+        return Icons.casino_rounded;
+      case 'spotlight':
+        return Icons.highlight_rounded;
       case 'saved_ink':
         return Icons.border_color_rounded;
       case 'app_drawer':
@@ -5664,10 +5815,16 @@ class _TeacherViewState extends State<TeacherView> {
         return _openCalculator;
       case 'picker':
         return _openRandomPicker;
+      case 'dice':
+        return _openDice;
+      case 'spotlight':
+        return _openSpotlight;
             case 'school_calendar':
         return _openSchoolCalendarDialog;
       case 'whiteboard':
         return _openWhiteboard;
+      case 'split_board':
+        return _openSplitBoard;
       case 'document_board':
         return _openPdfBoard;
       case 'website_board':
@@ -6463,11 +6620,12 @@ class _TeacherViewState extends State<TeacherView> {
       {'id': 'timer',           'name': '타이머'},
       {'id': 'calculator',      'name': '계산기'},
       {'id': 'picker',          'name': '발표자'},
+      {'id': 'dice',            'name': '주사위'},
       {'id': 'saved_ink',       'name': '판서보관함'},
-      {'id': 'app_drawer',      'name': '앱서랍'},
     ];
     final List<Map<String, String>> col2Tools = [
       {'id': 'whiteboard',      'name': '기본판서'},
+      {'id': 'split_board',     'name': '분할판서'},
       {'id': 'document_board',  'name': '문서판서'},
       {'id': 'boardbook',       'name': 'BoardBook'},
       {'id': 'canva_board',     'name': 'HTML Present'},
@@ -6475,11 +6633,12 @@ class _TeacherViewState extends State<TeacherView> {
       {'id': 'browser_board',   'name': '웹브라우저'},
     ];
     final List<Map<String, String>> col3Tools = [
+      {'id': 'spotlight',       'name': '스포트라이트'},
       {'id': 'bst_cloud',       'name': 'BST Cloud'},
       {'id': 'meal_call',       'name': '급식문자'},
       {'id': 'school_calendar', 'name': '학사달력'},
       {'id': 'message_box',     'name': '학급쪽지'},
-            {'id': 'settings',        'name': '설정'},
+      {'id': 'settings',        'name': '설정'},
     ];
 
     return Container(
@@ -6666,9 +6825,10 @@ class _TeacherViewState extends State<TeacherView> {
   // ── 플로팅 미니 타이머 오버레이 UI ─────────────────────────
 
   Widget _buildFloatingTimer(double scale) {
+    final int displaySecs = _timerIsStopwatch ? _timerSecondsElapsed : _timerTargetSeconds;
     final String timeText =
-        '${(_timerSecondsElapsed ~/ 60).toString().padLeft(2, '0')}:${(_timerSecondsElapsed % 60).toString().padLeft(2, '0')}';
-    final accentColor = const Color(0xFFFF8906);
+        '${(displaySecs ~/ 60).toString().padLeft(2, '0')}:${(displaySecs % 60).toString().padLeft(2, '0')}';
+    final accentColor = _timerIsStopwatch ? const Color(0xFF00F5D4) : const Color(0xFFFF8906);
 
     return Positioned(
       left: _timerWindowOffset.dx,
@@ -6683,12 +6843,12 @@ class _TeacherViewState extends State<TeacherView> {
           elevation: 16,
           color: Colors.transparent,
           child: Container(
-            width: 250 * scale,
+            width: 260 * scale,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF16161A).withOpacity(0.95),
+              color: const Color(0xFF16161A).withValues(alpha: 0.95),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
+              border: Border.all(color: accentColor.withValues(alpha: 0.3)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -6700,13 +6860,13 @@ class _TeacherViewState extends State<TeacherView> {
                     Row(
                       children: [
                         Icon(
-                          Icons.timer_rounded,
+                          _timerIsStopwatch ? Icons.timer_outlined : Icons.timer_rounded,
                           color: accentColor,
                           size: 16 * scale,
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          '타이머',
+                          _timerIsStopwatch ? '스톱워치' : '타이머',
                           style: GoogleFonts.notoSansKr(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -6715,19 +6875,62 @@ class _TeacherViewState extends State<TeacherView> {
                         ),
                       ],
                     ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.close,
-                        color: Colors.white38,
-                        size: 16,
-                      ),
-                      onPressed: _toggleMiniTimer,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
+                    Row(
+                      children: [
+                        // 모드 전환
+                        IconButton(
+                          icon: Icon(
+                            _timerIsStopwatch ? Icons.alarm_rounded : Icons.timer_outlined,
+                            color: Colors.white70,
+                            size: 16 * scale,
+                          ),
+                          tooltip: _timerIsStopwatch ? '타이머로 전환' : '스톱워치로 전환',
+                          onPressed: () {
+                            setState(() {
+                              _timerRunning = false;
+                              _miniTimerInstance?.cancel();
+                              _timerIsStopwatch = !_timerIsStopwatch;
+                            });
+                          },
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                        const SizedBox(width: 10),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.close,
+                            color: Colors.white38,
+                            size: 16,
+                          ),
+                          onPressed: _toggleMiniTimer,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+
+                // 종료 알림 배너
+                if (_timerTargetSeconds == 0 && !_timerIsStopwatch)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4565).withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFEF4565), width: 1),
+                    ),
+                    child: Text(
+                      '⏰ 수업 시간 종료!',
+                      style: GoogleFonts.notoSansKr(
+                        color: const Color(0xFFEF4565),
+                        fontSize: 11 * scale,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
 
                 // 시간 텍스트
                 Text(
@@ -6781,15 +6984,16 @@ class _TeacherViewState extends State<TeacherView> {
                 const SizedBox(height: 10),
 
                 // 시간 조절 프리셋 버튼
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildTimerPresetButton('+1분', 60, scale),
-                    _buildTimerPresetButton('+3분', 180, scale),
-                    _buildTimerPresetButton('+5분', 300, scale),
-                    _buildTimerPresetButton('CLR', -1, scale),
-                  ],
-                ),
+                if (!_timerIsStopwatch)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildTimerPresetButton('+1분', 60, scale),
+                      _buildTimerPresetButton('+3분', 180, scale),
+                      _buildTimerPresetButton('+5분', 300, scale),
+                      _buildTimerPresetButton('CLR', -1, scale),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -7243,23 +7447,36 @@ class _TeacherViewState extends State<TeacherView> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Student Count Selector
+                          // Student Count Selector & Reset Cycle
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                '학생 수:',
-                                style: GoogleFonts.notoSansKr(
-                                  color: Colors.white70,
-                                  fontSize: 11 * scale,
-                                ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '학생 수: $_pickerMaxStudents명',
+                                    style: GoogleFonts.notoSansKr(
+                                      color: Colors.white,
+                                      fontSize: 11 * scale,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    '남은 학생: ${_pickerMaxStudents - _pickerDrawnStudents.length}명 (중복 방지)',
+                                    style: GoogleFonts.notoSansKr(
+                                      color: const Color(0xFF00F5D4),
+                                      fontSize: 9.5 * scale,
+                                    ),
+                                  ),
+                                ],
                               ),
                               Row(
                                 children: [
                                   IconButton(
                                     constraints: const BoxConstraints(),
                                     padding: EdgeInsets.symmetric(
-                                      horizontal: 4 * scale,
+                                      horizontal: 3 * scale,
                                     ),
                                     icon: Icon(
                                       Icons.remove_circle_outline,
@@ -7272,22 +7489,15 @@ class _TeacherViewState extends State<TeacherView> {
                                             if (_pickerMaxStudents > 2) {
                                               setState(() {
                                                 _pickerMaxStudents--;
+                                                _pickerDrawnStudents.removeWhere((id) => id > _pickerMaxStudents);
                                               });
                                             }
                                           },
                                   ),
-                                  Text(
-                                    '$_pickerMaxStudents명',
-                                    style: GoogleFonts.outfit(
-                                      color: Colors.white,
-                                      fontSize: 13 * scale,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
                                   IconButton(
                                     constraints: const BoxConstraints(),
                                     padding: EdgeInsets.symmetric(
-                                      horizontal: 4 * scale,
+                                      horizontal: 3 * scale,
                                     ),
                                     icon: Icon(
                                       Icons.add_circle_outline,
@@ -7304,6 +7514,30 @@ class _TeacherViewState extends State<TeacherView> {
                                             }
                                           },
                                   ),
+                                  SizedBox(width: 4 * scale),
+                                  TextButton(
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 2 * scale),
+                                      minimumSize: Size.zero,
+                                      backgroundColor: Colors.white.withValues(alpha: 0.06),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4 * scale)),
+                                    ),
+                                    onPressed: _pickerRolling
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              _pickerDrawnStudents.clear();
+                                              _pickerWinner = null;
+                                            });
+                                          },
+                                    child: Text(
+                                      '초기화',
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 9.5 * scale,
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
@@ -7316,12 +7550,12 @@ class _TeacherViewState extends State<TeacherView> {
                             width: double.infinity,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF16161A).withOpacity(0.8),
+                              color: const Color(0xFF16161A).withValues(alpha: 0.8),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: _pickerWinner != null && !_pickerRolling
-                                    ? accentColor.withOpacity(0.3)
-                                    : Colors.white.withOpacity(0.05),
+                                    ? accentColor.withValues(alpha: 0.4)
+                                    : Colors.white.withValues(alpha: 0.05),
                               ),
                             ),
                             child: _pickerRolling
@@ -7378,7 +7612,7 @@ class _TeacherViewState extends State<TeacherView> {
                                 foregroundColor: Colors.white,
                                 disabledBackgroundColor: const Color(
                                   0xFF2EC4B6,
-                                ).withOpacity(0.3),
+                                ).withValues(alpha: 0.3),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),
@@ -7388,28 +7622,43 @@ class _TeacherViewState extends State<TeacherView> {
                               onPressed: _pickerRolling
                                   ? null
                                   : () async {
+                                      // 남은 후보 풀 계산
+                                      var pool = [
+                                        for (int i = 1; i <= _pickerMaxStudents; i++)
+                                          if (!_pickerDrawnStudents.contains(i)) i,
+                                      ];
+
+                                      // 전원 추첨 완료 시 자동으로 새 사이클 시작
+                                      if (pool.isEmpty) {
+                                        setState(() {
+                                          _pickerDrawnStudents.clear();
+                                        });
+                                        pool = [for (int i = 1; i <= _pickerMaxStudents; i++) i];
+                                      }
+
                                       setState(() {
                                         _pickerRolling = true;
                                         _pickerWinner = null;
                                       });
-                                      final random =
-                                          DateTime.now().millisecondsSinceEpoch;
-                                      int rollCount = 15;
+
+                                      final secureRng = math.Random.secure();
+                                      int rollCount = 12;
                                       for (int i = 0; i < rollCount; i++) {
                                         await Future.delayed(
-                                          Duration(milliseconds: 50 + (i * 15)),
+                                          Duration(milliseconds: 50 + (i * 12)),
                                         );
                                         if (!mounted) return;
-                                        final candidate =
-                                            ((random + i) %
-                                                _pickerMaxStudents) +
-                                            1;
+                                        final candidate = pool[secureRng.nextInt(pool.length)];
                                         setState(() {
                                           _pickerWinner = candidate;
                                         });
                                       }
+
                                       if (mounted) {
+                                        final finalWinner = pool[secureRng.nextInt(pool.length)];
                                         setState(() {
+                                          _pickerWinner = finalWinner;
+                                          _pickerDrawnStudents.add(finalWinner);
                                           _pickerRolling = false;
                                         });
                                       }
@@ -7559,6 +7808,7 @@ class _TeacherViewState extends State<TeacherView> {
       {'id': 'timer', 'name': '타이머'},
       {'id': 'calculator', 'name': '계산기'},
       {'id': 'whiteboard', 'name': '기본판서'},
+      {'id': 'split_board', 'name': '분할판서'},
       {'id': 'picker', 'name': '발표자'},
       {'id': 'document_board', 'name': '문서판서'},
             {'id': 'website_board', 'name': '사이트 판서'},

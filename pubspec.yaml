@@ -1,9 +1,37 @@
 name: boardest_workspace
 description: Boardest Monorepo Workspace
-version: 3.0.0
+version: 5.5.0
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
 
+dependencies:
+  flutter:
+    sdk: flutter
+  bst_core:
+    path: packages/common/bst_core
+  bst_pen:
+    path: packages/plugins/bst_pen
+  bst_tbp:
+    path: packages/plugins/bst_tbp
+  bst_canva:
+    path: packages/plugins/bst_canva
+  bst_auth:
+    path: packages/common/bst_auth
+  bst_timetable:
+    path: packages/common/bst_timetable
+  bst_ui:
+    path: packages/common/bst_ui
+  archive: ^4.0.9
+  shared_preferences: ^2.2.0
+  http: ^1.2.0
+  crypto: ^3.0.3
+
 dev_dependencies:
+  flutter_test:
+    sdk: flutter
   melos: ^4.1.0
+
+dependency_overrides:
+  google_fonts:
+    path: packages/common/google_fonts

@@ -576,7 +576,7 @@
         <div class="hero-info">
           <h1>
             <span id="productName">Boardest 통합 온라인 설치</span>
-            <span class="hero-badge" id="productVersion">v5.4.0</span>
+            <span class="hero-badge" id="productVersion">v5.5.0</span>
             <span class="admin-badge" id="adminBadge">🛡️ 관리자 권한</span>
           </h1>
           <p id="productDesc">실행 파일 이름을 감지하거나 설치할 앱을 선택하여 최신 버전을 설치합니다.</p>
@@ -935,7 +935,7 @@
       exeName: '',
       productType: 'Teacher',
       productName: 'Boardest Teacher',
-      productVersion: '5.4.0',
+      productVersion: '5.5.0',
       installDir: '',
       teacherInstallDir: '',
       isUninstall: false,
@@ -1164,7 +1164,7 @@
 
     window.receiveInitData = function(data) {
       appData = { ...appData, ...data };
-      document.getElementById('productVersion').innerText = 'v' + (appData.productVersion || '5.4.0');
+      document.getElementById('productVersion').innerText = 'v' + (appData.productVersion || '5.5.0');
 
       if (data.logoBase64) {
         const heroBox = document.getElementById('heroIconBox');

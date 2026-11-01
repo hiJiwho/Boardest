@@ -1,8 +1,8 @@
 # 🤖 Boardest Platform — Core Agent Memory & AI Collaboration Rules
 
-> **Current Platform Version**: `5.4.0` (App: `5.4.0`, Teacher: `5.4.0`, Web: `5.4.0`)  
+> **Current Platform Version**: `5.5.0` (App: `5.5.0+5500`, Teacher: `5.5.0+5500`, Web: `5.5.0`)  
 > **버전 관리 규격**: 버전 변경 이력 및 상세 수정 내역은 [Ver.md](file:///c:/Users/jiwho/Documents/boardest/Ver.md) 파일에 매 작업 완료 시마다 반드시 기록하여 유지합니다.
-> 🚀 **[최신 v5.4.0 기준]**: Windows 통합 온라인 설치 마법사(`boardest-windows-installer.web.app` 원격 설치 엔진 & 파일명 감지 & 관리자 권한 필수 & URL 출처 보안 가드 & 3단계 퍼센트 UI), TBP dHash 해밍 거리 정합성(18비트) 및 우클릭/롱프레스 핫스팟 모달 연동, `.tbp.bst` / `.htmlp.bst` 클라우드 직결 최적화, 좌우 대형 전용 페이지 넘김 버튼 탑재, TBP 실체 폴더(`bst-tbp`) 탐색기 숨김 및 연쇄 삭제, WebView 임베딩 시 창틀/최소화/닫기 숨김.
+> 🚀 **[최신 v5.5.0 기준]**: 전체 생태계 25개 컴포넌트(C01~C25) 무결성 검증 100% 완료, Class 앱 QR Cloud 접속 복구(Firebase RTDB `cloud_pair_sessions` 보안 규칙 허용 및 Zero-Persistence 1회성 토큰 즉시 수신 연동), Android 업데이트 무한 루프 원천 차단(Android 네이티브 `MainActivity.kt` MethodChannel 실제 `versionName` 및 `update_service.dart` 동기화), Windows C# 통합 온라인 설치 마법사 및 멀티플랫폼 일괄 `5.5.0` 릴리즈.
 
 ---
 

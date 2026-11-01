@@ -10,6 +10,7 @@ import 'dart:typed_data';
 import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:universal_io/io.dart';
 import '../../models/meal_models.dart';
 import '../../models/app_settings.dart' show LauncherSlot;
@@ -343,9 +344,68 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
   int _adSlideIndex = 0; // 0: 무조건 수행평가 안내 (90초), 1~N: 학교 행사 광고판 (30초씩)
   Timer? _adSlideTimer;
 
+  bool _isItemForThisClassroom(AssessmentItem it) {
+    final grade = _effectiveGrade;
+    final classNum = _effectiveClassNum;
+    final normCurrentSchool = AssessmentService.normalizeSchoolKey(_effectiveSchoolCode);
+    final normItemSchool = AssessmentService.normalizeSchoolKey(it.schoolCode);
+
+    // 학교 코드 일치 여부 (유효한 학교 코드가 설정된 경우 엄격 검사)
+    if (it.schoolCode.isNotEmpty && normItemSchool != normCurrentSchool) {
+      return false;
+    }
+
+    // 학년 엄격 격리 (현재 학년과 일치하거나 학년 전체 공통 0인 경우만 허용)
+    if (it.grade != grade && it.grade != 0) {
+      return false;
+    }
+
+    // 학급(반) 엄격 격리
+    // 1. 해당 학급 번호와 정확히 일치하는 경우
+    if (it.classNum == classNum) {
+      return true;
+    }
+    // 2. 전체 학급 공통(0)인 경우: 오직 교사(authorRole == 'teacher')가 게시한 공통 공지만 수신 허용
+    if (it.classNum == 0 && (it.authorRole == 'teacher' || it.authorRole.isEmpty)) {
+      return true;
+    }
+
+    // 타 학급(예: 1반인데 2반 수행평가)은 엄격 격리 및 차단
+    return false;
+  }
+
+  bool _isNoticeForThisClassroom(SchoolNotice notice) {
+    if (notice.isExpired48h) return false;
+    final title = notice.title.trim();
+    // 태그 검사: [N반] 형식인 경우 해당 학급에만 노출
+    final classMatch = RegExp(r'\[(\d+)반\]').firstMatch(title);
+    if (classMatch != null) {
+      final targetClass = int.tryParse(classMatch.group(1)!);
+      if (targetClass != null && targetClass > 0 && targetClass != _effectiveClassNum) {
+        return false;
+      }
+    }
+    // 태그 검사: [G-C] 또는 [G학년 C반] 형식
+    final gradeClassMatch = RegExp(r'\[(\d+)[-학년\s]+(\d+)반?\]').firstMatch(title);
+    if (gradeClassMatch != null) {
+      final targetGrade = int.tryParse(gradeClassMatch.group(1)!);
+      final targetClass = int.tryParse(gradeClassMatch.group(2)!);
+      if (targetGrade != null && targetGrade > 0 && targetGrade != _effectiveGrade) {
+        return false;
+      }
+      if (targetClass != null && targetClass > 0 && targetClass != _effectiveClassNum) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  List<SchoolNotice> get _filteredNotices =>
+      SchoolNoticeService.instance.notices.where(_isNoticeForThisClassroom).toList();
+
   void _startAdSlideTimer() {
     _adSlideTimer?.cancel();
-    final notices = SchoolNoticeService.instance.notices;
+    final notices = _filteredNotices;
     final totalSlides = 1 + notices.length;
     if (totalSlides <= 1) return;
 
@@ -356,7 +416,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
 
     _adSlideTimer = Timer(Duration(seconds: seconds), () {
       if (!mounted) return;
-      final curTotal = 1 + SchoolNoticeService.instance.notices.length;
+      final curTotal = 1 + _filteredNotices.length;
       setState(() {
         _adSlideIndex = (_adSlideIndex + 1) % curTotal;
       });
@@ -365,7 +425,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
   }
 
   void _changeAdSlide(int delta) {
-    final curTotal = 1 + SchoolNoticeService.instance.notices.length;
+    final curTotal = 1 + _filteredNotices.length;
     setState(() {
       _adSlideIndex = (_adSlideIndex + delta + curTotal) % curTotal;
     });
@@ -401,20 +461,164 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
         .map((m) => int.tryParse(m.group(0)!) ?? 0)
         .where((n) => n > 0)
         .toList();
-    return nums.length >= 2 ? nums[1] : 1;
+    if (nums.length >= 2) return nums[1];
+    if (nums.length == 1 && widget.grade > 0) return nums[0];
+    return nums.isNotEmpty ? nums.last : 1;
   }
 
   int _assessmentRefreshTick = 0;
+  bool _isSyncingAssessments = false;
 
-  void _syncClassAssessmentsAndNotices() {
-    AssessmentService.instance.loadAssessments(
-      schoolCode: _effectiveSchoolCode,
-      grade: _effectiveGrade,
-      classNum: _effectiveClassNum,
-    );
-    SchoolNoticeService.instance.loadNotices(
-      schoolCode: _effectiveSchoolCode,
-    );
+  http.Client? _sseClient;
+  StreamSubscription? _assessmentSseSub;
+  StreamSubscription? _noticeSseSub;
+  Timer? _sseReconnectTimer;
+
+  Future<void> _syncClassAssessmentsAndNotices() async {
+    if (_isSyncingAssessments) return;
+    _isSyncingAssessments = true;
+    try {
+      await Future.wait([
+        AssessmentService.instance.loadAssessments(
+          schoolCode: _effectiveSchoolCode,
+          grade: _effectiveGrade,
+          classNum: _effectiveClassNum,
+        ),
+        SchoolNoticeService.instance.loadNotices(
+          schoolCode: _effectiveSchoolCode,
+        ),
+      ]);
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      debugPrint('[BstClassMainLayout] Sync assessments error: $e');
+    } finally {
+      _isSyncingAssessments = false;
+    }
+  }
+
+  void _startRtdbSseStreams() {
+    _stopRtdbSseStreams();
+    final effectiveCode = AssessmentService.normalizeSchoolKey(_effectiveSchoolCode);
+    final grade = _effectiveGrade;
+    if (effectiveCode.isEmpty) return;
+
+    _sseClient = http.Client();
+    _connectAssessmentSse(effectiveCode, grade);
+    _connectNoticeSse(effectiveCode);
+  }
+
+  void _stopRtdbSseStreams() {
+    _sseReconnectTimer?.cancel();
+    _sseReconnectTimer = null;
+    _assessmentSseSub?.cancel();
+    _assessmentSseSub = null;
+    _noticeSseSub?.cancel();
+    _noticeSseSub = null;
+    _sseClient?.close();
+    _sseClient = null;
+  }
+
+  void _scheduleSseReconnect() {
+    _sseReconnectTimer?.cancel();
+    if (!mounted) return;
+    _sseReconnectTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) {
+        _startRtdbSseStreams();
+      }
+    });
+  }
+
+  Future<void> _connectAssessmentSse(String schoolCode, int grade) async {
+    try {
+      final url = Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/assessments/$schoolCode/$grade.json');
+      final request = http.Request('GET', url);
+      request.headers['Accept'] = 'text/event-stream';
+      request.headers['Cache-Control'] = 'no-cache';
+
+      final response = await _sseClient?.send(request);
+      if (response == null || response.statusCode != 200) {
+        _scheduleSseReconnect();
+        return;
+      }
+
+      String eventType = 'message';
+      _assessmentSseSub = response.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(
+        (line) {
+          if (line.startsWith('event: ')) {
+            eventType = line.substring(7).trim();
+          } else if (line.startsWith('data: ')) {
+            final dataStr = line.substring(6).trim();
+            if (dataStr.isNotEmpty && dataStr != 'null') {
+              if (eventType == 'put' || eventType == 'patch') {
+                // RTDB에서 새로운 수행평가 push 알림 수신 시 즉시 동기화 실행!
+                _syncClassAssessmentsAndNotices();
+              }
+            }
+          }
+        },
+        onDone: () => _scheduleSseReconnect(),
+        onError: (_) => _scheduleSseReconnect(),
+        cancelOnError: true,
+      );
+    } catch (_) {
+      _scheduleSseReconnect();
+    }
+  }
+
+  Future<void> _connectNoticeSse(String schoolCode) async {
+    try {
+      final url = Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/school_notices/$schoolCode.json');
+      final request = http.Request('GET', url);
+      request.headers['Accept'] = 'text/event-stream';
+      request.headers['Cache-Control'] = 'no-cache';
+
+      final response = await _sseClient?.send(request);
+      if (response == null || response.statusCode != 200) {
+        _scheduleSseReconnect();
+        return;
+      }
+
+      String eventType = 'message';
+      _noticeSseSub = response.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(
+        (line) {
+          if (line.startsWith('event: ')) {
+            eventType = line.substring(7).trim();
+          } else if (line.startsWith('data: ')) {
+            final dataStr = line.substring(6).trim();
+            if (dataStr.isNotEmpty && dataStr != 'null') {
+              if (eventType == 'put' || eventType == 'patch') {
+                // RTDB에서 새로운 학교 행사/공지 push 알림 수신 시 즉시 동기화 실행!
+                _syncClassAssessmentsAndNotices();
+              }
+            }
+          }
+        },
+        onDone: () => _scheduleSseReconnect(),
+        onError: (_) => _scheduleSseReconnect(),
+        cancelOnError: true,
+      );
+    } catch (_) {
+      _scheduleSseReconnect();
+    }
+  }
+
+  void _onAssessmentOrNoticeUpdated() {
+    if (!mounted) return;
+    setState(() {
+      // 신규 공지 수신 시 슬라이드 범위 유효성 보정 및 즉각적인 UI 리프레시
+      final total = 1 + _filteredNotices.length;
+      if (_adSlideIndex >= total) {
+        _adSlideIndex = 0;
+      }
+    });
   }
 
   @override
@@ -422,12 +626,16 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
     super.initState();
     _initCurrentPeriod();
     _loadSystemApps();
+    AssessmentService.instance.assessmentsNotifier.addListener(_onAssessmentOrNoticeUpdated);
+    SchoolNoticeService.instance.noticesNotifier.addListener(_onAssessmentOrNoticeUpdated);
     _syncClassAssessmentsAndNotices();
+    _startRtdbSseStreams();
     _startAdSlideTimer();
+    // 30초 느린 폴링 대신 1~2초 고속 동기화 (2초마다 RTDB 주기적 체크 및 SSE 실시간 푸시 병행)
     _tickerTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       _assessmentRefreshTick++;
-      if (_assessmentRefreshTick >= 30) {
+      if (_assessmentRefreshTick >= 2) {
         _assessmentRefreshTick = 0;
         _syncClassAssessmentsAndNotices();
       }
@@ -437,6 +645,9 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
 
   @override
   void dispose() {
+    AssessmentService.instance.assessmentsNotifier.removeListener(_onAssessmentOrNoticeUpdated);
+    SchoolNoticeService.instance.noticesNotifier.removeListener(_onAssessmentOrNoticeUpdated);
+    _stopRtdbSseStreams();
     _adSlideTimer?.cancel();
     _tickerTimer?.cancel();
     super.dispose();
@@ -455,6 +666,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
         oldWidget.grade != widget.grade ||
         oldWidget.classNum != widget.classNum ||
         oldWidget.gradeClass != widget.gradeClass) {
+      _startRtdbSseStreams();
       _syncClassAssessmentsAndNotices();
     }
   }
@@ -3926,7 +4138,8 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
   Widget _assessmentAndAdRotatingColumn() {
     return ValueListenableBuilder<List<SchoolNotice>>(
       valueListenable: SchoolNoticeService.instance.noticesNotifier,
-      builder: (ctx, notices, _) {
+      builder: (ctx, rawNotices, _) {
+        final notices = rawNotices.where(_isNoticeForThisClassroom).toList();
         final totalSlides = 1 + notices.length;
         if (_adSlideIndex >= totalSlides) {
           _adSlideIndex = 0;
@@ -4385,8 +4598,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
                 valueListenable: AssessmentService.instance.assessmentsNotifier,
                 builder: (context, items, _) {
                   final activeItems = items.where((it) {
-                    if (it.grade != grade && it.grade != 0) return false;
-                    if (it.classNum != 0 && it.classNum != classNum) return false;
+                    if (!_isItemForThisClassroom(it)) return false;
                     return it.dday == 'D-Day' || it.dday == 'D-1';
                   }).toList();
                   if (activeItems.isEmpty) return const SizedBox.shrink();
@@ -4460,11 +4672,7 @@ class _BstClassMainLayoutState extends State<BstClassMainLayout> {
             child: ValueListenableBuilder<List<AssessmentItem>>(
               valueListenable: AssessmentService.instance.assessmentsNotifier,
               builder: (context, items, _) {
-                final filtered = items.where((it) {
-                  if (it.grade != grade && it.grade != 0) return false;
-                  if (it.classNum != 0 && it.classNum != classNum) return false;
-                  return true;
-                }).toList();
+                final filtered = items.where(_isItemForThisClassroom).toList();
 
                 if (filtered.isEmpty) {
                   return Center(

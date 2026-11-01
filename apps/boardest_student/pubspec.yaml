@@ -1,7 +1,7 @@
 name: boardest_student
 description: "Boardest Student - 학교 디벗 & 스마트폰용 학생 전용 스마트 칠판 포털 (수행평가/시간표/급식/게시판)"
 publish_to: 'none'
-version: 1.0.0+1
+version: 5.5.0+5500
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

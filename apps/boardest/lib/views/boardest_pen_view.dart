@@ -151,6 +151,10 @@ class _BoardestPenViewState extends State<BoardestPenView>
 
   // ── Timers / Keys ──────────────────────────────────────
   final GlobalKey _canvasKey = GlobalKey();
+  bool _isSplitScreen = false;
+  late final SplitBoardController _splitController = SplitBoardController(
+    initialMode: SplitMode.twoVertical,
+  );
   final Map<String, Timer> _activeTimers = {};
 
   @override
@@ -479,6 +483,7 @@ class _BoardestPenViewState extends State<BoardestPenView>
 
   @override
   void dispose() {
+    _splitController.dispose();
     for (final t in _activeTimers.values) t.cancel();
     unawaited(_autoSaveBoard());
     super.dispose();
@@ -999,7 +1004,14 @@ class _BoardestPenViewState extends State<BoardestPenView>
         children: [
           // 1. Drawing Canvas
           Positioned.fill(
-            child: Listener(
+            child: _isSplitScreen
+                ? SplitBoardView(
+                    controller: _splitController,
+                    showHeaderToolbar: true,
+                    scaleFactor: scale,
+                    onClose: () => setState(() => _isSplitScreen = false),
+                  )
+                : Listener(
               onPointerDown: (event) {
                 _lastPointerKind = event.kind;
                 if (event.kind == PointerDeviceKind.stylus ||
@@ -1312,6 +1324,32 @@ class _BoardestPenViewState extends State<BoardestPenView>
           IconButton(
             icon: const Icon(Icons.redo_rounded, color: Colors.white70),
             onPressed: _redo,
+          ),
+
+          Container(
+            width: 1,
+            height: 24,
+            color: Colors.white12,
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+          ),
+
+          // Split Screen Dual Board Toggle
+          IconButton(
+            tooltip: _isSplitScreen ? '화면 분할 종료 (단일 칠판 복귀)' : '화면 분할 칠판 (2분할/4분할)',
+            icon: Icon(
+              Icons.splitscreen_rounded,
+              color: _isSplitScreen ? const Color(0xFF00F5D4) : Colors.white70,
+            ),
+            onPressed: () {
+              setState(() {
+                _isSplitScreen = !_isSplitScreen;
+                if (_isSplitScreen) {
+                  _isPenDetailsOpen = false;
+                  _isShapeDetailsOpen = false;
+                  _isMenuOpen = false;
+                }
+              });
+            },
           ),
         ],
       ),

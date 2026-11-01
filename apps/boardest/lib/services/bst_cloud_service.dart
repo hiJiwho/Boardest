@@ -1839,6 +1839,42 @@ class BstCloudService {
             }
           }
         }
+
+        // Firestore 2차 Fallback 폴링 (RTDB 지연 또는 방화벽 차단 대비)
+        final fsUrl = '$_firestoreBase/cloud_pair_sessions/$secret?key=$_apiKey';
+        final fsRes = await http.get(Uri.parse(fsUrl)).timeout(const Duration(seconds: 3));
+        if (fsRes.statusCode == 200 && fsRes.body.isNotEmpty) {
+          final fsData = jsonDecode(fsRes.body);
+          if (fsData is Map) {
+            final fsFields = fsData['fields'] as Map<String, dynamic>?;
+            final fsStatus = (fsFields?['status'] as Map?)?['stringValue'] as String? ?? '';
+            if (fsStatus == 'authenticated') {
+              final token = (fsFields?['accessToken'] as Map?)?['stringValue'] as String?;
+              final refreshTok = (fsFields?['refreshToken'] as Map?)?['stringValue'] as String?;
+              final tName = (fsFields?['teacherName'] as Map?)?['stringValue'] as String? ?? '선생님';
+              final ownerEmail = (fsFields?['email'] as Map?)?['stringValue'] as String? ?? '';
+              final totpSec = (fsFields?['totpSecret'] as Map?)?['stringValue'] as String?;
+              final folderId = (fsFields?['folderId'] as Map?)?['stringValue'] as String? ?? '';
+              final bstCloudFolderId = (fsFields?['bstCloudFolderId'] as Map?)?['stringValue'] as String? ?? folderId;
+
+              if (token != null && token.isNotEmpty) {
+                activeToken = token;
+                activeRefreshToken = refreshTok;
+                activeTeacherName = tName;
+                activeOwnerEmail = ownerEmail;
+                activeTotpSecret = totpSec;
+                activeFolderId = bstCloudFolderId.isNotEmpty ? bstCloudFolderId : folderId;
+
+                return (
+                  success: true,
+                  teacherName: tName,
+                  email: ownerEmail,
+                  errorMessage: null,
+                );
+              }
+            }
+          }
+        }
       } catch (e) {
         debugPrint('[BstCloudService] waitForReversePairAuth check error: $e');
       }

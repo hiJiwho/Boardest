@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show rootBundle, MethodChannel;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,11 +30,11 @@ enum UpdateState {
 /// 5. 잠금 화면 필수 4대 버튼: [업데이트 다운 / 수동 설치 / 앱 런처 / 앱 삭제]
 /// 6. 윈도우: AppData에 다운로드 후 종료하지 않고 윈도우 패키지 설치 관리자(AppX) 구동 -> 새 앱 실행 시 이전 AppX 자동 삭제
 class UpdateService {
-  static const String defaultVersion = '5.4.3';
+  static const String defaultVersion = '5.5.0';
+  static const String defaultBuildNumber = '5500';
+  static const String defaultFullVersion = '5.5.0+5500';
   static const String _releasesApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases?per_page=30';
-  static const String _latestApi =
-      'https://api.github.com/repos/hiJiwho/Boardest/releases/latest';
   static const String downloadPage = 'https://boardest-downloads.web.app';
 
   static final ValueNotifier<UpdateState> stateNotifier =
@@ -79,19 +80,87 @@ class UpdateService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('bst_installed_version');
     } catch (_) {}
-    try {
-      final jsonStr = await rootBundle.loadString('version.json');
-      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-      final v = data['version'] as String?;
-      if (v != null && v.isNotEmpty) {
-        _resolvedVersion = v.trim();
+
+    // 1) On Android, try MethodChannel first to query native package version (versionName)
+    if (!kIsWeb && Platform.isAndroid) {
+      final channels = ['boardest/version', 'com.boardest/launch_args'];
+      for (final chName in channels) {
+        try {
+          final channel = MethodChannel(chName);
+          final res = await channel.invokeMethod<dynamic>('getAppVersion') ??
+              await channel.invokeMethod<dynamic>('getPackageInfo');
+          if (res is Map) {
+            final v = (res['versionName'] ?? res['version'])?.toString();
+            final b = (res['versionCode'] ?? res['buildNumber'])?.toString();
+            if (v != null && v.trim().isNotEmpty) {
+              final vTrim = v.trim();
+              _resolvedVersion = (b != null && b.trim().isNotEmpty) ? '$vTrim+$b' : vTrim;
+              debugPrint('[UpdateService] Resolved Android version from MethodChannel ($chName): $_resolvedVersion');
+              return;
+            }
+          } else if (res is String && res.trim().isNotEmpty) {
+            _resolvedVersion = res.trim();
+            debugPrint('[UpdateService] Resolved Android version from MethodChannel string ($chName): $_resolvedVersion');
+            return;
+          }
+        } catch (_) {}
       }
-    } catch (_) {}
+    }
+
+    // 2) Try PackageInfo.fromPlatform()
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final v = info.version.trim();
+      final b = info.buildNumber.trim();
+      if (v.isNotEmpty) {
+        _resolvedVersion = b.isNotEmpty ? '$v+$b' : v;
+        debugPrint('[UpdateService] Resolved version from PackageInfo: $_resolvedVersion');
+        return;
+      }
+    } catch (e) {
+      debugPrint('[UpdateService] PackageInfo lookup error: $e');
+    }
+
+    // 3) Try Windows MSIX executable path regex
+    if (!kIsWeb && Platform.isWindows) {
+      final match = RegExp(
+        r'jiwho\.boardest\.(?:bst|cloud|board|class|teacher|class-lite|overlay-panser)_([0-9.]+)_',
+        caseSensitive: false,
+      ).firstMatch(Platform.resolvedExecutable);
+      if (match?.group(1) != null) {
+        final v = match!.group(1)!;
+        final parts = v.split('.');
+        if (parts.length == 4 && parts[3] == '0') {
+          _resolvedVersion = '${parts[0]}.${parts[1]}.${parts[2]}';
+          return;
+        }
+        _resolvedVersion = v;
+        return;
+      }
+    }
+
+    // 4) Try version.json from rootBundle
+    for (final path in ['assets/version.json', 'version.json']) {
+      try {
+        final jsonStr = await rootBundle.loadString(path);
+        final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+        final v = (data['version'] as String?)?.trim();
+        final b = (data['build_number'] ?? data['buildNumber'])?.toString().trim();
+        if (v != null && v.isNotEmpty) {
+          _resolvedVersion = (b != null && b.isNotEmpty) ? '$v+$b' : v;
+          debugPrint('[UpdateService] Resolved version from $path: $_resolvedVersion');
+          return;
+        }
+      } catch (_) {}
+    }
+
+    // 5) Cache fallback
+    _resolvedVersion = defaultFullVersion;
   }
 
-  /// 4번째 자리를 제거하고 앞 3자리(Major.Minor.Patch)만 반환
+  /// 4번째 자리를 제거하고 앞 3자리(Major.Minor.Patch)만 반환 (빌드 번호 및 v 접두사 제거)
   static String normalizeVersion(String v) {
-    final clean = v.replaceFirst(RegExp(r'^v'), '').trim();
+    final clean = v.replaceFirst(RegExp(r'^[vV]'), '').split('+').first.trim();
     final parts = clean.split('.');
     if (parts.length >= 3) {
       return '${parts[0]}.${parts[1]}.${parts[2]}';
@@ -99,34 +168,126 @@ class UpdateService {
     return clean;
   }
 
-  /// 이전 다운로드된 임시 AppX / APK 설치 파일 자동 삭제 (새 앱 실행 시 자동 정리)
+  /// Windows 패키지 에셋 우선순위 점수 계산 (.msix 최우선, boardest-class 우선)
+  /// 반환값: 0 (비매칭) ~ 100 (최우선 매칭)
+  static int getWindowsAssetScore(String name, {required bool isCloud}) {
+    final lower = name.trim().toLowerCase();
+    final isMsix = lower.endsWith('.msix');
+    final isAppx = lower.endsWith('.appx');
+    if (!isMsix && !isAppx) return 0;
+
+    if (isCloud) {
+      if (lower.contains('teacher') || lower.contains('overlay')) return 0;
+      final isCloudAsset = lower.contains('boardest-cloud') ||
+          lower.contains('class-cloud') ||
+          lower.contains('bcld');
+      if (!isCloudAsset) return 0;
+
+      if (isMsix) {
+        if (lower.startsWith('boardest-cloud') || lower.contains('boardest-cloud')) return 100;
+        if (lower.startsWith('class-cloud') || lower.contains('class-cloud')) return 90;
+        return 80;
+      } else {
+        if (lower.startsWith('boardest-cloud') || lower.contains('boardest-cloud')) return 40;
+        if (lower.startsWith('class-cloud') || lower.contains('class-cloud')) return 30;
+        return 20;
+      }
+    } else {
+      if (lower.contains('teacher') ||
+          lower.contains('lite') ||
+          lower.contains('cloud') ||
+          lower.contains('bcld') ||
+          lower.contains('overlay')) {
+        return 0;
+      }
+
+      if (isMsix) {
+        if (lower == 'boardest-class.msix' || lower.startsWith('boardest-class.')) return 100;
+        if (lower.contains('boardest-class')) return 95;
+        if (lower == 'boardest.msix' || lower.startsWith('boardest.')) return 85;
+        if (lower.contains('bst-class') || lower.contains('boardest')) return 80;
+        return 70;
+      } else {
+        if (lower == 'boardest-class.appx' || lower.startsWith('boardest-class.')) return 40;
+        if (lower.contains('boardest-class')) return 35;
+        if (lower == 'boardest.appx' || lower.startsWith('boardest.')) return 30;
+        if (lower.contains('bst-class') || lower.contains('boardest')) return 25;
+        return 20;
+      }
+    }
+  }
+
+  /// Android APK 에셋 우선순위 점수 계산
+  static int getApkAssetScore(String name, {required bool isCloud}) {
+    final lower = name.trim().toLowerCase();
+    if (!lower.endsWith('.apk')) return 0;
+
+    if (isCloud) {
+      if (lower.contains('teacher') || lower.contains('overlay')) return 0;
+      final isCloudAsset = lower.contains('boardest-cloud') ||
+          lower.contains('class-cloud') ||
+          lower.contains('bcld');
+      if (!isCloudAsset) return 0;
+
+      if (lower.startsWith('boardest-cloud') || lower.contains('boardest-cloud')) return 100;
+      if (lower.startsWith('class-cloud') || lower.contains('class-cloud')) return 90;
+      return 80;
+    } else {
+      if (lower.contains('teacher') ||
+          lower.contains('lite') ||
+          lower.contains('cloud') ||
+          lower.contains('bcld') ||
+          lower.contains('overlay')) {
+        return 0;
+      }
+
+      if (lower == 'boardest-class.apk' || lower.startsWith('boardest-class.')) return 100;
+      if (lower.contains('boardest-class')) return 95;
+      if (lower == 'boardest.apk' || lower.startsWith('boardest.')) return 85;
+      if (lower.contains('bst-class') || lower.contains('boardest')) return 80;
+      return 70;
+    }
+  }
+
+  /// 다운로드 URL에서 패키지 파일 확장자 추출 (.msix, .appx, .apk, .exe 동적 매칭)
+  static String extractExtensionFromUrl(String url, {required bool isWindows}) {
+    final uriPath = Uri.tryParse(url)?.path.toLowerCase() ?? '';
+    if (uriPath.endsWith('.msix')) return 'msix';
+    if (uriPath.endsWith('.appx')) return 'appx';
+    if (uriPath.endsWith('.apk')) return 'apk';
+    if (uriPath.endsWith('.exe')) return 'exe';
+    return isWindows ? 'msix' : 'apk';
+  }
+
+  /// 이전 다운로드된 임시 AppX / APK / MSIX 설치 파일 자동 삭제 (새 앱 실행 시 자동 정리)
   static Future<void> cleanupOldUpdates() async {
     if (kIsWeb) return;
     try {
-      final appSupport = await getApplicationSupportDirectory();
-      final updatesDir = Directory(p.join(appSupport.path, 'Updates'));
-      if (updatesDir.existsSync()) {
-        for (final entity in updatesDir.listSync()) {
+      final dirsToClean = <Directory>[];
+
+      try {
+        final appSupport = await getApplicationSupportDirectory();
+        dirsToClean.add(Directory(p.join(appSupport.path, 'Updates')));
+      } catch (_) {}
+
+      try {
+        final tempDir = await getTemporaryDirectory();
+        dirsToClean.add(Directory(p.join(tempDir.path, 'Updates')));
+        dirsToClean.add(tempDir);
+      } catch (_) {}
+
+      for (final targetDir in dirsToClean) {
+        if (!targetDir.existsSync()) continue;
+        for (final entity in targetDir.listSync()) {
           if (entity is File) {
             final ext = p.extension(entity.path).toLowerCase();
-            if (ext == '.appx' || ext == '.msix' || ext == '.apk') {
+            final base = p.basename(entity.path).toLowerCase();
+            final isInstaller = ext == '.appx' || ext == '.msix' || ext == '.apk' || ext == '.exe';
+            final isLegacyTemp = base.startsWith('boardest_update_') || base.startsWith('boardest_cloud_update_');
+            if (isInstaller || isLegacyTemp) {
               try {
                 entity.deleteSync();
                 debugPrint('[UpdateService] 🧹 Old installer package removed: ${entity.path}');
-              } catch (_) {}
-            }
-          }
-        }
-      }
-      // 5.1.1 등 구버전이 %TEMP%에 캐시한 오염된 boardest_update_* 파일도 함께 정리
-      final tempDir = await getTemporaryDirectory();
-      if (tempDir.existsSync()) {
-        for (final entity in tempDir.listSync()) {
-          if (entity is File) {
-            final base = p.basename(entity.path).toLowerCase();
-            if (base.startsWith('boardest_update_') || base.startsWith('boardest_cloud_update_')) {
-              try {
-                entity.deleteSync();
               } catch (_) {}
             }
           }
@@ -180,7 +341,7 @@ class UpdateService {
       Map<String, dynamic>? latestReleaseData;
 
       for (final r in releases) {
-        final tag = (r['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^v'), '').trim();
+        final tag = (r['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^[vV]'), '').trim();
         if (tag.isEmpty) continue;
         latestFullTag ??= tag;
         latestReleaseData ??= r as Map<String, dynamic>;
@@ -233,51 +394,39 @@ class UpdateService {
       // 6. 정상 업데이트 다운로드 처리
       final assets = (latestReleaseData['assets'] as List<dynamic>? ?? []);
       String? apkDownloadUrl;
-      String? appxDownloadUrl;
+      int bestApkScore = 0;
+      String? windowsDownloadUrl;
+      int bestWindowsScore = 0;
       final isCloud = AppConfig.isCloudMode;
 
       for (final a in assets) {
-        final name = (a['name'] as String? ?? '').trim().toLowerCase();
+        final name = (a['name'] as String? ?? '').trim();
         final url = a['browser_download_url'] as String?;
         if (url == null || url.isEmpty) continue;
 
-        if (isCloud) {
-          if (name.endsWith('.apk') &&
-              (name.contains('boardest-cloud') || name.contains('bcld') || name.contains('class-cloud'))) {
-            apkDownloadUrl ??= url;
-          } else if ((name.contains('boardest-cloud') || name.contains('class-cloud')) &&
-              (name.endsWith('.msix') || name.endsWith('.appx'))) {
-            appxDownloadUrl ??= url;
-          }
-        } else {
-          if (name.endsWith('.apk') &&
-              !name.contains('teacher') &&
-              !name.contains('lite') &&
-              !name.contains('cloud') &&
-              !name.contains('bcld') &&
-              !name.contains('overlay')) {
-            apkDownloadUrl ??= url;
-          } else if (!name.contains('teacher') &&
-              !name.contains('lite') &&
-              !name.contains('cloud') &&
-              !name.contains('bcld') &&
-              !name.contains('overlay') &&
-              (name.endsWith('.msix') || name.endsWith('.appx'))) {
-            appxDownloadUrl ??= url;
-          }
+        final winScore = getWindowsAssetScore(name, isCloud: isCloud);
+        if (winScore > bestWindowsScore) {
+          bestWindowsScore = winScore;
+          windowsDownloadUrl = url;
+        }
+
+        final apkScore = getApkAssetScore(name, isCloud: isCloud);
+        if (apkScore > bestApkScore) {
+          bestApkScore = apkScore;
+          apkDownloadUrl = url;
         }
       }
 
       apkDownloadUrl ??= isCloud
           ? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.apk'
           : 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest.apk';
-      appxDownloadUrl ??= isCloud
+      windowsDownloadUrl ??= isCloud
           ? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.msix'
           : 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.msix';
 
       if (_isNewerVersion(distinctNormalizedReleases.first, currentNorm)) {
         final isWindows = !kIsWeb && Platform.isWindows;
-        final targetUrl = isWindows ? appxDownloadUrl : apkDownloadUrl;
+        final targetUrl = isWindows ? windowsDownloadUrl : apkDownloadUrl;
         unawaited(_startSilentDownload(targetUrl, latestFullTag, isWindows));
       }
     } catch (e) {
@@ -288,16 +437,33 @@ class UpdateService {
     }
   }
 
-  static bool _isNewerVersion(String target, String current) {
-    final t = target.split('.').map((v) => int.tryParse(v) ?? 0).toList();
-    final c = current.split('.').map((v) => int.tryParse(v) ?? 0).toList();
-    for (var i = 0; i < (t.length > c.length ? t.length : c.length); i++) {
-      final tv = i < t.length ? t[i] : 0;
-      final cv = i < c.length ? c[i] : 0;
+  static bool isNewerVersion(String target, String current) {
+    final tClean = target.replaceFirst(RegExp(r'^[vV]'), '').trim();
+    final cClean = current.replaceFirst(RegExp(r'^[vV]'), '').trim();
+
+    final tParts = tClean.split('+');
+    final cParts = cClean.split('+');
+
+    final tSem = tParts.first.split('.').map((v) => int.tryParse(v) ?? 0).toList();
+    final cSem = cParts.first.split('.').map((v) => int.tryParse(v) ?? 0).toList();
+
+    final maxLen = tSem.length > cSem.length ? tSem.length : cSem.length;
+    for (var i = 0; i < maxLen; i++) {
+      final tv = i < tSem.length ? tSem[i] : 0;
+      final cv = i < cSem.length ? cSem[i] : 0;
       if (tv != cv) return tv > cv;
     }
+
+    if (tParts.length > 1 && cParts.length > 1) {
+      final tb = int.tryParse(tParts[1].trim()) ?? 0;
+      final cb = int.tryParse(cParts[1].trim()) ?? 0;
+      if (tb != cb) return tb > cb;
+    }
+
     return false;
   }
+
+  static bool _isNewerVersion(String target, String current) => isNewerVersion(target, current);
 
   /// AppData/Updates 폴더에 백그라운드 다운로드
   static Future<void> _startSilentDownload(
@@ -321,16 +487,22 @@ class UpdateService {
         updatesDir.createSync(recursive: true);
       }
 
-      final ext = isWindows ? 'msix' : 'apk';
+      final ext = extractExtensionFromUrl(downloadUrl, isWindows: isWindows);
       final prefix = AppConfig.isCloudMode ? 'boardest_cloud_update' : 'boardest_update';
       final fileName = '${prefix}_$version.$ext';
       final savePath = p.join(updatesDir.path, fileName);
 
-      // 과거 잘못 저장된 .appx 파일이 있다면 삭제
-      try {
-        final legacyAppx = File(p.join(updatesDir.path, '${prefix}_$version.appx'));
-        if (legacyAppx.existsSync()) legacyAppx.deleteSync();
-      } catch (_) {}
+      // 동일 버전의 다른 확장자 잔여 파일 정리 (.msix vs .appx 충돌 및 파일 손상 방지)
+      final otherExt = ext == 'msix' ? 'appx' : (ext == 'appx' ? 'msix' : null);
+      if (otherExt != null) {
+        try {
+          final conflictingFile = File(p.join(updatesDir.path, '${prefix}_$version.$otherExt'));
+          if (conflictingFile.existsSync()) {
+            conflictingFile.deleteSync();
+            debugPrint('[UpdateService] 🧹 Removed conflicting alternate package: ${conflictingFile.path}');
+          }
+        } catch (_) {}
+      }
 
       final existingFile = File(savePath);
       if (existingFile.existsSync() && existingFile.lengthSync() > 15 * 1024 * 1024) {
@@ -379,6 +551,9 @@ class UpdateService {
   /// 다운로드된 패키지 설치 실행 (윈도우: 윈도우 패키지 설치 관리자 호출, 앱 종료 안 함)
   static Future<void> executeInstall(BuildContext context) async {
     final savePath = downloadedPackagePath;
+    // Reset state to idle so subsequent app resumes do not re-prompt/re-install
+    stateNotifier.value = UpdateState.idle;
+
     if (savePath == null || !File(savePath).existsSync()) {
       // 다운로드된 파일이 없으면 바로 다운로드 사이트 열기
       await launchUrl(Uri.parse(downloadPage), mode: LaunchMode.externalApplication);
@@ -628,7 +803,7 @@ class UpdateService {
               border: Border.all(color: const Color(0xFFEF4565), width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFEF4565).withOpacity(0.25),
+                  color: const Color(0xFFEF4565).withValues(alpha: 0.25),
                   blurRadius: 40,
                   spreadRadius: 6,
                 ),
@@ -641,7 +816,7 @@ class UpdateService {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEF4565).withOpacity(0.15),
+                    color: const Color(0xFFEF4565).withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -704,7 +879,7 @@ class UpdateService {
                               const SnackBar(content: Text('⚡ 최신 버전을 다운로드하는 중입니다. 잠시만 기다려주세요...')),
                             );
                             await checkAndUpdate(context, force: true);
-                            if (downloadedPackagePath != null) {
+                            if (downloadedPackagePath != null && context.mounted) {
                               await executeInstall(context);
                             }
                           }
@@ -762,7 +937,7 @@ class UpdateService {
                       height: 44,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red.withOpacity(0.2),
+                          backgroundColor: Colors.red.withValues(alpha: 0.2),
                           foregroundColor: const Color(0xFFEF4565),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -851,7 +1026,7 @@ class UpdateService {
                           child: Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.05),
+                              color: Colors.white.withValues(alpha: 0.05),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: Colors.white10),
                             ),

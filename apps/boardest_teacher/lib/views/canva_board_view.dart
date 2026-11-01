@@ -200,6 +200,117 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
   String _currentDhash = 'default';
   List<Map<String, dynamic>> _currentHotspots = [];
 
+  // 학급별 판서 관리
+  String _selectedClass = '기본';
+  List<String> _availableClasses = ['기본', '1반', '2반', '3반'];
+  final Map<String, List<AnnotationStroke>> _pageStrokesMemory = {};
+
+  // 1536px 네이티브 벡터 선명도 줌 팩터 관리
+  double _lastAppliedZoom = -1.0;
+  double _lastContainerWidth = 0.0;
+
+  void _applyNativeZoom(double width) {
+    if (kIsWeb || !Platform.isWindows || !_winWebviewInitialized || width <= 0) return;
+    _lastContainerWidth = width;
+    final targetZoom = width / 1536.0;
+    if ((_lastAppliedZoom - targetZoom).abs() > 0.005) {
+      _lastAppliedZoom = targetZoom;
+      _winWebview.setZoomFactor(targetZoom);
+    }
+  }
+
+  Future<void> _loadAvailableClasses() async {
+    if (_tbpFolderPath.isNotEmpty) {
+      final list = await TbpStorageService.instance.getAvailableClasses(_tbpFolderPath);
+      if (mounted) {
+        setState(() {
+          final merged = <String>{'기본', ..._availableClasses, ...list};
+          _availableClasses = merged.toList();
+          if (!_availableClasses.contains(_selectedClass) && _availableClasses.isNotEmpty) {
+            _selectedClass = _availableClasses.first;
+          }
+        });
+      }
+    }
+  }
+
+  Future<void> _switchClass(String newClass) async {
+    if (_selectedClass == newClass) return;
+    try {
+      final curStrokes = List<AnnotationStroke>.from(_annotationController.strokes);
+      if (_currentDhash.isNotEmpty) {
+        _pageStrokesMemory['$_selectedClass::$_currentDhash'] = curStrokes;
+        if (_tbpFolderPath.isNotEmpty) {
+          await TbpStorageService.instance.savePenStrokes(
+            _tbpFolderPath,
+            _currentDhash,
+            curStrokes,
+            classId: _selectedClass,
+          );
+        }
+      }
+      setState(() {
+        _selectedClass = newClass;
+        if (!_availableClasses.contains(newClass)) {
+          _availableClasses.add(newClass);
+        }
+      });
+      // 0ms 인메모리 우선 복원
+      final targetKey = '$newClass::$_currentDhash';
+      List<AnnotationStroke> strokes;
+      if (_pageStrokesMemory.containsKey(targetKey)) {
+        strokes = _pageStrokesMemory[targetKey]!;
+      } else {
+        strokes = await TbpStorageService.instance.loadPenStrokes(
+          _tbpFolderPath,
+          _currentDhash,
+          classId: newClass,
+        );
+        _pageStrokesMemory[targetKey] = strokes;
+      }
+      if (mounted) {
+        _annotationController.setStrokes(strokes);
+      }
+    } catch (e) {
+      debugPrint('[HtmlPresentView] _switchClass error: $e');
+    }
+  }
+
+  Widget _buildClassSelector(double s) {
+    final activeVal = _availableClasses.contains(_selectedClass)
+        ? _selectedClass
+        : (_availableClasses.isNotEmpty ? _availableClasses.first : '기본');
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 2 * s),
+      decoration: BoxDecoration(
+        color: const Color(0xFF24262E),
+        borderRadius: BorderRadius.circular(8 * s),
+        border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.5)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: activeVal,
+          dropdownColor: const Color(0xFF16161A),
+          icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF00F5D4), size: 18),
+          style: GoogleFonts.notoSansKr(
+            color: const Color(0xFF00F5D4),
+            fontSize: 13 * s,
+            fontWeight: FontWeight.bold,
+          ),
+          items: _availableClasses.map((c) {
+            return DropdownMenuItem<String>(
+              value: c,
+              child: Text(c == '기본' ? '기본 학급' : c),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) _switchClass(val);
+          },
+        ),
+      ),
+    );
+  }
+
   // TBP 입력 모드 및 도구
   TbpInputMode _inputMode = TbpInputMode.pen;
   ToolMode _tool = ToolMode.pen;
@@ -212,6 +323,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
   bool _smartClickPassThrough = false;
   Timer? _activeSpotTimer;
   int? _spotTimerRemaining;
+  DateTime? _lastNavigateTime;
 
   bool get _isWebTouchMode =>
       _inputMode == TbpInputMode.touch ||
@@ -227,15 +339,23 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
     return;
   }
 
+  void _onStrokesChanged() {
+    if (_currentDhash.isNotEmpty) {
+      _pageStrokesMemory['$_selectedClass::$_currentDhash'] = List<AnnotationStroke>.from(_annotationController.strokes);
+    }
+    _scheduleAutoSavePenStrokes();
+  }
+
   @override
   void initState() {
     super.initState();
     _displayTitle = widget.title ?? 'HTML Present';
     _dhashEngine = TbpDhashEngine(
       onDhashChanged: _onDhashDetected,
+      onNavigationRequested: (isNext) => _navigatePage(isNext: isNext),
       onWebContextMenu: _handleWebviewHotspotContext,
     );
-    _annotationController.onStrokesChanged = _scheduleAutoSavePenStrokes;
+    _annotationController.onStrokesChanged = _onStrokesChanged;
     _annotationController.activeColor = _penColor;
     _annotationController.activeWidth = _strokeWidth;
     _syncIframePointerEvents();
@@ -342,8 +462,10 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
 
       // 초기 Dhash ('default') 핫스팟 및 판서 스트로크 로드
       _currentHotspots = await TbpStorageService.instance.loadHotspots(_tbpFolderPath, _currentDhash);
-      final initialStrokes = await TbpStorageService.instance.loadPenStrokes(_tbpFolderPath, _currentDhash);
+      final initialStrokes = await TbpStorageService.instance.loadPenStrokes(_tbpFolderPath, _currentDhash, classId: _selectedClass);
+      _pageStrokesMemory['$_selectedClass::$_currentDhash'] = initialStrokes;
       _annotationController.setStrokes(initialStrokes);
+      await _loadAvailableClasses();
 
       if (kIsWeb) {
         if (mounted) setState(() => _isLoading = false);
@@ -378,6 +500,16 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
       await _winWebview.initialize();
       await _winWebview.setBackgroundColor(Colors.transparent);
       await _winWebview.loadUrl(url);
+
+      _winWebview.loadingState.listen((state) {
+        if (state == LoadingState.navigationCompleted) {
+          _applyNativeZoom(_lastContainerWidth);
+          _dhashEngine.requestHashNow();
+          Future.delayed(const Duration(milliseconds: 50), () => _dhashEngine.requestHashNow());
+          Future.delayed(const Duration(milliseconds: 600), () => _dhashEngine.requestHashNow());
+          Future.delayed(const Duration(milliseconds: 1500), () => _dhashEngine.requestHashNow());
+        }
+      });
 
       _winWebview.webMessage.listen((message) {
         try {
@@ -431,6 +563,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
           _tbpFolderPath,
           _currentDhash,
           _annotationController.strokes,
+          classId: _selectedClass,
         );
         debugPrint('[HtmlPresentView] Auto-saved pen strokes for dhash: $_currentDhash');
       } catch (e) {
@@ -446,23 +579,42 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
     final prevStrokes = List<AnnotationStroke>.from(_annotationController.strokes);
     final prevHotspots = List<Map<String, dynamic>>.from(_currentHotspots);
 
+    if (prevDhash.isNotEmpty) {
+      _pageStrokesMemory['$_selectedClass::$prevDhash'] = prevStrokes;
+    }
+
     // 이전 페이지 판서 자동 저장
-    if (_tbpFolderPath.isNotEmpty) {
-      await TbpStorageService.instance.savePenStrokes(
+    if (_tbpFolderPath.isNotEmpty && prevDhash.isNotEmpty && prevDhash != 'default') {
+      TbpStorageService.instance.savePenStrokes(
         _tbpFolderPath,
         prevDhash,
         prevStrokes,
-      );
+        classId: _selectedClass,
+      ).catchError((e) {
+        debugPrint('[HtmlPresentView] Auto-save error: $e');
+      });
     }
 
     _currentDhash = dHash;
+    final memKey = '$_selectedClass::$dHash';
+    if (_pageStrokesMemory.containsKey(memKey)) {
+      if (mounted) {
+        _annotationController.setStrokes(_pageStrokesMemory[memKey]!);
+      }
+    }
+
     var hotspots = await TbpStorageService.instance.loadHotspots(_tbpFolderPath, dHash);
-    var strokes = await TbpStorageService.instance.loadPenStrokes(_tbpFolderPath, dHash);
+    var strokes = _pageStrokesMemory[memKey];
+    if (strokes == null) {
+      strokes = await TbpStorageService.instance.loadPenStrokes(_tbpFolderPath, dHash, classId: _selectedClass);
+      _pageStrokesMemory[memKey] = strokes;
+    }
 
     if (prevDhash == 'default') {
       if (strokes.isEmpty && prevStrokes.isNotEmpty) {
         strokes = prevStrokes;
-        await TbpStorageService.instance.savePenStrokes(_tbpFolderPath, dHash, strokes);
+        _pageStrokesMemory[memKey] = strokes;
+        await TbpStorageService.instance.savePenStrokes(_tbpFolderPath, dHash, strokes, classId: _selectedClass);
       }
       if (hotspots.isEmpty && prevHotspots.isNotEmpty) {
         hotspots = prevHotspots;
@@ -475,6 +627,19 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
         _currentHotspots = hotspots;
       });
       _annotationController.setStrokes(strokes);
+    }
+  }
+
+  void _navigatePage({required bool isNext}) {
+    final now = DateTime.now();
+    if (_lastNavigateTime != null && now.difference(_lastNavigateTime!).inMilliseconds < 350) {
+      return;
+    }
+    _lastNavigateTime = now;
+    if (kIsWeb) {
+      _sendVirtualKey(isNext ? 'PageDown' : 'PageUp', isNext ? 34 : 33);
+    } else {
+      _dhashEngine.navigatePage(isNext: isNext);
     }
   }
 
@@ -737,6 +902,9 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                     builder: (context, constraints) {
                       final cWidth = constraints.maxWidth > 0 ? constraints.maxWidth : MediaQuery.of(context).size.width;
                       final cHeight = constraints.maxHeight > 0 ? constraints.maxHeight : MediaQuery.of(context).size.height;
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _applyNativeZoom(cWidth);
+                      });
 
                       void openHotspotModalAt(Offset pos) {
                         if (_inputMode == TbpInputMode.pen) return;
@@ -882,6 +1050,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                                   _currentHotspots = updated;
                                 });
                               },
+                              onHotspotTap: _triggerHotspot,
                             ),
                           ),
 
@@ -900,7 +1069,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                                     child: InkWell(
                                       borderRadius: BorderRadius.circular(24 * s),
                                       onTap: () {
-                                        _dhashEngine.navigatePage(isNext: false);
+                                        _navigatePage(isNext: false);
                                       },
                                       child: Container(
                                         padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
@@ -945,7 +1114,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                                     child: InkWell(
                                       borderRadius: BorderRadius.circular(24 * s),
                                       onTap: () {
-                                        _dhashEngine.navigatePage(isNext: true);
+                                        _navigatePage(isNext: true);
                                       },
                                       child: Container(
                                         padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 14 * s),
@@ -1054,6 +1223,7 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                                     _tbpFolderPath,
                                     _currentDhash,
                                     _annotationController.strokes,
+                                    classId: _selectedClass,
                                   );
                                 }
                                 if (context.mounted) Navigator.pop(context);
@@ -1071,6 +1241,11 @@ class _HtmlPresentViewState extends State<HtmlPresentView> {
                           ],
                         ),
                       ),
+                    ),
+
+                    // 학급 선택기
+                    PointerInterceptor(
+                      child: _buildClassSelector(s),
                     ),
 
                     // 3모드 스위처 (마우스 / 스마트 / 주석)

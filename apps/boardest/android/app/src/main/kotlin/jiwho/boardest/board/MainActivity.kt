@@ -258,8 +258,49 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                 }
+                "getAppVersion", "getPackageInfo" -> {
+                    result.success(getPackageVersionInfo())
+                }
                 else -> result.notImplemented()
             }
+        }
+
+        val versionChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "boardest/version")
+        versionChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getAppVersion", "getPackageInfo" -> {
+                    result.success(getPackageVersionInfo())
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun getPackageVersionInfo(): Map<String, Any> {
+        return try {
+            val pInfo = packageManager.getPackageInfo(packageName, 0)
+            val vName = pInfo.versionName ?: "5.5.0"
+            val vCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pInfo.longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                pInfo.versionCode.toLong()
+            }
+            mapOf(
+                "version" to vName,
+                "versionName" to vName,
+                "versionCode" to vCode,
+                "buildNumber" to vCode.toString(),
+                "fullVersion" to "$vName+$vCode"
+            )
+        } catch (e: Exception) {
+            mapOf(
+                "version" to "5.5.0",
+                "versionName" to "5.5.0",
+                "versionCode" to 5500L,
+                "buildNumber" to "5500",
+                "fullVersion" to "5.5.0+5500"
+            )
         }
     }
 }

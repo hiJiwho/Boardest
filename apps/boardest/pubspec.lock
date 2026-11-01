@@ -63,77 +63,77 @@ packages:
       path: "../../packages/common/bst_auth"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "5.5.0"
   bst_canva:
     dependency: "direct main"
     description:
       path: "../../packages/plugins/bst_canva"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "5.5.0"
   bst_cast:
     dependency: "direct main"
     description:
       path: "../../packages/common/bst_cast"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "5.5.0"
   bst_cloud:
     dependency: "direct overridden"
     description:
       path: "../../packages/common/bst_cloud"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "5.5.0"
   bst_core:
     dependency: "direct main"
     description:
       path: "../../packages/common/bst_core"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "5.5.0"
   bst_pdf:
     dependency: "direct main"
     description:
       path: "../../packages/plugins/bst_pdf"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "5.5.0"
   bst_pen:
     dependency: "direct main"
     description:
       path: "../../packages/plugins/bst_pen"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "5.5.0"
   bst_tbp:
     dependency: "direct main"
     description:
       path: "../../packages/plugins/bst_tbp"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "5.5.0"
   bst_timetable:
     dependency: "direct main"
     description:
       path: "../../packages/common/bst_timetable"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "5.5.0"
   bst_ui:
     dependency: "direct main"
     description:
       path: "../../packages/common/bst_ui"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "5.5.0"
   bst_video:
     dependency: "direct main"
     description:
       path: "../../packages/plugins/bst_video"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "5.5.0"
   characters:
     dependency: transitive
     description:
@@ -580,6 +580,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  package_info_plus:
+    dependency: "direct main"
+    description:
+      name: package_info_plus
+      sha256: "468c26b4254ab01979fa5e4a98cb343ea3631b9acee6f21028997419a80e1a20"
+      url: "https://pub.dev"
+    source: hosted
+    version: "9.0.1"
+  package_info_plus_platform_interface:
+    dependency: transitive
+    description:
+      name: package_info_plus_platform_interface
+      sha256: "202a487f08836a592a6bd4f901ac69b3a8f146af552bbd14407b6b41e1c3f086"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.2.1"
   path:
     dependency: "direct main"
     description:

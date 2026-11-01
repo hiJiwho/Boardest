@@ -56,6 +56,12 @@
         ".write": true
       }
     },
+    "cloud_pair_sessions": {
+      "$session_id": {
+        ".read": true,
+        ".write": true
+      }
+    },
     "assessments": {
       ".read": true,
       ".write": true

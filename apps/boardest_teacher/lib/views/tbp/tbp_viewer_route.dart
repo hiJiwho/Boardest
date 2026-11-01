@@ -70,6 +70,22 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
   // ─── 학급별 판서 분리 관리 (핫스팟은 글로벌 공통 유지) ─────
   String _selectedClass = '기본';
   List<String> _availableClasses = ['기본', '1반', '2반', '3반'];
+  // 학급+해시별 0ms 즉각 복원 인메모리 스트로크 캐시 (키: '$classId::$dHash')
+  final Map<String, List<AnnotationStroke>> _pageStrokesMemory = {};
+
+  // 1536px 네이티브 벡터 선명도 줌 팩터 관리
+  double _lastAppliedZoom = -1.0;
+  double _lastContainerWidth = 0.0;
+
+  void _applyNativeZoom(double width) {
+    if (kIsWeb || !Platform.isWindows || !_winWebviewInitialized || width <= 0) return;
+    _lastContainerWidth = width;
+    final targetZoom = width / 1536.0;
+    if ((_lastAppliedZoom - targetZoom).abs() > 0.005) {
+      _lastAppliedZoom = targetZoom;
+      _winWebview.setZoomFactor(targetZoom);
+    }
+  }
 
   // ─── 판서 ───────────────────────────────────────────────
   final AnnotationController _annotationController = AnnotationController();
@@ -100,16 +116,19 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
 
   void _onStrokesChanged() {
     if (_isSwitchingPage) return;
-    if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty) {
+    if (_currentDhash.isNotEmpty) {
       final snapshot = List<AnnotationStroke>.from(_annotationController.strokes);
-      unawaited(
-        TbpStorageService.instance.savePenStrokes(
-          _tbpFolderPath,
-          _currentDhash,
-          snapshot,
-          classId: _selectedClass,
-        ),
-      );
+      _pageStrokesMemory['$_selectedClass::$_currentDhash'] = snapshot;
+      if (_tbpFolderPath.isNotEmpty) {
+        unawaited(
+          TbpStorageService.instance.savePenStrokes(
+            _tbpFolderPath,
+            _currentDhash,
+            snapshot,
+            classId: _selectedClass,
+          ),
+        );
+      }
     }
   }
 
@@ -132,13 +151,17 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
     if (_selectedClass == newClass) return;
     _isSwitchingPage = true;
     try {
-      if (_tbpFolderPath.isNotEmpty && _currentDhash.isNotEmpty) {
-        await TbpStorageService.instance.savePenStrokes(
-          _tbpFolderPath,
-          _currentDhash,
-          List<AnnotationStroke>.from(_annotationController.strokes),
-          classId: _selectedClass,
-        );
+      final curStrokes = List<AnnotationStroke>.from(_annotationController.strokes);
+      if (_currentDhash.isNotEmpty) {
+        _pageStrokesMemory['$_selectedClass::$_currentDhash'] = curStrokes;
+        if (_tbpFolderPath.isNotEmpty) {
+          await TbpStorageService.instance.savePenStrokes(
+            _tbpFolderPath,
+            _currentDhash,
+            curStrokes,
+            classId: _selectedClass,
+          );
+        }
       }
       setState(() {
         _selectedClass = newClass;
@@ -146,11 +169,19 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
           _availableClasses.add(newClass);
         }
       });
-      final strokes = await TbpStorageService.instance.loadPenStrokes(
-        _tbpFolderPath,
-        _currentDhash,
-        classId: newClass,
-      );
+      // 0ms 인메모리 우선 복원
+      final targetKey = '$newClass::$_currentDhash';
+      List<AnnotationStroke> strokes;
+      if (_pageStrokesMemory.containsKey(targetKey)) {
+        strokes = _pageStrokesMemory[targetKey]!;
+      } else {
+        strokes = await TbpStorageService.instance.loadPenStrokes(
+          _tbpFolderPath,
+          _currentDhash,
+          classId: newClass,
+        );
+        _pageStrokesMemory[targetKey] = strokes;
+      }
       if (mounted) {
         _annotationController.setStrokes(strokes);
         _showFeedback('🏫 [$newClass] 학급 판서로 전환 (핫스팟 유지)');
@@ -257,6 +288,7 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
     _annotationController.addListener(_onStrokesChanged);
     _dhashEngine = TbpDhashEngine(
       onDhashChanged: _onDhashDetected,
+      onNavigationRequested: (isNext) => _navigatePage(isNext),
       onWebContextMenu: (rx, ry) {
         if (!mounted || widget.mode == TbpViewerMode.htmlp) return;
         TbpHotspotOverlay.showAddHotspotModal(
@@ -491,7 +523,9 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
 
       _winWebview.loadingState.listen((state) {
         if (state == LoadingState.navigationCompleted) {
+          _applyNativeZoom(_lastContainerWidth);
           _dhashEngine.requestHashNow();
+          Future.delayed(const Duration(milliseconds: 50), () => _dhashEngine.requestHashNow());
           Future.delayed(const Duration(milliseconds: 600), () => _dhashEngine.requestHashNow());
           Future.delayed(const Duration(milliseconds: 1500), () => _dhashEngine.requestHashNow());
         }
@@ -559,32 +593,54 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
       final prevHash = _currentDhash;
       final prevStrokes = List<AnnotationStroke>.from(_annotationController.strokes);
 
+      // 0. 현재 메모리에 이전 페이지 스트로크 즉시 백업
+      if (prevHash.isNotEmpty) {
+        _pageStrokesMemory['$_selectedClass::$prevHash'] = prevStrokes;
+      }
+
       // 1. 이전 페이지 판서 자동 저장 (Auto-Save)
       if (_tbpFolderPath.isNotEmpty && prevHash.isNotEmpty && prevHash != 'default') {
-        await TbpStorageService.instance.savePenStrokes(
+        TbpStorageService.instance.savePenStrokes(
           _tbpFolderPath,
           prevHash,
           prevStrokes,
           classId: _selectedClass,
-        );
+        ).catchError((e) {
+          debugPrint('[TbpViewer] Auto-save error: $e');
+        });
       }
 
       _currentDhash = dHash;
+
+      // 0ms 즉각 복원: 인메모리 캐시에 이미 새 페이지 스트로크가 있으면 즉시 화면 반영
+      final memKey = '$_selectedClass::$dHash';
+      if (_pageStrokesMemory.containsKey(memKey)) {
+        final cached = _pageStrokesMemory[memKey]!;
+        if (mounted) {
+          _annotationController.setStrokes(cached);
+        }
+      }
 
       // 2. 새 페이지의 핫스팟 및 판서 스트로크 자동 로드
       final hotspots = await TbpStorageService.instance.loadHotspots(
         _tbpFolderPath,
         dHash,
       );
-      var strokes = await TbpStorageService.instance.loadPenStrokes(
-        _tbpFolderPath,
-        dHash,
-        classId: _selectedClass,
-      );
+      
+      var strokes = _pageStrokesMemory[memKey];
+      if (strokes == null) {
+        strokes = await TbpStorageService.instance.loadPenStrokes(
+          _tbpFolderPath,
+          dHash,
+          classId: _selectedClass,
+        );
+        _pageStrokesMemory[memKey] = strokes;
+      }
 
       // 초기 로딩 중('default') 작성한 판서가 있으면 첫 실제 페이지 해시로 이관
       if (prevHash == 'default' && prevStrokes.isNotEmpty && strokes.isEmpty) {
         strokes = prevStrokes;
+        _pageStrokesMemory[memKey] = strokes;
         await TbpStorageService.instance.savePenStrokes(
           _tbpFolderPath,
           dHash,
@@ -614,8 +670,8 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
 
   void _navigatePage(bool isNext) {
     final now = DateTime.now();
-    if (_lastNavigateTime != null && now.difference(_lastNavigateTime!).inMilliseconds < 450) {
-      return; // 450ms 디바운스로 2페이지 연속 넘어감 차단
+    if (_lastNavigateTime != null && now.difference(_lastNavigateTime!).inMilliseconds < 350) {
+      return; // 350ms 디바운스로 2페이지 연속 넘어감 차단
     }
     _lastNavigateTime = now;
     _dhashEngine.navigatePage(isNext: isNext);
@@ -870,51 +926,58 @@ class _TbpViewerRouteState extends State<TbpViewerRoute> {
               Center(
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: Stack(
-                    children: [
-                        // ── WebView 레이어 ──────────────────────────────
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            ignoring: _isAnnotationEnabled,
-                            child: webviewWidget,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _applyNativeZoom(constraints.maxWidth);
+                      });
+                      return Stack(
+                        children: [
+                          // ── WebView 레이어 ──────────────────────────────
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              ignoring: _isAnnotationEnabled,
+                              child: webviewWidget,
+                            ),
                           ),
-                        ),
 
-                        // ── 판서 오버레이 ───────────────────────────────
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            ignoring: !_isAnnotationEnabled,
-                            child: Container(
-                              color: Colors.transparent,
-                              child: AnnotationCanvas(
-                                controller: _annotationController,
-                                enabled:
-                                    _isAnnotationEnabled &&
-                                    _tool != ToolMode.pointer,
+                          // ── 판서 오버레이 ───────────────────────────────
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              ignoring: !_isAnnotationEnabled,
+                              child: Container(
+                                color: Colors.transparent,
+                                child: AnnotationCanvas(
+                                  controller: _annotationController,
+                                  enabled:
+                                      _isAnnotationEnabled &&
+                                      _tool != ToolMode.pointer,
+                                ),
                               ),
                             ),
                           ),
-                        ),
 
-                        // ── 핫스팟 오버레이 (TBP 모드일 때만 활성) ─────
-                        if (widget.mode == TbpViewerMode.tbp)
-                          Positioned.fill(
-                            child: TbpHotspotOverlay(
-                              hotspots: _currentHotspots,
-                              tbpFolderPath: _tbpFolderPath,
-                              currentDhash: _currentDhash,
-                              scaleFactor: widget.scaleFactor,
-                              inputMode: _inputMode,
-                              longPressActive: _longPressActive,
-                              onHotspotsUpdated: (updated) {
-                                setState(() {
-                                  _currentHotspots = updated;
-                                });
-                              },
+                          // ── 핫스팟 오버레이 (TBP 모드일 때만 활성) ─────
+                          if (widget.mode == TbpViewerMode.tbp)
+                            Positioned.fill(
+                              child: TbpHotspotOverlay(
+                                hotspots: _currentHotspots,
+                                tbpFolderPath: _tbpFolderPath,
+                                currentDhash: _currentDhash,
+                                scaleFactor: widget.scaleFactor,
+                                inputMode: _inputMode,
+                                longPressActive: _longPressActive,
+                                onHotspotsUpdated: (updated) {
+                                  setState(() {
+                                    _currentHotspots = updated;
+                                  });
+                                },
+                              ),
                             ),
-                          ),
-                      ],
-                    ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
 

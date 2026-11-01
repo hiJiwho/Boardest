@@ -35,7 +35,7 @@ class TbpMetadata {
       };
 
   factory TbpMetadata.fromJson(Map<String, dynamic> json) => TbpMetadata(
-        version: (json['version'] ?? '5.4.0').toString(),
+        version: (json['version'] ?? '5.5.0').toString(),
         folderId: (json['folderId'] ?? json['id'] ?? json['ID'] ?? '').toString(),
         title: (json['title'] ?? json['name'] ?? '').toString(),
         grade: json['grade'] is int ? json['grade'] as int : (int.tryParse(json['grade']?.toString() ?? '3') ?? 3),

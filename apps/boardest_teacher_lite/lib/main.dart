@@ -9,6 +9,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'models/meal_models.dart';
+import 'services/neis_meal_service.dart';
+import 'views/monthly_meal_calendar_dialog.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -112,6 +115,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
   bool _isCallingMeal = false;
   String? _mealCallStatus;
   List<String> _mealMenu = [];
+  List<LiteMealDishItem> _mealDishItems = [];
   String _mealDateLabel = '오늘의 급식';
 
   // Online Classrooms in Same Cafeteria
@@ -702,24 +706,18 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
   Future<void> _fetchNeisMeal() async {
     try {
       final now = DateTime.now();
-      final dateStr = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-      final url = 'https://open.neis.go.kr/hub/mealServiceDietInfo?Type=json&pIndex=1&pSize=1&ATPT_OFCDC_SC_CODE=B10&SD_SCHUL_CODE=7010260&MLSV_YMD=$dateStr';
-      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 4));
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        final row = data['mealServiceDietInfo']?[1]?['row']?[0];
-        if (row != null && row['DDISH_NM'] != null) {
-          final raw = row['DDISH_NM'].toString();
-          final items = raw
-              .replaceAll(RegExp(r'\([0-9\.\*]+\)'), '')
-              .split(RegExp(r'<br\s*[\/]?>|\n'))
-              .map((s) => s.trim())
-              .where((s) => s.isNotEmpty)
-              .toList();
-          setState(() {
-            _mealMenu = items;
-          });
-        }
+      _mealDateLabel = '${now.month}월 ${now.day}일 급식 식단';
+      final schoolQuery = _schoolCode.isNotEmpty
+          ? _schoolCode
+          : (_schoolName.isNotEmpty ? _schoolName : (_schoolId.isNotEmpty ? _schoolId : '양동중학교'));
+      final info = await LiteNeisMealService().fetchTodayMealInfo(schoolQuery, now);
+      if (mounted) {
+        setState(() {
+          _mealDishItems = info.dishes;
+          _mealMenu = info.dishes.isNotEmpty
+              ? info.dishes.map((d) => '${d.name} ${d.allergyDisplay}'.trim()).toList()
+              : (info.footnotes.isNotEmpty ? [info.footnotes.first] : ['오늘 등록된 급식 메뉴가 없습니다.']);
+        });
       }
     } catch (_) {}
   }
@@ -3009,7 +3007,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
-                      onPressed: () => launchUrl(Uri.parse('https://boardest-cloud-connect.web.app/edit?web-lite&return_url=https://boardest-teacher.web.app/lite/'), webOnlyWindowName: '_self'),
+                      onPressed: () => launchUrl(Uri.parse('https://boardest-teacher-oauth.web.app/edit?web-lite&return_url=https://boardest-teacher.web.app/lite/'), webOnlyWindowName: '_self'),
                       icon: const Icon(Icons.edit_note_rounded, size: 16, color: Color(0xFF2EC4B6)),
                       label: const Text('✏️ 계정 설정 변경 (포털)', style: TextStyle(color: Color(0xFF2EC4B6), fontSize: 12)),
                       style: OutlinedButton.styleFrom(
@@ -3042,11 +3040,16 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
 
   // ─── 7대 개편 탭: 2. 급식 (식단표 전용) ───
   Widget _buildLiteMealOnlyTab() {
+    final schoolQuery = _schoolCode.isNotEmpty
+        ? _schoolCode
+        : (_schoolName.isNotEmpty ? _schoolName : (_schoolId.isNotEmpty ? _schoolId : '양동중학교'));
+    final displayName = _schoolName.isNotEmpty ? _schoolName : schoolQuery;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
+          constraints: const BoxConstraints(maxWidth: 680),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -3068,11 +3071,94 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                       children: [
                         const Icon(Icons.restaurant_menu_rounded, color: Color(0xFFFF8906), size: 24),
                         const SizedBox(width: 10),
-                        Text('$_mealDateLabel ($_schoolName)', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                        Expanded(
+                          child: Text(
+                            '$_mealDateLabel ($displayName)',
+                            style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () {
+                            LiteMonthlyMealCalendarDialog.show(
+                              context,
+                              schoolQuery: schoolQuery,
+                              schoolName: displayName,
+                              initialDate: DateTime.now(),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF8906).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFFF8906).withOpacity(0.5)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.calendar_month_rounded, size: 15, color: Color(0xFFFF8906)),
+                                SizedBox(width: 4),
+                                Text(
+                                  '월간 달력',
+                                  style: TextStyle(color: Color(0xFFFF8906), fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 14),
-                    if (_mealMenu.isEmpty)
+                    const SizedBox(height: 16),
+                    if (_mealDishItems.isNotEmpty)
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _mealDishItems.map((dish) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F0E17),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFFF8906).withOpacity(0.35)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  dish.name,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                ),
+                                if (dish.allergies.isNotEmpty) ...[
+                                  const SizedBox(width: 8),
+                                  Wrap(
+                                    spacing: 4,
+                                    children: dish.allergies.map((a) {
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFF8906).withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(5),
+                                          border: Border.all(color: const Color(0xFFFF8906).withOpacity(0.5)),
+                                        ),
+                                        child: Text(
+                                          a,
+                                          style: const TextStyle(
+                                            color: Color(0xFFFF8906),
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      )
+                    else if (_mealMenu.isEmpty)
                       const Text('급식 메뉴를 불러오는 중입니다...', style: TextStyle(color: Color(0xFF94A1B2), fontSize: 13))
                     else
                       Wrap(
@@ -3086,6 +3172,50 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                           );
                         }).toList(),
                       ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // 알레르기 유발물질 1~19 종합 안내 카드
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16161A),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.info_outline_rounded, color: Color(0xFF2EC4B6), size: 18),
+                        SizedBox(width: 6),
+                        Text(
+                          'NEIS 19대 알레르기 유발물질 번호 안내',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: LiteMealDayInfo.allergyCodeMap.entries.map((e) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.white.withOpacity(0.1)),
+                          ),
+                          child: Text(
+                            '${e.key}.${e.value}',
+                            style: const TextStyle(color: Color(0xFF94A1B2), fontSize: 11),
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ],
                 ),
               ),

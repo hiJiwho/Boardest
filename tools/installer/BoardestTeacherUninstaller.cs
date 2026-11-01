@@ -66,6 +66,8 @@ namespace Boardest.Uninstaller {
         public static extern bool ReleaseCapture();
         [DllImport("user32.dll")]
         public static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
+        [DllImport("shell32.dll")]
+        private static extern void SHChangeNotify(int wEventId, int uFlags, IntPtr dwItem1, IntPtr dwItem2);
 
         private WebView2 _webView;
         private string _installDir;
@@ -158,7 +160,7 @@ namespace Boardest.Uninstaller {
             }
 
             string json = string.Format(
-                "{{\"productName\":\"Boardest Teacher\",\"productType\":\"Teacher\",\"productVersion\":\"5.3.7\",\"productDesc\":\"선생님 교무실 PC 전용 수업 관리자 프로그램 제거\",\"heroIcon\":\"🎓\",\"installDir\":\"{0}\",\"hideDirField\":true,\"isUninstall\":true,\"logoBase64\":\"{1}\"}}",
+                "{{\"productName\":\"Boardest Teacher\",\"productType\":\"Teacher\",\"productVersion\":\"5.5.0\",\"productDesc\":\"선생님 교무실 PC 전용 수업 관리자 프로그램 제거\",\"heroIcon\":\"🎓\",\"installDir\":\"{0}\",\"hideDirField\":true,\"isUninstall\":true,\"logoBase64\":\"{1}\"}}",
                 EscapeJson(_installDir),
                 logoB64
             );
@@ -207,11 +209,93 @@ namespace Boardest.Uninstaller {
 
         private void RemoveShortcuts() {
             try {
-                string desktopLnk = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Boardest Teacher.lnk");
-                if (File.Exists(desktopLnk)) File.Delete(desktopLnk);
+                string[] shortcutNames = new string[] {
+                    "Boardest Teacher.lnk",
+                    "Boardest Teacher 제거.lnk"
+                };
+                string[] shortcutPatterns = new string[] {
+                    "Boardest Teacher*.lnk",
+                    "Boardest Teacher 제거*.lnk"
+                };
 
-                string startDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Boardest");
-                if (Directory.Exists(startDir)) Directory.Delete(startDir, true);
+                // 1. 바탕화면 바로가기 삭제 (User 및 Common)
+                string[] desktopDirs = new string[] {
+                    Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory)
+                };
+                foreach (string dir in desktopDirs) {
+                    if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) continue;
+                    foreach (string name in shortcutNames) {
+                        try {
+                            string p = Path.Combine(dir, name);
+                            if (File.Exists(p)) File.Delete(p);
+                        } catch { }
+                    }
+                    foreach (string pattern in shortcutPatterns) {
+                        try {
+                            foreach (string lnk in Directory.GetFiles(dir, pattern)) {
+                                try { File.Delete(lnk); } catch { }
+                            }
+                        } catch { }
+                    }
+                }
+
+                // 2. 시작 메뉴 루트 및 시작프로그램 바로가기 삭제 (Programs 및 CommonPrograms)
+                string[] startRoots = new string[] {
+                    Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
+                    Environment.GetFolderPath(Environment.SpecialFolder.Startup),
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonStartup)
+                };
+                foreach (string root in startRoots) {
+                    if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) continue;
+                    foreach (string name in shortcutNames) {
+                        try {
+                            string p = Path.Combine(root, name);
+                            if (File.Exists(p)) File.Delete(p);
+                        } catch { }
+                    }
+                    foreach (string pattern in shortcutPatterns) {
+                        try {
+                            foreach (string lnk in Directory.GetFiles(root, pattern)) {
+                                try { File.Delete(lnk); } catch { }
+                            }
+                        } catch { }
+                    }
+                }
+
+                // 3. 시작 메뉴 프로그램 하위 폴더 삭제 (User 및 Common)
+                string[] startDirs = new string[] {
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Boardest"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), "Boardest"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Boardest Teacher"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), "Boardest Teacher")
+                };
+                foreach (string sDir in startDirs) {
+                    try {
+                        if (!string.IsNullOrEmpty(sDir) && Directory.Exists(sDir)) {
+                            Directory.Delete(sDir, true);
+                        }
+                    } catch { }
+                }
+
+                // 4. 작업표시줄 고정 바로가기 정리 (선택적)
+                try {
+                    string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                    string taskbarPinned = Path.Combine(appData, @"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar");
+                    if (Directory.Exists(taskbarPinned)) {
+                        foreach (string pattern in shortcutPatterns) {
+                            foreach (string lnk in Directory.GetFiles(taskbarPinned, pattern)) {
+                                try { File.Delete(lnk); } catch { }
+                            }
+                        }
+                    }
+                } catch { }
+
+                // 5. Windows 쉘 캐시 즉시 갱신 (SHCNE_ASSOCCHANGED = 0x08000000, SHCNF_IDLIST = 0x0000)
+                try {
+                    SHChangeNotify(0x08000000, 0x0000, IntPtr.Zero, IntPtr.Zero);
+                } catch { }
             } catch { }
         }
 
