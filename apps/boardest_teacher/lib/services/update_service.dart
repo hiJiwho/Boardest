@@ -242,7 +242,6 @@ class UpdateService {
   }
 
   static bool _isNewer(String target, String current) => isNewerVersion(target, current);
-  static bool _isNewerVersion(String target, String current) => isNewerVersion(target, current);
 
   /// 앱 삭제 (안드로이드 OS 제거 / 윈도우 앱 및 기능 설정 실행)
   static Future<void> uninstallApp([BuildContext? context]) async {
@@ -396,9 +395,8 @@ class UpdateService {
         }
       }
 
-      installerUrl ??= 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-installer.exe';
-      msiUrl ??= 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.msi';
-      apkUrl ??= 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.apk';
+      final selectedWindowsUrl = installerUrl ?? msiUrl ?? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-installer.exe';
+      final selectedApkUrl = apkUrl ?? 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.apk';
 
       final hasUpdate = _isNewer(distinctNormalized.first, currentNorm);
       hasUpdateNotifier.value = hasUpdate;
@@ -406,7 +404,7 @@ class UpdateService {
       return UpdateInfo(
         latestVersion: latestFullTag,
         currentVersion: currentVersion,
-        downloadUrl: isWindows ? (installerUrl ?? msiUrl) : apkUrl,
+        downloadUrl: isWindows ? selectedWindowsUrl : selectedApkUrl,
         releaseNotes: (latestReleaseData['body'] as String? ?? '').trim(),
         hasUpdate: hasUpdate,
         isWindows: isWindows,
