@@ -636,6 +636,30 @@
 
     <!-- Step 1: Ready / Intro (소개 & 설치 확인 UI) -->
     <div class="step-view active" id="stepReady">
+      <!-- 구버전 인스톨러 감지 경고 배너 -->
+      <div id="legacyInstallerNotice" style="display:none; margin-bottom: 12px; background: rgba(239, 68, 68, 0.12); border: 1.5px solid #ef4444; border-radius: 9px; padding: 10px 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+          <div style="display: flex; align-items: center; gap: 7px;">
+            <span style="font-size: 16px;">⚠️</span>
+            <span style="font-weight: 800; color: #ff6b6b; font-size: 13px;" id="legacyNoticeTitle">
+              이 인스톨러는 이전 버전의 설치로 제작 되었습니다.
+            </span>
+          </div>
+          <span id="legacyNoticeBadge" style="background: rgba(239, 68, 68, 0.25); color: #ff8787; font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 10px;">구버전 인스톨러(v<span id="legacyIncomingVerText"></span>) 감지</span>
+        </div>
+        <p style="font-size: 11px; color: #fca5a5; margin: 0 0 8px 0; line-height: 1.35;">
+          실행 중인 인스톨러(.exe)에 내장된 버전은 구버전입니다. 아래 옵션 중 설치할 버전을 선택해주세요.
+        </p>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <button type="button" class="btn" id="btnUseLegacyVer" onclick="useLegacyInstallerVersion()" style="padding: 5px 11px; font-size: 11px; font-weight: 600; background: rgba(255, 255, 255, 0.07); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.45); border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+            이 인스톨러에 저장된 안전하지 않은 버전 사용
+          </button>
+          <button type="button" class="btn" id="btnUseLatestVer" onclick="useLatestRecommendedVersion()" style="padding: 5px 13px; font-size: 11px; font-weight: 800; background: var(--teal); color: #000; border: none; border-radius: 6px; cursor: pointer; box-shadow: 0 0 10px rgba(0, 245, 212, 0.35); transition: all 0.2s;">
+            새 버전 사용 (추천)
+          </button>
+        </div>
+      </div>
+
       <div class="feature-grid" id="featureGrid"></div>
 
       <div class="panel">
@@ -936,6 +960,7 @@
       productType: 'Teacher',
       productName: 'Boardest Teacher',
       productVersion: '5.5.1',
+      installerExeVersion: '',
       installDir: '',
       teacherInstallDir: '',
       isUninstall: false,
@@ -946,6 +971,101 @@
     let pendingChoice = 'Class';
     let pendingRpcMap = {};
     let rpcSeq = 1;
+    let availableVersions = ['5.5.1', '5.5.0', '5.4.3', '5.4.1', '5.4.0', '5.3.7'];
+
+    function parseSemVer(v) {
+      if (!v) return [0, 0, 0, 0];
+      const clean = v.toString().replace(/^v/i, '').split('+')[0];
+      const parts = clean.split('.').map(n => parseInt(n, 10) || 0);
+      while (parts.length < 4) parts.push(0);
+      return parts;
+    }
+
+    function compareSemVer(v1, v2) {
+      const p1 = parseSemVer(v1);
+      const p2 = parseSemVer(v2);
+      for (let i = 0; i < 4; i++) {
+        if (p1[i] > p2[i]) return 1;
+        if (p1[i] < p2[i]) return -1;
+      }
+      return 0;
+    }
+
+    function checkLegacyInstallerNotice() {
+      const incomingVer = appData.installerExeVersion;
+      const latestVer = (availableVersions && availableVersions.length > 0) ? availableVersions[0] : (appData.productVersion || '5.5.1');
+      const noticeBox = document.getElementById('legacyInstallerNotice');
+      if (!noticeBox) return;
+
+      if (incomingVer && compareSemVer(latestVer, incomingVer) > 0) {
+        const spanVer = document.getElementById('legacyIncomingVerText');
+        if (spanVer) spanVer.innerText = incomingVer;
+        noticeBox.style.display = 'block';
+      } else {
+        noticeBox.style.display = 'none';
+      }
+    }
+
+    function useLatestRecommendedVersion() {
+      const latestVer = (availableVersions && availableVersions.length > 0) ? availableVersions[0] : (appData.productVersion || '5.5.1');
+      appData.productVersion = latestVer;
+      document.getElementById('productVersion').innerText = 'v' + latestVer;
+
+      const notice = document.getElementById('legacyInstallerNotice');
+      const title = document.getElementById('legacyNoticeTitle');
+      const btnLegacy = document.getElementById('btnUseLegacyVer');
+      const btnLatest = document.getElementById('btnUseLatestVer');
+      if (notice) {
+        notice.style.background = 'rgba(0, 245, 212, 0.08)';
+        notice.style.borderColor = 'var(--teal)';
+      }
+      if (title) {
+        title.innerText = `✅ 최신 권장 버전(v${latestVer})이 선택되었습니다.`;
+        title.style.color = 'var(--teal)';
+      }
+      if (btnLatest) {
+        btnLatest.style.background = 'var(--teal)';
+        btnLatest.style.color = '#000';
+        btnLatest.style.boxShadow = '0 0 12px rgba(0, 245, 212, 0.5)';
+      }
+      if (btnLegacy) {
+        btnLegacy.style.opacity = '0.4';
+        btnLegacy.style.background = 'transparent';
+        btnLegacy.style.color = '#888';
+        btnLegacy.style.borderColor = '#444';
+      }
+    }
+
+    function useLegacyInstallerVersion() {
+      const incomingVer = appData.installerExeVersion;
+      if (!incomingVer) return;
+
+      appData.productVersion = incomingVer;
+      document.getElementById('productVersion').innerText = 'v' + incomingVer + ' (안전하지 않음)';
+
+      const notice = document.getElementById('legacyInstallerNotice');
+      const title = document.getElementById('legacyNoticeTitle');
+      const btnLegacy = document.getElementById('btnUseLegacyVer');
+      const btnLatest = document.getElementById('btnUseLatestVer');
+      if (notice) {
+        notice.style.background = 'rgba(239, 68, 68, 0.2)';
+        notice.style.borderColor = '#ef4444';
+      }
+      if (title) {
+        title.innerText = `⚠️ 인스톨러에 저장된 안전하지 않은 버전(v${incomingVer})이 선택되었습니다.`;
+        title.style.color = '#ff6b6b';
+      }
+      if (btnLegacy) {
+        btnLegacy.style.opacity = '1';
+        btnLegacy.style.background = '#ef4444';
+        btnLegacy.style.color = '#fff';
+      }
+      if (btnLatest) {
+        btnLatest.style.background = 'rgba(255, 255, 255, 0.1)';
+        btnLatest.style.color = '#888';
+        btnLatest.style.boxShadow = 'none';
+      }
+    }
 
     function detectFromQueryParams() {
       const params = new URLSearchParams(window.location.search);
@@ -954,7 +1074,9 @@
       const verParam = params.get('ver') || params.get('version') || '';
       const dirParam = params.get('dir') || '';
 
-      if (verParam) appData.productVersion = verParam;
+      if (verParam) {
+        appData.installerExeVersion = verParam;
+      }
       if (dirParam) {
         appData.installDir = dirParam;
         appData.teacherInstallDir = dirParam;
@@ -976,6 +1098,7 @@
       } else if (exeParam || prodParam === 'Select') {
         appData.needsProductSelection = true;
       }
+      checkLegacyInstallerNotice();
     }
 
     function selectScope(scope) {
@@ -1164,6 +1287,11 @@
 
     window.receiveInitData = function(data) {
       appData = { ...appData, ...data };
+      if (data.productVersion) {
+        appData.installerExeVersion = data.productVersion;
+      }
+      const latestVer = (availableVersions && availableVersions.length > 0) ? availableVersions[0] : '5.5.1';
+      appData.productVersion = latestVer;
       document.getElementById('productVersion').innerText = 'v' + (appData.productVersion || '5.5.1');
 
       if (data.logoBase64) {
@@ -1186,6 +1314,7 @@
       }
 
       applyProductUI(data.productType || 'Teacher');
+      checkLegacyInstallerNotice();
       goToStep('stepReady');
     };
 
