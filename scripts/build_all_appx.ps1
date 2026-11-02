@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '5.5.3',
+  [string]$AppVersion = '5.5.3.1',
   [switch]$SkipApk,
   [switch]$SkipWindowsBuild
 )

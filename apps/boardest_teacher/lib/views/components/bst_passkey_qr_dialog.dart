@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../config/app_config.dart';
 import '../../services/cloud_drive_service.dart';
 import '../../services/passkey_service.dart';
 
@@ -57,6 +59,78 @@ class _BstPasskeyQrDialogState extends State<BstPasskeyQrDialog> {
   void initState() {
     super.initState();
     _startRegistrationSession();
+    _resolveAndSyncTokens();
+  }
+
+  Future<void> _resolveAndSyncTokens() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      var rToken = CloudDriveService.instance.refreshToken;
+      if (rToken == null || rToken.isEmpty) {
+        rToken = prefs.getString('bst_cld_refresh_token') ??
+            prefs.getString('bst_refresh_token') ??
+            prefs.getString('boardest_google_refresh_token');
+      }
+      if ((rToken == null || rToken.isEmpty) && widget.teacherName.isNotEmpty) {
+        // Firestore teacher_cloud_tokens에서 원격 복구 시도
+        try {
+          final email = CloudDriveService.instance.userEmail ?? '';
+          if (email.isNotEmpty) {
+            final uid = email.replaceAll('.', '_').replaceAll('@', '_').replaceAll('+', '_');
+            final fsRes = await http.get(Uri.parse('${AppConfig.firestoreBase}/teacher_cloud_tokens/$uid?key=${AppConfig.firebaseApiKey}')).timeout(const Duration(seconds: 3));
+            if (fsRes.statusCode == 200) {
+              final fsData = jsonDecode(fsRes.body);
+              final fsRef = fsData['fields']?['refreshToken']?['stringValue'] as String?;
+              if (fsRef != null && fsRef.isNotEmpty) {
+                rToken = fsRef;
+                await prefs.setString('bst_cld_refresh_token', fsRef);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (rToken != null && rToken.isNotEmpty && mounted) {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        final token = CloudDriveService.instance.accessToken ?? '';
+        final folderId = CloudDriveService.instance.bstSaveFolderId ?? CloudDriveService.instance.boardestFolderId ?? '';
+        final email = CloudDriveService.instance.userEmail ?? '';
+        final encToken = token.isNotEmpty ? '&token=${Uri.encodeComponent(token)}' : '';
+        final encRefresh = '&refreshToken=${Uri.encodeComponent(rToken)}';
+        final encFolder = folderId.isNotEmpty ? '&folderId=${Uri.encodeComponent(folderId)}' : '';
+        final encEmail = email.isNotEmpty ? '&email=${Uri.encodeComponent(email)}' : '';
+        final encTeacher = Uri.encodeComponent(widget.teacherName);
+        final encSchool = Uri.encodeComponent(widget.schoolName);
+        final encDevice = Uri.encodeComponent(widget.homeroomClass);
+
+        setState(() {
+          _registrationUrl = 'https://boardest-cloud-connect.web.app/?action=register&key=$_challengeId&teacher=$encTeacher&school=$encSchool&device=$encDevice&t=$now$encToken$encRefresh$encFolder$encEmail';
+        });
+
+        final vaultPayload = jsonEncode({
+          'credId': 'passkey_qr',
+          'teacher': widget.teacherName,
+          'teacherName': widget.teacherName,
+          'token': token,
+          'accessToken': token,
+          'refreshToken': rToken,
+          'folderId': folderId,
+          'bstCloudFolderId': folderId,
+          'email': email,
+          'updatedAt': now,
+        });
+        http.put(
+          Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/passkey/vaults/$encTeacher.json'),
+          headers: {'Content-Type': 'application/json'},
+          body: vaultPayload,
+        ).ignore();
+        http.put(
+          Uri.parse('https://jiwhosboardest-default-rtdb.firebaseio.com/passkey_vaults/$encTeacher.json'),
+          headers: {'Content-Type': 'application/json'},
+          body: vaultPayload,
+        ).ignore();
+      }
+    } catch (_) {}
   }
 
   void _startRegistrationSession() {

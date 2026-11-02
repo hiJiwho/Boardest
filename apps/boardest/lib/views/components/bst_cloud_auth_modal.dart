@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/passkey_service.dart';
 import '../../services/bst_cloud_service.dart';
 
@@ -152,6 +153,7 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
             teacherName: event.teacherName ?? '선생님',
             ownerEmail: event.email ?? '',
             folderId: event.folderId,
+            refreshToken: event.refreshToken,
           );
 
           await Future.delayed(const Duration(milliseconds: 700));
@@ -869,11 +871,21 @@ class _BstCloudAuthModalState extends State<BstCloudAuthModal> {
                       ),
                     ),
                     ElevatedButton.icon(
-                      onPressed: () {
+                      onPressed: () async {
+                        final rToken = t['refreshToken'];
+                        String validTok = token;
+                        if (rToken != null && rToken.isNotEmpty) {
+                          BstCloudService.instance.activeRefreshToken = rToken;
+                          final refreshed = await BstCloudService.instance.exchangeRefreshTokenForAccessToken(rToken, forceRefresh: true);
+                          if (refreshed != null && refreshed.isNotEmpty) {
+                            validTok = refreshed;
+                          }
+                        }
                         BstCloudService.instance.setDirectAccessToken(
-                          token,
+                          validTok,
                           teacherName: name,
                           ownerEmail: email,
+                          refreshToken: rToken,
                         );
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(

@@ -202,12 +202,33 @@
     const teacherName = params.get('teacherName') || params.get('teacher') || savedTeacherName || '선생님';
     let incomingToken = params.get('token') || params.get('accessToken') || savedToken || '';
     const incomingEmail = params.get('email') || '';
-    const incomingRefreshToken = params.get('refreshToken') || '';
+    let incomingRefreshToken = params.get('refreshToken') || localStorage.getItem('bst_teacher_refresh_token') || '';
     const incomingFolderId = params.get('folderId') || params.get('bstCloudFolderId') || '';
     const incomingTotpSecret = params.get('totpSecret') || params.get('totp') || '';
     const timestampStr = params.get('t') || params.get('time') || '';
     const reqTimestamp = timestampStr ? parseInt(timestampStr, 10) : null;
     let isExpired = false;
+
+    async function exchangeRefreshToken(rToken) {
+      if (!rToken) return null;
+      try {
+        const res = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: rToken,
+            client_id: '287519871774-tccqiqt3em43311vlsb79jg222sqi8qo.apps.googleusercontent.com',
+            client_secret: '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'
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.access_token) return data.access_token;
+        }
+      } catch (_) {}
+      return null;
+    }
 
     async function sha256Hex(message) {
       const msgBuffer = new TextEncoder().encode(message);
@@ -369,15 +390,47 @@
             credId = 'dev_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
           }
 
-          // RTDB passkey/vaults 및 passkey_vaults 에 등록 완료 기록
           const enc = encodeURIComponent(teacherName);
+          let finalRefreshToken = incomingRefreshToken || localStorage.getItem('bst_teacher_refresh_token') || '';
+          if (!finalRefreshToken && teacherName) {
+            try {
+              const vRes = await fetch(`${RTDB_URL}/passkey/vaults/${enc}.json`);
+              if (vRes.ok) {
+                const vData = await vRes.json();
+                if (vData && vData.refreshToken) finalRefreshToken = vData.refreshToken;
+              }
+            } catch (_) {}
+            if (!finalRefreshToken) {
+              try {
+                const fsRes = await fetch(`${FIRESTORE_BASE}/teacher_cloud_tokens`);
+                if (fsRes.ok) {
+                  const fsData = await fsRes.json();
+                  const docs = fsData.documents || [];
+                  for (const d of docs) {
+                    const fields = d.fields || {};
+                    const docTeacher = fields.teacherName?.stringValue || fields.name?.stringValue || '';
+                    const docRefresh = fields.refreshToken?.stringValue || '';
+                    if (docTeacher === teacherName && docRefresh) {
+                      finalRefreshToken = docRefresh;
+                      break;
+                    }
+                  }
+                }
+              } catch (_) {}
+            }
+          }
+          if (finalRefreshToken) {
+            try { localStorage.setItem('bst_teacher_refresh_token', finalRefreshToken); } catch(_) {}
+          }
+
+          // RTDB passkey/vaults 및 passkey_vaults 에 등록 완료 기록
           const vaultPayload = {
             credId: credId,
             teacher: teacherName,
             teacherName: teacherName,
             token: incomingToken,
             accessToken: incomingToken,
-            refreshToken: incomingRefreshToken || '',
+            refreshToken: finalRefreshToken,
             folderId: incomingFolderId || '',
             bstCloudFolderId: incomingFolderId || '',
             email: incomingEmail || '',
@@ -513,6 +566,22 @@
                     break;
                   }
                 }
+              }
+            } catch (_) {}
+          }
+
+          if (incomingRefreshToken && !refreshTokenToSend) {
+            refreshTokenToSend = incomingRefreshToken;
+          }
+
+          if (refreshTokenToSend) {
+            try {
+              localStorage.setItem('bst_teacher_refresh_token', refreshTokenToSend);
+              // 만료된 access_token을 영구 refresh_token으로 즉시 최신화하여 전자칠판에 전달 (1시간 후 먹통 완벽 방지)
+              const freshAccess = await exchangeRefreshToken(refreshTokenToSend);
+              if (freshAccess) {
+                tokenToSend = freshAccess;
+                localStorage.setItem('bst_teacher_token', freshAccess);
               }
             } catch (_) {}
           }

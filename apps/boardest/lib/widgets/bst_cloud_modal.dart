@@ -147,13 +147,8 @@ class _BstCloudModalState extends State<BstCloudModal> {
     }
   }
 
-  // 0: Bst (기본 수업자료), 1: Bst TBP (스마트교과서 & 웹교안), 2: Bst Pen (판서노트)
+  // 0: 수업 자료 및 교안 (일반 자료 + TBP 스마트교과서), 1: 판서 보관함 (.pen, .bstpen, .iwb)
   int _folderTab = 0;
-
-  String get _currentFolderName {
-    if (_folderTab == 2) return 'bst-pen';
-    return 'bst-save';
-  }
 
   void _loadFiles() async {
     final token = _driveToken ?? BstCloudService.instance.activeToken;
@@ -161,11 +156,35 @@ class _BstCloudModalState extends State<BstCloudModal> {
 
     setState(() => _loadingFiles = true);
     try {
-      final targetFolder = _currentFolderName;
-      final files = await BstCloudService.instance.fetchFilesBySpecificFolder(
-        accessToken: token,
-        folderName: targetFolder,
-      );
+      List<BstCloudFile> files;
+      if (_folderTab == 1) {
+        // 판서 보관함 전용
+        final penFiles = await BstCloudService.instance.fetchFilesBySpecificFolder(
+          accessToken: token,
+          folderName: 'bst-pen',
+        );
+        final freeFiles = await BstCloudService.instance.fetchBstFreeFiles(accessToken: token);
+        final Set<String> ids = {};
+        files = [];
+        for (final f in [...penFiles, ...freeFiles]) {
+          if (ids.add(f.id)) files.add(f);
+        }
+      } else {
+        // 수업 자료 및 교안 (자료 + TBP 스마트교과서 및 웹교안)
+        final saveFiles = await BstCloudService.instance.fetchFilesBySpecificFolder(
+          accessToken: token,
+          folderName: 'bst-save',
+        );
+        final tbpFiles = await BstCloudService.instance.fetchTbpFiles(accessToken: token);
+        final Set<String> ids = {};
+        files = [];
+        for (final f in [...saveFiles, ...tbpFiles]) {
+          final l = f.name.toLowerCase();
+          // 판서 기록은 엄격하게 제외
+          if (l.endsWith('.pen') || l.endsWith('.bstpen') || l.endsWith('.iwb')) continue;
+          if (ids.add(f.id)) files.add(f);
+        }
+      }
 
       if (mounted) {
         setState(() {
@@ -187,29 +206,18 @@ class _BstCloudModalState extends State<BstCloudModal> {
   void _applyFilter() {
     List<BstCloudFile> list = _allFiles;
 
-    // 1. 메인 3대 폴더 탭 필터
+    // 1. 메인 2대 보관함 탭 필터
     if (_folderTab == 1) {
-      // Bst TBP: TBP 교과서 및 HTMLP 교안 포인터
+      // 판서 보관함: 판서 파일 전용
       list = list.where((f) {
         final l = f.name.toLowerCase();
-        return l.endsWith('.tbp') ||
-            l.endsWith('.tbp.bst') ||
-            l.endsWith('.htmlp') ||
-            l.endsWith('.htmlp.bst') ||
-            l.endsWith('.bsttbp') ||
-            l.endsWith('.canva.bst') ||
-            l.endsWith('.canva') ||
-            l.endsWith('.bstcanva') ||
-            f.mimeType == 'application/x-bst-tbp-folder';
+        return l.endsWith('.pen') || l.endsWith('.bstpen') || l.endsWith('.iwb');
       }).toList();
-    } else if (_folderTab == 2) {
-      // Bst Pen: 판서 파일 전용
-      list = list.where((f) => f.name.toLowerCase().endsWith('.pen') || f.name.toLowerCase().endsWith('.bstpen')).toList();
     } else {
-      // Bst: 일반 수업 자료 (PDF, PPT, HWP, TBP/HTMLP 껍데기 등) - 판서(.pen)는 제외!
+      // 수업 자료 및 교안 (일반 수업 자료 + TBP/HTMLP) - 판서(.pen)는 제외!
       list = list.where((f) {
         final l = f.name.toLowerCase();
-        return !l.endsWith('.pen') && !l.endsWith('.bstpen');
+        return !l.endsWith('.pen') && !l.endsWith('.bstpen') && !l.endsWith('.iwb');
       }).toList();
     }
 
@@ -230,8 +238,6 @@ class _BstCloudModalState extends State<BstCloudModal> {
       list = list.where((f) => f.name.toLowerCase().endsWith('.ppt') || f.name.toLowerCase().endsWith('.pptx')).toList();
     } else if (_categoryFilter == 'hwp') {
       list = list.where((f) => f.name.toLowerCase().endsWith('.hwp') || f.name.toLowerCase().endsWith('.hwpx')).toList();
-    } else if (_categoryFilter == 'pen') {
-      list = list.where((f) => f.name.toLowerCase().endsWith('.pen') || f.name.toLowerCase().endsWith('.bstpen')).toList();
     }
 
     // 3. 검색어 필터
@@ -1208,12 +1214,10 @@ class _BstCloudModalState extends State<BstCloudModal> {
           color: const Color(0xFF1E293B).withOpacity(0.4),
           child: Row(
             children: [
-              // 3대 핵심 보관함 전환 탭
-              _buildFolderTabButton(0, '📁 Bst (자료)', const Color(0xFF38BDF8), s),
-              SizedBox(width: 6 * s),
-              _buildFolderTabButton(1, '📐 Bst TBP (교재)', const Color(0xFF818CF8), s),
-              SizedBox(width: 6 * s),
-              _buildFolderTabButton(2, '🎨 Bst Pen (판서)', const Color(0xFF00F5D4), s),
+              // 2대 핵심 보관함 전환 탭 (교안/TBP vs 판서 보관함)
+              _buildFolderTabButton(0, '📁 수업 자료 및 교안', const Color(0xFF38BDF8), s),
+              SizedBox(width: 8 * s),
+              _buildFolderTabButton(1, '📐 판서 보관함', const Color(0xFF00F5D4), s),
 
               SizedBox(width: 12 * s),
 
@@ -1230,7 +1234,7 @@ class _BstCloudModalState extends State<BstCloudModal> {
                   child: TextField(
                     style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 12 * s),
                     decoration: InputDecoration(
-                      hintText: '자료 파일 검색...',
+                      hintText: _folderTab == 1 ? '판서 기록 검색...' : '수업 자료 및 교재 검색...',
                       hintStyle: GoogleFonts.notoSansKr(color: Colors.white30, fontSize: 11.5 * s),
                       border: InputBorder.none,
                       icon: Icon(Icons.search_rounded, color: Colors.white38, size: 16 * s),
@@ -1281,10 +1285,8 @@ class _BstCloudModalState extends State<BstCloudModal> {
                           SizedBox(height: 10 * s),
                           Text(
                             _folderTab == 1
-                                ? '등록된 스마트교과서 또는 웹교안(.tbp / .htmlp)이 없습니다.\n교사용 앱에서 교과서/교안을 저장해주세요.'
-                                : _folderTab == 2
-                                    ? '보관된 전자칠판 판서 노트(.pen)가 없습니다.'
-                                    : '보관된 수업 자료가 없습니다.\n교사용 앱에서 교안을 업로드하세요.',
+                                ? '보관된 전자칠판 판서 기록(.pen)이 없습니다.'
+                                : '보관된 수업 자료 및 스마트교과서가 없습니다.\n교사용 앱에서 교안을 업로드하거나 교과서를 저장하세요.',
                             style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 12.5 * s),
                             textAlign: TextAlign.center,
                           ),
@@ -1344,31 +1346,24 @@ class _BstCloudModalState extends State<BstCloudModal> {
 
   List<Widget> _buildSubCategoryChips(double s) {
     if (_folderTab == 1) {
-      // Bst TBP
-      return [
-        _buildFilterChip('all', '전체 TBP/HTMLP (${_filteredFiles.length})', s),
-        SizedBox(width: 8 * s),
-        _buildFilterChip('tbp', '📐 TBP 교과서', s),
-        SizedBox(width: 8 * s),
-        _buildFilterChip('htmlp', '🌐 HTMLP 웹교안', s),
-      ];
-    } else if (_folderTab == 2) {
-      // Bst Pen
+      // 판서 보관함
       return [
         _buildFilterChip('all', '전체 판서 (${_filteredFiles.length})', s),
       ];
     } else {
-      // Bst 전체
+      // 수업 자료 및 교안 (일반 자료 + TBP)
       return [
         _buildFilterChip('all', '전체 자료 (${_allFiles.length})', s),
         SizedBox(width: 8 * s),
-        _buildFilterChip('tbp', '📐 TBP/HTMLP', s),
+        _buildFilterChip('tbp', '📐 TBP 스마트교과서', s),
         SizedBox(width: 8 * s),
-        _buildFilterChip('pdf', '📕 PDF', s),
+        _buildFilterChip('htmlp', '🌐 HTMLP 웹교안', s),
         SizedBox(width: 8 * s),
-        _buildFilterChip('ppt', '📊 PPT', s),
+        _buildFilterChip('pdf', '📕 PDF 교재', s),
         SizedBox(width: 8 * s),
-        _buildFilterChip('hwp', '📝 한글', s),
+        _buildFilterChip('ppt', '📊 프레젠테이션', s),
+        SizedBox(width: 8 * s),
+        _buildFilterChip('hwp', '📝 한글/문서', s),
       ];
     }
   }

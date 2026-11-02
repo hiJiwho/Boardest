@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
 import 'bst_cloud_logger.dart';
+import 'passkey_service.dart';
 import 'totp_service.dart';
 
 class BstCloudTeacher {
@@ -151,12 +152,17 @@ class BstCloudService {
     String teacherName = '선생님',
     String ownerEmail = '',
     String? folderId,
+    String? refreshToken,
   }) {
     _hasAuthError = false;
     activeToken = token;
     activeTeacherName = teacherName;
     activeOwnerEmail = ownerEmail;
     if (folderId != null) activeFolderId = folderId;
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      activeRefreshToken = refreshToken;
+      SharedPreferences.getInstance().then((p) => p.setString('bst_active_refresh_token', refreshToken));
+    }
   }
 
   void disconnect() {
@@ -938,6 +944,18 @@ class BstCloudService {
           }
         }
       }
+      // 2.5 PRO 등록된 교사 금고에서 리프레시 토큰 조회
+      try {
+        final savedTeachers = await PasskeyService.instance.getProSavedTeachers();
+        for (final t in savedTeachers) {
+          final r = t['refreshToken'];
+          if (r != null && r.isNotEmpty && (activeTeacherName == null || t['teacherName'] == activeTeacherName || t['email'] == activeOwnerEmail)) {
+            activeRefreshToken = r;
+            await prefs.setString('bst_active_refresh_token', r);
+            return r;
+          }
+        }
+      } catch (_) {}
     } catch (e) {
       debugPrint('[BstCloudService] _resolveRefreshToken error: $e');
     }
@@ -946,10 +964,10 @@ class BstCloudService {
 
   /// 401 Unauthorized 발생 시 리프레시 토큰 및 Firestore 교사 정보 기반 안전한 토큰 자동 갱신
   Future<String?> _attemptTokenRefresh(String oldToken) async {
-    // 1. Refresh Token 통한 갱신 시도
+    // 1. Refresh Token 통한 갱신 시도 (forceRefresh: true 로 만료 캐시 완전 우회)
     final rToken = await _resolveRefreshToken();
     if (rToken != null && rToken.isNotEmpty) {
-      final refreshed = await exchangeRefreshTokenForAccessToken(rToken);
+      final refreshed = await exchangeRefreshTokenForAccessToken(rToken, forceRefresh: true);
       if (refreshed != null && refreshed.isNotEmpty) {
         activeToken = refreshed;
         _hasAuthError = false;
@@ -969,7 +987,7 @@ class BstCloudService {
           return match.directAccessToken;
         }
         if (match.refreshToken != null && match.refreshToken!.isNotEmpty) {
-          final refreshed = await exchangeRefreshTokenForAccessToken(match.refreshToken!);
+          final refreshed = await exchangeRefreshTokenForAccessToken(match.refreshToken!, forceRefresh: true);
           if (refreshed != null && refreshed.isNotEmpty) {
             activeToken = refreshed;
             _hasAuthError = false;
@@ -984,12 +1002,16 @@ class BstCloudService {
   }
 
   /// 9. Refresh Token -> Google 임시 Access Token 교환 (인플라이트 중복 제거 & 10분 캐시 & Worker CORS 폴백)
-  Future<String?> exchangeRefreshTokenForAccessToken(String refreshToken) async {
+  Future<String?> exchangeRefreshTokenForAccessToken(String refreshToken, {bool forceRefresh = false}) async {
     if (refreshToken.isEmpty) return null;
 
-    final cached = _tokenCache[refreshToken];
-    if (cached != null && DateTime.now().isBefore(cached.expiresAt)) {
-      return cached.token;
+    if (forceRefresh) {
+      _tokenCache.remove(refreshToken);
+    } else {
+      final cached = _tokenCache[refreshToken];
+      if (cached != null && DateTime.now().isBefore(cached.expiresAt)) {
+        return cached.token;
+      }
     }
 
     if (_ongoingTokenExchanges.containsKey(refreshToken)) {
@@ -1200,17 +1222,11 @@ class BstCloudService {
           );
           var fbRes = await http.get(fallbackUrl, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
           if (fbRes.statusCode == 401) {
-            if (activeRefreshToken != null && activeRefreshToken!.isNotEmpty) {
-              final newToken = await exchangeRefreshTokenForAccessToken(activeRefreshToken!);
-              if (newToken != null && newToken.isNotEmpty) {
-                activeToken = newToken;
-                currentToken = newToken;
-                fbRes = await http.get(fallbackUrl, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
-              } else {
-                _hasAuthError = true;
-                activeToken = null;
-                break;
-              }
+            final refreshed = await _attemptTokenRefresh(currentToken);
+            if (refreshed != null && refreshed.isNotEmpty) {
+              currentToken = refreshed;
+              activeToken = refreshed;
+              fbRes = await http.get(fallbackUrl, headers: {'Authorization': 'Bearer $currentToken'}).timeout(const Duration(seconds: 8));
             } else {
               _hasAuthError = true;
               activeToken = null;
@@ -1429,11 +1445,16 @@ class BstCloudService {
         final url = Uri.parse(
           "https://www.googleapis.com/drive/v3/files?${spaceParam}q=${Uri.encodeComponent(q)}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=100&orderBy=modifiedTime desc",
         );
-        final res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 8));
+        var res = await http.get(url, headers: {'Authorization': 'Bearer $accessToken'}).timeout(const Duration(seconds: 8));
         if (res.statusCode == 401) {
-          _hasAuthError = true;
-          activeToken = null;
-          return [];
+          final refreshed = await _attemptTokenRefresh(accessToken);
+          if (refreshed != null && refreshed.isNotEmpty) {
+            res = await http.get(url, headers: {'Authorization': 'Bearer $refreshed'}).timeout(const Duration(seconds: 8));
+          } else {
+            _hasAuthError = true;
+            activeToken = null;
+            return [];
+          }
         }
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);

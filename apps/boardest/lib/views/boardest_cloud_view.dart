@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config/app_config.dart';
@@ -40,12 +41,16 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
   String? _qrError;
   StreamSubscription? _approvalSubscription;
 
-  // 파일 탐색기 상태
+  // 파일 탐색기 상태 (수업 자료 및 교안 vs 판서 보관함 완전 분리)
   bool _isLoadingFiles = false;
-  List<BstCloudFile> _allFiles = [];
-  List<BstCloudFile> _filteredFiles = [];
+  int _selectedMainTab = 0; // 0: 수업 자료 및 교안, 1: 판서 보관함
+  List<BstCloudFile> _materialFiles = []; // 업로드 문서 및 TBP 교과서 전용 목록 (판서 절대 제외)
+  List<BstCloudFile> _penFiles = []; // 판서 보관함 전용 목록 (.pen, .Free.pen, .bstpen, .iwb)
+  List<BstCloudFile> _filteredMaterialFiles = [];
+  List<BstCloudFile> _filteredPenFiles = [];
   String _searchQuery = '';
-  String _selectedCategory = 'all'; // 'all', 'tbp', 'pdf', 'ppt', 'hwp', 'pen'
+  String _selectedMaterialCategory = 'all'; // 'all', 'tbp', 'pdf', 'ppt', 'hwp', 'other'
+  String _selectedPenClassroom = 'all'; // 'all', '201', '208', '공통', etc.
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -171,6 +176,7 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
             teacherName: event.teacherName ?? '선생님',
             ownerEmail: event.email ?? '',
             folderId: event.folderId,
+            refreshToken: event.refreshToken,
           );
 
           setState(() {
@@ -220,7 +226,29 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
     }
   }
 
-  /// 📂 Google Drive 내 수업자료 파일 목록 로드
+  static String extractClassroomTag(String fileName) {
+    final match = RegExp(r'^\[([^\]]+)\]').firstMatch(fileName);
+    if (match != null) {
+      return match.group(1) ?? '공통';
+    }
+    return '공통';
+  }
+
+  static String formatPenTimestamp(String fileName) {
+    final match = RegExp(r'(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})').firstMatch(fileName);
+    if (match != null) {
+      return '${match.group(1)}.${match.group(2)}.${match.group(3)} ${match.group(4)}:${match.group(5)}';
+    }
+    return '';
+  }
+
+  static String cleanPenTitle(String fileName) {
+    var name = fileName.replaceFirst(RegExp(r'^\[[^\]]+\]\s*'), '');
+    name = name.replaceAll(RegExp(r'(\.Free|\.file)?\.(pen|bstpen|iwb)$', caseSensitive: false), '');
+    return name.trim().isEmpty ? '자유 판서 기록' : name.trim();
+  }
+
+  /// 📂 Google Drive 내 수업자료 및 판서 보관함 파일 목록 로드 (완전 분리)
   Future<void> _loadFiles() async {
     final token = BstCloudService.instance.activeToken;
     if (token == null || token.isEmpty) return;
@@ -245,18 +273,34 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
         ),
       ]);
 
-      final Map<String, BstCloudFile> fileMap = {};
+      final Map<String, BstCloudFile> materialMap = {};
+      final Map<String, BstCloudFile> penMap = {};
+
       for (final list in results) {
         for (final file in list) {
           // 32자리 Hex 실체 폴더는 사용자 목록에서 제외 (.tbp.bst 포인터 파일만 표시)
           if (RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(file.name.trim())) continue;
-          fileMap[file.id] = file;
+
+          final lower = file.name.toLowerCase();
+          final isPen = lower.endsWith('.pen') ||
+              lower.endsWith('.bstpen') ||
+              lower.endsWith('.iwb') ||
+              lower.endsWith('.pen.json') ||
+              lower.endsWith('.pen.save.bst') ||
+              lower.startsWith('pen_');
+
+          if (isPen) {
+            penMap[file.id] = file;
+          } else {
+            materialMap[file.id] = file;
+          }
         }
       }
 
       if (mounted) {
         setState(() {
-          _allFiles = fileMap.values.toList();
+          _materialFiles = materialMap.values.toList();
+          _penFiles = penMap.values.toList();
           _applyFilter();
           _isLoadingFiles = false;
         });
@@ -278,11 +322,12 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
   }
 
   void _applyFilter() {
-    List<BstCloudFile> list = _allFiles;
+    final q = _searchQuery.trim().toLowerCase();
 
-    // 카테고리 필터
-    if (_selectedCategory == 'tbp') {
-      list = list.where((f) {
+    // 1. 수업 자료 및 교안 필터링 (판서 제외)
+    List<BstCloudFile> matList = _materialFiles;
+    if (_selectedMaterialCategory == 'tbp') {
+      matList = matList.where((f) {
         final l = f.name.toLowerCase();
         return l.endsWith('.tbp') ||
             l.endsWith('.tbp.bst') ||
@@ -294,32 +339,41 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
             l.endsWith('.bstcanva') ||
             f.mimeType == 'application/x-bst-tbp-folder';
       }).toList();
-    } else if (_selectedCategory == 'pdf') {
-      list = list.where((f) => f.name.toLowerCase().endsWith('.pdf')).toList();
-    } else if (_selectedCategory == 'ppt') {
-      list = list.where((f) {
+    } else if (_selectedMaterialCategory == 'pdf') {
+      matList = matList.where((f) => f.name.toLowerCase().endsWith('.pdf')).toList();
+    } else if (_selectedMaterialCategory == 'ppt') {
+      matList = matList.where((f) {
         final l = f.name.toLowerCase();
         return l.endsWith('.ppt') || l.endsWith('.pptx');
       }).toList();
-    } else if (_selectedCategory == 'hwp') {
-      list = list.where((f) {
+    } else if (_selectedMaterialCategory == 'hwp') {
+      matList = matList.where((f) {
         final l = f.name.toLowerCase();
         return l.endsWith('.hwp') || l.endsWith('.hwpx') || l.endsWith('.doc') || l.endsWith('.docx');
       }).toList();
-    } else if (_selectedCategory == 'pen') {
-      list = list.where((f) {
+    } else if (_selectedMaterialCategory == 'other') {
+      matList = matList.where((f) {
         final l = f.name.toLowerCase();
-        return l.endsWith('.pen') || l.endsWith('.bstpen');
+        final isKnown = l.endsWith('.tbp') || l.endsWith('.tbp.bst') || l.endsWith('.htmlp') || l.endsWith('.htmlp.bst') ||
+            l.endsWith('.pdf') || l.endsWith('.ppt') || l.endsWith('.pptx') || l.endsWith('.hwp') || l.endsWith('.hwpx') ||
+            l.endsWith('.doc') || l.endsWith('.docx');
+        return !isKnown;
       }).toList();
     }
-
-    // 검색어 필터
-    if (_searchQuery.trim().isNotEmpty) {
-      final q = _searchQuery.trim().toLowerCase();
-      list = list.where((f) => f.name.toLowerCase().contains(q)).toList();
+    if (q.isNotEmpty) {
+      matList = matList.where((f) => f.name.toLowerCase().contains(q)).toList();
     }
+    _filteredMaterialFiles = matList;
 
-    _filteredFiles = list;
+    // 2. 판서 보관함 필터링
+    List<BstCloudFile> penList = _penFiles;
+    if (_selectedPenClassroom != 'all') {
+      penList = penList.where((f) => extractClassroomTag(f.name) == _selectedPenClassroom).toList();
+    }
+    if (q.isNotEmpty) {
+      penList = penList.where((f) => f.name.toLowerCase().contains(q) || extractClassroomTag(f.name).toLowerCase().contains(q)).toList();
+    }
+    _filteredPenFiles = penList;
   }
 
 
@@ -527,8 +581,10 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
                 _isConnected = false;
                 _teacherName = null;
                 _ownerEmail = null;
-                _allFiles = [];
-                _filteredFiles = [];
+                _materialFiles = [];
+                _penFiles = [];
+                _filteredMaterialFiles = [];
+                _filteredPenFiles = [];
               });
               _startQrSession();
             },
@@ -975,6 +1031,8 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
   // 2. 연결 완료 상태: Cloud 전문형 파일 브라우저
   // ─────────────────────────────────────────────────────────────
   Widget _buildCloudBrowser() {
+    final currentList = _selectedMainTab == 0 ? _filteredMaterialFiles : _filteredPenFiles;
+
     return Column(
       children: [
         _buildBrowserHeader(),
@@ -988,15 +1046,15 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
                       CircularProgressIndicator(color: Color(0xFF00F5D4)),
                       SizedBox(height: 16),
                       Text(
-                        'Google Drive 수업 자료를 동기화하는 중...',
+                        'Google Drive 수업 자료 및 판서 보관함을 동기화하는 중...',
                         style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
                       ),
                     ],
                   ),
                 )
-              : _filteredFiles.isEmpty
+              : currentList.isEmpty
                   ? _buildEmptyState()
-                  : _buildFileGrid(),
+                  : (_selectedMainTab == 0 ? _buildFileGrid() : _buildPenArchiveGrid()),
         ),
       ],
     );
@@ -1171,6 +1229,32 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
   }
 
   Widget _buildFilterToolbar() {
+    // 1. 수업 자료 및 교안 카테고리별 개수 산출
+    int tbpCount = 0, pdfCount = 0, pptCount = 0, hwpCount = 0, otherCount = 0;
+    for (final f in _materialFiles) {
+      final l = f.name.toLowerCase();
+      if (l.endsWith('.tbp') || l.endsWith('.tbp.bst') || l.endsWith('.htmlp') || l.endsWith('.htmlp.bst') ||
+          l.endsWith('.bsttbp') || l.endsWith('.canva.bst') || l.endsWith('.canva') || l.endsWith('.bstcanva') ||
+          f.mimeType == 'application/x-bst-tbp-folder') {
+        tbpCount++;
+      } else if (l.endsWith('.pdf')) {
+        pdfCount++;
+      } else if (l.endsWith('.ppt') || l.endsWith('.pptx')) {
+        pptCount++;
+      } else if (l.endsWith('.hwp') || l.endsWith('.hwpx') || l.endsWith('.doc') || l.endsWith('.docx')) {
+        hwpCount++;
+      } else {
+        otherCount++;
+      }
+    }
+
+    // 2. 판서 보관함 교실별 개수 산출
+    final Map<String, int> classroomCounts = {};
+    for (final f in _penFiles) {
+      final tag = extractClassroomTag(f.name);
+      classroomCounts[tag] = (classroomCounts[tag] ?? 0) + 1;
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: const BoxDecoration(
@@ -1179,72 +1263,179 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
           bottom: BorderSide(color: Color(0xFF1E293B)),
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 스마트보드 터치 친화적 검색창
-          SizedBox(
-            width: 280,
-            height: 42,
-            child: TextField(
-              controller: _searchController,
-              onChanged: (val) {
-                setState(() {
-                  _searchQuery = val;
-                  _applyFilter();
-                });
-              },
-              style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 13),
-              decoration: InputDecoration(
-                hintText: '파일명 검색...',
-                hintStyle: GoogleFonts.notoSansKr(color: const Color(0xFF64748B), fontSize: 13),
-                prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear_rounded, color: Color(0xFF64748B), size: 16),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {
-                            _searchQuery = '';
-                            _applyFilter();
-                          });
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: const Color(0xFF1E293B),
-                contentPadding: EdgeInsets.zero,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
+          // ─── 상단 메인 세그먼트 전환: [📁 수업 자료 및 교안] vs [📐 판서 보관함] ───
+          Row(
+            children: [
+              _buildMainTabPill(
+                index: 0,
+                icon: Icons.folder_shared_rounded,
+                title: '수업 자료 및 교안',
+                count: _materialFiles.length,
+              ),
+              const SizedBox(width: 12),
+              _buildMainTabPill(
+                index: 1,
+                icon: Icons.history_edu_rounded,
+                title: '판서 보관함',
+                count: _penFiles.length,
+                badgeColor: const Color(0xFF10B981),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // ─── 하단 검색 및 세부 카테고리/교실 칩 ───
+          Row(
+            children: [
+              // 스마트보드 터치 친화적 검색창
+              SizedBox(
+                width: 280,
+                height: 42,
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (val) {
+                    setState(() {
+                      _searchQuery = val;
+                      _applyFilter();
+                    });
+                  },
+                  style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: _selectedMainTab == 0 ? '교안/교재 검색...' : '판서 기록/교실 검색...',
+                    hintStyle: GoogleFonts.notoSansKr(color: const Color(0xFF64748B), fontSize: 13),
+                    prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 18),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded, color: Color(0xFF64748B), size: 16),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {
+                                _searchQuery = '';
+                                _applyFilter();
+                              });
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: const Color(0xFF1E293B),
+                    contentPadding: EdgeInsets.zero,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 20),
+              const SizedBox(width: 20),
 
-          // 카테고리 필터 칩들
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildCategoryChip('all', '전체 (${_allFiles.length})'),
-                  _buildCategoryChip('tbp', '📘 TBP 스마트교과서'),
-                  _buildCategoryChip('pdf', '📕 PDF 교재'),
-                  _buildCategoryChip('ppt', '📙 프레젠테이션'),
-                  _buildCategoryChip('hwp', '📄 문서(한글/워드)'),
-                  _buildCategoryChip('pen', '✏️ 판서 노트'),
-                ],
+              // 카테고리 필터 칩들
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: _selectedMainTab == 0
+                        ? [
+                            _buildMaterialCategoryChip('all', '전체 (${_materialFiles.length})'),
+                            _buildMaterialCategoryChip('tbp', '📘 TBP 스마트교과서 ($tbpCount)'),
+                            _buildMaterialCategoryChip('pdf', '📕 PDF 교재 ($pdfCount)'),
+                            _buildMaterialCategoryChip('ppt', '📙 프레젠테이션 ($pptCount)'),
+                            _buildMaterialCategoryChip('hwp', '📄 문서(한글/워드) ($hwpCount)'),
+                            if (otherCount > 0)
+                              _buildMaterialCategoryChip('other', '📦 기타 파일 ($otherCount)'),
+                          ]
+                        : [
+                            _buildPenClassroomChip('all', '전체 판서 (${_penFiles.length})'),
+                            ...classroomCounts.entries.map(
+                              (e) => _buildPenClassroomChip(e.key, '🏫 [${e.key}] (${e.value})'),
+                            ),
+                          ],
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildCategoryChip(String category, String label) {
-    final isSelected = _selectedCategory == category;
+  Widget _buildMainTabPill({
+    required int index,
+    required IconData icon,
+    required String title,
+    required int count,
+    Color badgeColor = const Color(0xFF00F5D4),
+  }) {
+    final isSelected = _selectedMainTab == index;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedMainTab = index;
+          _applyFilter();
+        });
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? badgeColor.withValues(alpha: 0.18)
+              : const Color(0xFF141E33),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? badgeColor : const Color(0xFF1E293B),
+            width: isSelected ? 1.5 : 1.0,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: badgeColor.withValues(alpha: 0.2),
+                    blurRadius: 10,
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: isSelected ? badgeColor : const Color(0xFF94A3B8), size: 18),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: GoogleFonts.notoSansKr(
+                color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+              decoration: BoxDecoration(
+                color: isSelected ? badgeColor : const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: GoogleFonts.outfit(
+                  color: isSelected ? Colors.black : Colors.white60,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMaterialCategoryChip(String category, String label) {
+    final isSelected = _selectedMaterialCategory == category;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: FilterChip(
@@ -1266,7 +1457,38 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
         ),
         onSelected: (val) {
           setState(() {
-            _selectedCategory = category;
+            _selectedMaterialCategory = category;
+            _applyFilter();
+          });
+        },
+      ),
+    );
+  }
+
+  Widget _buildPenClassroomChip(String classroom, String label) {
+    final isSelected = _selectedPenClassroom == classroom;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        selected: isSelected,
+        label: Text(label),
+        labelStyle: GoogleFonts.notoSansKr(
+          color: isSelected ? Colors.black87 : const Color(0xFF94A3B8),
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+        ),
+        backgroundColor: const Color(0xFF1E293B),
+        selectedColor: const Color(0xFF10B981),
+        checkmarkColor: Colors.black87,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(
+            color: isSelected ? const Color(0xFF10B981) : Colors.transparent,
+          ),
+        ),
+        onSelected: (val) {
+          setState(() {
+            _selectedPenClassroom = classroom;
             _applyFilter();
           });
         },
@@ -1288,13 +1510,247 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
             mainAxisSpacing: 18,
             childAspectRatio: 0.95,
           ),
-          itemCount: _filteredFiles.length,
+          itemCount: _filteredMaterialFiles.length,
           itemBuilder: (context, index) {
-            final file = _filteredFiles[index];
+            final file = _filteredMaterialFiles[index];
             return _buildFileCard(file);
           },
         );
       },
+    );
+  }
+
+  Widget _buildPenArchiveGrid() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = (constraints.maxWidth / 240).floor().clamp(2, 6);
+        return GridView.builder(
+          padding: const EdgeInsets.all(24),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 18,
+            mainAxisSpacing: 18,
+            childAspectRatio: 0.95,
+          ),
+          itemCount: _filteredPenFiles.length,
+          itemBuilder: (context, index) {
+            final file = _filteredPenFiles[index];
+            return _buildPenCard(file);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPenCard(BstCloudFile file) {
+    final roomTag = extractClassroomTag(file.name);
+    final noteTitle = cleanPenTitle(file.name);
+    final timestamp = formatPenTimestamp(file.name);
+
+    final sizeStr = file.size != null && file.size! > 0
+        ? '${(file.size! / (1024 * 1024)).toStringAsFixed(1)} MB'
+        : '0.1 MB';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openFile(file),
+        borderRadius: BorderRadius.circular(18),
+        hoverColor: const Color(0xFF10B981).withValues(alpha: 0.08),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: const Color(0xFF10B981).withValues(alpha: 0.35),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: const Color(0xFF10B981).withValues(alpha: 0.08),
+                blurRadius: 12,
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 상단: 교실 뱃지 + 우측 메뉴
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF10B981), width: 1.2),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.meeting_room_rounded, color: Color(0xFF10B981), size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                          '[$roomTag]',
+                          style: GoogleFonts.notoSansKr(
+                            color: const Color(0xFF34D399),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E293B),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '판서',
+                          style: GoogleFonts.notoSansKr(
+                            color: const Color(0xFF10B981),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF64748B), size: 18),
+                        color: const Color(0xFF1E293B),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        onSelected: (val) {
+                          if (val == 'open') {
+                            _openFile(file);
+                          } else if (val == 'drive') {
+                            launchUrl(
+                              Uri.parse('https://drive.google.com/file/d/${file.id}/view'),
+                              mode: LaunchMode.externalApplication,
+                            );
+                          } else if (val == 'delete') {
+                            _confirmDeleteFile(file);
+                          }
+                        },
+                        itemBuilder: (ctx) => [
+                          const PopupMenuItem(
+                            value: 'open',
+                            child: Row(
+                              children: [
+                                Icon(Icons.play_circle_fill_rounded, color: Color(0xFF10B981), size: 16),
+                                SizedBox(width: 8),
+                                Text('판서 열기', style: TextStyle(color: Colors.white, fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'drive',
+                            child: Row(
+                              children: [
+                                Icon(Icons.open_in_new_rounded, color: Color(0xFF94A3B8), size: 16),
+                                SizedBox(width: 8),
+                                Text('Google Drive에서 보기', style: TextStyle(color: Colors.white, fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4565), size: 16),
+                                SizedBox(width: 8),
+                                Text('삭제', style: TextStyle(color: Color(0xFFEF4565), fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const Spacer(),
+
+              // 중앙/하단: 판서 저장 일시 및 제목
+              if (timestamp.isNotEmpty)
+                Text(
+                  '🕒 $timestamp',
+                  style: GoogleFonts.outfit(
+                    color: const Color(0xFF00F5D4),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              const SizedBox(height: 3),
+              Text(
+                noteTitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // 하단: 크기 & [판서 열기 ➔] 버튼
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    sizeStr,
+                    style: GoogleFonts.outfit(
+                      color: const Color(0xFF64748B),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '판서 열기',
+                          style: GoogleFonts.notoSansKr(
+                            color: const Color(0xFF34D399),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Color(0xFF34D399),
+                          size: 12,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1528,25 +1984,27 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
   }
 
   Widget _buildEmptyState() {
+    final isPenTab = _selectedMainTab == 1;
+
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
+            decoration: const BoxDecoration(
+              color: Color(0xFF1E293B),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.cloud_off_rounded,
-              color: Color(0xFF64748B),
+            child: Icon(
+              isPenTab ? Icons.history_edu_rounded : Icons.cloud_off_rounded,
+              color: isPenTab ? const Color(0xFF10B981) : const Color(0xFF64748B),
               size: 52,
             ),
           ),
           const SizedBox(height: 18),
           Text(
-            '클라우드 폴더(bst-save)에 수업 자료가 없습니다.',
+            isPenTab ? '저장된 전자칠판 판서 기록(.pen)이 없습니다.' : '클라우드에 등록된 수업 자료(교안/교재/TBP)가 없습니다.',
             style: GoogleFonts.notoSansKr(
               color: Colors.white,
               fontSize: 16,
@@ -1555,7 +2013,9 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
           ),
           const SizedBox(height: 6),
           Text(
-            '교사용 앱(Boardest Teacher) 또는 Google Drive에 업로드된 수업 자료가 여기에 안전하게 표시됩니다.',
+            isPenTab
+                ? '전자칠판 또는 판서 모드에서 저장된 판서 기록이 교실별로 여기에 안전하게 보관됩니다.'
+                : '교사용 앱(Boardest Teacher) 또는 Google Drive에 업로드된 교안·교재가 여기에 안전하게 표시됩니다.',
             style: GoogleFonts.notoSansKr(
               color: const Color(0xFF64748B),
               fontSize: 13,
@@ -1568,10 +2028,10 @@ class _BoardestCloudViewState extends State<BoardestCloudView> {
               OutlinedButton.icon(
                 onPressed: _loadFiles,
                 icon: const Icon(Icons.refresh_rounded, size: 16),
-                label: const Text('수업 자료 새로고침'),
+                label: Text(isPenTab ? '판서 보관함 새로고침' : '수업 자료 새로고침'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF00F5D4),
-                  side: const BorderSide(color: Color(0xFF00F5D4)),
+                  foregroundColor: isPenTab ? const Color(0xFF10B981) : const Color(0xFF00F5D4),
+                  side: BorderSide(color: isPenTab ? const Color(0xFF10B981) : const Color(0xFF00F5D4)),
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),

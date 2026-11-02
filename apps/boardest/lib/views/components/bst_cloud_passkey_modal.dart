@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/passkey_service.dart';
 import '../../services/bst_cloud_service.dart';
 
@@ -138,6 +139,7 @@ class _BstCloudPasskeyModalState extends State<BstCloudPasskeyModal> {
             teacherName: result.teacherName ?? '선생님',
             ownerEmail: result.email ?? '',
             folderId: result.folderId,
+            refreshToken: result.refreshToken,
           );
 
           await Future.delayed(const Duration(milliseconds: 600));
@@ -173,13 +175,26 @@ class _BstCloudPasskeyModalState extends State<BstCloudPasskeyModal> {
   }
 
   Future<void> _unlockWithSavedTeacher(Map<String, String> teacher) async {
-    final token = teacher['accessToken'] ?? teacher['refreshToken'];
+    final rToken = teacher['refreshToken'];
+    String? token = teacher['accessToken'];
+    if (rToken != null && rToken.isNotEmpty) {
+      BstCloudService.instance.activeRefreshToken = rToken;
+      try {
+        final refreshed = await BstCloudService.instance.exchangeRefreshTokenForAccessToken(rToken, forceRefresh: true);
+        if (refreshed != null && refreshed.isNotEmpty) {
+          token = refreshed;
+        }
+      } catch (e) {
+        debugPrint('[BstCloudPasskeyModal] Refresh error on saved teacher: $e');
+      }
+    }
     if (token == null || token.isEmpty) return;
 
     BstCloudService.instance.setDirectAccessToken(
       token,
       teacherName: teacher['teacherName'] ?? '선생님',
       ownerEmail: teacher['email'] ?? '',
+      refreshToken: rToken,
     );
 
     Navigator.pop(context);

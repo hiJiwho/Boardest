@@ -350,7 +350,7 @@ class CloudDriveService with ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       _accessToken = prefs.getString(_tokenKey) ?? prefs.getString('bst_google_access_token') ?? prefs.getString('bst_token');
-      _refreshToken = prefs.getString(_refreshTokenKey) ?? prefs.getString('bst_refresh_token');
+      _refreshToken = prefs.getString(_refreshTokenKey) ?? prefs.getString('bst_refresh_token') ?? prefs.getString('boardest_google_refresh_token');
       _userEmail = prefs.getString(_userEmailKey) ?? prefs.getString('bst_user_email') ?? prefs.getString('email');
       _userName = prefs.getString(_userNameKey) ?? prefs.getString('bst_user_name');
       _schoolName = prefs.getString(_schoolNameKey) ?? prefs.getString('bst_school_name');
@@ -1401,39 +1401,62 @@ class CloudDriveService with ChangeNotifier {
       final uid = _userEmail!.replaceAll('.', '_').replaceAll('@', '_').replaceAll('+', '_');
       final firestoreUrl = '${AppConfig.firestoreBase}/teacher_cloud_tokens/$uid?key=${AppConfig.firebaseApiKey}';
 
+      // 리프레시 토큰이 로컬 메모리에 비어있다면 Firestore에서 기존 저장된 리프레시 토큰 복구 시도 (덮어쓰기 방지)
+      final prefs = await SharedPreferences.getInstance();
+      if (_refreshToken == null || _refreshToken!.isEmpty) {
+        _refreshToken = prefs.getString(_refreshTokenKey) ?? prefs.getString('boardest_google_refresh_token') ?? prefs.getString('bst_refresh_token');
+        if (_refreshToken == null || _refreshToken!.isEmpty) {
+          try {
+            final fsRes = await http.get(Uri.parse(firestoreUrl)).timeout(const Duration(seconds: 3));
+            if (fsRes.statusCode == 200) {
+              final fsData = jsonDecode(fsRes.body);
+              final existingRefresh = fsData['fields']?['refreshToken']?['stringValue'] as String?;
+              if (existingRefresh != null && existingRefresh.isNotEmpty) {
+                _refreshToken = existingRefresh;
+                await prefs.setString(_refreshTokenKey, existingRefresh);
+                debugPrint('[CloudDriveService] 🔑 Recovered refreshToken from Firestore: ${existingRefresh.substring(0, 10)}...');
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
       if (_totpSecret == null || _totpSecret!.isEmpty) {
         _totpSecret = TotpService.generateDeterministicSecret(_userEmail!);
       }
 
-      final prefs = await SharedPreferences.getInstance();
       final currentSchoolId = AppConfig.isDemoMode ? 'Demo' : (prefs.getString('bst_school_id') ?? '');
       final currentSchoolName = _schoolName ?? (AppConfig.isDemoMode ? '데모 중학교' : '');
 
-      final payload = {
-        'fields': {
-          'email': {'stringValue': _userEmail!},
-          'name': {'stringValue': _userName ?? '선생님'},
-          'teacherName': {'stringValue': _userName ?? '선생님'},
-          'school': {'stringValue': currentSchoolName},
-          'schoolId': {'stringValue': currentSchoolId},
-          'accessToken': {'stringValue': _accessToken ?? 'demo_token'},
-          'refreshToken': {'stringValue': _refreshToken ?? ''},
-          'totpSecret': {'stringValue': _totpSecret ?? ''},
-          'shortId': {'stringValue': _shortId ?? '12'},
-          'cloudId': {'stringValue': cloudId},
-          'trustDeviceEnabled': {'booleanValue': _trustDeviceEnabled},
-          'autoLessonFlowEnabled': {'booleanValue': _autoLessonFlowEnabled},
-          'folderId': {'stringValue': _boardestFolderId ?? ''},
-          'bstSaveFolderId': {'stringValue': _bstSaveFolderId ?? _boardestFolderId ?? ''},
-          'bstCloudFolderId': {'stringValue': _boardestConnectFolderId ?? _boardestFolderId ?? ''},
-          'bstPenFolderId': {'stringValue': _bstPenFolderId ?? ''},
-          'bstCanvaFolderId': {'stringValue': _bstCanvaFolderId ?? ''},
-          'bstTextbookProFolderId': {'stringValue': _bstTextbookProFolderId ?? ''},
-          'lastConsumedWindow': {'integerValue': '0'},
-          'updatedAt': {'timestampValue': DateTime.now().toUtc().toIso8601String()},
-          'expiresAt': {'timestampValue': DateTime.now().add(const Duration(days: 30)).toUtc().toIso8601String()},
-        }
+      final fields = <String, dynamic>{
+        'email': {'stringValue': _userEmail!},
+        'name': {'stringValue': _userName ?? '선생님'},
+        'teacherName': {'stringValue': _userName ?? '선생님'},
+        'school': {'stringValue': currentSchoolName},
+        'schoolId': {'stringValue': currentSchoolId},
+        'accessToken': {'stringValue': _accessToken ?? 'demo_token'},
+        'totpSecret': {'stringValue': _totpSecret ?? ''},
+        'shortId': {'stringValue': _shortId ?? '12'},
+        'cloudId': {'stringValue': cloudId},
+        'trustDeviceEnabled': {'booleanValue': _trustDeviceEnabled},
+        'autoLessonFlowEnabled': {'booleanValue': _autoLessonFlowEnabled},
+        'folderId': {'stringValue': _boardestFolderId ?? ''},
+        'bstSaveFolderId': {'stringValue': _bstSaveFolderId ?? _boardestFolderId ?? ''},
+        'bstCloudFolderId': {'stringValue': _boardestConnectFolderId ?? _boardestFolderId ?? ''},
+        'bstPenFolderId': {'stringValue': _bstPenFolderId ?? ''},
+        'bstCanvaFolderId': {'stringValue': _bstCanvaFolderId ?? ''},
+        'bstTextbookProFolderId': {'stringValue': _bstTextbookProFolderId ?? ''},
+        'lastConsumedWindow': {'integerValue': '0'},
+        'updatedAt': {'timestampValue': DateTime.now().toUtc().toIso8601String()},
+        'expiresAt': {'timestampValue': DateTime.now().add(const Duration(days: 30)).toUtc().toIso8601String()},
       };
+
+      // refreshToken이 있을 때만 필드에 포함하여 Firestore의 기존 유효 리프레시 토큰이 공백("")으로 소실되지 않도록 철저히 보호!
+      if (_refreshToken != null && _refreshToken!.isNotEmpty) {
+        fields['refreshToken'] = {'stringValue': _refreshToken!};
+      }
+
+      final payload = {'fields': fields};
 
       await http.patch(
         Uri.parse(firestoreUrl),

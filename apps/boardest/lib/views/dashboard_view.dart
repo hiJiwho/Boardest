@@ -9491,10 +9491,10 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
             ),
             child: Row(
               children: [
-                _buildCloudFilterPill('all', '전체', scale),
-                _buildCloudFilterPill('lesson', '📁 수업 자료', scale),
-                _buildCloudFilterPill('tbp_canva', '📐 TBP & Canva', scale),
-                _buildCloudFilterPill('pen', '✏️ 판서', scale),
+                _buildCloudFilterPill('all', '전체 자료', scale),
+                _buildCloudFilterPill('tbp_canva', '📐 TBP/교재', scale),
+                _buildCloudFilterPill('lesson', '📁 문서·교안', scale),
+                _buildCloudFilterPill('pen', '📐 판서 보관함', scale),
               ],
             ),
           ),
@@ -9536,10 +9536,10 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                 final filteredFiles = _filterCloudFiles(allFiles);
 
                 if (filteredFiles.isEmpty) {
-                  String emptyMsg = '표시할 클라우드 파일이 없습니다.';
+                  String emptyMsg = '보관된 수업 자료 및 TBP가 없습니다.';
                   if (_cloudCategoryFilter == 'lesson') emptyMsg = '수업 자료(PDF, PPT, HWP 등)가 없습니다.';
                   if (_cloudCategoryFilter == 'tbp_canva') emptyMsg = '등록된 TBP 교과서 및 Canva 디자인이 없습니다.';
-                  if (_cloudCategoryFilter == 'pen') emptyMsg = '저장된 판서 기록(.pen, .bstpen)이 없습니다.';
+                  if (_cloudCategoryFilter == 'pen') emptyMsg = '저장된 전자칠판 판서 기록(.pen)이 없습니다.';
 
                   return Center(
                     child: Padding(
@@ -9598,7 +9598,8 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                     } else if (isPen) {
                       iconData = Icons.history_edu_rounded;
                       itemColor = const Color(0xFF00F5D4);
-                      badgeText = '판서';
+                      final match = RegExp(r'^\[(.*?)\]').firstMatch(f.name);
+                      badgeText = match != null ? match.group(1)! : '판서';
                     } else if (isPdf) {
                       iconData = Icons.picture_as_pdf_rounded;
                       itemColor = Colors.redAccent;
@@ -9651,7 +9652,9 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                             SizedBox(width: 6 * scale),
                             Expanded(
                               child: Text(
-                                f.name,
+                                isPen
+                                    ? f.name.replaceFirst(RegExp(r'^\[.*?\]\s*'), '').replaceAll('.Free.pen', '').replaceAll('.pen', '').replaceAll('.bstpen', '')
+                                    : f.name,
                                 style: GoogleFonts.notoSansKr(
                                   color: Colors.white,
                                   fontSize: 10.5 * scale,
@@ -9751,7 +9754,7 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
           return isPen;
         case 'all':
         default:
-          return true;
+          return !isPen; // 전체 자료 탭에는 판서 파일(.pen)을 제외하고 수업 자료 및 TBP만 표시
       }
     }).toList();
   }
@@ -9903,11 +9906,21 @@ class _DashboardViewState extends State<DashboardView> with TickerProviderStateM
                                   ),
                                   if (!isCurrent)
                                     ElevatedButton(
-                                      onPressed: () {
+                                      onPressed: () async {
+                                        final rToken = t['refreshToken'];
+                                        String validTok = token;
+                                        if (rToken != null && rToken.isNotEmpty) {
+                                          BstCloudService.instance.activeRefreshToken = rToken;
+                                          final refreshed = await BstCloudService.instance.exchangeRefreshTokenForAccessToken(rToken, forceRefresh: true);
+                                          if (refreshed != null && refreshed.isNotEmpty) {
+                                            validTok = refreshed;
+                                          }
+                                        }
                                         BstCloudService.instance.setDirectAccessToken(
-                                          token,
+                                          validTok,
                                           teacherName: name,
                                           ownerEmail: email,
+                                          refreshToken: rToken,
                                         );
                                         setState(() {
                                           _refreshCloudFiles();
