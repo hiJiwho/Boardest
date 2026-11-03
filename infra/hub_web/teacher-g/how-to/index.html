@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>교사용 기능 사용 가이드 (쪽지, 수행평가, 설정) — Boardest</title>
+  <title>초보 선생님을 위한 Boardest 교사용 초간단 가이드 — Boardest</title>
   <link rel="icon" type="image/png" href="/assets/logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,67 +11,204 @@
   <link rel="stylesheet" href="/assets/m3.css">
   <style>
     .article-header {
-      padding: 40px 0 24px;
+      padding: 48px 0 28px;
       border-bottom: 1px solid var(--md-sys-color-outline-variant);
-      margin-bottom: 32px;
+      margin-bottom: 36px;
+      text-align: center;
     }
     .article-tag {
-      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
       font-weight: 800;
-      color: var(--md-sys-color-primary);
+      color: #00F5D4;
+      background: rgba(0, 245, 212, 0.12);
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(0, 245, 212, 0.3);
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      margin-bottom: 8px;
+      margin-bottom: 14px;
     }
     .article-title {
-      font-size: 36px;
+      font-size: 38px;
       font-weight: 900;
       color: #FFF;
       line-height: 1.25;
-      margin-bottom: 10px;
+      margin-bottom: 14px;
     }
     .article-desc {
-      font-size: 16px;
-      color: var(--md-sys-color-on-surface-variant);
-      line-height: 1.6;
+      font-size: 17px;
+      color: #94A1B2;
+      line-height: 1.7;
+      max-width: 780px;
+      margin: 0 auto;
     }
-    .guide-content h3 {
-      font-size: 22px;
-      font-weight: 800;
+    .quick-start-box {
+      background: linear-gradient(135deg, rgba(127, 90, 240, 0.12) 0%, rgba(0, 245, 212, 0.08) 100%);
+      border: 1px solid rgba(0, 245, 212, 0.25);
+      border-radius: 24px;
+      padding: 32px;
+      margin-bottom: 48px;
+    }
+    .quick-title {
+      font-size: 24px;
+      font-weight: 900;
       color: #FFF;
-      margin: 36px 0 14px;
+      margin-bottom: 10px;
       display: flex;
       align-items: center;
       gap: 10px;
     }
-    .guide-content p {
+    .quick-sub {
+      font-size: 15px;
+      color: #CBD5E1;
+      margin-bottom: 24px;
+    }
+    .step-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    @media (max-width: 860px) {
+      .step-grid { grid-template-columns: 1fr; }
+      .article-title { font-size: 28px; }
+    }
+    .step-card {
+      background: rgba(22, 27, 39, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .step-card:hover {
+      border-color: rgba(0, 245, 212, 0.5);
+      transform: translateY(-3px);
+    }
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #00F5D4;
+      color: #0F172A;
+      font-weight: 900;
+      font-size: 15px;
+      margin-bottom: 14px;
+    }
+    .step-heading {
+      font-size: 18px;
+      font-weight: 800;
+      color: #FFF;
+      margin-bottom: 8px;
+    }
+    .step-text {
+      font-size: 14px;
+      color: #94A3B8;
+      line-height: 1.65;
+      flex-grow: 1;
+      margin-bottom: 14px;
+    }
+    .step-pill {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      color: #A78BFA;
+      background: rgba(167, 139, 250, 0.15);
+      padding: 4px 10px;
+      border-radius: 8px;
+      width: fit-content;
+    }
+    .section-title-wrap {
+      margin: 44px 0 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .section-title-wrap h2 {
+      font-size: 24px;
+      font-weight: 800;
+      color: #FFF;
+      margin: 0;
+    }
+    .feature-card {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+    .feature-card h3 {
+      font-size: 20px;
+      font-weight: 800;
+      color: #38BDF8;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .feature-card p {
       font-size: 15px;
       color: #CBD5E1;
       line-height: 1.75;
       margin-bottom: 14px;
     }
-    .guide-content ul, .guide-content ol {
-      margin-left: 24px;
-      margin-bottom: 18px;
+    .feature-card ul, .feature-card ol {
+      margin-left: 20px;
       color: #CBD5E1;
       font-size: 14.5px;
-      line-height: 1.75;
+      line-height: 1.8;
+      margin-bottom: 14px;
     }
-    .guide-content li {
-      margin-bottom: 6px;
+    .feature-card li strong {
+      color: #FFF;
     }
-    .callout-box {
-      background: var(--md-sys-color-surface-container-high);
-      border-left: 4px solid var(--md-sys-color-primary);
+    .tip-box {
+      background: rgba(0, 245, 212, 0.08);
+      border-left: 4px solid #00F5D4;
       border-radius: 0 14px 14px 0;
       padding: 16px 20px;
-      margin: 20px 0;
-      font-size: 14.5px;
+      margin: 18px 0;
+      font-size: 14px;
       color: #E2E8F0;
       line-height: 1.65;
     }
-    .callout-box strong {
-      color: var(--md-sys-color-primary);
+    .tip-box strong {
+      color: #00F5D4;
+    }
+    .faq-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 18px;
+      margin-top: 20px;
+    }
+    @media (max-width: 768px) {
+      .faq-grid { grid-template-columns: 1fr; }
+    }
+    .faq-item {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 16px;
+      padding: 20px;
+    }
+    .faq-q {
+      font-size: 16px;
+      font-weight: 800;
+      color: #F8FAFC;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .faq-a {
+      font-size: 14px;
+      color: #94A3B8;
+      line-height: 1.65;
     }
   </style>
 </head>
@@ -83,13 +220,14 @@
       <a href="/" class="m3-brand-link">
         <img src="/assets/logo.png" alt="Boardest Logo" class="m3-logo-img">
         <span class="m3-brand-text">Boardest</span>
+        <span class="m3-brand-badge">v5.6.0</span>
       </a>
 
       <nav class="m3-nav-actions">
         <a href="/" class="m3-nav-button">홈</a>
         <a href="/downloads" class="m3-nav-button">다운로드</a>
         <a href="/teacher-g/install" class="m3-nav-button">교사 설치</a>
-        <a href="/teacher-g/how-to" class="m3-nav-button active">교사 기능 사용법</a>
+        <a href="/teacher-g/how-to" class="m3-nav-button active">교사 사용법 (초급자용)</a>
         <a href="/cloud-g" class="m3-nav-button">클라우드 가이드</a>
       </nav>
     </div>
@@ -98,60 +236,155 @@
   <main class="m3-container guide-content">
 
     <div class="article-header">
-      <p class="article-tag">Teacher Manual / How-to</p>
-      <h1 class="article-title">교사용 기능 가이드: 쪽지, 수행평가, 설정</h1>
-      <p class="article-desc">선생님 앱(Boardest Teacher)의 실시간 교실 쪽지 전송, 다중 반 수행평가 일괄 공지, 동료 교사 시간표 병합 기반 평가 일정 AI 최적 추천 활용법을 안내합니다.</p>
+      <span class="article-tag">✨ 초보 선생님을 위한 3분 마스터 매뉴얼</span>
+      <h1 class="article-title">선생님, 이것만 알면 5분 만에 수업 준비 끝!</h1>
+      <p class="article-desc">
+        복잡한 설정이나 비밀번호 암기 없이, <strong>스마트폰 지문 인증(Passkey)</strong>과 <strong>1초 QR 로그인</strong>으로
+        교무실과 교실 전자칠판을 자유자재로 연결해보세요.
+      </p>
     </div>
 
-    <h3>1. 실시간 교실 쪽지 & 긴급 공지 발송</h3>
-    <p>
-      교무실에 앉아서 각 반 전자칠판 대화면으로 실시간 쪽지를 전송할 수 있습니다.
-    </p>
-    <ul>
-      <li><strong>수신 대상 선택:</strong> 내가 담임을 맡은 반, 특정 이동수업 교실, 또는 전체 교실을 선택할 수 있습니다.</li>
-      <li><strong>실시간 팝업 안내:</strong> 전송 즉시 해당 교실 전자칠판 상단에 슬라이드 배너가 나타나며, 학생들이 수업 전 중요한 준비물이나 공지사항을 놓치지 않도록 돕습니다.</li>
-    </ul>
+    <!-- 3-Step Quick Start -->
+    <div class="quick-start-box">
+      <div class="quick-title">
+        <span>🚀 3단계 초간단 빠른 시작 가이드</span>
+      </div>
+      <p class="quick-sub">처음 사용하는 선생님도 그대로 따라 하시면 3분 안에 완벽히 연동됩니다.</p>
 
-    <h3>2. 수행평가 다중 반 일괄 공지 등록 (NEW v5.3.5)</h3>
-    <p>
-      같은 과목을 여러 반(예: 1반부터 8반)에 걸쳐 가르치는 교과 선생님들을 위해 <strong>반별 일괄 등록 인터페이스</strong>를 제공합니다.
-    </p>
-    <div class="callout-box">
-      <strong>🎯 일괄 등록 절차:</strong><br>
-      1. 좌측 메뉴에서 <strong>[📝 수행평가]</strong> 탭을 클릭합니다.<br>
-      2. 과목명(예: <code>수학</code>), 평가명(예: <code>이차방정식 서술형 평가</code>), 준비물 및 평가 범위를 입력합니다.<br>
-      3. 하단 학급 목록에서 <strong>1반(월 2교시), 2반(화 1교시), 3반(화 3교시)...</strong> 등 각 반별 실시 일시를 한 화면에서 표 형태로 빠르게 지정합니다.<br>
-      4. <strong>[한 번에 공지 배포]</strong>를 클릭하면 모든 해당 학급 전자칠판의 수행평가 칸에 실시간으로 등록됩니다.
+      <div class="step-grid">
+        <!-- Step 1 -->
+        <div class="step-card">
+          <div class="step-num">1</div>
+          <div class="step-heading">내 폰에 패스키 등록</div>
+          <p class="step-text">
+            휴대폰 브라우저로 <code>boardest-teacher-oauth.web.app</code>에 접속해 구글 로그인 후 <strong>[이 기기를 패스키로 등록]</strong>을 누릅니다. 지문/Face ID 한 번 찍으면 등록 완료!
+          </p>
+          <span class="step-pill">최초 1회만 등록</span>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="step-card">
+          <div class="step-num">2</div>
+          <div class="step-heading">교실 칠판 QR 1초 로그인</div>
+          <p class="step-text">
+            교실 전자칠판의 <strong>Boardest Class Cloud</strong> 화면에 뜬 QR 코드를 스마트폰 기본 카메라로 찰칵 스캔하세요. 학생들 보는 앞에서 비번 칠 필요 없이 즉시 안전하게 로그인됩니다!
+          </p>
+          <span class="step-pill">비밀번호 노출 원천 방지</span>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="step-card">
+          <div class="step-num">3</div>
+          <div class="step-heading">수업 후 1초 원격 로그아웃</div>
+          <p class="step-text">
+            수업이 끝나면 내 휴대폰 화면에서 <strong>[전자칠판 로그아웃]</strong> 버튼을 누르거나, 칠판의 <strong>[로그아웃]</strong>을 누르면 내 개인 파일이 교실에서 즉시 닫힙니다.
+          </p>
+          <span class="step-pill">수업 후 보안 완벽 보장</span>
+        </div>
+      </div>
     </div>
 
-    <h3>3. 동료 교사 시간표 병합 & 주간 달력 히트맵 (AI 최적 일정 추천)</h3>
-    <p>
-      수행평가를 잡을 때 가장 큰 고민은 다른 과목(국어, 영어 등)과 시험 일정이 겹쳐 학생들이 힘들어하는 것입니다.
-    </p>
-    <ul>
-      <li><strong>동료 교사 시간표 병합:</strong> 동료 교사(예: 수학과 김선생님, 영어과 박선생님)를 기입하면, 두 선생님의 수업 시간표와 이미 등록된 타 교과 수행평가 데이터가 하나로 합쳐집니다.</li>
-      <li><strong>주간 캘린더 히트맵:</strong> 특정 요일과 교시에 평가가 얼마나 몰려있는지 색상 농도(녹색: 여유 → 빨간색: 과밀)로 시각화해 드립니다.</li>
-      <li><strong>AI 황금 일정 추천:</strong> <em>"11월 2주차 화요일 3교시에 3반을 진행하면, 다른 주요 과목과 겹치지 않고 3일 안에 모든 반 평가가 마무리됩니다!"</em> 와 같은 최적 일정을 자동으로 제안받을 수 있습니다.</li>
-    </ul>
+    <!-- Core Features Guide -->
+    <div class="section-title-wrap">
+      <h2>💡 가장 많이 쓰는 핵심 기능 4가지</h2>
+    </div>
 
-    <h3>4. 컴시간 / 나이스 시간표 연동 및 설정 관리</h3>
-    <p>
-      선생님의 주간 수업 시간표를 자동으로 동기화하고 개인 맞춤형 환경을 설정합니다.
-    </p>
-    <ul>
-      <li><strong>시간표 새로고침:</strong> 학교 시간표가 수시로 변경(교체 수업, 보강 등)되더라도 <strong>[시간표 새로고침]</strong> 버튼을 누르면 컴시간 서버의 최신 시간표로 1초 만에 갱신됩니다.</li>
-      <li><strong>A4 인쇄 & 엑셀 내보내기:</strong> 등록된 반별 수행평가 계획표는 교무일지 보관용 A4 인쇄 서식이나 Excel(.xlsx/CSV) 파일로 원클릭 저장할 수 있습니다.</li>
-    </ul>
+    <!-- 1. 쪽지 -->
+    <div class="feature-card">
+      <h3>💬 1. 교무실에서 교실 전자칠판으로 실시간 쪽지 & 공지 보내기</h3>
+      <p>
+        학생들이 수업 시작 전 깜빡하기 쉬운 준비물이나 긴급 전달사항을 교무실 자리에서 바로 보낼 수 있습니다.
+      </p>
+      <ul>
+        <li><strong>어디서 보내나요?</strong> 교무실 PC의 <strong>Boardest Teacher</strong> 앱 또는 웹 포털의 <strong>[쪽지 보내기]</strong> 탭에서 작성합니다.</li>
+        <li><strong>누구에게 가나요?</strong> 우리 담임반, 내가 수업 들어가는 특정 교실, 또는 전 학년 전체 교실을 선택해 전송할 수 있습니다.</li>
+        <li><strong>칠판에는 어떻게 뜨나요?</strong> 해당 반 전자칠판 상단에 슬라이드 팝업 배너 형태로 나타나며, 학생들이 수업 전 또렷하게 확인하게 됩니다.</li>
+      </ul>
+      <div class="tip-box">
+        <strong>💡 선생님 꿀팁:</strong> 1교시 수업 전 <em>"오늘 3반은 3교시에 과학실로 이동합니다! 교과서 챙겨오세요."</em>와 같은 알림을 5초 만에 보낼 수 있습니다.
+      </div>
+    </div>
 
-    <div style="margin-top: 40px; text-align: center;">
-      <a href="/cloud-g" class="m3-btn m3-btn-filled" style="padding: 12px 28px;">다음: 클라우드 & BCLD 연동 가이드 보기 →</a>
+    <!-- 2. 수행평가 -->
+    <div class="feature-card">
+      <h3>📝 2. 여러 반 수행평가 일괄 공지 등록 (1반~8반 한 번에!)</h3>
+      <p>
+        동일한 과목을 여러 반에 걸쳐 수업하시는 교과 선생님들을 위해, 각 반별 평가 일정을 표 하나에서 일괄 등록할 수 있습니다.
+      </p>
+      <ol>
+        <li>좌측 메뉴에서 <strong>[수행평가]</strong> 탭을 클릭합니다.</li>
+        <li><strong>과목명</strong>(예: <code>수학</code>)과 <strong>평가 제목</strong>(예: <code>이차방정식 서술형 평가</code>), 평가 범위 및 준비물을 적습니다.</li>
+        <li>아래 학급 목록에서 <strong>1반(월 2교시), 2반(화 1교시), 3반(화 3교시)...</strong> 표에 날짜와 교시를 콕콕 찍어 선택합니다.</li>
+        <li><strong>[한 번에 공지 배포]</strong>를 누르면 각 교실 전자칠판의 수행평가 칸에 실시간으로 등록됩니다!</li>
+      </ol>
+      <div class="tip-box">
+        <strong>💡 자동 알람 기능:</strong> 시험 전날에는 칠판에 <code>[내일 수행!]</code>, 당일에는 <code>[오늘 수행!]</code> 뱃지가 자동으로 깜빡여 학생들이 일정을 놓치지 않습니다.
+      </div>
+    </div>
+
+    <!-- 3. AI 일정 추천 -->
+    <div class="feature-card">
+      <h3>🤝 3. 동료 교사 일정 합치기 & 시험 겹침 방지 (AI 최적 일정 추천)</h3>
+      <p>
+        수행평가를 잡을 때 국어, 영어, 수학 일정이 겹쳐 학생들이 힘들어하지 않도록 다른 선생님의 일정과 겹치지 않는 황금 요일을 찾아드립니다.
+      </p>
+      <ul>
+        <li><strong>동료 선생님 검색:</strong> 같은 학년 다른 과목 선생님을 추가하면 두 분의 수업 시간표와 이미 잡힌 평가 일정이 하나로 합쳐집니다.</li>
+        <li><strong>주간 히트맵 색상 안내:</strong> 녹색(여유)부터 붉은색(과밀)까지 어느 요일에 시험이 몰려 있는지 한눈에 보입니다.</li>
+        <li><strong>AI 최적 추천:</strong> <em>"다음 주 화요일 3교시에 진행하면 다른 중요 시험과 겹치지 않습니다!"</em> 안내에 따라 클릭 한 번으로 확정할 수 있습니다.</li>
+      </ul>
+    </div>
+
+    <!-- 4. 시간표 연동 -->
+    <div class="feature-card">
+      <h3>⏰ 4. 나이스 / 컴시간 시간표 1초 동기화 & A4 인쇄</h3>
+      <p>
+        갑작스러운 교체 수업이나 보강 일정도 걱정 마세요. <strong>[시간표 새로고침]</strong> 버튼 한 번으로 학교 서버의 최신 시간표를 즉시 반영합니다.
+      </p>
+      <ul>
+        <li>교무일지 보관용으로 수행평가 계획표를 깔끔한 A4 양식으로 인쇄하거나 Excel(.xlsx)로 내보낼 수 있습니다.</li>
+      </ul>
+    </div>
+
+    <!-- FAQ -->
+    <div class="section-title-wrap">
+      <h2>❓ 초보 선생님이 자주 묻는 질문 (FAQ)</h2>
+    </div>
+
+    <div class="faq-grid">
+      <div class="faq-item">
+        <div class="faq-q">❓ 학생들이 보는데 비번을 치기 불안해요.</div>
+        <div class="faq-a">비밀번호를 교실 칠판에 타이핑할 필요가 전혀 없습니다! 스마트폰 카메라로 QR 코드를 비추고 휴대폰 지문만 찍으면 칠판에 내 수업자료가 즉시 열립니다.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">❓ 수업 끝나고 칠판 로그아웃을 깜빡했어요!</div>
+        <div class="faq-a">교무실로 돌아와서 스마트폰을 켜고 [전자칠판 로그아웃]을 누르면 교실 화면이 원격으로 즉시 잠깁니다. 걱정하지 마세요!</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">❓ 학생들도 제 개인 클라우드 파일에 접근하나요?</div>
+        <div class="faq-a">전자칠판용 Boardest Class Cloud는 <strong>열람 전용 모드</strong>로 작동하여 학생들이 임의로 파일을 수정, 다운로드, 삭제할 수 없습니다.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">❓ 스마트 교과서(TBP) 판서도 가능한가요?</div>
+        <div class="faq-a">네! Boardest Class Cloud 전용 앱에서 TBP 교과서 및 PDF 학습지 위에 직접 필압 지원 펜으로 판서하고 필기 내용을 저장할 수 있습니다.</div>
+      </div>
+    </div>
+
+    <div style="margin: 50px 0 20px; text-align: center;">
+      <a href="/downloads" class="m3-btn m3-btn-filled" style="padding: 14px 32px; font-size: 16px;">
+        📥 교사용 앱 다운로드 받기 (/downloads)
+      </a>
+      <a href="/cloud-g" class="m3-btn m3-btn-outlined" style="padding: 14px 28px; font-size: 16px; margin-left: 10px;">
+        클라우드 연동 자세히 보기 →
+      </a>
     </div>
 
   </main>
 
   <footer class="m3-footer">
     <div class="m3-container">
-      <p>© 2026 Boardest Open Source Project. All rights reserved.</p>
+      <p style="margin-bottom: 6px;">© 2026 Boardest Open Source Project. All rights reserved.</p>
+      <p>공식 GitHub: <a href="https://github.com/hiJiwho/Boardest" target="_blank">hiJiwho/Boardest</a> | <a href="https://github.com/hiJiwho/Boardest-Source-code" target="_blank">Boardest-Source-code</a></p>
     </div>
   </footer>
 
