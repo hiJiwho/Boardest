@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
@@ -2425,7 +2425,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                 onTap: () async {
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('[${r['name']}] 으로 8자리 자동 OTP Secret 발송 중...')),
+                    SnackBar(content: Text('[${r['name']}] 으로 6자리 자동 OTP Secret 발송 중...')),
                   );
                   try {
                     await http.put(
@@ -2550,7 +2550,7 @@ class _LiteMainScreenState extends State<LiteMainScreen> {
                     ElevatedButton.icon(
                       onPressed: () => _showAutoOtpDirectDialog(),
                       icon: const Icon(Icons.send_rounded, size: 16, color: Colors.black),
-                      label: Text('📡 전자칠판에 8자리 자동 OTP Secret 전송', style: GoogleFonts.notoSansKr(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13)),
+                      label: Text('📡 전자칠판에 6자리 자동 OTP Secret 전송', style: GoogleFonts.notoSansKr(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF00F5D4),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

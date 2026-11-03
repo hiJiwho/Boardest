@@ -48,9 +48,9 @@ class UpdateService {
   UpdateService._internal();
   static final instance = UpdateService._internal();
 
-  static const String defaultVersion = '5.5.3.1';
-  static const String defaultBuildNumber = '5531';
-  static const String defaultFullVersion = '5.5.3.1+5531';
+  static const String defaultVersion = '5.6.0';
+  static const String defaultBuildNumber = '5600';
+  static const String defaultFullVersion = '5.6.0+5600';
   static const String _releasesApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases?per_page=30';
   static const String downloadPage = 'https://boardest-downloads.web.app';
@@ -333,10 +333,13 @@ class UpdateService {
       final releases = jsonDecode(response.body) as List<dynamic>;
       if (releases.isEmpty) return null;
 
-      // 4번째 자리를 무시한 유니크 릴리즈 목록 구성
+      // 4번째 자리를 무시한 유니크 릴리즈 목록 구성 및 [Must update] 강제 락다운 감지
       final List<String> distinctNormalized = [];
       String? latestFullTag;
       Map<String, dynamic>? latestReleaseData;
+      bool hasMustUpdateAhead = false;
+
+      final currentNorm = normalizeVersion(currentVersion);
 
       for (final r in releases) {
         final tag = (r['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^[vV]'), '').trim();
@@ -348,11 +351,18 @@ class UpdateService {
         if (!distinctNormalized.contains(norm)) {
           distinctNormalized.add(norm);
         }
+
+        // [Must update] 키워드가 본인 버전보다 상위(최신) 릴리즈 제목/본문에 포함되어 있는지 검사
+        if (_isNewer(norm, currentNorm)) {
+          final relName = (r['name'] as String? ?? '').toLowerCase();
+          final relBody = (r['body'] as String? ?? '').toLowerCase();
+          if (relName.contains('[must update]') || relBody.contains('[must update]')) {
+            hasMustUpdateAhead = true;
+          }
+        }
       }
 
       if (latestFullTag == null || latestReleaseData == null) return null;
-
-      final currentNorm = normalizeVersion(currentVersion);
 
       // 메이저 버전 변경 판별
       final currentMajor = int.tryParse(currentNorm.split('.').first) ?? 5;
@@ -367,8 +377,8 @@ class UpdateService {
         }
       }
 
-      final isBlocked = isMajorBehind || lagCount >= 6;
-      final isCloudBlocked = lagCount >= 3 || isMajorBehind;
+      final isBlocked = isMajorBehind || lagCount >= 6 || hasMustUpdateAhead;
+      final isCloudBlocked = lagCount >= 3 || isMajorBehind || hasMustUpdateAhead;
 
       isBlockedNotifier.value = isBlocked;
       isCloudBlockedNotifier.value = isCloudBlocked;

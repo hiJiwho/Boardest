@@ -156,7 +156,8 @@
       window.location.replace(`https://boardest-teacher-oauth.web.app/edit${window.location.search}`);
     }
     const RTDB_URL = "https://jiwhosboardest-default-rtdb.firebaseio.com";
-    const FIRESTORE_BASE = "https://firestore.googleapis.com/v1/projects/jiwhosboardest/databases/(default)/documents";
+    // 패스키 서버측 검증 / 토큰 발급 Worker (Google Client Secret 은 Worker 환경변수에만 존재)
+    const WORKER_URL = "https://boardest-cloud-token.jiwho.workers.dev";
     const PROOF_SALT = "bst_passkey_v2_hmac_guard";
     const params = new URLSearchParams(window.location.search);
     if (params.has('create-Demo') || params.has('Demo') || params.has('demo')) {
@@ -185,49 +186,58 @@
     }
     const reversePairSecret = bstPairParam ? unmanglePairSecret(bstPairParam) : null;
 
-    // Saved identity on this mobile device
+    // ── 이 스마트폰에 저장된 신원 정보 (이름 / 이메일 / 폴더만 저장 — 토큰은 저장하지 않음) ──
     let savedTeacherName = '';
-    let savedToken = '';
+    let savedEmail = '';
+    let savedFolderId = '';
+    let legacyToken = '';
+    let legacyRefreshToken = '';
     try {
       savedTeacherName = localStorage.getItem('bst_teacher_name') || '';
-      savedToken = localStorage.getItem('bst_teacher_token') || '';
-      if (savedTeacherName === '이수학' || (savedToken && savedToken.startsWith('demo_token'))) {
+      savedEmail = localStorage.getItem('bst_teacher_email') || '';
+      savedFolderId = localStorage.getItem('bst_teacher_folder_id') || '';
+      // 구버전이 저장해 둔 토큰은 1회 이전(패스키 등록 시 서버 보관)만 허용하고 즉시 폰에서 제거
+      legacyToken = localStorage.getItem('bst_teacher_token') || '';
+      legacyRefreshToken = localStorage.getItem('bst_teacher_refresh_token') || '';
+      if (savedTeacherName === '이수학' || legacyToken.startsWith('demo_token')) {
         localStorage.removeItem('bst_teacher_name');
-        localStorage.removeItem('bst_teacher_token');
         savedTeacherName = '';
-        savedToken = '';
+        legacyToken = '';
+        legacyRefreshToken = '';
       }
+      localStorage.removeItem('bst_teacher_token');
     } catch (_) {}
 
     const teacherName = params.get('teacherName') || params.get('teacher') || savedTeacherName || '선생님';
-    let incomingToken = params.get('token') || params.get('accessToken') || savedToken || '';
-    const incomingEmail = params.get('email') || '';
-    let incomingRefreshToken = params.get('refreshToken') || localStorage.getItem('bst_teacher_refresh_token') || '';
-    const incomingFolderId = params.get('folderId') || params.get('bstCloudFolderId') || '';
-    const incomingTotpSecret = params.get('totpSecret') || params.get('totp') || '';
+    const incomingToken = params.get('token') || params.get('accessToken') || legacyToken || '';
+    const incomingEmail = params.get('email') || savedEmail || '';
+    const incomingRefreshToken = params.get('refreshToken') || legacyRefreshToken || '';
+    const incomingFolderId = params.get('folderId') || params.get('bstCloudFolderId') || savedFolderId || '';
     const timestampStr = params.get('t') || params.get('time') || '';
     const reqTimestamp = timestampStr ? parseInt(timestampStr, 10) : null;
     let isExpired = false;
 
-    async function exchangeRefreshToken(rToken) {
-      if (!rToken) return null;
-      try {
-        const res = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            grant_type: 'refresh_token',
-            refresh_token: rToken,
-            client_id: '287519871774-tccqiqt3em43311vlsb79jg222sqi8qo.apps.googleusercontent.com',
-            client_secret: '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'
-          })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.access_token) return data.access_token;
-        }
-      } catch (_) {}
-      return null;
+    // 주소창/방문기록에 토큰이 남지 않도록 URL 에서 민감 파라미터 제거
+    try {
+      ['token', 'accessToken', 'refreshToken', 'totpSecret', 'totp'].forEach(k => params.delete(k));
+      const qs = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
+    } catch (_) {}
+
+    // ── 유틸 ──
+    function b64u(buf) {
+      const bytes = new Uint8Array(buf);
+      let s = '';
+      for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+      return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    function fromB64u(str) {
+      let b64 = String(str).replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      const bin = atob(b64);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
     }
 
     async function sha256Hex(message) {
@@ -235,6 +245,165 @@
       const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
       return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function loginLink(label) {
+      return `<a href="https://boardest-teacher-oauth.web.app?return_url=${encodeURIComponent(window.location.href)}" class="btn btn-purple" style="margin-top:12px;padding:12px 18px;text-decoration:none;display:inline-block;">${label}</a>`;
+    }
+
+    // Worker 호출 (오류 코드/메시지를 Error 로 변환)
+    async function workerPost(path, body) {
+      let res;
+      try {
+        res = await fetch(WORKER_URL + path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body || {})
+        });
+      } catch (e) {
+        throw new Error('인증 서버에 연결하지 못했습니다. 네트워크 상태를 확인해주세요.');
+      }
+      let json = {};
+      try { json = await res.json(); } catch (_) {}
+      if (!res.ok) {
+        const err = new Error(json.error || ('서버 오류 (' + res.status + ')'));
+        err.code = json.code || '';
+        err.status = res.status;
+        throw err;
+      }
+      return json;
+    }
+
+    function passkeySupported() {
+      return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
+    }
+
+    function friendlyWebAuthnError(err) {
+      if (err && (err.name === 'NotAllowedError' || err.name === 'AbortError')) {
+        return new Error('생체인증(패스키) 확인이 취소되었거나 시간이 초과되었습니다. 다시 시도해주세요.');
+      }
+      if (err && err.name === 'InvalidStateError') {
+        return new Error('이미 이 기기에 등록된 패스키입니다. 그대로 승인 QR을 사용하세요.');
+      }
+      if (err && err.name === 'SecurityError') {
+        return new Error('이 주소(' + window.location.hostname + ')에서는 패스키를 사용할 수 없습니다. boardest-cloud-connect.web.app 로 접속해주세요.');
+      }
+      return err;
+    }
+
+    function deviceLabelGuess() {
+      const ua = navigator.userAgent || '';
+      if (/iPhone|iPad/.test(ua)) return 'iPhone/iPad';
+      if (/Android/.test(ua)) return 'Android 스마트폰';
+      if (/Windows/.test(ua)) return 'Windows PC';
+      if (/Mac/.test(ua)) return 'Mac';
+      return '교사 스마트폰';
+    }
+
+    // 만료된 access_token 대신 refresh_token 이 있으면 Worker 로 최신화 (Secret 은 서버에만 존재)
+    async function freshAccessToken() {
+      if (incomingRefreshToken) {
+        try {
+          const r = await workerPost('/api/auth/token/refresh', { refreshToken: incomingRefreshToken });
+          if (r.accessToken) return r.accessToken;
+        } catch (_) {}
+      }
+      return incomingToken;
+    }
+
+    // ── 패스키 등록: 서버(Worker)에 공개키 저장 — 실패 시 가짜 등록 없이 오류를 그대로 보여줌 ──
+    async function registerPasskey(status) {
+      if (!passkeySupported()) {
+        throw new Error('이 브라우저는 패스키를 지원하지 않습니다. 최신 Chrome 또는 Safari 로 열어주세요.');
+      }
+      status.innerText = '교사 계정 확인 중...';
+      const accessToken = await freshAccessToken();
+      if (!accessToken) {
+        const e = new Error('교사 Google 계정 로그인이 필요합니다.');
+        e.code = 'UNAUTHENTICATED';
+        throw e;
+      }
+      const opt = await workerPost('/api/passkey/register/options', { accessToken });
+
+      status.innerText = '기기 생체인식 또는 화면 잠금 인증을 진행해주세요...';
+      let cred;
+      try {
+        cred = await navigator.credentials.create({
+          publicKey: {
+            challenge: fromB64u(opt.challenge),
+            rp: { id: opt.rpId, name: opt.rpName },
+            user: { id: fromB64u(opt.user.id), name: opt.user.name, displayName: opt.user.displayName },
+            pubKeyCredParams: [{ type: 'public-key', alg: -7 }], // ES256 (서버가 지원하는 알고리즘)
+            authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
+            excludeCredentials: (opt.excludeCredentials || []).map(id => ({ type: 'public-key', id: fromB64u(id) })),
+            attestation: 'none',
+            timeout: 60000
+          }
+        });
+      } catch (e) {
+        throw friendlyWebAuthnError(e);
+      }
+      if (!cred) throw new Error('패스키 생성에 실패했습니다.');
+      if (typeof cred.response.getPublicKey !== 'function') {
+        throw new Error('브라우저가 패스키 공개키 추출을 지원하지 않습니다. 브라우저를 최신 버전으로 업데이트해주세요.');
+      }
+      const pub = cred.response.getPublicKey();
+      const alg = typeof cred.response.getPublicKeyAlgorithm === 'function' ? cred.response.getPublicKeyAlgorithm() : -7;
+
+      status.innerText = '패스키를 서버에 등록하는 중...';
+      return await workerPost('/api/passkey/register/verify', {
+        accessToken,
+        challengeId: opt.challengeId,
+        credentialId: b64u(cred.rawId),
+        clientDataJSON: b64u(cred.response.clientDataJSON),
+        publicKey: b64u(pub),
+        publicKeyAlg: alg,
+        refreshToken: incomingRefreshToken || '',
+        folderId: incomingFolderId || '',
+        label: deviceLabelGuess()
+      });
+    }
+
+    // ── 패스키 로그인: 서버가 서명을 검증한 뒤에만 Drive access_token 이 발급됨 ──
+    async function authenticateWithPasskey(email, status) {
+      if (!passkeySupported()) {
+        throw new Error('이 브라우저는 패스키를 지원하지 않습니다. 최신 Chrome 또는 Safari 로 열어주세요.');
+      }
+      if (!email) {
+        const e = new Error('이 스마트폰에 등록된 교사 패스키 정보가 없습니다.');
+        e.code = 'NO_PASSKEY';
+        throw e;
+      }
+      const opt = await workerPost('/api/passkey/auth/options', { email });
+      status.innerText = '생체인식 확인 중...';
+      let assertion;
+      try {
+        assertion = await navigator.credentials.get({
+          publicKey: {
+            challenge: fromB64u(opt.challenge),
+            rpId: opt.rpId,
+            allowCredentials: (opt.allowCredentials || []).map(id => ({ type: 'public-key', id: fromB64u(id) })),
+            userVerification: 'required',
+            timeout: 60000
+          }
+        });
+      } catch (e) {
+        throw friendlyWebAuthnError(e);
+      }
+      if (!assertion) throw new Error('패스키 인증에 실패했습니다.');
+      const r = assertion.response;
+      status.innerText = '서버에서 패스키 서명을 검증하는 중...';
+      return await workerPost('/api/passkey/auth/verify', {
+        challengeId: opt.challengeId,
+        credentialId: b64u(assertion.rawId),
+        clientDataJSON: b64u(r.clientDataJSON),
+        authenticatorData: b64u(r.authenticatorData),
+        signature: b64u(r.signature)
+      });
+    }
+
+    function noPasskeyHtml(msg) {
+      return `${msg}<br>${loginLink('🔑 교사 계정 로그인 후 이 폰에 패스키 등록')}`;
     }
 
     function updateCountdown() {
@@ -271,21 +440,11 @@
 
       if (isExpired) return;
 
+      const teacherDisplay = (savedTeacherName || teacherName !== '선생님') ? ` (${savedTeacherName || teacherName} 선생님)` : '';
+
       if (isRegister) {
         if (teacherName && teacherName !== '선생님') {
           try { localStorage.setItem('bst_teacher_name', teacherName); } catch(_) {}
-        }
-        if (incomingToken) {
-          try { localStorage.setItem('bst_teacher_token', incomingToken); } catch(_) {}
-        }
-        if (incomingRefreshToken) {
-          try { localStorage.setItem('bst_teacher_refresh_token', incomingRefreshToken); } catch(_) {}
-        }
-        if (incomingFolderId) {
-          try { localStorage.setItem('bst_teacher_folder_id', incomingFolderId); } catch(_) {}
-        }
-        if (incomingEmail) {
-          try { localStorage.setItem('bst_teacher_email', incomingEmail); } catch(_) {}
         }
         document.getElementById('iconBadge').innerText = '🛡️';
         document.getElementById('titleText').innerText = '교사 패스키 등록';
@@ -297,12 +456,11 @@
         document.getElementById('iconBadge').innerText = '☁️';
         document.getElementById('titleText').innerText = '전자칠판 교재·자료 클라우드 연결';
         document.getElementById('descText').innerText = '선생님의 수업자료 및 교재를 전자칠판에 안전하게 1회성으로 연결합니다.';
-        const teacherDisplay = (savedTeacherName || teacherName !== '선생님') ? ` (${savedTeacherName || teacherName} 선생님)` : '';
         document.getElementById('targetInfo').innerText = '전자칠판 확인 중...' + teacherDisplay;
         document.getElementById('actionBtn').className = 'btn btn-primary';
         document.getElementById('actionBtn').innerHTML = '<span>🚀 전자칠판에 내 클라우드 연결</span>';
 
-        // Load reverse pair session details from RTDB (0 Firestore reads)
+        // 역방향 세션 정보 표시 (RTDB 1회 조회 — Firestore 읽기 0회)
         fetch(`${RTDB_URL}/cloud_pair_sessions/${reversePairSecret}.json`)
           .then(res => res.json())
           .then(data => {
@@ -317,7 +475,6 @@
           })
           .catch(() => {});
       } else if (key) {
-        const teacherDisplay = (savedTeacherName || teacherName !== '선생님') ? ` (${savedTeacherName || teacherName} 선생님)` : '';
         document.getElementById('targetInfo').innerText = school + ' · ' + device + teacherDisplay;
       } else {
         document.getElementById('descText').innerText = '전자칠판 화면의 QR 코드를 스마트폰 카메라로 비춰 접속하거나 아래 메뉴로 이동해주세요.';
@@ -332,6 +489,28 @@
       }
     };
 
+    // RTDB 에 JSON 쓰기 (성공 여부 반환)
+    async function rtdbWrite(path, method, payload) {
+      try {
+        const res = await fetch(`${RTDB_URL}/${path}.json`, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        return res.ok;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function rememberIdentity(name, email, folderId) {
+      try {
+        if (name && name !== '선생님') localStorage.setItem('bst_teacher_name', name);
+        if (email) localStorage.setItem('bst_teacher_email', email);
+        if (folderId) localStorage.setItem('bst_teacher_folder_id', folderId);
+      } catch (_) {}
+    }
+
     async function handleAuthAction() {
       if (isExpired || (reqTimestamp && (Date.now() - reqTimestamp > 120000))) {
         alert("⚠️ 유효시간(2분)이 만료된 요청입니다. 새 QR 코드를 생성해주세요.");
@@ -341,483 +520,108 @@
       const btn = document.getElementById('actionBtn');
       const status = document.getElementById('statusMsg');
       btn.disabled = true;
+      status.style.color = '';
 
+      // ── 1. 이 스마트폰을 교사 패스키 기기로 등록 ──
       if (isRegister) {
-        // 1. 스마트폰/기기 패스키(WebAuthn) 생성 등록
-        status.innerText = "기기 생체인식 또는 화면 잠금 인증을 진행해주세요...";
         try {
-          const challenge = new Uint8Array(32);
-          window.crypto.getRandomValues(challenge);
-          const userId = new Uint8Array(16);
-          window.crypto.getRandomValues(userId);
+          const result = await registerPasskey(status);
+          const email = result.email || incomingEmail;
+          rememberIdentity(teacherName, email, incomingFolderId);
+          try { localStorage.removeItem('bst_teacher_refresh_token'); } catch (_) {}
 
-          let credId = null;
-          if (window.PublicKeyCredential) {
-            try {
-              const credential = await navigator.credentials.create({
-                publicKey: {
-                  challenge: challenge,
-                  rp: {
-                    name: "Boardest Cloud Connect",
-                    id: window.location.hostname
-                  },
-                  user: {
-                    id: userId,
-                    name: teacherName || "선생님",
-                    displayName: teacherName || "선생님"
-                  },
-                  pubKeyCredParams: [
-                    { type: "public-key", alg: -7 },  // ES256
-                    { type: "public-key", alg: -257 } // RS256
-                  ],
-                  authenticatorSelection: {
-                    residentKey: "preferred",
-                    userVerification: "preferred"
-                  },
-                  timeout: 60000
-                }
-              });
-              if (credential) {
-                credId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
-              }
-            } catch (credErr) {
-              console.warn("WebAuthn create fallback:", credErr);
-            }
-          }
-
-          if (!credId) {
-            // WebAuthn/기기 보안 우회 또는 미지원 시 보안 고유 기기 키 생성
-            credId = 'dev_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
-          }
-
-          const enc = encodeURIComponent(teacherName);
-          let finalRefreshToken = incomingRefreshToken || localStorage.getItem('bst_teacher_refresh_token') || '';
-          if (!finalRefreshToken && teacherName) {
-            try {
-              const vRes = await fetch(`${RTDB_URL}/passkey/vaults/${enc}.json`);
-              if (vRes.ok) {
-                const vData = await vRes.json();
-                if (vData && vData.refreshToken) finalRefreshToken = vData.refreshToken;
-              }
-            } catch (_) {}
-            if (!finalRefreshToken) {
-              try {
-                const fsRes = await fetch(`${FIRESTORE_BASE}/teacher_cloud_tokens`);
-                if (fsRes.ok) {
-                  const fsData = await fsRes.json();
-                  const docs = fsData.documents || [];
-                  for (const d of docs) {
-                    const fields = d.fields || {};
-                    const docTeacher = fields.teacherName?.stringValue || fields.name?.stringValue || '';
-                    const docRefresh = fields.refreshToken?.stringValue || '';
-                    if (docTeacher === teacherName && docRefresh) {
-                      finalRefreshToken = docRefresh;
-                      break;
-                    }
-                  }
-                }
-              } catch (_) {}
-            }
-          }
-          if (finalRefreshToken) {
-            try { localStorage.setItem('bst_teacher_refresh_token', finalRefreshToken); } catch(_) {}
-          }
-
-          // RTDB passkey/vaults 및 passkey_vaults 에 등록 완료 기록
-          const vaultPayload = {
-            credId: credId,
-            teacher: teacherName,
-            teacherName: teacherName,
-            token: incomingToken,
-            accessToken: incomingToken,
-            refreshToken: finalRefreshToken,
-            folderId: incomingFolderId || '',
-            bstCloudFolderId: incomingFolderId || '',
-            email: incomingEmail || '',
-            registeredAt: Date.now()
-          };
-          await Promise.allSettled([
-            fetch(`${RTDB_URL}/passkey/vaults/${enc}.json`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(vaultPayload)
-            }),
-            fetch(`${RTDB_URL}/passkey_vaults/${enc}.json`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(vaultPayload)
-            })
-          ]);
-
+          // 교사 앱이 등록 완료를 감지할 수 있도록 비밀정보 없는 완료 표식만 기록
           if (key) {
-            const pairPayload = {
-              status: 'registered',
-              teacher: teacherName,
-              registeredAt: Date.now()
-            };
-            await Promise.allSettled([
-              fetch(`${RTDB_URL}/passkey/sessions/${key}.json`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(pairPayload)
-              }),
-              fetch(`${RTDB_URL}/passkey_pairs/${key}.json`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(pairPayload)
-              })
+            const marker = { status: 'registered', teacher: teacherName, registeredAt: Date.now() };
+            await Promise.all([
+              rtdbWrite(`passkey/sessions/${key}`, 'PUT', marker),
+              rtdbWrite(`passkey_pairs/${key}`, 'PUT', marker)
             ]);
           }
+          await rtdbWrite(`passkey_vaults/${encodeURIComponent(teacherName)}`, 'PUT', {
+            credId: 'server_registered', teacherName: teacherName, registeredAt: Date.now()
+          });
 
-          status.innerHTML = "🎉 <strong>기기/패스키 등록이 완료되었습니다!</strong><br>이제 전자칠판 QR 스캔 시 1초 만에 안전하게 자동 로그인됩니다.";
+          status.innerHTML = "🎉 <strong>패스키 등록이 완료되었습니다!</strong><br>이제 전자칠판 QR 스캔 시 생체인증으로 안전하게 로그인됩니다.";
           btn.style.display = 'none';
         } catch (err) {
-          status.innerHTML = `등록 안내: ${err.message}<br><button class="btn btn-purple" style="margin-top:12px;padding:10px 18px;" onclick="forceRegisterDirectly()">⚡ 원클릭 간편 기기 등록</button>`;
+          status.style.color = '#EF4565';
+          if (err.code === 'UNAUTHENTICATED') {
+            status.innerHTML = noPasskeyHtml('등록 안내: 교사 Google 계정 로그인이 필요합니다.');
+          } else {
+            status.innerText = '등록 오류: ' + err.message;
+          }
           btn.disabled = false;
         }
-      } else if (key) {
-        // 2. 전자칠판 로그인 승인 (WebAuthn Get)
-        status.innerText = "생체인식 확인 중...";
+        return;
+      }
+
+      // ── 2. 전자칠판 로그인 승인 / 3. 전자칠판에 클라우드 연결 (둘 다 서버 검증된 패스키 필수) ──
+      if (key || reversePairSecret) {
         try {
-          let tokenToSend = incomingToken || localStorage.getItem('bst_teacher_token') || '';
-          let refreshTokenToSend = incomingRefreshToken || localStorage.getItem('bst_teacher_refresh_token') || '';
-          let folderIdToSend = incomingFolderId || localStorage.getItem('bst_teacher_folder_id') || '';
-          let emailToSend = incomingEmail || localStorage.getItem('bst_teacher_email') || '';
-          
-          // 패스키 생체인증 요구 (사용자 취소 시 승인 중단 보안 강화)
-          if (window.PublicKeyCredential) {
-            try {
-              const challenge = new TextEncoder().encode((key + '_' + Date.now()).padEnd(32, '0').slice(0, 32));
-              await navigator.credentials.get({
-                publicKey: {
-                  challenge: challenge,
-                  rpId: window.location.hostname,
-                  userVerification: "preferred",
-                  timeout: 60000
-                }
-              });
-            } catch (authErr) {
-              if (authErr && (authErr.name === 'NotAllowedError' || authErr.name === 'AbortError')) {
-                throw new Error("생체인증(패스키) 확인이 취소되었거나 거부되었습니다. 다시 시도해주세요.");
-              }
-              console.log("Passkey assertion fallback:", authErr);
+          const auth = await authenticateWithPasskey(incomingEmail, status);
+          const accessToken = auth.accessToken;
+          const teacherNameToSend = auth.teacherName || teacherName;
+          const emailToSend = auth.email || incomingEmail;
+          const folderIdToSend = auth.folderId || incomingFolderId || '';
+          rememberIdentity(teacherNameToSend, emailToSend, folderIdToSend);
+
+          if (key) {
+            const proof = await sha256Hex(`${key}:${qrChallenge}:${accessToken}:${PROOF_SALT}`);
+            const payload = {
+              status: 'approved',
+              teacher: teacherNameToSend,
+              teacherName: teacherNameToSend,
+              accessToken: accessToken,
+              token: accessToken,
+              folderId: folderIdToSend,
+              bstCloudFolderId: folderIdToSend,
+              email: emailToSend,
+              schoolId: params.get('schoolId') || '',
+              schoolName: school || '',
+              proof: proof,
+              timestamp: Date.now()
+            };
+            const [r1, r2] = await Promise.all([
+              rtdbWrite(`passkey/sessions/${key}`, 'PUT', payload),
+              rtdbWrite(`passkey_pairs/${key}`, 'PUT', payload)
+            ]);
+            if (r1 || r2) {
+              status.innerText = "🚀 전자칠판 로그인 승인 완료! 칠판이 잠금해제되었습니다.";
+              btn.style.display = 'none';
+              setTimeout(() => { window.close(); }, 3000);
+            } else {
+              throw new Error("서버 전송 실패 (네트워크 연결을 확인해주세요)");
             }
-          }
-
-          // 1. Fetch token from RTDB vaults
-          if (!tokenToSend && teacherName) {
-            const enc = encodeURIComponent(teacherName);
-            try {
-              const vRes = await fetch(`${RTDB_URL}/passkey/vaults/${enc}.json`);
-              if (vRes.ok) {
-                const vData = await vRes.json();
-                if (vData) {
-                  if (vData.token) tokenToSend = vData.token;
-                  if (vData.refreshToken && !incomingRefreshToken) incomingRefreshToken = vData.refreshToken;
-                  if (vData.email && !incomingEmail) incomingEmail = vData.email;
-                  if (vData.folderId && !incomingFolderId) incomingFolderId = vData.folderId;
-                }
-              }
-            } catch (_) {}
-            if (!tokenToSend) {
-              try {
-                const vRes2 = await fetch(`${RTDB_URL}/passkey_vaults/${enc}.json`);
-                if (vRes2.ok) {
-                  const vData2 = await vRes2.json();
-                  if (vData2) {
-                    if (vData2.token) tokenToSend = vData2.token;
-                    if (vData2.refreshToken && !incomingRefreshToken) incomingRefreshToken = vData2.refreshToken;
-                    if (vData2.email && !incomingEmail) incomingEmail = vData2.email;
-                    if (vData2.folderId && !incomingFolderId) incomingFolderId = vData2.folderId;
-                  }
-                }
-              } catch (_) {}
-            }
-          }
-
-          // 2. Fallback: Fetch token from Firestore teacher_cloud_tokens (데모 및 가상 계정 완전 배제)
-          if (!tokenToSend || !incomingRefreshToken) {
-            try {
-              const fsRes = await fetch(`${FIRESTORE_BASE}/teacher_cloud_tokens`);
-              if (fsRes.ok) {
-                const fsData = await fsRes.json();
-                const docs = fsData.documents || [];
-                for (const d of docs) {
-                  const fields = d.fields || {};
-                  const docEmail = fields.email?.stringValue || '';
-                  const docTeacher = fields.teacherName?.stringValue || fields.name?.stringValue || '';
-                  const docToken = fields.accessToken?.stringValue || '';
-                  const docRefresh = fields.refreshToken?.stringValue || '';
-                  const docFolder = fields.bstCloudFolderId?.stringValue || fields.folderId?.stringValue || '';
-                  const docTotp = fields.totpSecret?.stringValue || '';
-                  
-                  // 데모 계정 및 더미 교사(이수학 등)는 실사용자 인증으로 절대 채택하지 않음
-                  if (docEmail.includes('demo') || docTeacher === '이수학' || docToken.startsWith('demo_token')) continue;
-
-                  if (docToken && (docTeacher === teacherName || (!teacherName || teacherName === '선생님') || (!savedTeacherName && docs.length === 1))) {
-                    if (!tokenToSend) tokenToSend = docToken;
-                    if (docRefresh && !incomingRefreshToken) incomingRefreshToken = docRefresh;
-                    if (docEmail && !incomingEmail) incomingEmail = docEmail;
-                    if (docFolder && !incomingFolderId) incomingFolderId = docFolder;
-                    if (docTotp && !incomingTotpSecret) incomingTotpSecret = docTotp;
-                    if (docTeacher && docTeacher !== '선생님') {
-                      try { localStorage.setItem('bst_teacher_name', docTeacher); } catch(_) {}
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (_) {}
-          }
-
-          if (incomingRefreshToken && !refreshTokenToSend) {
-            refreshTokenToSend = incomingRefreshToken;
-          }
-
-          if (refreshTokenToSend) {
-            try {
-              localStorage.setItem('bst_teacher_refresh_token', refreshTokenToSend);
-              // 만료된 access_token을 영구 refresh_token으로 즉시 최신화하여 전자칠판에 전달 (1시간 후 먹통 완벽 방지)
-              const freshAccess = await exchangeRefreshToken(refreshTokenToSend);
-              if (freshAccess) {
-                tokenToSend = freshAccess;
-                localStorage.setItem('bst_teacher_token', freshAccess);
-              }
-            } catch (_) {}
-          }
-
-          if (tokenToSend) {
-            try {
-              localStorage.setItem('bst_teacher_token', tokenToSend);
-              if (teacherName && teacherName !== '선생님') {
-                localStorage.setItem('bst_teacher_name', teacherName);
-              }
-            } catch(_) {}
           } else {
-            status.innerHTML = `등록된 교사 토큰이 없습니다.<br><a href="https://boardest-teacher-oauth.web.app?return_url=${encodeURIComponent(window.location.href)}" class="btn btn-purple" style="margin-top:12px;padding:12px 18px;text-decoration:none;display:inline-block;">🔑 교사 계정 1초 로그인 후 전자칠판 승인</a>`;
-            btn.disabled = false;
-            return;
-          }
-
-          const proof = await sha256Hex(`${key}:${qrChallenge}:${tokenToSend}:${PROOF_SALT}`);
-
-          // 전자칠판과 1회용 핸드셰이크 전송 (Challenge-Response SHA-256 서명 proof 포함)
-          const payload = {
-            status: "approved",
-            teacher: teacherName,
-            teacherName: teacherName,
-            accessToken: tokenToSend,
-            token: tokenToSend,
-            refreshToken: refreshTokenToSend || incomingRefreshToken || '',
-            folderId: folderIdToSend || incomingFolderId || '',
-            bstCloudFolderId: folderIdToSend || incomingFolderId || '',
-            email: emailToSend || incomingEmail || '',
-            schoolId: params.get('schoolId') || '',
-            schoolName: school || '',
-            proof: proof,
-            timestamp: Date.now()
-          };
-
-          const [r1, r2] = await Promise.all([
-            fetch(`${RTDB_URL}/passkey/sessions/${key}.json`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            }).catch(() => null),
-            fetch(`${RTDB_URL}/passkey_pairs/${key}.json`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            }).catch(() => null)
-          ]);
-
-          if ((r1 && r1.ok) || (r2 && r2.ok)) {
-            status.innerText = "🚀 전자칠판 로그인 승인 완료! 칠판이 잠금해제되었습니다.";
-            btn.style.display = 'none';
-            setTimeout(() => {
-              window.close();
-            }, 3000);
-          } else {
-            throw new Error("서버 전송 실패 (네트워크 연결을 확인해주세요)");
-          }
-        } catch (err) {
-          status.innerText = "승인 안내: " + err.message;
-          btn.disabled = false;
-        }
-      } else if (reversePairSecret) {
-        status.innerText = "선생님 인증 확인 중...";
-        try {
-          let tokenToSend = incomingToken || localStorage.getItem('bst_teacher_token') || '';
-          let refreshTokenToSend = incomingRefreshToken || localStorage.getItem('bst_teacher_refresh_token') || '';
-          let folderIdToSend = incomingFolderId || localStorage.getItem('bst_teacher_folder_id') || '';
-          let emailToSend = incomingEmail || localStorage.getItem('bst_teacher_email') || '';
-          let teacherNameToSend = teacherName;
-          let emailToSend = incomingEmail || '';
-          let refreshTokenToSend = incomingRefreshToken || '';
-          let folderIdToSend = incomingFolderId || '';
-          let totpSecretToSend = incomingTotpSecret || '';
-
-          // 1. Fetch token from RTDB vaults
-          if (!tokenToSend && teacherNameToSend && teacherNameToSend !== '선생님') {
-            const enc = encodeURIComponent(teacherNameToSend);
-            try {
-              const vRes = await fetch(`${RTDB_URL}/passkey/vaults/${enc}.json`);
-              if (vRes.ok) {
-                const vData = await vRes.json();
-                if (vData && vData.token) tokenToSend = vData.token;
-              }
-            } catch (_) {}
-          }
-
-          // 2. Fetch token from Firestore teacher_cloud_tokens
-          if (!tokenToSend || !emailToSend) {
-            try {
-              const fsRes = await fetch(`${FIRESTORE_BASE}/teacher_cloud_tokens`);
-              if (fsRes.ok) {
-                const fsData = await fsRes.json();
-                const docs = fsData.documents || [];
-                for (const d of docs) {
-                  const fields = d.fields || {};
-                  const docEmail = fields.email?.stringValue || '';
-                  const docTeacher = fields.teacherName?.stringValue || fields.name?.stringValue || '';
-                  const docToken = fields.accessToken?.stringValue || '';
-                  const docRefresh = fields.refreshToken?.stringValue || '';
-                  const docFolder = fields.bstCloudFolderId?.stringValue || fields.folderId?.stringValue || '';
-                  const docTotp = fields.totpSecret?.stringValue || '';
-
-                  if (docEmail.includes('demo') || docTeacher === '이수학' || docToken.startsWith('demo_token')) continue;
-
-                  if (docToken && (docTeacher === teacherNameToSend || (!savedTeacherName && docs.length === 1) || (!teacherNameToSend || teacherNameToSend === '선생님'))) {
-                    tokenToSend = docToken;
-                    teacherNameToSend = docTeacher || teacherNameToSend;
-                    emailToSend = docEmail;
-                    refreshTokenToSend = docRefresh;
-                    folderIdToSend = docFolder;
-                    totpSecretToSend = docTotp;
-                    break;
-                  }
-                }
-              }
-            } catch (_) {}
-          }
-
-          if (!tokenToSend) {
-            status.innerHTML = `등록된 교사 토큰이 없습니다.<br><a href="https://boardest-teacher-oauth.web.app?return_url=${encodeURIComponent(window.location.href)}" class="btn btn-purple" style="margin-top:12px;padding:12px 18px;text-decoration:none;display:inline-block;">🔑 교사 계정 1초 로그인 후 연결</a>`;
-            btn.disabled = false;
-            return;
-          }
-
-          status.innerText = "전자칠판에 클라우드 연결 전송 중...";
-          // 1. RTDB 우선 전송 (v5.3.3+ 전자칠판 즉시 수신, Firestore 읽기/쓰기 0회)
-          const rtdbPairUrl = `${RTDB_URL}/cloud_pair_sessions/${reversePairSecret}.json`;
-          const rtdbPairRes = await fetch(rtdbPairUrl, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+            status.innerText = "전자칠판에 클라우드 연결 전송 중...";
+            const ok = await rtdbWrite(`cloud_pair_sessions/${reversePairSecret}`, 'PATCH', {
               status: 'authenticated',
               teacherName: teacherNameToSend || '선생님',
               email: emailToSend,
-              accessToken: tokenToSend,
-              refreshToken: refreshTokenToSend,
+              accessToken: accessToken,
               folderId: folderIdToSend,
-              bstCloudFolderId: folderIdToSend,
-              totpSecret: totpSecretToSend
-            })
-          }).catch(() => null);
-
-          // 2. 구버전 호환용 Firestore 1회 PATCH
-          const patchUrl = `${FIRESTORE_BASE}/cloud_pair_sessions/${reversePairSecret}?updateMask.fieldPaths=status&updateMask.fieldPaths=teacherName&updateMask.fieldPaths=email&updateMask.fieldPaths=accessToken&updateMask.fieldPaths=refreshToken&updateMask.fieldPaths=folderId&updateMask.fieldPaths=bstCloudFolderId&updateMask.fieldPaths=totpSecret`;
-          const patchPayload = {
-            fields: {
-              status: { stringValue: 'authenticated' },
-              teacherName: { stringValue: teacherNameToSend || '선생님' },
-              email: { stringValue: emailToSend },
-              accessToken: { stringValue: tokenToSend },
-              refreshToken: { stringValue: refreshTokenToSend },
-              folderId: { stringValue: folderIdToSend },
-              bstCloudFolderId: { stringValue: folderIdToSend },
-              totpSecret: { stringValue: totpSecretToSend }
+              bstCloudFolderId: folderIdToSend
+            });
+            if (ok) {
+              status.innerHTML = "🎉 <strong>전자칠판에 클라우드가 연결되었습니다!</strong><br>칠판 화면이 내 수업 자료로 즉시 전환됩니다.";
+              btn.style.display = 'none';
+              setTimeout(() => { window.close(); }, 3000);
+            } else {
+              throw new Error("클라우드 세션 전송에 실패했습니다. 새 QR 코드로 다시 시도해주세요.");
             }
-          };
-
-          const patchRes = await fetch(patchUrl, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(patchPayload)
-          }).catch(() => null);
-
-          if ((rtdbPairRes && rtdbPairRes.ok) || (patchRes && patchRes.ok)) {
-            status.innerHTML = "🎉 <strong>전자칠판에 클라우드가 연결되었습니다!</strong><br>칠판 화면이 내 수업 자료로 즉시 전환됩니다.";
-            btn.style.display = 'none';
-            setTimeout(() => {
-              window.close();
-            }, 3000);
-          } else {
-            throw new Error("클라우드 세션 전송 실패 (" + patchRes.status + ")");
           }
         } catch (err) {
-          status.innerText = "연결 오류: " + err.message;
+          status.style.color = '#EF4565';
+          if (err.code === 'NO_PASSKEY' || err.code === 'UNKNOWN_CREDENTIAL') {
+            status.innerHTML = noPasskeyHtml('이 계정으로 등록된 패스키가 없습니다.');
+          } else if (err.code === 'NO_REFRESH_TOKEN' || err.code === 'GOOGLE_REFRESH_FAILED') {
+            status.innerHTML = noPasskeyHtml(err.message);
+          } else {
+            status.innerText = (key ? '승인 안내: ' : '연결 오류: ') + err.message;
+          }
           btn.disabled = false;
         }
-      }
-    }
-
-    async function forceRegisterDirectly() {
-      const status = document.getElementById('statusMsg');
-      const btn = document.getElementById('actionBtn');
-      status.innerText = "간편 기기 등록 중...";
-      try {
-        if (teacherName && teacherName !== '선생님') {
-          try { localStorage.setItem('bst_teacher_name', teacherName); } catch(_) {}
-        }
-        if (incomingToken) {
-          try { localStorage.setItem('bst_teacher_token', incomingToken); } catch(_) {}
-        }
-        const credId = 'dev_direct_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
-        const enc = encodeURIComponent(teacherName);
-        const vPayload = {
-          credId: credId,
-          teacher: teacherName,
-          token: incomingToken,
-          registeredAt: Date.now()
-        };
-        await Promise.allSettled([
-          fetch(`${RTDB_URL}/passkey/vaults/${enc}.json`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(vPayload)
-          }),
-          fetch(`${RTDB_URL}/passkey_vaults/${enc}.json`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(vPayload)
-          })
-        ]);
-
-        if (key) {
-          const sPayload = {
-            status: 'registered',
-            teacher: teacherName,
-            registeredAt: Date.now()
-          };
-          await Promise.allSettled([
-            fetch(`${RTDB_URL}/passkey/sessions/${key}.json`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(sPayload)
-            }),
-            fetch(`${RTDB_URL}/passkey_pairs/${key}.json`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(sPayload)
-            })
-          ]);
-        }
-
-        status.innerHTML = "🎉 <strong>기기 간편 등록 완료!</strong><br>이제 전자칠판 QR 스캔 시 1초 만에 자동 로그인됩니다.";
-        if (btn) btn.style.display = 'none';
-      } catch (e) {
-        status.innerText = "등록 오류: " + e.message;
       }
     }
   </script>

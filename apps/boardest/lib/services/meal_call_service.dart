@@ -1,4 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
+﻿import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -669,7 +669,7 @@ class MealCallService {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('auto_otp_secret_$teacherEmail', secret);
         await prefs.setString('auto_otp_teacher_$teacherEmail', teacherName);
-        await prefs.setInt('auto_otp_digits_$teacherEmail', 8);
+        await prefs.setInt('auto_otp_digits_$teacherEmail', 6);
         debugPrint('[MealCallService] 🔐 Saved Auto OTP secret for $teacherEmail');
         onAutoOtpRegistered?.call(teacherName, teacherEmail);
       }

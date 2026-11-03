@@ -19,6 +19,13 @@
         ".write": true
       }
     },
+    "cloud_pair_sessions": {
+      "$session_id": {
+        ".read": true,
+        ".write": "!data.exists() || !newData.exists() || (data.child('status').val() == 'pending' && (newData.child('status').val() == 'authenticated' || newData.child('status').val() == 'consumed')) || data.child('status').val() == 'authenticated'",
+        ".validate": "newData.hasChildren(['status']) && newData.child('status').isString()"
+      }
+    },
     "passkey": {
       ".read": false,
       ".write": false,
@@ -26,7 +33,8 @@
         ".read": false,
         "$session_id": {
           ".read": true,
-          ".write": true
+          ".write": "!data.exists() || !newData.exists() || (data.child('status').val() == 'waiting' && (newData.child('status').val() == 'approved' || newData.child('status').val() == 'rejected'))",
+          ".validate": "newData.hasChildren(['status']) && newData.child('status').isString()"
         }
       },
       "vaults": {
@@ -47,19 +55,7 @@
     "passkey_pairs": {
       "$pair_id": {
         ".read": true,
-        ".write": true
-      }
-    },
-    "passkey_vaults": {
-      "$vault_id": {
-        ".read": true,
-        ".write": true
-      }
-    },
-    "cloud_pair_sessions": {
-      "$session_id": {
-        ".read": true,
-        ".write": true
+        ".write": "!data.exists() || !newData.exists() || (data.child('status').val() == 'waiting' && newData.child('status').val() == 'approved') || newData.child('status').val() == 'registered'"
       }
     },
     "assessments": {

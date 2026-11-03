@@ -31,9 +31,9 @@ enum UpdateState {
 /// 5. 잠금 화면 필수 4대 버튼: [업데이트 다운 / 수동 설치 / 앱 런처 / 앱 삭제]
 /// 6. 윈도우: AppData에 다운로드 후 종료하지 않고 윈도우 패키지 설치 관리자(AppX) 구동 -> 새 앱 실행 시 이전 AppX 자동 삭제
 class UpdateService {
-  static const String defaultVersion = '5.5.3.1';
-  static const String defaultBuildNumber = '5531';
-  static const String defaultFullVersion = '5.5.3.1+5531';
+  static const String defaultVersion = '5.6.0';
+  static const String defaultBuildNumber = '5600';
+  static const String defaultFullVersion = '5.6.0+5600';
   static const String _releasesApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases?per_page=30';
   static const String downloadPage = 'https://boardest-downloads.web.app';
@@ -339,10 +339,13 @@ class UpdateService {
       final releases = jsonDecode(response.body) as List<dynamic>;
       if (releases.isEmpty) return;
 
-      // 1. 4번째 자리를 무시한 유니크 릴리즈 목록 추출
+      // 1. 4번째 자리를 무시한 유니크 릴리즈 목록 추출 및 [Must update] 강제 락다운 감지
       final List<String> distinctNormalizedReleases = [];
       String? latestFullTag;
       Map<String, dynamic>? latestReleaseData;
+      bool hasMustUpdateAhead = false;
+
+      final currentNorm = normalizeVersion(currentVersion);
 
       for (final r in releases) {
         final tag = (r['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^[vV]'), '').trim();
@@ -354,12 +357,19 @@ class UpdateService {
         if (!distinctNormalizedReleases.contains(normalized)) {
           distinctNormalizedReleases.add(normalized);
         }
+
+        // [Must update] 키워드가 본인 버전보다 상위(최신) 릴리즈 제목/본문에 포함되어 있는지 검사
+        if (_isNewerVersion(normalized, currentNorm)) {
+          final relName = (r['name'] as String? ?? '').toLowerCase();
+          final relBody = (r['body'] as String? ?? '').toLowerCase();
+          if (relName.contains('[must update]') || relBody.contains('[must update]')) {
+            hasMustUpdateAhead = true;
+          }
+        }
       }
 
       if (latestFullTag == null || latestReleaseData == null) return;
       latestVersion = latestFullTag;
-
-      final currentNorm = normalizeVersion(currentVersion);
 
       // 2. 맨 앞자리(Major) 버전 변경 확인
       final currentMajor = int.tryParse(currentNorm.split('.').first) ?? 5;
@@ -374,21 +384,23 @@ class UpdateService {
         }
       }
 
-      debugPrint('[UpdateService] Current: $currentVersion ($currentNorm), Latest: $latestFullTag, Distinct Releases: $distinctNormalizedReleases, Lag: $lagCount, MajorBehind: $isMajorBehind');
+      debugPrint('[UpdateService] Current: $currentVersion ($currentNorm), Latest: $latestFullTag, Distinct Releases: $distinctNormalizedReleases, Lag: $lagCount, MajorBehind: $isMajorBehind, MustUpdate: $hasMustUpdateAhead');
 
-      // 4. Cloud 차단 (3회 지연 시)
-      if (lagCount >= 3 || isMajorBehind) {
+      // 4. Cloud 차단 (3회 지연 시 또는 Must update 시)
+      if (lagCount >= 3 || isMajorBehind || hasMustUpdateAhead) {
         isCloudBlockedNotifier.value = true;
       } else {
         isCloudBlockedNotifier.value = false;
       }
 
-      // 5. 앱 실행 차단 (Major 변경 또는 6회 지연 시)
-      if (isMajorBehind || lagCount >= 6) {
+      // 5. 앱 실행 차단 (Major 변경, 6회 지연, 또는 [Must update] 강제 락다운 시)
+      if (isMajorBehind || lagCount >= 6 || hasMustUpdateAhead) {
         isBlockedNotifier.value = true;
-        blockReason = isMajorBehind
-            ? '주요 대규모 메이저 업데이트($latestMajor.x.x)가 배포되었습니다.'
-            : '보안 기준(6차례 업데이트 지연)을 초과하여 현재 버전을 사용할 수 없습니다.';
+        blockReason = hasMustUpdateAhead
+            ? '보안 및 안정성을 위한 필수 긴급 업데이트가 배포되어 최신 버전 업데이트가 필요합니다. [Must update]'
+            : (isMajorBehind
+                ? '주요 대규모 메이저 업데이트($latestMajor.x.x)가 배포되었습니다.'
+                : '보안 기준(6차례 업데이트 지연)을 초과하여 현재 버전을 사용할 수 없습니다.');
         if (context.mounted) {
           showLockoutDialog(context);
         }
