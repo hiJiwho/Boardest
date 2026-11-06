@@ -350,12 +350,15 @@ class UpdateService {
       for (final r in releases) {
         final tag = (r['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^[vV]'), '').trim();
         if (tag.isEmpty) continue;
-        latestFullTag ??= tag;
-        latestReleaseData ??= r as Map<String, dynamic>;
 
         final normalized = normalizeVersion(tag);
         if (!distinctNormalizedReleases.contains(normalized)) {
           distinctNormalizedReleases.add(normalized);
+        }
+
+        if (latestFullTag == null || isNewerVersion(tag, latestFullTag)) {
+          latestFullTag = tag;
+          latestReleaseData = r as Map<String, dynamic>;
         }
 
         // [Must update] 키워드가 본인 버전보다 상위(최신) 릴리즈 제목/본문에 포함되어 있는지 검사
@@ -367,6 +370,8 @@ class UpdateService {
           }
         }
       }
+
+      distinctNormalizedReleases.sort((a, b) => isNewerVersion(a, b) ? -1 : (isNewerVersion(b, a) ? 1 : 0));
 
       if (latestFullTag == null || latestReleaseData == null) return;
       latestVersion = latestFullTag;
@@ -393,21 +398,7 @@ class UpdateService {
         isCloudBlockedNotifier.value = false;
       }
 
-      // 5. 앱 실행 차단 (Major 변경, 6회 지연, 또는 [Must update] 강제 락다운 시)
-      if (isMajorBehind || lagCount >= 6 || hasMustUpdateAhead) {
-        isBlockedNotifier.value = true;
-        blockReason = hasMustUpdateAhead
-            ? '보안 및 안정성을 위한 필수 긴급 업데이트가 배포되어 최신 버전 업데이트가 필요합니다. [Must update]'
-            : (isMajorBehind
-                ? '주요 대규모 메이저 업데이트($latestMajor.x.x)가 배포되었습니다.'
-                : '보안 기준(6차례 업데이트 지연)을 초과하여 현재 버전을 사용할 수 없습니다.');
-        if (context.mounted) {
-          showLockoutDialog(context);
-        }
-        return;
-      }
-
-      // 6. 정상 업데이트 다운로드 처리
+      // 5. 다운로드 URL 준비 및 최신 버전 다운로드 개시 (잠금 상태여도 다운로드가 진행되어야 복구 가능)
       final assets = (latestReleaseData['assets'] as List<dynamic>? ?? []);
       String? apkDownloadUrl;
       int bestApkScore = 0;
@@ -440,10 +431,25 @@ class UpdateService {
           ? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-cloud.msix'
           : 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-class.msix';
 
-      if (_isNewerVersion(distinctNormalizedReleases.first, currentNorm)) {
+      final bool hasNewer = _isNewerVersion(distinctNormalizedReleases.first, currentNorm);
+      if (hasNewer) {
         final isWindows = !kIsWeb && Platform.isWindows;
         final targetUrl = isWindows ? windowsDownloadUrl : apkDownloadUrl;
         unawaited(_startSilentDownload(targetUrl, latestFullTag, isWindows));
+      }
+
+      // 6. 앱 실행 차단 (Major 변경, 6회 지연, 또는 [Must update] 강제 락다운 시)
+      if (isMajorBehind || lagCount >= 6 || hasMustUpdateAhead) {
+        isBlockedNotifier.value = true;
+        blockReason = hasMustUpdateAhead
+            ? '보안 및 안정성을 위한 필수 긴급 업데이트가 배포되어 최신 버전 업데이트가 필요합니다. [Must update]'
+            : (isMajorBehind
+                ? '주요 대규모 메이저 업데이트($latestMajor.x.x)가 배포되었습니다.'
+                : '보안 기준(6차례 업데이트 지연)을 초과하여 현재 버전을 사용할 수 없습니다.');
+        if (context.mounted) {
+          showLockoutDialog(context);
+        }
+        return;
       }
     } catch (e) {
       debugPrint('[UpdateService] Update check failed: $e');
@@ -893,14 +899,27 @@ class UpdateService {
                         onPressed: () async {
                           if (downloadedPackagePath != null && File(downloadedPackagePath!).existsSync()) {
                             await executeInstall(context);
-                          } else {
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('⚡ 최신 버전을 다운로드하고 있습니다. 잠시만 기다려주세요...')),
+                          );
+                          await checkAndUpdate(context, force: true);
+                          // 다운로드 완료 대기 (최대 20초)
+                          int waited = 0;
+                          while ((downloadedPackagePath == null || !File(downloadedPackagePath!).existsSync()) &&
+                              stateNotifier.value == UpdateState.downloading &&
+                              waited < 40) {
+                            await Future.delayed(const Duration(milliseconds: 500));
+                            waited++;
+                          }
+                          if (downloadedPackagePath != null && File(downloadedPackagePath!).existsSync() && context.mounted) {
+                            await executeInstall(context);
+                          } else if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('⚡ 최신 버전을 다운로드하는 중입니다. 잠시만 기다려주세요...')),
+                              const SnackBar(content: Text('⚠️ 자동 다운로드가 지연되어 다운로드 센터로 이동합니다.')),
                             );
-                            await checkAndUpdate(context, force: true);
-                            if (downloadedPackagePath != null && context.mounted) {
-                              await executeInstall(context);
-                            }
+                            await launchUrl(Uri.parse(downloadPage), mode: LaunchMode.externalApplication);
                           }
                         },
                         icon: const Icon(Icons.download_rounded, color: Colors.black),

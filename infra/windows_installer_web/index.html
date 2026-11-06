@@ -1021,7 +1021,7 @@
         productType: 'Class',
         productName: 'Boardest Class',
         requiresCert: true,
-        certThumbprint: '006d6eb59ce360dbd15bf1367ea107b34033c7a3',
+        certThumbprint: '69af4cc96f4a48f88cee359f0ba0555a0b06e361',
         certUrls: [
           'https://bst-installer.web.app/BoardestCert.cer',
           'https://github.com/hiJiwho/Boardest/releases/latest/download/BoardestCert.cer'
@@ -1045,7 +1045,7 @@
         productType: 'ClassLite',
         productName: 'Boardest Class Lite',
         requiresCert: true,
-        certThumbprint: '006d6eb59ce360dbd15bf1367ea107b34033c7a3',
+        certThumbprint: '69af4cc96f4a48f88cee359f0ba0555a0b06e361',
         certUrls: [
           'https://bst-installer.web.app/BoardestCert.cer',
           'https://github.com/hiJiwho/Boardest/releases/latest/download/BoardestCert.cer'
@@ -1066,7 +1066,7 @@
         productType: 'Cloud',
         productName: 'Boardest Cloud',
         requiresCert: true,
-        certThumbprint: '006d6eb59ce360dbd15bf1367ea107b34033c7a3',
+        certThumbprint: '69af4cc96f4a48f88cee359f0ba0555a0b06e361',
         certUrls: [
           'https://bst-installer.web.app/BoardestCert.cer',
           'https://github.com/hiJiwho/Boardest/releases/latest/download/BoardestCert.cer'
@@ -1343,7 +1343,7 @@
           const list = await resp.json();
           const tags = list.map(r => (r.tag_name || '').replace(/^v/, '')).filter(t => t && t !== '5.4.2');
           if (tags.length > 0) {
-            availableVersions = Array.from(new Set(tags));
+            availableVersions = Array.from(new Set(tags)).sort((a, b) => compareSemVer(b, a));
             const latestGithubTag = availableVersions[0];
             if (latestGithubTag) {
               appData.productVersion = latestGithubTag;

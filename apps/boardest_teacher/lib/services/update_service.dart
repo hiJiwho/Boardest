@@ -344,8 +344,10 @@ class UpdateService {
       for (final r in releases) {
         final tag = (r['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^[vV]'), '').trim();
         if (tag.isEmpty) continue;
-        latestFullTag ??= tag;
-        latestReleaseData ??= r as Map<String, dynamic>;
+        if (latestFullTag == null || _isNewer(normalizeVersion(tag), normalizeVersion(latestFullTag))) {
+          latestFullTag = tag;
+          latestReleaseData = r as Map<String, dynamic>;
+        }
 
         final norm = normalizeVersion(tag);
         if (!distinctNormalized.contains(norm)) {
@@ -363,6 +365,8 @@ class UpdateService {
       }
 
       if (latestFullTag == null || latestReleaseData == null) return null;
+
+      distinctNormalized.sort((a, b) => _isNewer(a, b) ? -1 : (_isNewer(b, a) ? 1 : 0));
 
       // 메이저 버전 변경 판별
       final currentMajor = int.tryParse(currentNorm.split('.').first) ?? 5;

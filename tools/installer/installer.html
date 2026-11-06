@@ -604,7 +604,7 @@
         <div class="hero-info">
           <h1>
             <span id="productName">Boardest 통합 온라인 설치</span>
-            <span class="hero-badge" id="productVersion">v5.5.3.1</span>
+            <span class="hero-badge" id="productVersion">v5.5.3</span>
             <span class="admin-badge" id="adminBadge">🛡️ 관리자 권한</span>
           </h1>
           <p id="productDesc">실행 파일 이름을 감지하거나 설치할 앱을 선택하여 최신 버전을 설치합니다.</p>
@@ -696,7 +696,7 @@
           <button type="button" class="btn" onclick="startUpdateFromInstalled()" style="padding: 13px 18px; font-size: 14.5px; font-weight: 800; background: var(--teal); color: #000; border: none; border-radius: 9px; cursor: pointer; box-shadow: 0 0 16px rgba(0, 245, 212, 0.35); display: flex; align-items: center; justify-content: center; gap: 8px;">
             <span>🚀</span>
             <span>최신 버전으로 업데이트</span>
-            <span style="font-size: 11px; font-weight: 500; opacity: 0.85;">(최신 v<span class="installedTargetVerText">5.5.3.1</span> 설치)</span>
+            <span style="font-size: 11px; font-weight: 500; opacity: 0.85;">(최신 v<span class="installedTargetVerText">5.5.3</span> 설치)</span>
           </button>
 
           <!-- 2. 프로그램 제거 -->
@@ -793,9 +793,8 @@
           <div style="display:flex; align-items:center; gap:6px;">
             <span style="font-weight:600; color:#fff;">🏷️ 설치 버전:</span>
             <select id="versionSelect" onchange="onVersionChange()" style="background:#1e1e24; color:var(--teal); font-weight:700; border:1px solid var(--teal-glow); padding:2px 6px; border-radius:5px; font-size:10.5px; outline:none; cursor:pointer;">
-              <option value="latest">최신 버전 (v5.5.3.1 권장)</option>
-              <option value="5.5.3.1">v5.5.3.1 (정식 릴리즈)</option>
-              <option value="5.5.3">v5.5.3</option>
+              <option value="latest">최신 버전 (v5.5.3 권장)</option>
+              <option value="5.5.3">v5.5.3 (정식 릴리즈)</option>
               <option value="5.5.1">v5.5.1</option>
               <option value="5.5.0">v5.5.0</option>
               <option value="5.4.3">v5.4.3</option>
@@ -812,7 +811,7 @@
       <div class="btn-row">
         <button class="btn btn-secondary" onclick="postToHost('minimize')">창 최소화</button>
         <button class="btn btn-primary" id="btnStartInstall" onclick="startInstall()">
-          <span id="btnStartInstallText">최신버전 (v5.5.3.1) 빠른 설치</span> &#8594;
+          <span id="btnStartInstallText">최신버전 (v5.5.3) 빠른 설치</span> &#8594;
         </button>
       </div>
     </div>
@@ -1022,7 +1021,7 @@
         productType: 'Class',
         productName: 'Boardest Class',
         requiresCert: true,
-        certThumbprint: '006d6eb59ce360dbd15bf1367ea107b34033c7a3',
+        certThumbprint: '69af4cc96f4a48f88cee359f0ba0555a0b06e361',
         certUrls: [
           'https://bst-installer.web.app/BoardestCert.cer',
           'https://github.com/hiJiwho/Boardest/releases/latest/download/BoardestCert.cer'
@@ -1046,7 +1045,7 @@
         productType: 'ClassLite',
         productName: 'Boardest Class Lite',
         requiresCert: true,
-        certThumbprint: '006d6eb59ce360dbd15bf1367ea107b34033c7a3',
+        certThumbprint: '69af4cc96f4a48f88cee359f0ba0555a0b06e361',
         certUrls: [
           'https://bst-installer.web.app/BoardestCert.cer',
           'https://github.com/hiJiwho/Boardest/releases/latest/download/BoardestCert.cer'
@@ -1067,7 +1066,7 @@
         productType: 'Cloud',
         productName: 'Boardest Cloud',
         requiresCert: true,
-        certThumbprint: '006d6eb59ce360dbd15bf1367ea107b34033c7a3',
+        certThumbprint: '69af4cc96f4a48f88cee359f0ba0555a0b06e361',
         certUrls: [
           'https://bst-installer.web.app/BoardestCert.cer',
           'https://github.com/hiJiwho/Boardest/releases/latest/download/BoardestCert.cer'
@@ -1110,7 +1109,7 @@
       exeName: '',
       productType: 'Teacher', // 'Class', 'ClassLite', 'Teacher', 'Cloud'
       productName: 'Boardest Teacher',
-      productVersion: '5.5.3.1',
+      productVersion: '5.5.3',
       installerExeVersion: '',
       installDir: '',
       teacherInstallDir: '',
@@ -1122,7 +1121,7 @@
     let pendingChoice = 'Class';
     let pendingRpcMap = {};
     let rpcSeq = 1;
-    let availableVersions = ['5.5.3.1', '5.5.3', '5.5.1', '5.5.0', '5.4.3', '5.4.1', '5.4.0', '5.3.7'];
+    let availableVersions = ['5.5.3', '5.5.1', '5.5.0', '5.4.3', '5.4.1', '5.4.0', '5.3.7'];
     let selectedVersion = 'latest';
 
     function parseSemVer(v) {
@@ -1145,7 +1144,7 @@
 
     function checkLegacyInstallerNotice() {
       const incomingVer = appData.installerExeVersion;
-      const latestVer = (availableVersions && availableVersions.length > 0) ? availableVersions[0] : (appData.productVersion || '5.5.3.1');
+      const latestVer = (availableVersions && availableVersions.length > 0) ? availableVersions[0] : (appData.productVersion || '5.5.3');
       const noticeBox = document.getElementById('legacyInstallerNotice');
       if (!noticeBox) return;
 
@@ -1210,7 +1209,7 @@
       const appNameEl = document.getElementById('alreadyInstalledAppName');
       if (appNameEl) appNameEl.innerText = pName;
 
-      const latestVer = (availableVersions && availableVersions.length > 0) ? availableVersions[0] : (appData.productVersion || '5.5.3.1');
+      const latestVer = (availableVersions && availableVersions.length > 0) ? availableVersions[0] : (appData.productVersion || '5.5.3');
       document.querySelectorAll('.installedTargetVerText').forEach(el => el.innerText = latestVer);
 
       const btnChangeApp = document.getElementById('btnChangeApp');
@@ -1252,7 +1251,7 @@
     }
 
     function useLatestRecommendedVersion() {
-      const latestVer = (availableVersions && availableVersions.length > 0) ? availableVersions[0] : (appData.productVersion || '5.5.3.1');
+      const latestVer = (availableVersions && availableVersions.length > 0) ? availableVersions[0] : (appData.productVersion || '5.5.3');
       selectedVersion = 'latest';
       appData.productVersion = latestVer;
       const select = document.getElementById('versionSelect');
@@ -1344,7 +1343,7 @@
           const list = await resp.json();
           const tags = list.map(r => (r.tag_name || '').replace(/^v/, '')).filter(t => t && t !== '5.4.2');
           if (tags.length > 0) {
-            availableVersions = Array.from(new Set(tags));
+            availableVersions = Array.from(new Set(tags)).sort((a, b) => compareSemVer(b, a));
             const latestGithubTag = availableVersions[0];
             if (latestGithubTag) {
               appData.productVersion = latestGithubTag;
@@ -1365,7 +1364,7 @@
     function renderVersionDropdown() {
       const select = document.getElementById('versionSelect');
       if (!select) return;
-      const currentVer = appData.productVersion || '5.5.3.1';
+      const currentVer = appData.productVersion || '5.5.3';
       select.innerHTML = `<option value="latest">최신 버전 (v${currentVer} 권장)</option>`;
       availableVersions.forEach(v => {
         if (v !== currentVer) {
@@ -1383,7 +1382,7 @@
       const btnText = document.getElementById('btnStartInstallText');
       if (btnText) {
         if (selectedVersion === 'latest') {
-          btnText.innerText = `최신버전 (v${appData.productVersion || '5.5.3.1'}) 빠른 설치`;
+          btnText.innerText = `최신버전 (v${appData.productVersion || '5.5.3'}) 빠른 설치`;
         } else {
           btnText.innerText = `선택한 v${selectedVersion} 버전 설치`;
         }
@@ -1651,9 +1650,9 @@
       if (data.productVersion) {
         appData.installerExeVersion = data.productVersion;
       }
-      const latestVer = (availableVersions && availableVersions.length > 0) ? availableVersions[0] : '5.5.3.1';
+      const latestVer = (availableVersions && availableVersions.length > 0) ? availableVersions[0] : '5.5.3';
       appData.productVersion = latestVer;
-      document.getElementById('productVersion').innerText = 'v' + (appData.productVersion || '5.5.3.1');
+      document.getElementById('productVersion').innerText = 'v' + (appData.productVersion || '5.5.3');
 
       if (data.logoBase64) {
         const heroBox = document.getElementById('heroIconBox');
