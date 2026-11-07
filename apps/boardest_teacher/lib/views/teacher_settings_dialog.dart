@@ -31,6 +31,7 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
   School? _selectedSchool;
   int _selectedGrade = 1;
   int _selectedClass = 1;
+  bool _isHomeroom = true;
   List<String> _teachers = [];
   String _selectedTeacher = '';
   bool _loadingTeachers = false;
@@ -105,9 +106,10 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
           _selectedSchool = s.selectedSchool;
           _selectedGrade = s.selectedGrade.clamp(1, 6);
           _selectedClass = s.selectedClass.clamp(1, 15);
+          _isHomeroom = s.isHomeroom;
           _teachers = teachersList;
           _selectedTeacher = s.selectedTeacher;
-          _teacherController.text = s.selectedTeacher;
+          _teacherController.text = s.selectedTeacherName.isNotEmpty ? s.selectedTeacherName : s.selectedTeacher;
           _themeMode = s.themeMode;
           _uiScale = s.scaleFactor.clamp(0.8, 1.4);
           _hasCloudDrive = hasDrive;
@@ -232,15 +234,20 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
     if (_settings == null) return;
     setState(() => _loading = true);
     try {
-      final teacherName = _teacherController.text.trim().isNotEmpty
+      final displayTeacherName = _teacherController.text.trim().isNotEmpty
           ? _teacherController.text.trim()
           : _selectedTeacher;
+      final comciganTeacher = _selectedTeacher.trim().isNotEmpty
+          ? _selectedTeacher.trim()
+          : displayTeacherName;
       final updated = _settings!.copyWith(
         selectedSchool: _selectedSchool,
         selectedGrade: _selectedGrade,
         selectedClass: _selectedClass,
-        selectedTeacher: teacherName,
-        selectedTeacherName: teacherName,
+        isHomeroom: _isHomeroom,
+        selectedTeacher: comciganTeacher,
+        selectedTeacherId: comciganTeacher,
+        selectedTeacherName: displayTeacherName,
         themeMode: _themeMode,
         scaleFactor: _uiScale,
       );
@@ -571,6 +578,35 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
           const SizedBox(height: 14),
 
           // 교사 드롭다운 / 입력
+          if (_error != null) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4565).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFEF4565).withOpacity(0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4565), size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _error!,
+                      style: GoogleFonts.notoSansKr(color: const Color(0xFFEF4565), fontSize: 12.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 16),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () => setState(() => _error = null),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (_loadingTeachers)
             const Padding(
               padding: EdgeInsets.all(12),
@@ -582,44 +618,101 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
                 ],
               ),
             )
-          else if (_teachers.isNotEmpty) ...[
-            DropdownButtonFormField<String>(
-              value: _teachers.contains(_selectedTeacher) ? _selectedTeacher : null,
-              dropdownColor: const Color(0xFF141A29),
-              style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14),
-              decoration: InputDecoration(
-                labelText: '교사 명단 선택',
-                labelStyle: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2)),
-                filled: true,
-                fillColor: const Color(0xFF141A29),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          else ...[
+            if (_teachers.isNotEmpty) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _teachers.contains(_selectedTeacher) ? _selectedTeacher : null,
+                      dropdownColor: const Color(0xFF141A29),
+                      style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14),
+                      decoration: InputDecoration(
+                        labelText: '컴시간 교사 명단 선택 (${_teachers.length}명)',
+                        labelStyle: GoogleFonts.notoSansKr(color: const Color(0xFF00F5D4)),
+                        filled: true,
+                        fillColor: const Color(0xFF141A29),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      items: _teachers.map((t) => DropdownMenuItem(value: t, child: Text('$t 선생님'))).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _selectedTeacher = val;
+                            if (_teacherController.text.trim().isEmpty || _teachers.contains(_teacherController.text.trim())) {
+                              _teacherController.text = val;
+                            }
+                          });
+                          _autoDetectHomeroomClass(val);
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  IconButton(
+                    tooltip: '컴시간 교사 명단 새로고침',
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xFF141A29),
+                      foregroundColor: const Color(0xFF00F5D4),
+                    ),
+                    onPressed: _selectedSchool == null ? null : () => _loadSchoolTeachers(_selectedSchool!),
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
               ),
-              items: _teachers.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-              onChanged: (val) {
-                if (val != null) {
-                  setState(() {
-                    _selectedTeacher = val;
-                    _teacherController.text = val;
-                  });
-                  _autoDetectHomeroomClass(val);
-                }
-              },
-            ),
-          ] else ...[
-            TextField(
-              controller: _teacherController,
-              style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14),
-              decoration: InputDecoration(
-                labelText: '선생님 성함 직접 입력',
-                labelStyle: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2)),
-                filled: true,
-                fillColor: const Color(0xFF141A29),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              ),
+              const SizedBox(height: 12),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _teacherController,
+                    style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      labelText: '표시할 선생님 성함 (직접 입력 가능)',
+                      labelStyle: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2)),
+                      filled: true,
+                      fillColor: const Color(0xFF141A29),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                ),
+                if (_teachers.isEmpty && _selectedSchool != null) ...[
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF141A29),
+                      foregroundColor: const Color(0xFF00F5D4),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () => _loadSchoolTeachers(_selectedSchool!),
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text('명단 불러오기'),
+                  ),
+                ],
+              ],
             ),
           ],
+
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141A29),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              activeColor: const Color(0xFF00F5D4),
+              title: Text('담임 교사 여부 (우리 반 시간표 함께 보기)', style: GoogleFonts.notoSansKr(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold)),
+              subtitle: Text('활성화 시 주간 시간표에서 담임 학급 시간표가 나란히 표시됩니다.', style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 11.5)),
+              value: _isHomeroom,
+              onChanged: (v) => setState(() => _isHomeroom = v),
+            ),
+          ),
 
           const SizedBox(height: 20),
           // 학년 및 반
@@ -838,15 +931,54 @@ class _TeacherSettingsDialogState extends State<TeacherSettingsDialog> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('로컬 캐시 비우기', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text('버전 및 업데이트 확인 (현재 v${UpdateService.normalizeVersion(UpdateService.currentVersion)})', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                     const SizedBox(height: 4),
-                    Text('시간표 및 급식 임시 캐시를 즉시 새로고침합니다.', style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 12)),
+                    Text('GitHub 공식 릴리즈 서버에서 최신 버전 여부를 즉시 확인합니다.', style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 12)),
+                  ],
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00F5D4), foregroundColor: Colors.black),
+                  onPressed: () => UpdateService.instance.checkAndPromptUpdate(context, force: true),
+                  icon: const Icon(Icons.system_update_alt_rounded, size: 16),
+                  label: const Text('업데이트 확인', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141A29),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('로컬 캐시 비우기 및 시간표 동기화', style: GoogleFonts.notoSansKr(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 4),
+                    Text('시간표 및 급식 임시 캐시를 즉시 비우고 새로고침합니다.', style: GoogleFonts.notoSansKr(color: const Color(0xFF94A1B2), fontSize: 12)),
                   ],
                 ),
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF00F5D4), side: const BorderSide(color: Color(0xFF00F5D4))),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('로컬 캐시가 성공적으로 비워졌습니다.')));
+                  onPressed: () async {
+                    ComciganService.clearCache();
+                    if (_selectedSchool != null) {
+                      await _comcigan.fetchTimetableRaw(_selectedSchool!.code);
+                    }
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('컴시간 시간표 및 로컬 캐시가 성공적으로 갱신되었습니다.'),
+                          backgroundColor: Color(0xFF10B981),
+                        ),
+                      );
+                    }
                   },
                   child: const Text('캐시 정리'),
                 ),

@@ -22,8 +22,8 @@ using Microsoft.Web.WebView2.WinForms;
 [assembly: AssemblyCompany("Boardest Team")]
 [assembly: AssemblyProduct("Boardest Online Installer")]
 [assembly: AssemblyCopyright("Copyright © 2026 Boardest. All rights reserved.")]
-[assembly: AssemblyVersion("5.5.3.1")]
-[assembly: AssemblyFileVersion("5.5.3.1")]
+[assembly: AssemblyVersion("5.6.1.0")]
+[assembly: AssemblyFileVersion("5.6.1.0")]
 
 namespace BoardestInstaller
 {
@@ -54,7 +54,7 @@ namespace BoardestInstaller
         private WebView2 _webView;
         private string _productType = "Teacher"; // "Class", "Teacher", "Cloud"
         private string _productName = "Boardest 통합 온라인 설치";
-        private string _productVersion = "5.5.3.1";
+        private string _productVersion = "5.6.1";
         private string _teacherInstallDir;
         private string _exeFileName = "";
         private string _lastTargetUrl = "";
@@ -1277,6 +1277,8 @@ namespace BoardestInstaller
                 candidateUrls = new string[]
                 {
                     primaryUrl,
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.6.1/boardest-class-lite.msix",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.6.1/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.6.0/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.6.0/boardest-class-lite.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.5.3.1/boardest-class-lite.msix",
@@ -1303,6 +1305,9 @@ namespace BoardestInstaller
                 candidateUrls = new string[]
                 {
                     primaryUrl,
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.6.1/boardest-class.msix",
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.6.1/boardest.msix",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.6.1/boardest-class.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.6.0/boardest-class.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.6.0/boardest.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.6.0/boardest-class.msix",
@@ -1337,6 +1342,8 @@ namespace BoardestInstaller
                 candidateUrls = new string[]
                 {
                     primaryUrl,
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.6.1/boardest-cloud.msix",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.6.1/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.6.0/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.6.0/boardest-cloud.msix",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.5.3.1/boardest-cloud.msix",
@@ -1363,6 +1370,8 @@ namespace BoardestInstaller
                 candidateUrls = new string[]
                 {
                     primaryUrl,
+                    "https://github.com/hiJiwho/Boardest/releases/download/v5.6.1/bst-teacher-windows.zip",
+                    "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.6.1/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.6.0/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest-Source-code/releases/download/v5.6.0/bst-teacher-windows.zip",
                     "https://github.com/hiJiwho/Boardest/releases/download/v5.5.3.1/bst-teacher-windows.zip",
@@ -1503,6 +1512,35 @@ namespace BoardestInstaller
                     UpdateStageUI(3, copyPct, string.Format("앱 파일 복사 중... ({0}/{1})", copiedCount, totalFiles), null, null, null);
                 }
             }
+
+            // 기존에 다른 설치 경로(Program Files 또는 LocalAppData)에 구버전이 남아 있는 경우 함께 최신 파일로 동기화
+            try
+            {
+                string[] secondaryDirs = new string[]
+                {
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "BoardestTeacher"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "BoardestTeacher"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Boardest", "Boardest Teacher")
+                };
+                foreach (string secDir in secondaryDirs)
+                {
+                    if (string.IsNullOrEmpty(secDir)) continue;
+                    if (string.Equals(Path.GetFullPath(secDir).TrimEnd('\\'), Path.GetFullPath(_teacherInstallDir).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (File.Exists(Path.Combine(secDir, "boardest_teacher.exe")))
+                    {
+                        foreach (string srcFile in allFiles)
+                        {
+                            string relPath = srcFile.Substring(sourceRoot.Length).TrimStart('\\', '/');
+                            string destFile = Path.Combine(secDir, relPath);
+                            string destFolder = Path.GetDirectoryName(destFile);
+                            if (!Directory.Exists(destFolder)) Directory.CreateDirectory(destFolder);
+                            try { CopyFileWithRetry(srcFile, destFile); } catch { }
+                        }
+                    }
+                }
+            }
+            catch { }
 
             UpdateStageUI(3, 88, "언인스톨러 복사 및 바로가기 등록 중...", null, null, "[3단계] 언인스톨러 및 바로가기 등록 중...");
 

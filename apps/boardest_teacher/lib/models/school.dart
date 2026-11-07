@@ -12,13 +12,34 @@ class School {
   });
 
   /// Creates a School object from the raw list format returned by Comcigan API.
-  /// Format: [id, region, name, code]
-  factory School.fromRawList(List<dynamic> raw) {
+  /// Legacy Format: [id, region, name, code]
+  /// 2026 Format: [id, region, name, code1, code2, code3] where real code index = (id ~/ 6347) + 2
+  factory School.fromRawList(dynamic rawInput) {
+    if (rawInput is Map) {
+      return School(
+        id: (rawInput['id'] ?? rawInput['regionCode'] ?? 0) is num
+            ? ((rawInput['id'] ?? rawInput['regionCode'] ?? 0) as num).toInt()
+            : int.tryParse((rawInput['id'] ?? rawInput['regionCode'] ?? '0').toString()) ?? 0,
+        region: (rawInput['region'] ?? '').toString(),
+        name: (rawInput['name'] ?? '').toString(),
+        code: (rawInput['code'] ?? 0) is num
+            ? (rawInput['code'] as num).toInt()
+            : int.tryParse((rawInput['code'] ?? '0').toString()) ?? 0,
+      );
+    }
+    final List<dynamic> raw = rawInput as List<dynamic>;
+    final int idVal = (raw[0] is num) ? (raw[0] as num).toInt() : int.tryParse(raw[0].toString()) ?? 0;
+    final int codeIdx = (raw.length > 4 && idVal >= 6347)
+        ? ((idVal ~/ 6347) + 2).clamp(3, raw.length - 1)
+        : 3;
+    final int codeVal = (raw[codeIdx] is num)
+        ? (raw[codeIdx] as num).toInt()
+        : int.tryParse(raw[codeIdx].toString()) ?? 0;
     return School(
-      id: raw[0] as int,
-      region: raw[1] as String,
-      name: raw[2] as String,
-      code: raw[3] as int,
+      id: idVal,
+      region: raw[1].toString(),
+      name: raw[2].toString(),
+      code: codeVal,
     );
   }
 

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:bst_core/bst_core.dart';
 
@@ -136,19 +137,19 @@ class ComciganService {
   static Map<String, dynamic> normalizeRawData(Map<String, dynamic> rawJson) {
     final normalized = <String, dynamic>{};
     rawJson.forEach((k, v) {
-      if (k.contains('147')) {
+      if (k.contains('147') || k.contains('146')) {
         normalized['자료147'] = v;
-      } else if (k.contains('446')) {
+      } else if (k.contains('446') || k.contains('131')) {
         normalized['자료446'] = v;
-      } else if (k.contains('492')) {
+      } else if (k.contains('492') || k.contains('133')) {
         normalized['자료492'] = v;
-      } else if (k.contains('481')) {
+      } else if (k.contains('481') || k.contains('115')) {
         normalized['자료481'] = v;
-      } else if (k.contains('542')) {
+      } else if (k.contains('542') || k.contains('140')) {
         normalized['자료542'] = v;
-      } else if (k.contains('245')) {
+      } else if (k.contains('245') || k.contains('160')) {
         normalized['자료245'] = v;
-      } else if (k.contains('학급수') || (v is List && v.length >= 4 && v.length <= 10 && v[1] is num)) {
+      } else if (k == '학급수' || (!rawJson.containsKey('학급수') && !normalized.containsKey('학급수') && k.contains('학급수') && !k.contains('가상'))) {
         normalized['학급수'] = v;
       } else if (k.contains('분리') || v == 100 || v == 1000) {
         normalized['분리'] = v;
@@ -188,7 +189,7 @@ class ComciganService {
 
     final teachersRaw = data['자료446'] as List? ?? [];
     final subjectsRaw = data['자료492'] as List? ?? [];
-    final lessonsRaw = data['자료481'] as List? ?? [];
+    final lessonsRaw = (data['자료481'] ?? data['자료147']) as List? ?? [];
 
     final homeroomTeachers = <int, Map<int, String>>{};
     final lessons = <Lesson>[];
@@ -200,11 +201,13 @@ class ComciganService {
         if (homeroomRaw[g] is List) {
           final gList = homeroomRaw[g] as List;
           for (int c = 1; c < gList.length; c++) {
-            final tIndex = (gList[c] as num?)?.toInt() ?? 0;
-            if (tIndex > 0 && tIndex < teachersRaw.length) {
-              final tName = teachersRaw[tIndex]?.toString().trim() ?? '';
-              if (tName.isNotEmpty) {
-                homeroomTeachers.putIfAbsent(g, () => {})[c] = tName;
+            if (gList[c] is num) {
+              final tIndex = (gList[c] as num?)?.toInt() ?? 0;
+              if (tIndex > 0 && tIndex < teachersRaw.length) {
+                final tName = teachersRaw[tIndex]?.toString().trim() ?? '';
+                if (tName.isNotEmpty) {
+                  homeroomTeachers.putIfAbsent(g, () => {})[c] = tName;
+                }
               }
             }
           }
@@ -213,7 +216,6 @@ class ComciganService {
     }
 
     // 시간표 과목 및 교사 매핑 (자료481: [grade][class][weekday][period])
-    // w: 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun (주말 시간표 지원)
     if (lessonsRaw.isNotEmpty) {
       for (int g = 1; g < lessonsRaw.length; g++) {
         if (targetGrade != null && targetGrade != g) {
@@ -265,7 +267,7 @@ class ComciganService {
               final int separation = (data['분리'] as num?)?.toInt() ?? 100;
 
               if (separation == 1000) {
-                sIndex = cellVal ~/ 1000;
+                sIndex = (cellVal ~/ 1000) % 1000;
                 tIndex = cellVal % 1000;
               } else {
                 sIndex = cellVal ~/ 100;
@@ -336,6 +338,8 @@ class ComciganService {
         final bool isRealData = rawJson.isNotEmpty &&
             (rawJson.containsKey('자료481') ||
                 rawJson.containsKey('자료446') ||
+                rawJson.containsKey('자료146') ||
+                rawJson.containsKey('자료131') ||
                 (normalized.containsKey('학교명') &&
                     !normalized['학교명'].toString().startsWith('School_')));
         if (!normalized.containsKey('학교명') || normalized['학교명'] == null || normalized['학교명'].toString().isEmpty) {

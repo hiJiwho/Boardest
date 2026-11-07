@@ -3228,6 +3228,17 @@ class _TeacherViewState extends State<TeacherView> {
                             hasPasskey: true,
                             isLoggedIn: CloudDriveService.instance.isLoggedIn,
                             userEmail: CloudDriveService.instance.userEmail,
+                            storageSummaryText: CloudDriveService.instance.isLoggedIn
+                                ? (_driveFiles.isNotEmpty
+                                    ? '클라우드 보관 자료 ${_driveFiles.length}개 연동됨'
+                                    : 'Google Drive 클라우드 보관함 연동됨')
+                                : '로컬 보관함 활성 (클라우드 미연동)',
+                            storageSubText: CloudDriveService.instance.isLoggedIn
+                                ? '내 드라이브 > $_currentDriveFolderName 실시간 백업 중'
+                                : '상단 로그인 버튼으로 Google Drive를 연동하세요',
+                            storageProgress: CloudDriveService.instance.isLoggedIn
+                                ? ((_driveFiles.length / 50.0).clamp(0.08, 1.0))
+                                : 0.12,
                             onLoginPressed: () async {
                               await CloudDriveService.instance.loginWithBrowserOAuth();
                               if (mounted) setState(() {});
@@ -3265,13 +3276,13 @@ class _TeacherViewState extends State<TeacherView> {
                           }
                         },
                         onResumeLesson: () {
-                          setState(() => _currentTeacherTab = 'lesson');
+                          setState(() => _currentTeacherTab = 'create');
                         },
                         onStartQuickLesson: () {
-                          setState(() => _currentTeacherTab = 'lesson');
+                          setState(() => _currentTeacherTab = 'create');
                         },
                         onCreateQuickMaterial: () {
-                          setState(() => _currentTeacherTab = 'cloud_create');
+                          setState(() => _currentTeacherTab = 'create');
                         },
                       ),
               ),
@@ -3439,32 +3450,58 @@ class _TeacherViewState extends State<TeacherView> {
     );
   }
 
-  // ── 교사 ID 매칭 헬퍼 (교사 실명 완전 배제, 오직 컴시간 교사 ID만 매칭) ──
+  // ── 교사 ID 매칭 헬퍼 (컴시간 약칭 및 설정 교사명 정밀 매칭) ──
   bool _isTeacherMatch(String lessonTeacher) {
     final lt = lessonTeacher.replaceAll('*', '').replaceAll('선생님', '').trim().toUpperCase();
     if (lt.isEmpty) return false;
 
+    final primarySelected = _settings.selectedTeacher.replaceAll('*', '').replaceAll('선생님', '').trim().toUpperCase();
+    if (primarySelected.isNotEmpty && primarySelected != '1' && primarySelected != '선생님') {
+      if (lt == primarySelected) return true;
+      if (lt.length >= 2 && primarySelected.length >= 2 && lt.substring(0, 2) == primarySelected.substring(0, 2)) {
+        return true;
+      }
+    }
+
     final candidates = [
-      _settings.selectedTeacherName,
       _settings.selectedTeacher,
       _settings.selectedTeacherId,
+      _settings.selectedTeacherName,
       CloudDriveService.instance.userName,
     ].map((s) => (s ?? '').replaceAll('*', '').replaceAll('선생님', '').trim().toUpperCase())
-     .where((s) => s.isNotEmpty && s != '1' && s != '선생님')
+     .where((s) => s.isNotEmpty && s != '1' && s != '선생님' && s != '김보데')
      .toList();
 
     if (candidates.isEmpty) {
-      return true;
+      return false;
     }
 
     for (final targetId in candidates) {
       if (lt == targetId) return true;
-      if (lt.contains(targetId) || targetId.contains(lt)) return true;
       if (lt.length >= 2 && targetId.length >= 2 && lt.substring(0, 2) == targetId.substring(0, 2)) {
+        return true;
+      }
+      if (lt.length >= 2 && (lt.contains(targetId) || targetId.contains(lt))) {
         return true;
       }
     }
     return false;
+  }
+
+  Future<void> _quickSelectComciganTeacher(String teacherAbbr) async {
+    final clean = teacherAbbr.replaceAll('*', '').trim();
+    if (clean.isEmpty) return;
+    final updated = _settings.copyWith(
+      selectedTeacher: clean,
+      selectedTeacherId: clean,
+      selectedTeacherName: _settings.selectedTeacherName.isNotEmpty ? _settings.selectedTeacherName : clean,
+    );
+    await StorageService().saveSettings(updated);
+    if (mounted) {
+      setState(() {
+        _settings = updated;
+      });
+    }
   }
 
   // ── 좌측 상단: 선생님 시간표 패널 ─────────────────────────
@@ -3478,21 +3515,28 @@ class _TeacherViewState extends State<TeacherView> {
             ? _settings.selectedTeacher
             : '교사');
 
-    var teacherLessons = (_timetableResult?.lessons ?? [])
+    final allLessons = _timetableResult?.lessons ?? [];
+    final allSchoolTeachers = allLessons
+        .map((l) => l.teacher.replaceAll('*', '').trim())
+        .where((t) => t.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    final hasAnyMatchedLessonInWeek = allLessons.any((l) => _isTeacherMatch(l.teacher));
+    final bool showingHomeroomFallback = !hasAnyMatchedLessonInWeek && allLessons.isNotEmpty;
+
+    var teacherLessons = allLessons
         .where((l) => l.weekday == displayDay && _isTeacherMatch(l.teacher))
         .toList();
-    if (teacherLessons.isEmpty && (_timetableResult?.lessons.isNotEmpty ?? false)) {
-      final firstTeacher = _timetableResult!.lessons.map((l) => l.teacher).where((t) => t.trim().isNotEmpty).firstOrNull;
-      if (firstTeacher != null) {
-        teacherLessons = _timetableResult!.lessons
-            .where((l) => l.weekday == displayDay && l.teacher.replaceAll('*', '').trim() == firstTeacher.replaceAll('*', '').trim())
-            .toList();
-      }
-      if (teacherLessons.isEmpty) {
-        teacherLessons = _timetableResult!.lessons
-            .where((l) => l.weekday == displayDay && l.grade == _settings.selectedGrade && l.classNum == _settings.selectedClass)
-            .toList();
-      }
+
+    if (showingHomeroomFallback) {
+      teacherLessons = allLessons
+          .where((l) =>
+              l.weekday == displayDay &&
+              l.grade == _settings.selectedGrade &&
+              l.classNum == _settings.selectedClass)
+          .toList();
     }
     teacherLessons.sort((a, b) => a.classTime.compareTo(b.classTime));
 
@@ -3529,7 +3573,7 @@ class _TeacherViewState extends State<TeacherView> {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          Icons.person_rounded,
+                          showingHomeroomFallback ? Icons.school_rounded : Icons.person_rounded,
                           color: const Color(0xFF00F5D4),
                           size: 14 * s,
                         ),
@@ -3537,7 +3581,9 @@ class _TeacherViewState extends State<TeacherView> {
                       SizedBox(width: 6 * s),
                       Expanded(
                         child: Text(
-                          '$teacherDisplayName 선생님 (${_getKoreanWeekday(displayDay)})',
+                          showingHomeroomFallback
+                              ? '${_settings.selectedGrade}-${_settings.selectedClass}반 시간표 (${_getKoreanWeekday(displayDay)})'
+                              : '$teacherDisplayName${_settings.selectedTeacher.isNotEmpty && _settings.selectedTeacher != teacherDisplayName ? " (${_settings.selectedTeacher})" : ""} 선생님 (${_getKoreanWeekday(displayDay)})',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.notoSansKr(
@@ -3547,8 +3593,72 @@ class _TeacherViewState extends State<TeacherView> {
                           ),
                         ),
                       ),
+                      if (allSchoolTeachers.isNotEmpty)
+                        PopupMenuButton<String>(
+                          tooltip: '컴시간 교사 선택',
+                          color: const Color(0xFF1E2230),
+                          onSelected: _quickSelectComciganTeacher,
+                          itemBuilder: (ctx) => allSchoolTeachers
+                              .map(
+                                (t) => PopupMenuItem<String>(
+                                  value: t,
+                                  child: Text(
+                                    '$t 선생님',
+                                    style: TextStyle(
+                                      color: t == _settings.selectedTeacher ? const Color(0xFF00F5D4) : Colors.white,
+                                      fontWeight: t == _settings.selectedTeacher ? FontWeight.bold : FontWeight.normal,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          child: Container(
+                            padding: EdgeInsets.symmetric(horizontal: 7 * s, vertical: 3 * s),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00F5D4).withOpacity(0.14),
+                              borderRadius: BorderRadius.circular(6 * s),
+                              border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.4)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.person_search_rounded, size: 12 * s, color: const Color(0xFF00F5D4)),
+                                SizedBox(width: 3 * s),
+                                Text(
+                                  showingHomeroomFallback ? '내 교사 선택' : '교사 변경',
+                                  style: GoogleFonts.notoSansKr(
+                                    color: const Color(0xFF00F5D4),
+                                    fontSize: 10 * s,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
+                  if (showingHomeroomFallback) ...[
+                    SizedBox(height: 6 * s),
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(horizontal: 8 * s, vertical: 4 * s),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(6 * s),
+                        border: Border.all(color: Colors.amber.withOpacity(0.35)),
+                      ),
+                      child: Text(
+                        '우측 상단 [내 교사 선택]에서 선생님의 컴시간 성함을 선택하세요.',
+                        style: GoogleFonts.notoSansKr(
+                          color: Colors.amberAccent,
+                          fontSize: 10 * s,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                   SizedBox(height: 8 * s),
                   if (_errorMessage != null)
                     Expanded(
@@ -3631,7 +3741,11 @@ class _TeacherViewState extends State<TeacherView> {
                                 ),
                                 if (hasClass)
                                   Text(
-                                    '${lesson.grade}-${lesson.classNum}반',
+                                    showingHomeroomFallback
+                                        ? (lesson.teacher.replaceAll('*', '').isNotEmpty
+                                            ? '${lesson.teacher.replaceAll('*', '')} 선생님'
+                                            : '${lesson.grade}-${lesson.classNum}반')
+                                        : '${lesson.grade}-${lesson.classNum}반',
                                     style: GoogleFonts.notoSansKr(
                                       color: const Color(0xFF00F5D4),
                                       fontSize: 10 * s,

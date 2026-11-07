@@ -198,7 +198,7 @@ class ComciganService {
   /// 2) 실패 시 내부 fallback map 반환
   static Future<String> fetchCode(String schoolId) async {
     const Map<String, String> fallbackMap = {
-      'ydm': '48588',
+      'ydm': '44134',
     };
     if (kIsWeb && fallbackMap.containsKey(schoolId.toLowerCase())) {
       return fallbackMap[schoolId.toLowerCase()]!;
@@ -220,179 +220,290 @@ class ComciganService {
   String? _baseUrl;
   String? _extractCode;
   List<String>? _scData;
+  String? _hourToken;
+  String? _sessionCookie;
+  String _route = '941645';
+  String _searchPrefix = '99604l';
+  String _scPrefix = '106958_';
+  String _aesKeyHex = '4eb6d28336f50bca3799179b2cd4ead31ec882bd32cdd12018840a2911a33db6';
 
   String? get baseUrl => _baseUrl;
   String? get extractCode => _extractCode;
   List<String>? get scData => _scData;
 
-  /// Initializes the session parameters by fetching the Comcigan landing frame.
-  Future<void> init() async {
-    if (kIsWeb) return;
-    // 이미 초기화된 경우 스킵 (재호출 시 실패 방지)
-    if (_baseUrl != null && _extractCode != null && _scData != null) return;
-    try {
-      final response = await http.get(Uri.parse(_defaultUrl)).timeout(const Duration(seconds: 7));
-      String html;
-      try {
-        html = utf8.decode(response.bodyBytes);
-      } catch (_) {
-        html = cp949.decode(response.bodyBytes);
-      }
+  Map<String, String> _buildComciganHeaders() {
+    final headers = <String, String>{
+      'Referer': '${_baseUrl ?? 'http://comci.net:4082'}/st',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+    };
+    if (_hourToken != null && _hourToken!.isNotEmpty) {
+      headers['X-Hour-Token'] = _hourToken!;
+    }
+    if (_sessionCookie != null && _sessionCookie!.isNotEmpty) {
+      headers['Cookie'] = _sessionCookie!;
+    }
+    return headers;
+  }
 
-      // Parse the frame source URL
-      final RegExp frameRegExp = RegExp(r"""<frame\s+[^>]*src=["']([^"']+)["']""", caseSensitive: false);
-      final match = frameRegExp.firstMatch(html);
-      if (match == null) {
-        throw Exception('Failed to find frame source in Comcigan landing page');
+  /// Deobfuscates Comcigan's 2026 `hour-obfuscated-v2` and `hour-ajax-obfuscated-v1` scripts.
+  static String _deobfuscateHourJs(String html) {
+    final blockRe = RegExp(
+      r'\/\* hour-[a-z0-9-]+ \*\/\(function\(a,k\)\{[\s\S]*?\}\)\((\[\[[\s\S]*?\]\]),\s*(\d+)\);',
+    );
+    String current = html;
+    final decodedBlocks = <String>[];
+    for (int depth = 0; depth < 4; depth++) {
+      final matches = blockRe.allMatches(current).toList();
+      if (matches.isEmpty) break;
+      final nextLayer = StringBuffer();
+      for (final m in matches) {
+        try {
+          final arr = json.decode(m.group(1)!) as List<dynamic>;
+          final k = int.parse(m.group(2)!);
+          final sb = StringBuffer();
+          for (int i = 0; i < arr.length; i++) {
+            final item = arr[i] as List<dynamic>;
+            final flag = (item[0] as num).toInt();
+            final s = item[1].toString();
+            if (flag != 0) {
+              sb.write(s);
+            } else {
+              for (int j = 0; j < s.length; j += 4) {
+                final hexVal = int.parse(s.substring(j, j + 4), radix: 16);
+                final code = hexVal ^ ((k + (j ~/ 4) * 13) & 255);
+                sb.writeCharCode(code);
+              }
+            }
+          }
+          final decoded = sb.toString();
+          decodedBlocks.add(decoded);
+          nextLayer.writeln(decoded);
+        } catch (_) {}
       }
-      
-      String framePath = match.group(1)!;
-      final resolvedUri = Uri.parse(_defaultUrl).resolve(framePath);
+      current = nextLayer.toString();
+    }
+    return decodedBlocks.join('\n');
+  }
+
+  /// Initializes the session parameters by fetching the Comcigan landing frame.
+  Future<void> init({bool force = false}) async {
+    if (kIsWeb) return;
+    if (!force && _baseUrl != null && (_hourToken != null || _extractCode != null)) return;
+    try {
+      Uri resolvedUri = Uri.parse('http://comci.net:4082/st');
+      try {
+        final response = await http.get(Uri.parse(_defaultUrl)).timeout(const Duration(seconds: 5));
+        String html;
+        try {
+          html = utf8.decode(response.bodyBytes);
+        } catch (_) {
+          html = cp949.decode(response.bodyBytes);
+        }
+        final RegExp frameRegExp = RegExp(r"""<frame\s+[^>]*src=["']([^"']+)["']""", caseSensitive: false);
+        final match = frameRegExp.firstMatch(html);
+        if (match != null) {
+          resolvedUri = Uri.parse(_defaultUrl).resolve(match.group(1)!);
+        }
+      } catch (_) {}
+
       _baseUrl = '${resolvedUri.scheme}://${resolvedUri.host}:${resolvedUri.port}';
 
-      // Load frame HTML and decode in CP949
       final frameResponse = await http.get(resolvedUri).timeout(const Duration(seconds: 7));
-      final frameHtml = cp949.decode(frameResponse.bodyBytes);
+      final setCookie = frameResponse.headers['set-cookie'];
+      if (setCookie != null && setCookie.isNotEmpty) {
+        _sessionCookie = setCookie.split(';').first.trim();
+      }
 
-      // Extract school search code path
-      // e.g. url:'./36179?17384l'+sc -> url: './36179?17384l'
-      final RegExp schoolRaRegExp = RegExp(r"url\s*:\s*'\s*\./([^']+)'", caseSensitive: false);
-      final schoolRaMatch = schoolRaRegExp.firstMatch(frameHtml);
-      if (schoolRaMatch == null) {
-        throw Exception('Failed to extract school_ra search path');
+      String frameHtml;
+      try {
+        frameHtml = cp949.decode(frameResponse.bodyBytes);
+      } catch (_) {
+        frameHtml = utf8.decode(frameResponse.bodyBytes, allowMalformed: true);
       }
-      _extractCode = '/${schoolRaMatch.group(1)!}';
 
-      // Extract sc_data parameters
-      // e.g. sc_data('73629_',sc,1,'0');
-      final int scDataIdx = frameHtml.indexOf("sc_data('");
-      if (scDataIdx == -1) {
-        throw Exception('Failed to locate sc_data initialization call');
+      final tokenMatch = RegExp(r"window\.__HourRequestToken\s*=\s*'([^']+)'").firstMatch(frameHtml);
+      if (tokenMatch != null) {
+        _hourToken = tokenMatch.group(1)!;
       }
-      final String subStr = frameHtml.substring(scDataIdx, scDataIdx + 50).replaceAll(' ', '');
-      final RegExp argRegExp = RegExp(r"\((.*?)\)");
-      final argMatch = argRegExp.firstMatch(subStr);
-      if (argMatch == null) {
-        throw Exception('Failed to extract arguments from sc_data');
+
+      final deobfuscated = _deobfuscateHourJs(frameHtml);
+      final combinedJs = '$frameHtml\n$deobfuscated';
+
+      final routeMatch = RegExp(r"url\s*:\s*'\.\/(\d+)\?'").firstMatch(combinedJs);
+      if (routeMatch != null) {
+        _route = routeMatch.group(1)!;
       }
-      
-      _scData = argMatch.group(1)!
-          .split(',')
-          .map((s) => s.replaceAll("'", "").replaceAll('"', ''))
-          .toList();
+
+      final searchPrefixMatch = RegExp(r"btoa\('(\d+l)'").firstMatch(combinedJs);
+      if (searchPrefixMatch != null) {
+        _searchPrefix = searchPrefixMatch.group(1)!;
+      }
+
+      final scPrefixMatch = RegExp(r"sc_data\('(\d+_)'").firstMatch(combinedJs);
+      if (scPrefixMatch != null) {
+        _scPrefix = scPrefixMatch.group(1)!;
+      }
+
+      final keyPartsMatch = RegExp(r"\['([0-9a-f]{16})','([0-9a-f]{16})','([0-9a-f]{16})','([0-9a-f]{16})'\]").firstMatch(combinedJs);
+      if (keyPartsMatch != null) {
+        _aesKeyHex = '${keyPartsMatch.group(3)!}${keyPartsMatch.group(2)!}${keyPartsMatch.group(4)!}${keyPartsMatch.group(1)!}';
+      }
+
+      _extractCode = '/$_route?$_searchPrefix';
+      _scData = [_scPrefix, '0', '1', '0'];
     } catch (e) {
-      throw Exception('Comcigan initialization failed: $e');
+      debugPrint('[ComciganService] Comcigan init warning: $e');
+      _baseUrl ??= 'http://comci.net:4082';
+      _extractCode ??= '/$_route?$_searchPrefix';
+      _scData ??= [_scPrefix, '0', '1', '0'];
     }
+  }
+
+  String _decryptPayloadIfNeeded(String rawBody) {
+    final trimmed = rawBody.trim();
+    if (trimmed.startsWith('enc5:') || trimmed.startsWith('enc1:')) {
+      final parts = trimmed.split(':');
+      if (parts.length >= 3) {
+        final ivBytes = base64.decode(parts[1]);
+        final cipherBytes = base64.decode(parts[2]);
+        final keyBytes = _ComciganAes256.hexToBytes(_aesKeyHex);
+        final decryptedBytes = _ComciganAes256.decryptCbc(cipherBytes, keyBytes, ivBytes);
+        return utf8.decode(decryptedBytes, allowMalformed: true).replaceAll('\x00', '').trim();
+      }
+    }
+    return _cleanJsonBody(trimmed);
+  }
+
+  static Map<String, dynamic> _normalizeComciganMap(Map<String, dynamic> rawJson) {
+    final normalized = <String, dynamic>{};
+    rawJson.forEach((k, v) {
+      if (k == '자료147' || k == '자료146' || k.contains('147') || k.contains('146')) {
+        normalized['자료147'] = v;
+      } else if (k == '자료446' || k == '자료131' || k.contains('446') || k.contains('131')) {
+        normalized['자료446'] = v;
+      } else if (k == '자료492' || k == '자료133' || k.contains('492') || k.contains('133')) {
+        normalized['자료492'] = v;
+      } else if (k == '자료481' || k == '자료115' || k.contains('481') || k.contains('115')) {
+        normalized['자료481'] = v;
+      } else if (k == '자료542' || k == '자료140' || k.contains('542') || k.contains('140')) {
+        normalized['자료542'] = v;
+      } else if (k == '자료245' || k == '자료160' || k.contains('245') || k.contains('160')) {
+        normalized['자료245'] = v;
+      } else if (k == '학급수' || (!rawJson.containsKey('학급수') && !normalized.containsKey('학급수') && k.contains('학급수') && !k.contains('가상'))) {
+        normalized['학급수'] = v;
+      } else if (k.contains('분리') || v == 100 || v == 1000) {
+        normalized['분리'] = v;
+      } else if (k.contains('일과시간') || (v is List && v.isNotEmpty && v.first.toString().contains('('))) {
+        normalized['일과시간'] = v;
+      } else if (k.contains('학교명')) {
+        normalized['학교명'] = v;
+      }
+      normalized[k] = v;
+    });
+    return normalized;
   }
 
   /// Searches for schools matching the keyword.
   Future<List<School>> searchSchool(String keyword) async {
-    if (kIsWeb) {
-      try {
-        final workerUrl = Uri.parse('https://comcigan.jiwho.workers.dev/api/comcigan/search?school=${Uri.encodeComponent(keyword)}');
-        final response = await http.get(workerUrl).timeout(const Duration(seconds: 7));
-        if (response.statusCode == 200) {
-          final jsonMap = json.decode(utf8.decode(response.bodyBytes));
-          final List<dynamic> rawList = jsonMap['results'] ?? jsonMap['schools'] ?? [];
-          return rawList.map((raw) => School.fromRawList(raw)).toList();
+    final cleanKeyword = keyword.trim();
+    if (cleanKeyword.isEmpty) return [];
+
+    if (!kIsWeb) {
+      for (int attempt = 0; attempt < 2; attempt++) {
+        try {
+          await init(force: attempt > 0);
+          final encodedKeyword = Uri.encodeComponent(cleanKeyword);
+          final queryPayload = '$_searchPrefix${encodedKeyword}_enc5';
+          final b64Query = Uri.encodeComponent(base64.encode(utf8.encode(queryPayload)));
+          final url = '${_baseUrl!}/$_route?$b64Query';
+
+          final response = await http
+              .get(Uri.parse(url), headers: _buildComciganHeaders())
+              .timeout(const Duration(seconds: 7));
+          if (response.statusCode == 200) {
+            final rawText = _decodeBody(response.bodyBytes);
+            final decrypted = _decryptPayloadIfNeeded(rawText);
+            final Map<String, dynamic> data = json.decode(_cleanJsonBody(decrypted));
+            final List<dynamic> rawList = data['학교검색'] ?? [];
+            return rawList.map((raw) => School.fromRawList(raw)).toList();
+          }
+        } catch (e) {
+          debugPrint('[ComciganService] searchSchool attempt ${attempt + 1} error: $e');
         }
-      } catch (e) {
-        debugPrint('Web school search error: $e');
       }
-      return [];
     }
 
-    await init();
-
-    // Convert keyword to CP949 URL hex string
-    final List<int> cp949Bytes = cp949.encode(keyword);
-    final String hexQuery = cp949Bytes.map((b) => '%${b.toRadixString(16).padLeft(2, '0')}').join('');
-
-    final String url = _baseUrl! + _extractCode! + hexQuery;
-    final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 7));
-    final String body = _cleanJsonBody(_decodeBody(response.bodyBytes));
-    final Map<String, dynamic> data = json.decode(body);
-    final List<dynamic> rawList = data['학교검색'] ?? [];
-    return rawList.map((raw) => School.fromRawList(raw)).toList();
+    try {
+      final workerUrl = Uri.parse('https://comcigan.jiwho.workers.dev/api/comcigan/search?school=${Uri.encodeComponent(cleanKeyword)}');
+      final response = await http.get(workerUrl).timeout(const Duration(seconds: 7));
+      if (response.statusCode == 200) {
+        final jsonMap = json.decode(utf8.decode(response.bodyBytes));
+        final List<dynamic> rawList = jsonMap['results'] ?? jsonMap['schools'] ?? [];
+        return rawList.map((raw) => School.fromRawList(raw)).toList();
+      }
+    } catch (e) {
+      debugPrint('Web school search error: $e');
+    }
+    return [];
   }
 
   /// Fetches raw JSON timetable data from the server.
   Future<Map<String, dynamic>> fetchTimetableRaw(int schoolCode, {int weekOffset = 0}) async {
-    if (kIsWeb) {
-      // 1. Primary: Cloudflare Worker with Direct TCP Sockets & Clean UTF-8 decoding
-      try {
-        final workerUrl = Uri.parse('https://comcigan.jiwho.workers.dev/api/comcigan/lookup?code=$schoolCode&offset=$weekOffset');
-        final response = await http.get(workerUrl).timeout(const Duration(seconds: 10));
-        if (response.statusCode == 200) {
-          final String bodyStr = response.body.isNotEmpty ? response.body : utf8.decode(response.bodyBytes);
-          final Map<String, dynamic> jsonMap = json.decode(bodyStr);
-          final Map<String, dynamic> data = jsonMap['data'] ?? {};
-          final Map<String, dynamic> rawJson = Map<String, dynamic>.from(data['rawJson'] ?? {});
+    if (!kIsWeb) {
+      for (int attempt = 0; attempt < 2; attempt++) {
+        try {
+          await init(force: attempt > 0);
+          final int rWeek = weekOffset + 1;
+          final String payload = '$_scPrefix${schoolCode}_0_${rWeek}_enc5';
+          final String base64Payload = base64.encode(utf8.encode(payload));
+          final String url = '${_baseUrl!}/$_route?$base64Payload';
 
-          final normalized = <String, dynamic>{};
-          if (data['parsed'] != null && data['parsed'] is Map) {
-            normalized['__parsed__'] = data['parsed'];
+          final response = await http
+              .get(Uri.parse(url), headers: _buildComciganHeaders())
+              .timeout(const Duration(seconds: 7));
+          if (response.statusCode == 200) {
+            final String rawText = _decodeBody(response.bodyBytes);
+            final String decrypted = _decryptPayloadIfNeeded(rawText);
+            final decoded = json.decode(_cleanJsonBody(decrypted)) as Map<String, dynamic>;
+            final normalized = _normalizeComciganMap(decoded);
+            if (normalized.containsKey('자료147') || normalized.containsKey('자료446') || normalized.containsKey('학교명')) {
+              return normalized;
+            }
           }
-          rawJson.forEach((k, v) {
-            if (k.contains('147')) normalized['자료147'] = v;
-            else if (k.contains('446')) normalized['자료446'] = v;
-            else if (k.contains('492')) normalized['자료492'] = v;
-            else if (k.contains('481')) normalized['자료481'] = v;
-            else if (k.contains('542')) normalized['자료542'] = v;
-            else if (k.contains('245')) normalized['자료245'] = v;
-            else if (k.contains('학급수') || (v is List && v.length == 4 && v[1] is num)) normalized['학급수'] = v;
-            else if (k.contains('분리') || v == 100 || v == 1000) normalized['분리'] = v;
-            else if (k.contains('일과시간') || (v is List && v.isNotEmpty && v.first.toString().contains('('))) normalized['일과시간'] = v;
-            else if (k.contains('학교명')) normalized['학교명'] = v;
-            else normalized[k] = v;
-          });
-          debugPrint('[Comcigan] Successfully fetched raw timetable from worker for school $schoolCode');
-          return normalized;
+        } catch (e) {
+          debugPrint('[Comcigan] Direct enc5 fetch attempt ${attempt + 1} failed: $e');
         }
-      } catch (e) {
-        debugPrint('Web timetable primary worker error: $e');
       }
-
-      // 2. Fallback: allorigins proxy
-      try {
-        final da1 = weekOffset.toString();
-        final s7 = '73629_$schoolCode';
-        final payload = '${s7}_${da1}_1';
-        final base64Payload = base64.encode(utf8.encode(payload));
-        final targetUrl = 'http://comci.net:4082/36179?$base64Payload';
-        final proxyUrl = Uri.parse('https://api.allorigins.win/raw?url=${Uri.encodeComponent(targetUrl)}');
-        final response = await http.get(proxyUrl).timeout(const Duration(seconds: 4));
-        if (response.statusCode == 200 && response.body.contains('{')) {
-          final String body = _cleanJsonBody(response.body);
-          final decoded = json.decode(body) as Map<String, dynamic>;
-          if (decoded.containsKey('자료492') || decoded.containsKey('자료147') || decoded.containsKey('학교명')) {
-            return decoded;
-          }
-        }
-      } catch (e) {
-        debugPrint('Web timetable allorigins proxy fallback: $e');
-      }
-
-      throw Exception('Failed to fetch timetable data on Web');
     }
 
-    await init();
+    // Fallback: Cloudflare Worker
+    try {
+      final workerUrl = Uri.parse('https://comcigan.jiwho.workers.dev/api/comcigan/lookup?code=$schoolCode&offset=$weekOffset');
+      final response = await http.get(workerUrl).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final String bodyStr = response.body.isNotEmpty ? response.body : utf8.decode(response.bodyBytes);
+        final Map<String, dynamic> jsonMap = json.decode(bodyStr);
+        final Map<String, dynamic> data = jsonMap['data'] ?? {};
+        final Map<String, dynamic> rawJson = Map<String, dynamic>.from(data['rawJson'] ?? {});
 
-    final String da1 = weekOffset.toString();
-    final String s7 = '${_scData![0]}$schoolCode';
-    final String payload = '${s7}_${da1}_${_scData![2]}';
-    final String base64Payload = base64.encode(utf8.encode(payload));
+        final normalized = _normalizeComciganMap(rawJson);
+        if (data['parsed'] != null && data['parsed'] is Map) {
+          normalized['__parsed__'] = data['parsed'];
+        }
+        debugPrint('[Comcigan] Successfully fetched raw timetable from worker for school $schoolCode');
+        return normalized;
+      }
+    } catch (e) {
+      debugPrint('Web timetable primary worker error: $e');
+    }
 
-    final String path = _extractCode!.split('?')[0];
-    final String url = '${_baseUrl!}$path?$base64Payload';
-
-    final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 7));
-    final String body = _cleanJsonBody(_decodeBody(response.bodyBytes));
-    return json.decode(body) as Map<String, dynamic>;
+    throw Exception('Failed to fetch timetable data');
   }
 
   /// Decodes and parses raw JSON timetable data into the custom TimetableResult model.
-  TimetableResult parseTimetable(Map<String, dynamic> data) {
+  TimetableResult parseTimetable(Map<String, dynamic> rawInput) {
+    final data = _normalizeComciganMap(rawInput);
     if (data.containsKey('__parsed__') && data['__parsed__'] is Map) {
       try {
         final parsedMap = Map<String, dynamic>.from(data['__parsed__'] as Map);
@@ -443,9 +554,9 @@ class ComciganService {
     }
 
     final int bunri = (data['분리'] as num? ?? 100).toInt();
-    final List<dynamic> rawTeacherList = data['자료446'] ?? [];
+    final List<dynamic> rawTeacherList = data['자료446'] ?? data['자료131'] ?? [];
     final List<String> teacherList = rawTeacherList.map((t) => _fixMojibake(t.toString())).toList();
-    final List<dynamic> rawSubjectList = data['자료492'] ?? [];
+    final List<dynamic> rawSubjectList = data['자료492'] ?? data['자료133'] ?? [];
     final List<String> subjectList = rawSubjectList.map((s) => _fixMojibake(s.toString())).toList();
 
     // Parse homeroom teachers mapping
@@ -468,9 +579,9 @@ class ComciganService {
     }
 
     final List<Lesson> lessons = [];
-    final dynamic rawDaily = data['자료147'];
-    final dynamic rawOriginal = data['자료481'];
-    final dynamic rawClassrooms = data['자료245'];
+    final dynamic rawDaily = data['자료147'] ?? data['자료146'];
+    final dynamic rawOriginal = data['자료481'] ?? data['자료115'];
+    final dynamic rawClassrooms = data['자료245'] ?? data['자료160'];
     final bool hasClassroom = (data['강의실'] ?? 0) == 1;
 
     for (int grade = 1; grade <= (classCounts.isEmpty ? 3 : classCounts.length); grade++) {
@@ -483,7 +594,7 @@ class ComciganService {
 
             if (dailyVal == 0) {
               // Try to find if any teacher is teaching this Grade/Class at this Weekday/Period in 자료542
-              final List<dynamic>? teacherSchedules = data['자료542'] as List<dynamic>?;
+              final List<dynamic>? teacherSchedules = (data['자료542'] ?? data['자료140']) as List<dynamic>?;
               if (teacherSchedules != null) {
                 for (int t = 1; t < teacherSchedules.length; t++) {
                   final int val = _getTeacherScheduleValue(teacherSchedules, t, weekday, period);
@@ -511,7 +622,6 @@ class ComciganService {
             }
 
             int valToDecode = dailyVal;
-            bool isSelfStudy = false;
 
             if (dailyVal == 0) {
               // Empty slot (no class at all)
@@ -519,12 +629,14 @@ class ComciganService {
             }
 
             int th, sb;
-            if (valToDecode >= 10000) {
-              sb = valToDecode ~/ 1000;
-              th = valToDecode % 100;
-            } else if (bunri == 100) {
-              th = valToDecode ~/ 100;
-              sb = valToDecode % 100;
+            if (bunri == 100) {
+              if (valToDecode >= 10000) {
+                sb = valToDecode ~/ 1000;
+                th = valToDecode % 100;
+              } else {
+                th = valToDecode ~/ 100;
+                sb = valToDecode % 100;
+              }
             } else {
               th = valToDecode % bunri;
               sb = valToDecode ~/ bunri;
@@ -567,7 +679,7 @@ class ComciganService {
               subjectName = tt + subjectName;
             }
 
-            if (dailyVal != origVal) {
+            if (dailyVal != origVal && origVal != 0) {
               subjectName = '$subjectName*';
             }
 
@@ -591,7 +703,7 @@ class ComciganService {
               teacher: teacherName,
               subject: subjectName,
               classroom: classroom,
-              isChanged: dailyVal != origVal,
+              isChanged: dailyVal != origVal && origVal != 0,
             ));
           }
         }
@@ -709,17 +821,19 @@ class ComciganService {
             final int grade2 = classVal ~/ 100;
             final int classNum2 = classVal - grade2 * 100;
 
-            final int dailyVal2 = _getValue(data['자료147'], grade2, classNum2, weekday, period);
+            final int dailyVal2 = _getValue(data['자료147'] ?? data['자료146'], grade2, classNum2, weekday, period);
             int subject3, teacher2;
-            if (dailyVal2 >= 10000) {
-              subject3 = dailyVal2 ~/ 1000;
-              teacher2 = dailyVal2 % 100;
-            } else if (bunri == 100) {
-              teacher2 = dailyVal2 ~/ 100;
-              subject3 = dailyVal2 % 100;
+            if (bunri == 100) {
+              if (dailyVal2 >= 10000) {
+                subject3 = dailyVal2 ~/ 1000;
+                teacher2 = dailyVal2 % 100;
+              } else {
+                teacher2 = dailyVal2 ~/ 100;
+                subject3 = dailyVal2 % 100;
+              }
             } else {
               teacher2 = dailyVal2 % bunri;
-              subject3 = dailyVal2 ~/ bunri;
+              subject3 = (dailyVal2 ~/ bunri) % bunri;
             }
 
             if (k == 1) {
@@ -780,5 +894,199 @@ class ComciganService {
       }
     } catch (_) {}
     return input;
+  }
+}
+
+/// Pure-Dart AES-256-CBC decryptor for Comcigan 2026 `enc5` / `enc1` payloads.
+class _ComciganAes256 {
+  static const List<int> _sBox = [
+    0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
+    0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
+    0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7, 0xcc, 0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15,
+    0x04, 0xc7, 0x23, 0xc3, 0x18, 0x96, 0x05, 0x9a, 0x07, 0x12, 0x80, 0xe2, 0xeb, 0x27, 0xb2, 0x75,
+    0x09, 0x83, 0x2c, 0x1a, 0x1b, 0x6e, 0x5a, 0xa0, 0x52, 0x3b, 0xd6, 0xb3, 0x29, 0xe3, 0x2f, 0x84,
+    0x53, 0xd1, 0x00, 0xed, 0x20, 0xfc, 0xb1, 0x5b, 0x6a, 0xcb, 0xbe, 0x39, 0x4a, 0x4c, 0x58, 0xcf,
+    0xd0, 0xef, 0xaa, 0xfb, 0x43, 0x4d, 0x33, 0x85, 0x45, 0xf9, 0x02, 0x7f, 0x50, 0x3c, 0x9f, 0xa8,
+    0x51, 0xa3, 0x40, 0x8f, 0x92, 0x9d, 0x38, 0xf5, 0xbc, 0xb6, 0xda, 0x21, 0x10, 0xff, 0xf3, 0xd2,
+    0xcd, 0x0c, 0x13, 0xec, 0x5f, 0x97, 0x44, 0x17, 0xc4, 0xa7, 0x7e, 0x3d, 0x64, 0x5d, 0x19, 0x73,
+    0x60, 0x81, 0x4f, 0xdc, 0x22, 0x2a, 0x90, 0x88, 0x46, 0xee, 0xb8, 0x14, 0xde, 0x5e, 0x0b, 0xdb,
+    0xe0, 0x32, 0x3a, 0x0a, 0x49, 0x06, 0x24, 0x5c, 0xc2, 0xd3, 0xac, 0x62, 0x91, 0x95, 0xe4, 0x79,
+    0xe7, 0xc8, 0x37, 0x6d, 0x8d, 0xd5, 0x4e, 0xa9, 0x6c, 0x56, 0xf4, 0xea, 0x65, 0x7a, 0xae, 0x08,
+    0xba, 0x78, 0x25, 0x2e, 0x1c, 0xa6, 0xb4, 0xc6, 0xe8, 0xdd, 0x74, 0x1f, 0x4b, 0xbd, 0x8b, 0x8a,
+    0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e, 0x61, 0x35, 0x57, 0xb9, 0x86, 0xc1, 0x1d, 0x9e,
+    0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
+    0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16,
+  ];
+
+  static const List<int> _invSBox = [
+    0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb,
+    0x7c, 0xe3, 0x39, 0x82, 0x9b, 0x2f, 0xff, 0x87, 0x34, 0x8e, 0x43, 0x44, 0xc4, 0xde, 0xe9, 0xcb,
+    0x54, 0x7b, 0x94, 0x32, 0xa6, 0xc2, 0x23, 0x3d, 0xee, 0x4c, 0x95, 0x0b, 0x42, 0xfa, 0xc3, 0x4e,
+    0x08, 0x2e, 0xa1, 0x66, 0x28, 0xd9, 0x24, 0xb2, 0x76, 0x5b, 0xa2, 0x49, 0x6d, 0x8b, 0xd1, 0x25,
+    0x72, 0xf8, 0xf6, 0x64, 0x86, 0x68, 0x98, 0x16, 0xd4, 0xa4, 0x5c, 0xcc, 0x5d, 0x65, 0xb6, 0x92,
+    0x6c, 0x70, 0x48, 0x50, 0xfd, 0xed, 0xb9, 0xda, 0x5e, 0x15, 0x46, 0x57, 0xa7, 0x8d, 0x9d, 0x84,
+    0x90, 0xd8, 0xab, 0x00, 0x8c, 0xbc, 0xd3, 0x0a, 0xf7, 0xe4, 0x58, 0x05, 0xb8, 0xb3, 0x45, 0x06,
+    0xd0, 0x2c, 0x1e, 0x8f, 0xca, 0x3f, 0x0f, 0x02, 0xc1, 0xaf, 0xbd, 0x03, 0x01, 0x13, 0x8a, 0x6b,
+    0x3a, 0x91, 0x11, 0x41, 0x4f, 0x67, 0xdc, 0xea, 0x97, 0xf2, 0xcf, 0xce, 0xf0, 0xb4, 0xe6, 0x73,
+    0x96, 0xac, 0x74, 0x22, 0xe7, 0xad, 0x35, 0x85, 0xe2, 0xf9, 0x37, 0xe8, 0x1c, 0x75, 0xdf, 0x6e,
+    0x47, 0xf1, 0x1a, 0x71, 0x1d, 0x29, 0xc5, 0x89, 0x6f, 0xb7, 0x62, 0x0e, 0xaa, 0x18, 0xbe, 0x1b,
+    0xfc, 0x56, 0x3e, 0x4b, 0xc6, 0xd2, 0x79, 0x20, 0x9a, 0xdb, 0xc0, 0xfe, 0x78, 0xcd, 0x5a, 0xf4,
+    0x1f, 0xdd, 0xa8, 0x33, 0x88, 0x07, 0xc7, 0x31, 0xb1, 0x12, 0x10, 0x59, 0x27, 0x80, 0xec, 0x5f,
+    0x60, 0x51, 0x7f, 0xa9, 0x19, 0xb5, 0x4a, 0x0d, 0x2d, 0xe5, 0x7a, 0x9f, 0x93, 0xc9, 0x9c, 0xef,
+    0xa0, 0xe0, 0x3b, 0x4d, 0xae, 0x2a, 0xf5, 0xb0, 0xc8, 0xeb, 0xbb, 0x3c, 0x83, 0x53, 0x99, 0x61,
+    0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d,
+  ];
+
+  static const List<int> _rCon = [
+    0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36,
+  ];
+
+  static Uint8List hexToBytes(String hex) {
+    final clean = hex.trim();
+    final out = Uint8List(clean.length ~/ 2);
+    for (int i = 0; i < out.length; i++) {
+      out[i] = int.parse(clean.substring(i * 2, i * 2 + 2), radix: 16);
+    }
+    return out;
+  }
+
+  static int _gmul(int a, int b) {
+    int p = 0;
+    int aa = a;
+    int bb = b;
+    for (int i = 0; i < 8; i++) {
+      if ((bb & 1) != 0) p ^= aa;
+      final hiBit = (aa & 0x80) != 0;
+      aa = (aa << 1) & 0xff;
+      if (hiBit) aa ^= 0x1b;
+      bb >>= 1;
+    }
+    return p;
+  }
+
+  static Uint8List _expandKey256(Uint8List key) {
+    final w = Uint8List(240);
+    for (int i = 0; i < 32; i++) {
+      w[i] = key[i];
+    }
+    final temp = Uint8List(4);
+    for (int i = 8; i < 60; i++) {
+      final prevOffset = (i - 1) * 4;
+      temp[0] = w[prevOffset];
+      temp[1] = w[prevOffset + 1];
+      temp[2] = w[prevOffset + 2];
+      temp[3] = w[prevOffset + 3];
+
+      if (i % 8 == 0) {
+        final t = temp[0];
+        temp[0] = _sBox[temp[1]] ^ _rCon[i ~/ 8];
+        temp[1] = _sBox[temp[2]];
+        temp[2] = _sBox[temp[3]];
+        temp[3] = _sBox[t];
+      } else if (i % 8 == 4) {
+        temp[0] = _sBox[temp[0]];
+        temp[1] = _sBox[temp[1]];
+        temp[2] = _sBox[temp[2]];
+        temp[3] = _sBox[temp[3]];
+      }
+
+      final curOffset = i * 4;
+      final backOffset = (i - 8) * 4;
+      w[curOffset] = w[backOffset] ^ temp[0];
+      w[curOffset + 1] = w[backOffset + 1] ^ temp[1];
+      w[curOffset + 2] = w[backOffset + 2] ^ temp[2];
+      w[curOffset + 3] = w[backOffset + 3] ^ temp[3];
+    }
+    return w;
+  }
+
+  static void _addRoundKey(Uint8List state, Uint8List roundKeys, int round) {
+    final offset = round * 16;
+    for (int i = 0; i < 16; i++) {
+      state[i] ^= roundKeys[offset + i];
+    }
+  }
+
+  static void _invShiftRows(Uint8List s) {
+    int t = s[13];
+    s[13] = s[9];
+    s[9] = s[5];
+    s[5] = s[1];
+    s[1] = t;
+    t = s[2];
+    s[2] = s[10];
+    s[10] = t;
+    t = s[6];
+    s[6] = s[14];
+    s[14] = t;
+    t = s[3];
+    s[3] = s[7];
+    s[7] = s[11];
+    s[11] = s[15];
+    s[15] = t;
+  }
+
+  static void _invSubBytes(Uint8List s) {
+    for (int i = 0; i < 16; i++) {
+      s[i] = _invSBox[s[i]];
+    }
+  }
+
+  static void _invMixColumns(Uint8List s) {
+    for (int c = 0; c < 4; c++) {
+      final idx = c * 4;
+      final s0 = s[idx];
+      final s1 = s[idx + 1];
+      final s2 = s[idx + 2];
+      final s3 = s[idx + 3];
+      s[idx] = _gmul(s0, 0x0e) ^ _gmul(s1, 0x0b) ^ _gmul(s2, 0x0d) ^ _gmul(s3, 0x09);
+      s[idx + 1] = _gmul(s0, 0x09) ^ _gmul(s1, 0x0e) ^ _gmul(s2, 0x0b) ^ _gmul(s3, 0x0d);
+      s[idx + 2] = _gmul(s0, 0x0d) ^ _gmul(s1, 0x09) ^ _gmul(s2, 0x0e) ^ _gmul(s3, 0x0b);
+      s[idx + 3] = _gmul(s0, 0x0b) ^ _gmul(s1, 0x0d) ^ _gmul(s2, 0x09) ^ _gmul(s3, 0x0e);
+    }
+  }
+
+  static Uint8List decryptCbc(List<int> cipherBytes, Uint8List key, List<int> iv) {
+    final roundKeys = _expandKey256(key);
+    final out = Uint8List(cipherBytes.length);
+    final block = Uint8List(16);
+    List<int> prevBlock = iv;
+
+    for (int offset = 0; offset + 16 <= cipherBytes.length; offset += 16) {
+      for (int i = 0; i < 16; i++) {
+        block[i] = cipherBytes[offset + i];
+      }
+      _addRoundKey(block, roundKeys, 14);
+      for (int round = 13; round >= 1; round--) {
+        _invShiftRows(block);
+        _invSubBytes(block);
+        _addRoundKey(block, roundKeys, round);
+        _invMixColumns(block);
+      }
+      _invShiftRows(block);
+      _invSubBytes(block);
+      _addRoundKey(block, roundKeys, 0);
+
+      for (int i = 0; i < 16; i++) {
+        out[offset + i] = block[i] ^ prevBlock[i];
+      }
+      prevBlock = cipherBytes.sublist(offset, offset + 16);
+    }
+
+    if (out.isEmpty) return out;
+    final padLen = out.last;
+    if (padLen >= 1 && padLen <= 16 && padLen <= out.length) {
+      bool validPad = true;
+      for (int i = out.length - padLen; i < out.length; i++) {
+        if (out[i] != padLen) {
+          validPad = false;
+          break;
+        }
+      }
+      if (validPad) {
+        return Uint8List.sublistView(out, 0, out.length - padLen);
+      }
+    }
+    return out;
   }
 }

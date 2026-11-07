@@ -48,9 +48,9 @@ class UpdateService {
   UpdateService._internal();
   static final instance = UpdateService._internal();
 
-  static const String defaultVersion = '5.6.0';
-  static const String defaultBuildNumber = '5600';
-  static const String defaultFullVersion = '5.6.0+5600';
+  static const String defaultVersion = '5.6.1';
+  static const String defaultBuildNumber = '5610';
+  static const String defaultFullVersion = '5.6.1+5610';
   static const String _releasesApi =
       'https://api.github.com/repos/hiJiwho/Boardest/releases?per_page=30';
   static const String downloadPage = 'https://boardest-downloads.web.app';
@@ -115,18 +115,46 @@ class UpdateService {
       }
     }
 
-    // 2) Try PackageInfo.fromPlatform()
+    // 2) Compare PackageInfo and assets/version.json, picking the highest resolved version
+    String? pkgVersion;
     try {
       final info = await PackageInfo.fromPlatform();
       final v = info.version.trim();
       final b = info.buildNumber.trim();
       if (v.isNotEmpty) {
-        _resolvedVersion = b.isNotEmpty ? '$v+$b' : v;
-        debugPrint('[UpdateService] Resolved version from PackageInfo: $_resolvedVersion');
-        return;
+        pkgVersion = b.isNotEmpty ? '$v+$b' : v;
       }
     } catch (e) {
       debugPrint('[UpdateService] PackageInfo lookup error: $e');
+    }
+
+    String? assetVersion;
+    for (final path in ['assets/version.json', 'version.json']) {
+      try {
+        final jsonStr = await rootBundle.loadString(path);
+        final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+        final v = (data['version'] as String?)?.trim();
+        final b = (data['build_number'] ?? data['buildNumber'])?.toString().trim();
+        if (v != null && v.isNotEmpty) {
+          assetVersion = (b != null && b.isNotEmpty) ? '$v+$b' : v;
+          break;
+        }
+      } catch (_) {}
+    }
+
+    if (pkgVersion != null && assetVersion != null) {
+      _resolvedVersion = isNewerVersion(assetVersion, pkgVersion) ? assetVersion : pkgVersion;
+      if (isNewerVersion(defaultFullVersion, _resolvedVersion!)) {
+        _resolvedVersion = defaultFullVersion;
+      }
+      debugPrint('[UpdateService] Resolved version (pkg vs asset): $_resolvedVersion');
+      return;
+    } else if (pkgVersion != null) {
+      _resolvedVersion = isNewerVersion(defaultFullVersion, pkgVersion) ? defaultFullVersion : pkgVersion;
+      return;
+    } else if (assetVersion != null) {
+      _resolvedVersion = isNewerVersion(defaultFullVersion, assetVersion) ? defaultFullVersion : assetVersion;
+      return;
     }
 
     // 3) Try Windows MSIX executable path regex
@@ -147,22 +175,7 @@ class UpdateService {
       }
     }
 
-    // 4) Try version.json from rootBundle
-    for (final path in ['assets/version.json', 'version.json']) {
-      try {
-        final jsonStr = await rootBundle.loadString(path);
-        final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-        final v = (data['version'] as String?)?.trim();
-        final b = (data['build_number'] ?? data['buildNumber'])?.toString().trim();
-        if (v != null && v.isNotEmpty) {
-          _resolvedVersion = (b != null && b.isNotEmpty) ? '$v+$b' : v;
-          debugPrint('[UpdateService] Resolved version from $path: $_resolvedVersion');
-          return;
-        }
-      } catch (_) {}
-    }
-
-    // 5) Cache fallback
+    // 4) Cache fallback
     _resolvedVersion = defaultFullVersion;
   }
 
@@ -409,8 +422,8 @@ class UpdateService {
         }
       }
 
-      final selectedWindowsUrl = installerUrl ?? msiUrl ?? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-installer.exe';
-      final selectedApkUrl = apkUrl ?? 'https://github.com/hiJiwho/Boardest/releases/latest/download/bst-teacher.apk';
+      final selectedWindowsUrl = installerUrl ?? msiUrl ?? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.exe';
+      final selectedApkUrl = apkUrl ?? 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher-lite.apk';
 
       final hasUpdate = _isNewer(distinctNormalized.first, currentNorm);
       hasUpdateNotifier.value = hasUpdate;
@@ -433,6 +446,68 @@ class UpdateService {
     } finally {
       _checking = false;
     }
+  }
+
+  /// 사이드바 및 설정 창에서 즉시 업데이트 확인 및 피드백 UI 표시
+  Future<void> checkAndPromptUpdate(BuildContext context, {bool force = false}) async {
+    final info = await checkForUpdate(force: force);
+    if (!context.mounted) return;
+    if (info != null && (info.hasUpdate || info.isBlocked)) {
+      showUpdateDialog(context, info);
+    } else if (force) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('현재 최신 버전(v${normalizeVersion(currentVersion)})을 사용 중입니다.'),
+          backgroundColor: const Color(0xFF00B4D8),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  /// 온라인 인스톨러(.exe / .msi) 또는 APK를 자동 다운로드하여 즉시 실행합니다.
+  static Future<bool> downloadAndLaunchInstaller(
+    UpdateInfo info, {
+    void Function(String status)? onStatus,
+  }) async {
+    if (kIsWeb) {
+      await launchUrl(Uri.parse(downloadPage), mode: LaunchMode.externalApplication);
+      return true;
+    }
+    try {
+      onStatus?.call('최신 설치 관리자 다운로드 중...');
+      final tempDir = await getTemporaryDirectory();
+      final url = info.downloadUrl.isNotEmpty
+          ? info.downloadUrl
+          : 'https://github.com/hiJiwho/Boardest/releases/latest/download/boardest-teacher.exe';
+      final ext = url.toLowerCase().endsWith('.msi')
+          ? '.msi'
+          : (url.toLowerCase().endsWith('.apk') ? '.apk' : '.exe');
+      final targetPath = p.join(tempDir.path, 'boardest-teacher-updater$ext');
+
+      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 45));
+      if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
+        final file = File(targetPath);
+        await file.writeAsBytes(res.bodyBytes, flush: true);
+        onStatus?.call('설치 관리자 실행 중...');
+        if (Platform.isWindows) {
+          if (ext == '.msi') {
+            await Process.start('msiexec.exe', ['/i', file.path], mode: ProcessStartMode.detached);
+          } else {
+            await Process.start(file.path, [], mode: ProcessStartMode.detached);
+          }
+          await Future.delayed(const Duration(milliseconds: 500));
+          exit(0);
+        } else {
+          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+          return true;
+        }
+      }
+    } catch (e) {
+      debugPrint('[UpdateService] Auto installer launch failed: $e');
+    }
+    await launchUrl(Uri.parse(downloadPage), mode: LaunchMode.externalApplication);
+    return false;
   }
 
   /// Cloud 기능 3회 지연 제한 안내 모달
@@ -482,8 +557,8 @@ class UpdateService {
   }
 
   /// 교사용 앱 업데이트 다이얼로그 노출
-  /// - 차단 상태(isBlocked): 20초 카운트다운 후 앱 삭제/종료 모달 강제 렌더링
-  /// - 일반 업데이트 상태: 다운로드 사이트 이동 버튼이 포함된 안내 모달
+  /// - 차단 상태(isBlocked): 자동 업데이트 실행 지원 모달 렌더링
+  /// - 일반 업데이트 상태: 자동 업데이트 및 다운로드 사이트 이동 모달
   void showUpdateDialog(BuildContext context, UpdateInfo info) {
     if (!context.mounted) return;
     if (info.isBlocked) {
@@ -510,7 +585,7 @@ class UpdateService {
   }
 }
 
-/// 6차례 지연 또는 메이저 버전 변경 시 20초 카운트다운 후 자동 삭제/종료 강제 잠금 다이얼로그
+/// 필수 업데이트 잠금 다이얼로그 (원클릭 자동 인스톨러 실행 지원)
 class _TeacherMandatoryLockoutDialog extends StatefulWidget {
   final UpdateInfo info;
   const _TeacherMandatoryLockoutDialog({required this.info});
@@ -524,12 +599,14 @@ class _TeacherMandatoryLockoutDialogState
     extends State<_TeacherMandatoryLockoutDialog> {
   int _secondsLeft = 20;
   Timer? _timer;
+  bool _isUpdating = false;
+  String _statusText = '';
 
   @override
   void initState() {
     super.initState();
     _timer = Timer.periodic(const Duration(seconds: 1), (t) async {
-      if (!mounted) return;
+      if (!mounted || _isUpdating) return;
       setState(() {
         if (_secondsLeft > 0) {
           _secondsLeft--;
@@ -537,11 +614,26 @@ class _TeacherMandatoryLockoutDialogState
       });
       if (_secondsLeft <= 0) {
         t.cancel();
-        // 20초 만료 시 앱 삭제 실행 후 종료!
-        await UpdateService.uninstallApp(context);
-        exit(0);
+        _triggerAutoUpdate();
       }
     });
+  }
+
+  Future<void> _triggerAutoUpdate() async {
+    if (_isUpdating) return;
+    setState(() {
+      _isUpdating = true;
+      _statusText = '최신 인스톨러 다운로드 중...';
+    });
+    await UpdateService.downloadAndLaunchInstaller(
+      widget.info,
+      onStatus: (s) {
+        if (mounted) setState(() => _statusText = s);
+      },
+    );
+    if (mounted) {
+      setState(() => _isUpdating = false);
+    }
   }
 
   @override
@@ -579,27 +671,29 @@ class _TeacherMandatoryLockoutDialogState
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.warning_amber_rounded,
+                Icons.system_update_alt_rounded,
                 color: Color(0xFFEF4565),
                 size: 46,
               ),
             ),
             const SizedBox(height: 18),
             Text(
-              '[업데이트 필수]',
+              '[필수 업데이트 안내 · v${widget.info.latestVersion}]',
               style: GoogleFonts.notoSansKr(
                 color: const Color(0xFFEF4565),
-                fontSize: 22,
+                fontSize: 20,
                 fontWeight: FontWeight.w900,
               ),
             ),
             const SizedBox(height: 12),
             Text(
-              '업데이트가 감지되었습니다.\n이 앱을 설치했던 installer 를 열어서 업데이트 해주세요.',
+              _isUpdating
+                  ? _statusText
+                  : '필수 업데이트(v${widget.info.latestVersion})가 감지되었습니다.\n아래 버튼을 누르면 자동으로 최신 설치 관리자를 실행하여 업데이트합니다.',
               textAlign: TextAlign.center,
               style: GoogleFonts.notoSansKr(
                 color: Colors.white,
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
                 height: 1.5,
               ),
@@ -608,17 +702,26 @@ class _TeacherMandatoryLockoutDialogState
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.orange.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.timer_outlined, color: Colors.orangeAccent, size: 20),
+                  if (_isUpdating)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00F5D4)),
+                    )
+                  else
+                    const Icon(Icons.timer_outlined, color: Colors.orangeAccent, size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    '$_secondsLeft초 뒤 앱이 종료 및 삭제됩니다.',
+                    _isUpdating
+                        ? '업데이트 설치 관리자를 준비하고 있습니다...'
+                        : '$_secondsLeft초 뒤 자동으로 업데이트 설치 관리자가 실행됩니다.',
                     style: GoogleFonts.notoSansKr(
                       color: Colors.orangeAccent,
                       fontSize: 13,
@@ -639,12 +742,10 @@ class _TeacherMandatoryLockoutDialogState
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    onPressed: () {
-                      launchUrl(Uri.parse(UpdateService.downloadPage), mode: LaunchMode.externalApplication);
-                    },
-                    icon: const Icon(Icons.open_in_browser_rounded, color: Colors.black),
+                    onPressed: _isUpdating ? null : _triggerAutoUpdate,
+                    icon: const Icon(Icons.rocket_launch_rounded, color: Colors.black),
                     label: Text(
-                      '다운로드 사이트 이동',
+                      '지금 자동 업데이트 실행',
                       style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900, fontSize: 14),
                     ),
                   ),
@@ -657,11 +758,10 @@ class _TeacherMandatoryLockoutDialogState
                     padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () async {
-                    await UpdateService.uninstallApp(context);
-                    exit(0);
+                  onPressed: () {
+                    launchUrl(Uri.parse(UpdateService.downloadPage), mode: LaunchMode.externalApplication);
                   },
-                  child: const Text('지금 삭제'),
+                  child: const Text('웹사이트'),
                 ),
               ],
             ),
@@ -672,10 +772,33 @@ class _TeacherMandatoryLockoutDialogState
   }
 }
 
-/// 일반적인 업데이트 알람 대화상자 (사용자가 직접 수동 다운로드 사이트로 이동)
-class _TeacherOptionalUpdateDialog extends StatelessWidget {
+/// 일반적인 업데이트 알람 대화상자 (원클릭 자동 인스톨러 실행 지원)
+class _TeacherOptionalUpdateDialog extends StatefulWidget {
   final UpdateInfo info;
   const _TeacherOptionalUpdateDialog({required this.info});
+
+  @override
+  State<_TeacherOptionalUpdateDialog> createState() => _TeacherOptionalUpdateDialogState();
+}
+
+class _TeacherOptionalUpdateDialogState extends State<_TeacherOptionalUpdateDialog> {
+  bool _isUpdating = false;
+  String _statusText = '';
+
+  Future<void> _startUpdate() async {
+    if (_isUpdating) return;
+    setState(() {
+      _isUpdating = true;
+      _statusText = '설치 관리자 다운로드 중...';
+    });
+    await UpdateService.downloadAndLaunchInstaller(
+      widget.info,
+      onStatus: (s) {
+        if (mounted) setState(() => _statusText = s);
+      },
+    );
+    if (mounted) setState(() => _isUpdating = false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -723,7 +846,7 @@ class _TeacherOptionalUpdateDialog extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '현재 버전: v${info.currentVersion} ➔ 최신 버전: v${info.latestVersion}',
+                        '현재 버전: v${widget.info.currentVersion} ➔ 최신 버전: v${widget.info.latestVersion}',
                         style: GoogleFonts.notoSansKr(color: Colors.white54, fontSize: 12),
                       ),
                     ],
@@ -733,7 +856,9 @@ class _TeacherOptionalUpdateDialog extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              '업데이트가 감지되었습니다. 이 앱을 설치했던 installer 를 열어서 업데이트 해주세요.\n(웹 사이트 이동 버튼을 누르면 최신 설치 관리자를 다시 다운로드하실 수도 있습니다.)',
+              _isUpdating
+                  ? _statusText
+                  : '새 버전(v${widget.info.latestVersion})이 준비되었습니다.\n"지금 자동 업데이트"를 누르면 설치 관리자가 자동으로 실행됩니다.',
               style: GoogleFonts.notoSansKr(color: Colors.white70, fontSize: 13, height: 1.5),
             ),
             const SizedBox(height: 24),
@@ -741,8 +866,15 @@ class _TeacherOptionalUpdateDialog extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: _isUpdating ? null : () => Navigator.pop(context),
                   child: const Text('나중에', style: TextStyle(color: Colors.white54)),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () {
+                    launchUrl(Uri.parse(UpdateService.downloadPage), mode: LaunchMode.externalApplication);
+                  },
+                  child: const Text('웹사이트 이동', style: TextStyle(color: Color(0xFF00F5D4))),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
@@ -752,12 +884,11 @@ class _TeacherOptionalUpdateDialog extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    launchUrl(Uri.parse(UpdateService.downloadPage), mode: LaunchMode.externalApplication);
-                  },
-                  icon: const Icon(Icons.download_rounded, color: Colors.black, size: 18),
-                  label: Text('다운로드 사이트 이동', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold)),
+                  onPressed: _isUpdating ? null : _startUpdate,
+                  icon: _isUpdating
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                      : const Icon(Icons.download_rounded, color: Colors.black, size: 18),
+                  label: Text('지금 자동 업데이트', style: GoogleFonts.notoSansKr(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),

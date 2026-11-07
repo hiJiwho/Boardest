@@ -30,6 +30,9 @@ class BstTeacherMainLayout extends StatelessWidget {
   final String? userEmail;
   final VoidCallback? onLoginPressed;
   final VoidCallback? onLogoutPressed;
+  final String? storageSummaryText;
+  final String? storageSubText;
+  final double? storageProgress;
 
   const BstTeacherMainLayout({
     super.key,
@@ -56,6 +59,9 @@ class BstTeacherMainLayout extends StatelessWidget {
     this.userEmail,
     this.onLoginPressed,
     this.onLogoutPressed,
+    this.storageSummaryText,
+    this.storageSubText,
+    this.storageProgress,
   });
 
   static const _nav = <(IconData, String, String)>[
@@ -210,7 +216,10 @@ class BstTeacherMainLayout extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(color: const Color(0xFF00F5D4), width: 0.8),
                         ),
-                        child: Text('v${UpdateService.currentVersion}', style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4))),
+                        child: Text(
+                          'v${UpdateService.normalizeVersion(UpdateService.currentVersion)}',
+                          style: _ts(8.5, w: FontWeight.w900, c: const Color(0xFF00F5D4)),
+                        ),
                       ),
                     ],
                   ),
@@ -254,7 +263,7 @@ class BstTeacherMainLayout extends StatelessWidget {
             valueListenable: UpdateService.hasUpdateNotifier,
             builder: (context, hasUpdate, _) {
               return InkWell(
-                onTap: () => UpdateService.instance.checkForUpdate(force: true),
+                onTap: () => UpdateService.instance.checkAndPromptUpdate(context, force: true),
                 borderRadius: BorderRadius.circular(10),
                 child: _tile(
                   selected: hasUpdate,
@@ -268,7 +277,7 @@ class BstTeacherMainLayout extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '업데이트',
+                        '업데이트 확인',
                         style: _ts(
                           13,
                           w: FontWeight.w700,
@@ -311,36 +320,53 @@ class BstTeacherMainLayout extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          // 교사 계정 정보 카드
-          _tile(
-            padding: const EdgeInsets.all(10),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: const Color(0xFF00F5D4),
-                  child: Text(
-                    teacherName.isNotEmpty ? teacherName[0] : '선',
-                    style: _ts(14, w: FontWeight.w900, c: Colors.black),
+          // 교사 계정 정보 카드 (클릭 시 설정 열기)
+          InkWell(
+            onTap: () => onTabSelected?.call('settings'),
+            borderRadius: BorderRadius.circular(12),
+            child: _tile(
+              padding: const EdgeInsets.all(10),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: const Color(0xFF00F5D4),
+                    child: Text(
+                      teacherName.isNotEmpty ? teacherName[0] : '선',
+                      style: _ts(14, w: FontWeight.w900, c: Colors.black),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('$teacherName 선생님', style: _ts(12.5, w: FontWeight.w800)),
-                      Text(schoolName, style: _ts(10.5, c: Colors.white54)),
-                    ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${teacherName.isNotEmpty ? teacherName : "미설정"} 선생님',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _ts(12.5, w: FontWeight.w800),
+                        ),
+                        Text(
+                          schoolName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: _ts(10.5, c: Colors.white54),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(color: Color(0xFF34D399), shape: BoxShape.circle),
-                ),
-              ],
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: isLoggedIn ? const Color(0xFF34D399) : Colors.amber,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -400,19 +426,44 @@ class BstTeacherMainLayout extends StatelessWidget {
       children: [
         Text(title, style: _ts(22, w: FontWeight.w900)),
         const Spacer(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.06),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.sync_rounded, color: Color(0xFF00F5D4), size: 16),
-              const SizedBox(width: 6),
-              Text('Google Drive 실시간 연동됨',
-                  style: _ts(12, c: const Color(0xFF00F5D4), w: FontWeight.w700)),
-            ],
+        InkWell(
+          onTap: isLoggedIn
+              ? () => onTabSelected?.call('settings')
+              : (onLoginPressed ?? () => onTabSelected?.call('settings')),
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: isLoggedIn
+                  ? const Color(0xFF00F5D4).withOpacity(0.1)
+                  : Colors.amber.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isLoggedIn
+                    ? const Color(0xFF00F5D4).withOpacity(0.35)
+                    : Colors.amber.withOpacity(0.4),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  isLoggedIn ? Icons.cloud_done_rounded : Icons.login_rounded,
+                  color: isLoggedIn ? const Color(0xFF00F5D4) : Colors.amberAccent,
+                  size: 16,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isLoggedIn
+                      ? 'Google Drive 연동됨${(userEmail != null && userEmail!.isNotEmpty) ? " (${userEmail!})" : ""}'
+                      : 'Google 클라우드 로그인하기',
+                  style: _ts(
+                    12,
+                    c: isLoggedIn ? const Color(0xFF00F5D4) : Colors.amberAccent,
+                    w: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(width: 10),
@@ -425,8 +476,8 @@ class BstTeacherMainLayout extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: onResumeLesson,
-            icon: const Icon(Icons.play_circle_outline_rounded, size: 16, color: Color(0xFF00F5D4)),
-            label: Text('이어서 하기', style: _ts(12, w: FontWeight.w800)),
+            icon: const Icon(Icons.add_box_rounded, size: 16, color: Color(0xFF00F5D4)),
+            label: Text('새 판서 · 수업 시작', style: _ts(12, w: FontWeight.w800)),
           ),
       ],
     );
@@ -606,48 +657,63 @@ class BstTeacherMainLayout extends StatelessWidget {
     );
   }
 
-  /// [K안 우측 상단 앱 보관자료 용량 카드] (앱 차지 용량만 표기)
+  /// [K안 우측 상단 앱 보관자료 용량 카드]
   Widget _driveStorageCardCompact() {
-    return _surface(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.inventory_2_rounded, size: 16, color: Color(0xFF00F5D4)),
-              const SizedBox(width: 6),
-              Text('Boardest 보관함 용량', style: _ts(13.5, w: FontWeight.w800)),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00F5D4).withOpacity(0.15),
+    final summary = storageSummaryText ??
+        (isLoggedIn ? 'Google Drive 클라우드 보관함 활성' : '로컬 교안 · 판서 보관함 사용 중');
+    final subText = storageSubText ??
+        (isLoggedIn
+            ? '내 교안, 판서, 교과서가 Google Drive와 실시간 동기화됩니다'
+            : '클릭하여 파일 관리함을 열거나 클라우드 계정을 연동하세요');
+    final prog = (storageProgress ?? (isLoggedIn ? 0.35 : 0.12)).clamp(0.02, 1.0);
+
+    return InkWell(
+      onTap: () => onTabSelected?.call('files'),
+      borderRadius: BorderRadius.circular(16),
+      child: _surface(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.inventory_2_rounded, size: 16, color: Color(0xFF00F5D4)),
+                const SizedBox(width: 6),
+                Text('Boardest 자료 보관함', style: _ts(13.5, w: FontWeight.w800)),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: (isLoggedIn ? const Color(0xFF00F5D4) : Colors.amber).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    isLoggedIn ? '동기화 활성' : '로컬 보관',
+                    style: _ts(10.5, w: FontWeight.w800, c: isLoggedIn ? const Color(0xFF00F5D4) : Colors.amberAccent),
+                  ),
+                ),
+              ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(summary, maxLines: 1, overflow: TextOverflow.ellipsis, style: _ts(14, w: FontWeight.w900, c: Colors.white)),
+                const SizedBox(height: 6),
+                ClipRRect(
                   borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: prog,
+                    minHeight: 6,
+                    color: const Color(0xFF00F5D4),
+                    backgroundColor: Colors.white12,
+                  ),
                 ),
-                child: Text('동기화 완료', style: _ts(10.5, w: FontWeight.w800, c: const Color(0xFF00F5D4))),
-              ),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('앱 보관자료 142.8 MB 사용 중', style: _ts(14.5, w: FontWeight.w900, c: Colors.white)),
-              const SizedBox(height: 6),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: const LinearProgressIndicator(
-                  value: 0.18,
-                  minHeight: 6,
-                  color: Color(0xFF00F5D4),
-                  backgroundColor: Colors.white12,
-                ),
-              ),
-            ],
-          ),
-          Text('내 교안, 판서, 교과서만 안전하게 백업 중', style: _ts(11, c: Colors.white54)),
-        ],
+              ],
+            ),
+            Text(subText, maxLines: 1, overflow: TextOverflow.ellipsis, style: _ts(11, c: Colors.white54)),
+          ],
+        ),
       ),
     );
   }
@@ -764,13 +830,14 @@ class BstTeacherMainLayout extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text('주간 전체 시간표', style: _ts(18, w: FontWeight.w900)),
                 const Spacer(),
-                OutlinedButton(
-                  onPressed: () => onTabSelected?.call('timetable'),
+                OutlinedButton.icon(
+                  onPressed: () => onTabSelected?.call('dashboard'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF00F5D4),
                     side: const BorderSide(color: Color(0xFF00F5D4)),
                   ),
-                  child: const Text('대시보드로 복귀'),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 16),
+                  label: const Text('대시보드로 복귀'),
                 ),
               ],
             ),
