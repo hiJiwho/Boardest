@@ -6,14 +6,11 @@ $Version = '5.6.2'
 $Repos = @('hiJiwho/Boardest', 'hiJiwho/Boardest-Source-code')
 
 $Assets = @(
-  'boardest-class-cloud.apk',
-  'boardest-class-cloud.appx',
   'boardest-class-cloud.msix',
   'boardest-class-installer.exe',
   'boardest-class-lite-installer.exe',
   'Boardest-Class-Lite-Setup.exe',
   'boardest-class-lite.apk',
-  'boardest-class-lite.appx',
   'boardest-class-lite.exe',
   'boardest-class-lite.msix',
   'Boardest-Class-Setup.exe',
@@ -24,7 +21,6 @@ $Assets = @(
   'boardest-cloud-installer.exe',
   'Boardest-Cloud-Setup.exe',
   'boardest-cloud.apk',
-  'boardest-cloud.appx',
   'boardest-cloud.exe',
   'boardest-cloud.msix',
   'boardest-installer.exe',
