@@ -243,6 +243,7 @@
     const sessionId = params.get('sid') || params.get('session') || '';
     const action = params.get('action') || (sessionId ? 'approve' : 'register');
     const email = params.get('email') || (teacherName.toLowerCase() + '@school.go.kr');
+    const incomingRefreshToken = params.get('refreshToken') || params.get('refresh_token') || localStorage.getItem('bst_teacher_refresh_token') || localStorage.getItem('boardest_google_refresh_token') || '';
 
     document.getElementById('teacherDisplay').textContent = teacherName;
     document.getElementById('schoolDisplay').textContent = schoolName;
@@ -334,7 +335,8 @@
                 approvedAt: Date.now(),
                 teacherName: teacherName,
                 email: email,
-                accessToken: 'passkey_reg_access_' + Date.now()
+                accessToken: 'passkey_reg_access_' + Date.now(),
+                refreshToken: incomingRefreshToken || ''
               })
             }).catch(() => {});
           }
@@ -372,7 +374,8 @@
           approvedAt: Date.now(),
           teacherName: teacherName,
           email: email,
-          accessToken: 'passkey_cloud_access_' + Date.now()
+          accessToken: 'passkey_cloud_access_' + Date.now(),
+          refreshToken: incomingRefreshToken || ''
         };
 
         await fetch('https://jiwhosboardest-default-rtdb.firebaseio.com/passkey/sessions/' + sessionId + '.json', {

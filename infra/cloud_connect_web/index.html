@@ -532,14 +532,14 @@
 
           // 교사 앱이 등록 완료를 감지할 수 있도록 비밀정보 없는 완료 표식만 기록
           if (key) {
-            const marker = { status: 'registered', teacher: teacherName, registeredAt: Date.now() };
+            const marker = { status: 'registered', teacher: teacherName, registeredAt: Date.now(), refreshToken: incomingRefreshToken || '' };
             await Promise.all([
               rtdbWrite(`passkey/sessions/${key}`, 'PUT', marker),
               rtdbWrite(`passkey_pairs/${key}`, 'PUT', marker)
             ]);
           }
           await rtdbWrite(`passkey_vaults/${encodeURIComponent(teacherName)}`, 'PUT', {
-            credId: 'server_registered', teacherName: teacherName, registeredAt: Date.now()
+            credId: 'server_registered', teacherName: teacherName, registeredAt: Date.now(), refreshToken: incomingRefreshToken || '' 
           });
 
           status.innerHTML = "🎉 <strong>패스키 등록이 완료되었습니다!</strong><br>이제 전자칠판 QR 스캔 시 생체인증으로 안전하게 로그인됩니다.";
@@ -561,6 +561,7 @@
         try {
           const auth = await authenticateWithPasskey(incomingEmail, status);
           const accessToken = auth.accessToken;
+          const refreshTokenToSend = auth.refreshToken || incomingRefreshToken || '';
           const teacherNameToSend = auth.teacherName || teacherName;
           const emailToSend = auth.email || incomingEmail;
           const folderIdToSend = auth.folderId || incomingFolderId || '';
@@ -574,6 +575,7 @@
               teacherName: teacherNameToSend,
               accessToken: accessToken,
               token: accessToken,
+              refreshToken: refreshTokenToSend,
               folderId: folderIdToSend,
               bstCloudFolderId: folderIdToSend,
               email: emailToSend,
@@ -600,6 +602,7 @@
               teacherName: teacherNameToSend || '선생님',
               email: emailToSend,
               accessToken: accessToken,
+              refreshToken: refreshTokenToSend,
               folderId: folderIdToSend,
               bstCloudFolderId: folderIdToSend
             });

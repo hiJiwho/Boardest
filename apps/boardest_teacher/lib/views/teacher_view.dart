@@ -277,25 +277,52 @@ class _TeacherViewState extends State<TeacherView> {
   Future<void> _loadWindowsAccentColor() async {
     if (kIsWeb || !Platform.isWindows) return;
     try {
-      final res = await Process.run('powershell', [
-        '-NoProfile',
-        '-Command',
-        '[Convert]::ToString((Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\DWM").ColorizationColor, 16)',
+      final res = await Process.run('reg', [
+        'query',
+        r'HKCU\Software\Microsoft\Windows\DWM',
+        '/v',
+        'ColorizationColor',
       ]);
       if (res.exitCode == 0) {
-        final hex = res.stdout.toString().trim();
-        if (hex.length >= 8) {
+        final out = res.stdout.toString();
+        final match = RegExp(r'ColorizationColor\s+REG_DWORD\s+0x([0-9a-fA-F]+)').firstMatch(out);
+        if (match != null) {
+          final hex = match.group(1)!;
           final colorInt = int.tryParse(hex, radix: 16);
-          if (colorInt != null) {
-            if (mounted) {
-              setState(() {
-                _systemAccentColor = Color(colorInt).withOpacity(1.0);
-              });
-            }
+          if (colorInt != null && mounted) {
+            setState(() {
+              _systemAccentColor = Color(colorInt | 0xFF000000);
+            });
           }
         }
       }
     } catch (_) {}
+  }
+
+  Future<void> _handleGoogleLogin() async {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🌐 기본 브라우저에서 Google 로그인 창이 열립니다. 로그인을 진행해주세요.'),
+          duration: Duration(seconds: 4),
+          backgroundColor: Color(0xFF7F5AF0),
+        ),
+      );
+    }
+    final ok = await CloudDriveService.instance.loginWithBrowserOAuth();
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ 브라우저를 열지 못했습니다. 기본 브라우저 설정을 확인해주세요.'),
+          duration: Duration(seconds: 4),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+    if (mounted) {
+      setState(() {});
+      _refreshDriveFiles();
+    }
   }
 
   @override
@@ -385,6 +412,19 @@ class _TeacherViewState extends State<TeacherView> {
       _updateOtp();
       final s = await _storageService.loadConfigAndSync();
       if (mounted) {
+        if (!kIsWeb && Platform.isWindows) {
+          try {
+            await windowManager.show();
+            await windowManager.focus();
+          } catch (_) {}
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 Google 계정 로그인이 완료되었습니다!'),
+            duration: Duration(seconds: 3),
+            backgroundColor: Color(0xFF2EC4B6),
+          ),
+        );
         setState(() {
           _settings = s;
         });
@@ -3185,10 +3225,7 @@ class _TeacherViewState extends State<TeacherView> {
                                 width: double.infinity,
                                 height: 48,
                                 child: ElevatedButton.icon(
-                                  onPressed: () async {
-                                    await CloudDriveService.instance.loginWithBrowserOAuth();
-                                    if (mounted) setState(() {});
-                                  },
+                                  onPressed: _handleGoogleLogin,
                                   icon: const Icon(Icons.login_rounded, color: Colors.black),
                                   label: const Text('Google 계정으로 로그인', style: TextStyle(color: Colors.black, fontSize: 14, fontWeight: FontWeight.w900)),
                                   style: ElevatedButton.styleFrom(
@@ -3239,10 +3276,7 @@ class _TeacherViewState extends State<TeacherView> {
                             storageProgress: CloudDriveService.instance.isLoggedIn
                                 ? ((_driveFiles.length / 50.0).clamp(0.08, 1.0))
                                 : 0.12,
-                            onLoginPressed: () async {
-                              await CloudDriveService.instance.loginWithBrowserOAuth();
-                              if (mounted) setState(() {});
-                            },
+                            onLoginPressed: _handleGoogleLogin,
                             onLogoutPressed: () async {
                               await CloudDriveService.instance.logout();
                               if (mounted) setState(() {});
@@ -4832,13 +4866,7 @@ class _TeacherViewState extends State<TeacherView> {
                                   padding: EdgeInsets.symmetric(horizontal: 14 * s, vertical: 8 * s),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8 * s)),
                                 ),
-                                onPressed: () async {
-                                  final ok = await CloudDriveService.instance.loginWithBrowserOAuth();
-                                  if (ok && mounted) {
-                                    setState(() {});
-                                    _refreshDriveFiles();
-                                  }
-                                },
+                                onPressed: _handleGoogleLogin,
                               ),
                             ],
                           ),
@@ -5787,7 +5815,7 @@ class _TeacherViewState extends State<TeacherView> {
                                       Text('Google Drive 미연동 상태입니다', style: TextStyle(color: _textColor54, fontSize: 11 * s)),
                                       SizedBox(height: 6 * s),
                                       ElevatedButton(
-                                        onPressed: () => CloudDriveService.instance.loginWithBrowserOAuth(),
+                                        onPressed: _handleGoogleLogin,
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: const Color(0xFF7F5AF0),
                                           foregroundColor: Colors.white,
@@ -6340,9 +6368,9 @@ class _TeacherViewState extends State<TeacherView> {
               foregroundColor: Colors.black,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 * s)),
             ),
-            onPressed: () async {
+            onPressed: () {
               Navigator.pop(ctx);
-              await CloudDriveService.instance.loginWithBrowserOAuth();
+              _handleGoogleLogin();
             },
           ),
         ],
@@ -8813,13 +8841,7 @@ class _TeacherViewState extends State<TeacherView> {
                       ),
                     ] else ...[
                       InkWell(
-                        onTap: () async {
-                          final ok = await CloudDriveService.instance.loginWithBrowserOAuth();
-                          if (ok && mounted) {
-                            setState(() {});
-                            _refreshDriveFiles();
-                          }
-                        },
+                        onTap: _handleGoogleLogin,
                         borderRadius: BorderRadius.circular(6 * s),
                         child: Container(
                           padding: EdgeInsets.symmetric(horizontal: 5 * s, vertical: 2 * s),
@@ -9865,8 +9887,14 @@ class _AuthManagementDialogState extends State<_AuthManagementDialog> {
             ElevatedButton.icon(
               onPressed: () async {
                 Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('🌐 기본 브라우저에서 Google 로그인 창이 열립니다. 로그인을 진행해주세요.'),
+                    duration: Duration(seconds: 4),
+                    backgroundColor: Color(0xFF7F5AF0),
+                  ),
+                );
                 await CloudDriveService.instance.loginWithBrowserOAuth();
-                if (mounted) setState(() {});
               },
               icon: Icon(Icons.refresh_rounded, size: 14 * s, color: Colors.black),
               label: Text('Google 계정 다시 로그인', style: TextStyle(fontSize: 11.5 * s, color: Colors.black, fontWeight: FontWeight.bold)),

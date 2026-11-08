@@ -1,5 +1,5 @@
 param(
-  [string]$AppVersion = '5.6.1',
+  [string]$AppVersion = '5.6.2',
   [switch]$SkipApk,
   [switch]$SkipWindowsBuild
 )
@@ -183,13 +183,16 @@ if (Test-Path (Join-Path $PackageDir 'boardest-class-lite\boardest_class_lite.ex
 }
 Compress-Archive -Path (Join-Path $BoardestRelease '*') -DestinationPath (Join-Path $OutDir 'boardest-windows.zip') -Force
 Compress-Archive -Path (Join-Path $TeacherRelease '*') -DestinationPath (Join-Path $OutDir 'bst-teacher-windows.zip') -Force
+Copy-Item (Join-Path $OutDir 'bst-teacher-windows.zip') (Join-Path $OutDir 'boardest-teacher-windows.zip') -Force
 Copy-Item (Join-Path $RootDir 'infra\class_lite_web\index.html') (Join-Path $PackageDir 'boardest-class-lite\index.html') -Force
 
 if (-not $SkipApk) {
   Build-Apk (Join-Path $RootDir 'apps\boardest') 'boardest.apk'
+  Copy-Item (Join-Path $OutDir 'boardest.apk') (Join-Path $OutDir 'boardest-class.apk') -Force
   Build-Apk (Join-Path $RootDir 'apps\boardest') 'boardest-cloud.apk' '--dart-define=BC_CLOUD_MODE=true'
   Copy-Item (Join-Path $OutDir 'boardest-cloud.apk') (Join-Path $OutDir 'boardest-class-cloud.apk') -Force
   Build-Apk (Join-Path $RootDir 'apps\boardest_teacher') 'bst-teacher.apk'
+  Copy-Item (Join-Path $OutDir 'bst-teacher.apk') (Join-Path $OutDir 'boardest-teacher.apk') -Force
   Build-Apk (Join-Path $RootDir 'apps\boardest_teacher_lite') 'boardest-teacher-lite.apk'
   Copy-Item (Join-Path $OutDir 'boardest-teacher-lite.apk') (Join-Path $OutDir 'bst-teacher-lite.apk') -Force
   Build-Apk (Join-Path $RootDir 'apps\boardest_class_lite') 'bst-class-lite.apk'

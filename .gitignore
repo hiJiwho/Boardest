@@ -58,3 +58,7 @@ tools/*
 tools/installer/*.exe
 tools/installer/*.dll
 tools/installer/*.cer
+
+# Agents & Teamwork Workspaces
+.agents/
+

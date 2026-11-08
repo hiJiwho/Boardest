@@ -509,28 +509,35 @@ class _TeacherSetupWizardViewState extends State<TeacherSetupWizardView> {
       _errorMessage = null;
     });
 
-    if (kIsWeb) {
-      // Web: OAuth 포털 리다이렉션 (target=web&return_url=...)
-      final returnUrl = Uri.encodeComponent(Uri.base.toString());
-      final portalUrl = 'https://boardest-teacher-oauth.web.app/?target=web&return_url=$returnUrl$demoParam';
-      try {
+    try {
+      if (kIsWeb) {
+        // Web: OAuth 포털 리다이렉션 (target=web&return_url=...)
+        final returnUrl = Uri.encodeComponent(Uri.base.toString());
+        final portalUrl = 'https://boardest-teacher-oauth.web.app/?target=web&return_url=$returnUrl$demoParam';
         await launchUrl(Uri.parse(portalUrl), webOnlyWindowName: '_self');
-      } catch (e) {
+      } else {
+        // Windows / Desktop: 루프백 서버 준비 후 외부 브라우저(Chrome/Edge)로 OAuth 포털 실행
+        await CloudDriveService.instance.startPersistentLoopbackServer();
+        final port = CloudDriveService.instance.activePort;
+        final url = 'https://boardest-teacher-oauth.web.app/?target=win&port=$port$demoParam';
+
+        final opened = await CloudDriveService.instance.launchExternalBrowserUrl(url);
+        if (!opened && mounted) {
+          setState(() {
+            _errorMessage = '브라우저를 열지 못했습니다. 기본 브라우저 설정을 확인해주세요.';
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         setState(() {
-          _isLoading = false;
-          _errorMessage = '브라우저 실행 실패: $e';
+          _errorMessage = '로그인 창 실행 오류: $e';
         });
       }
-    } else {
-      // Windows / Desktop: 외부 브라우저(Chrome)로 OAuth 포털 실행 (target=win&port=...) -> 127.0.0.1 루프백 수신
-      final port = CloudDriveService.instance.activePort;
-      final url = 'https://boardest-teacher-oauth.web.app/?target=win&port=$port$demoParam';
-      try {
-        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      } catch (e) {
+    } finally {
+      if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = '로그인 창 실행 오류: $e';
         });
       }
     }

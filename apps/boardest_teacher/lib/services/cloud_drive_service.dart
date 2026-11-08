@@ -427,18 +427,14 @@ class CloudDriveService with ChangeNotifier {
     }
     const defaultPort = 1217;
     try {
-      _localServer = await HttpServer.bind(InternetAddress.anyIPv4, defaultPort, shared: true);
-    } catch (e) {
+      _localServer = await HttpServer.bind(InternetAddress.loopbackIPv4, defaultPort, shared: true);
+    } catch (e1) {
+      debugPrint('[CloudDriveService] Port $defaultPort unavailable ($e1). Binding to dynamic available port...');
       try {
-        _localServer = await HttpServer.bind(InternetAddress.loopbackIPv4, defaultPort, shared: true);
-      } catch (e1) {
-        debugPrint('[CloudDriveService] Port $defaultPort unavailable ($e1). Binding to dynamic available port...');
-        try {
-          _localServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0, shared: true);
-        } catch (e2) {
-          debugPrint('[CloudDriveService] Failed to bind loopback server: $e2');
-          return;
-        }
+        _localServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0, shared: true);
+      } catch (e2) {
+        debugPrint('[CloudDriveService] Failed to bind loopback server: $e2');
+        return;
       }
     }
 
@@ -572,6 +568,13 @@ class CloudDriveService with ChangeNotifier {
           onSessionReady?.call();
           _onLoginSuccess?.call();
 
+          if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+            try {
+              await windowManager.show();
+              await windowManager.focus();
+            } catch (_) {}
+          }
+
           request.response.headers.contentType = ContentType.html;
           request.response.write('''
             <!DOCTYPE html>
@@ -638,7 +641,7 @@ class CloudDriveService with ChangeNotifier {
         } else if (path == '/start-boardest-oauth') {
           final authUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
               '?client_id=${AppConfig.googleClientIdNoDrive}'
-              '&redirect_uri=http://127.0.0.1:1217/boardest-oauth-callback'
+              '&redirect_uri=http://127.0.0.1:$_activePort/boardest-oauth-callback'
               '&response_type=code'
               '&scope=openid%20https://www.googleapis.com/auth/userinfo.profile%20https://www.googleapis.com/auth/userinfo.email'
               '&access_type=offline'
@@ -651,7 +654,7 @@ class CloudDriveService with ChangeNotifier {
           if (code.isNotEmpty) {
             await exchangeAuthorizationCode(
               code,
-              redirectUri: 'http://127.0.0.1:1217/boardest-oauth-callback',
+              redirectUri: 'http://127.0.0.1:$_activePort/boardest-oauth-callback',
               withDrive: false,
             );
             _pendingSession.boardestDone = true;
@@ -1585,6 +1588,61 @@ class CloudDriveService with ChangeNotifier {
     return loginWithLocalLoopbackOAuth(targetWebUrl: targetWebUrl, includeBoardest: includeBoardest, includeBstCld: includeBstCld, includeCanva: includeCanva);
   }
 
+  /// 견고한 멀티티어 외부 브라우저 실행기
+  /// Tier 1: url_launcher externalApplication
+  /// Tier 2: url_launcher platformDefault
+  /// Tier 3 (Windows): explorer.exe 직접 위임 (cmd parsing 방지)
+  /// Tier 4 (Windows): 안전하게 따옴표 처리된 cmd.exe start
+  /// Tier 5 (Windows): powershell Start-Process
+  Future<bool> launchExternalBrowserUrl(String url) async {
+    final uri = Uri.parse(url);
+
+    // Tier 1: url_launcher external application
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (ok) return true;
+    } catch (e) {
+      debugPrint('[CloudDriveService] launchUrl externalApplication failed: $e');
+    }
+
+    // Tier 2: url_launcher platform default
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      if (ok) return true;
+    } catch (e) {
+      debugPrint('[CloudDriveService] launchUrl platformDefault failed: $e');
+    }
+
+    // Windows 데스크톱 다이렉트 멀티티어 Fallback
+    if (!kIsWeb && Platform.isWindows) {
+      // Tier 3: explorer.exe 직접 실행
+      try {
+        final res = await Process.run('explorer.exe', [url]);
+        if (res.exitCode == 0 || res.exitCode == 1) return true;
+      } catch (e) {
+        debugPrint('[CloudDriveService] explorer.exe fallback failed: $e');
+      }
+
+      // Tier 4: cmd.exe start (URL 전체를 빈 타이틀과 함께 올바르게 감싸서 실행)
+      try {
+        final res = await Process.run('cmd.exe', ['/c', 'start', '""', '"$url"']);
+        if (res.exitCode == 0) return true;
+      } catch (e) {
+        debugPrint('[CloudDriveService] cmd.exe fallback failed: $e');
+      }
+
+      // Tier 5: PowerShell Start-Process
+      try {
+        final res = await Process.run('powershell', ['-NoProfile', '-Command', 'Start-Process', '"$url"']);
+        if (res.exitCode == 0) return true;
+      } catch (e) {
+        debugPrint('[CloudDriveService] powershell fallback failed: $e');
+      }
+    }
+
+    return false;
+  }
+
   /// Chrome / Edge 브라우저에서 Google OAuth 로그인 실행 (상시 가동 루프백 서버 포트 사용)
   Future<bool> loginWithLocalLoopbackOAuth({String? targetWebUrl, bool includeBoardest = true, bool includeBstCld = true, bool includeCanva = false}) async {
     _isAuthenticating = true;
@@ -1608,16 +1666,10 @@ class CloudDriveService with ChangeNotifier {
 
       final port = _activePort;
       final authUrl = 'https://boardest-teacher-oauth.web.app/?sys=win&target=win&port=$port&$queryString';
-      final uri = Uri.parse(authUrl);
 
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        _isAuthenticating = false;
-        return true;
-      } else {
-        _isAuthenticating = false;
-        return false;
-      }
+      final opened = await launchExternalBrowserUrl(authUrl);
+      _isAuthenticating = false;
+      return opened;
     } catch (e) {
       debugPrint('[CloudDriveService] OAuth launch error: $e');
     }
@@ -1634,13 +1686,10 @@ class CloudDriveService with ChangeNotifier {
       }
       final port = _activePort;
       final redirectUri = 'https://boardest-teacher-oauth.web.app/?sys=win&target=win&port=$port&boardest-cloud-login=true';
-      final uri = Uri.parse(redirectUri);
 
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        _isAuthenticating = false;
-        return true;
-      }
+      final opened = await launchExternalBrowserUrl(redirectUri);
+      _isAuthenticating = false;
+      return opened;
     } catch (e) {
       debugPrint('[CloudDriveService] loginWithBstCldOnly error: $e');
     }

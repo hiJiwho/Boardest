@@ -1,3 +1,20 @@
+## 🚀 [정식 릴리즈] Boardest v5.6.2 (2026-11-08)
+- **교사용 앱(apps/boardest_teacher) 구글 로그인 창 미오픈 버그 완벽 해결**:
+  - Windows 데스크톱 환경에서 Google OAuth2 인증 시 시스템 기본 브라우저 실행 프로세스 핸들러(`url_launcher` / `Process.start`) 개선.
+  - 로컬 리다이렉션 루프백 서버(`127.0.0.1`) 포트 바인딩 및 IPv6 주소 충돌 방지로 안전한 OAuth2 토큰 교환 및 인증 복구.
+  - 교사용 앱 초기 설정 마법사(`TeacherSetupWizardView`)에서 비동기 인증 처리 시 UI 로딩 멈춤(Freeze) 현상 제거.
+  - `TeacherView` 로그인 시도 시 시각적 피드백 제공 및 인증 완료 후 앱 윈도우 포그라운드 포커스 복원.
+- **학생용 앱(apps/boardest_student) 정합성 및 테스트 완벽화**:
+  - `BoardestStudentApp` 메인 위젯 테스트 규격 정상화 및 회귀 검증 통과.
+  - 학생용 학교 코드 정규화(`school_key_normalization`) 및 Realtime Database 수행평가 실시간 정합성 동기화 검증 완료.
+- **Windows 테마 악센트 컬러 조회 최적화**:
+  - DWM 및 레지스트리 쿼리(`reg query`) 캐싱을 통해 불필요한 반복 쉘 프로세스 호출을 방지하고 UI 반응성 개선.
+- **전 플랫폼 빌드 및 40종 공식 릴리즈 에셋 배포**:
+  - Windows 데스크톱 (MSIX, WiX Enterprise MSI, C# WebView2 Online Installer) v5.6.2 서명 배포.
+  - Android APK 6종 (Class, Cloud, Teacher Lite, Student, Class Lite) 공식 배포 및 SHA256 보안 서명 무결성 확보.
+
+---
+
 ## 🚀 [정식 릴리즈] Boardest v5.5.0 (2026-11-01)
 - **전체 생태계 v5.5.0 (5.5.0+5500) 일괄 버전 동기화**:
   - 모노레포 루트 `pubspec.yaml`, 5대 핵심 앱(`boardest`, `boardest_teacher`, `boardest_teacher_lite`, `boardest_class_lite`, `boardest_class_cloud`), 학생용 앱(`boardest_student`), 15개 공유 패키지(`packages/**`) 버전 `5.5.0` / `5.5.0+5500` 일괄 통일.

@@ -600,21 +600,22 @@ class _TeacherAppState extends State<TeacherApp> with WindowListener {
   Future<void> _loadWindowsAccentColor() async {
     if (kIsWeb || !Platform.isWindows) return;
     try {
-      final res = await Process.run('powershell', [
-        '-NoProfile',
-        '-Command',
-        '[Convert]::ToString((Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\DWM").ColorizationColor, 16)'
+      final res = await Process.run('reg', [
+        'query',
+        r'HKCU\Software\Microsoft\Windows\DWM',
+        '/v',
+        'ColorizationColor',
       ]);
       if (res.exitCode == 0) {
-        final hex = res.stdout.toString().trim();
-        if (hex.length >= 8) {
+        final out = res.stdout.toString();
+        final match = RegExp(r'ColorizationColor\s+REG_DWORD\s+0x([0-9a-fA-F]+)').firstMatch(out);
+        if (match != null) {
+          final hex = match.group(1)!;
           final colorInt = int.tryParse(hex, radix: 16);
-          if (colorInt != null) {
-            if (mounted) {
-              setState(() {
-                _systemAccentColor = Color(colorInt).withOpacity(1.0);
-              });
-            }
+          if (colorInt != null && mounted) {
+            setState(() {
+              _systemAccentColor = Color(colorInt | 0xFF000000);
+            });
           }
         }
       }

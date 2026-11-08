@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'models/assessment_item.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await initializeDateFormatting('ko_KR', null);
+  } catch (_) {}
   runApp(const BoardestStudentApp());
 }
 
@@ -72,6 +76,9 @@ class _StudentMainShellState extends State<StudentMainShell> {
   @override
   void initState() {
     super.initState();
+    try {
+      initializeDateFormatting('ko_KR', null);
+    } catch (_) {}
     _loadProfileAndData();
     // 30초마다 백그라운드 데이터 자동 갱신
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => _refreshData());
@@ -135,10 +142,35 @@ class _StudentMainShellState extends State<StudentMainShell> {
     }
   }
 
+  String _normalizeSchoolKey(String raw) {
+    final t = raw.trim();
+    if (t.isEmpty || t.toLowerCase() == 'default') return 'ydm';
+    final lower = t.toLowerCase();
+    if (lower == 'ydm' ||
+        t.contains('양동') ||
+        lower == '44134' ||
+        lower == '48588' ||
+        lower == '7091484' ||
+        lower == 'j100000690') {
+      return 'ydm';
+    }
+    if (lower == 'demo' || t.contains('데모')) {
+      return 'demo';
+    }
+    final ascii = lower.replaceAll(RegExp(r'[^a-z0-9_-]'), '');
+    if (ascii.isNotEmpty) return ascii;
+    int h = 0;
+    for (int i = 0; i < t.length; i++) {
+      h = ((h << 5) - h) + t.codeUnitAt(i);
+      h &= 0x7fffffff;
+    }
+    return 'sch_$h';
+  }
+
   Future<void> _fetchAssessments() async {
     try {
-      final safeSchool = _schoolCode.trim().replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-      final url = 'https://jiwhosboardest-default-rtdb.firebaseio.com/school_assessments/$safeSchool.json';
+      final schoolKey = _normalizeSchoolKey(_schoolCode.isNotEmpty ? _schoolCode : _schoolName);
+      final url = 'https://jiwhosboardest-default-rtdb.firebaseio.com/assessments/$schoolKey/$_grade.json';
       final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
       if (res.statusCode == 200 && res.body != 'null' && res.body.isNotEmpty) {
         final data = json.decode(res.body);
@@ -147,7 +179,11 @@ class _StudentMainShellState extends State<StudentMainShell> {
           data.forEach((key, val) {
             if (val is Map) {
               try {
-                final item = AssessmentItem.fromJson(Map<String, dynamic>.from(val));
+                final map = Map<String, dynamic>.from(val);
+                if (!map.containsKey('id') || map['id'] == null || map['id'].toString().isEmpty) {
+                  map['id'] = key.toString();
+                }
+                final item = AssessmentItem.fromJson(map);
                 // 내 학년 및 내 반(또는 0인 전학급 공통)에 해당하는 수행평가만 필터
                 if (item.grade == _grade && (item.classNum == 0 || item.classNum == _classNum)) {
                   list.add(item);
@@ -169,7 +205,7 @@ class _StudentMainShellState extends State<StudentMainShell> {
 
   Future<void> _fetchNotices() async {
     try {
-      final safeSchool = _schoolCode.trim().replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      final safeSchool = _normalizeSchoolKey(_schoolCode.isNotEmpty ? _schoolCode : _schoolName);
       final url = 'https://jiwhosboardest-default-rtdb.firebaseio.com/school_notices/$safeSchool.json';
       final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
       if (res.statusCode == 200 && res.body != 'null' && res.body.isNotEmpty) {
@@ -190,7 +226,30 @@ class _StudentMainShellState extends State<StudentMainShell> {
   Future<void> _fetchMeal() async {
     try {
       final nowStr = DateFormat('yyyyMMdd').format(DateTime.now());
-      final url = 'https://open.neis.go.kr/hub/mealServiceDietInfo?Type=json&pIndex=1&pSize=5&ATPT_OFCDC_SC_CODE=B10&SD_SCHUL_CODE=7091484&MLSV_YMD=$nowStr';
+      String officeCode = 'B10';
+      String schoolCode = '7091484';
+
+      final cleanDigits = _schoolCode.trim().replaceAll(RegExp(r'[^0-9]'), '');
+      if (cleanDigits.length == 7) {
+        schoolCode = cleanDigits;
+      } else if (_schoolName.isNotEmpty && !_schoolName.contains('양동')) {
+        try {
+          final queryUrl = Uri.parse(
+            'https://open.neis.go.kr/hub/schoolInfo?Type=json&pIndex=1&pSize=1&SCHUL_NM=${Uri.encodeComponent(_schoolName.trim())}',
+          );
+          final res = await http.get(queryUrl).timeout(const Duration(seconds: 3));
+          if (res.statusCode == 200) {
+            final data = json.decode(res.body);
+            final row = data['schoolInfo']?[1]?['row']?[0];
+            if (row != null) {
+              officeCode = row['ATPT_OFCDC_SC_CODE']?.toString() ?? officeCode;
+              schoolCode = row['SD_SCHUL_CODE']?.toString() ?? schoolCode;
+            }
+          }
+        } catch (_) {}
+      }
+
+      final url = 'https://open.neis.go.kr/hub/mealServiceDietInfo?Type=json&pIndex=1&pSize=5&ATPT_OFCDC_SC_CODE=$officeCode&SD_SCHUL_CODE=$schoolCode&MLSV_YMD=$nowStr';
       final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 4));
       if (res.statusCode == 200) {
         final data = json.decode(res.body);

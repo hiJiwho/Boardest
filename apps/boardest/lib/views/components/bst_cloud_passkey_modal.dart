@@ -107,8 +107,8 @@ class _BstCloudPasskeyModalState extends State<BstCloudPasskeyModal> {
             _isApproved = true;
           });
 
-          // PRO 기기 등록이 체크된 경우 로컬 금고에 저장
-          if (!kIsWeb && _saveToProBoard && result.teacherName != null) {
+          // PRO 기기 등록이 체크된 경우 로컬 금고(SharedPreferences / Web localStorage)에 저장
+          if (_saveToProBoard && result.teacherName != null) {
             await PasskeyService.instance.saveProTeacher(
               teacherName: result.teacherName!,
               email: result.email ?? '',

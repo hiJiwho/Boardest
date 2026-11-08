@@ -3,10 +3,10 @@ import 'package:boardest/services/update_service.dart';
 
 void main() {
   group('UpdateService Version Constants and Normalization Tests', () {
-    test('defaultVersion and metadata constants are aligned to v5.5.3+5530', () {
-      expect(UpdateService.defaultVersion, equals('5.5.3'));
-      expect(UpdateService.defaultBuildNumber, equals('5530'));
-      expect(UpdateService.defaultFullVersion, equals('5.5.3+5530'));
+    test('defaultVersion and metadata constants are aligned to v5.6.2+5620', () {
+      expect(UpdateService.defaultVersion, equals('5.6.2'));
+      expect(UpdateService.defaultBuildNumber, equals('5620'));
+      expect(UpdateService.defaultFullVersion, equals('5.6.2+5620'));
     });
 
     test('normalizeVersion correctly strips prefix v and build metadata', () {

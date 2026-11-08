@@ -127,18 +127,18 @@ class AssessmentService {
           });
         }
       } else {
-        debugPrint('[Teacher AssessmentService] fetchInstalledClasses non-200 or empty');
-        return result;
+        debugPrint('[Teacher AssessmentService] fetchInstalledClasses non-200 or empty, falling back to allAvailableClassesFallback');
+        return allAvailableClassesFallback();
       }
     } catch (e) {
-      debugPrint('[Teacher AssessmentService] fetchInstalledClasses error: $e');
-      return result;
+      debugPrint('[Teacher AssessmentService] fetchInstalledClasses error: $e, falling back to allAvailableClassesFallback');
+      return allAvailableClassesFallback();
     }
 
     final bool allEmpty = result.values.every((s) => s.isEmpty);
     if (allEmpty) {
-      debugPrint('[Teacher AssessmentService] No active installed classes found in 24h window');
-      return result;
+      debugPrint('[Teacher AssessmentService] No active installed classes found in 24h window, falling back to allAvailableClassesFallback');
+      return allAvailableClassesFallback();
     }
 
     return result;

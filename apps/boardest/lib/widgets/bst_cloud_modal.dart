@@ -179,9 +179,19 @@ class _BstCloudModalState extends State<BstCloudModal> {
         final Set<String> ids = {};
         files = [];
         for (final f in [...saveFiles, ...tbpFiles]) {
+          // 32자리 Hex 실체 폴더는 사용자 목록에서 제외 (.tbp.bst 포인터 파일만 표시)
+          if (RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(f.name.trim())) continue;
+
           final l = f.name.toLowerCase();
-          // 판서 기록은 엄격하게 제외
-          if (l.endsWith('.pen') || l.endsWith('.bstpen') || l.endsWith('.iwb')) continue;
+          // 판서 기록은 엄격하게 제외 (Teacher 앱과 100% 일치)
+          if (l.endsWith('.pen') ||
+              l.endsWith('.bstpen') ||
+              l.endsWith('.iwb') ||
+              l.endsWith('.pen.json') ||
+              l.endsWith('.pen.save.bst') ||
+              l.startsWith('pen_')) {
+            continue;
+          }
           if (ids.add(f.id)) files.add(f);
         }
       }
@@ -217,7 +227,12 @@ class _BstCloudModalState extends State<BstCloudModal> {
       // 수업 자료 및 교안 (일반 수업 자료 + TBP/HTMLP) - 판서(.pen)는 제외!
       list = list.where((f) {
         final l = f.name.toLowerCase();
-        return !l.endsWith('.pen') && !l.endsWith('.bstpen') && !l.endsWith('.iwb');
+        return !l.endsWith('.pen') &&
+            !l.endsWith('.bstpen') &&
+            !l.endsWith('.iwb') &&
+            !l.endsWith('.pen.json') &&
+            !l.endsWith('.pen.save.bst') &&
+            !l.startsWith('pen_');
       }).toList();
     }
 
@@ -672,12 +687,12 @@ class _BstCloudModalState extends State<BstCloudModal> {
         decoration: BoxDecoration(
           color: const Color(0xFF0F172A),
           borderRadius: BorderRadius.circular(24 * s),
-          border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.5), width: 1.5),
+          border: Border.all(color: const Color(0xFF00F5D4).withOpacity(0.4), width: 1.5),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF6366F1).withOpacity(0.25),
-              blurRadius: 30,
-              spreadRadius: 4,
+              color: const Color(0xFF00F5D4).withOpacity(0.15),
+              blurRadius: 32,
+              spreadRadius: 2,
             ),
           ],
         ),
@@ -702,7 +717,7 @@ class _BstCloudModalState extends State<BstCloudModal> {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 20 * s, vertical: 14 * s),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1B4B).withOpacity(0.6),
+        color: const Color(0xFF0B1120),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24 * s)),
         border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
       ),
@@ -711,10 +726,10 @@ class _BstCloudModalState extends State<BstCloudModal> {
           Container(
             padding: EdgeInsets.all(6 * s),
             decoration: BoxDecoration(
-              color: const Color(0xFF6366F1).withOpacity(0.25),
+              color: const Color(0xFF00F5D4).withOpacity(0.15),
               borderRadius: BorderRadius.circular(10 * s),
             ),
-            child: Icon(Icons.cloud_done_rounded, color: const Color(0xFF818CF8), size: 20 * s),
+            child: Icon(Icons.cloud_done_rounded, color: const Color(0xFF00F5D4), size: 20 * s),
           ),
           SizedBox(width: 10 * s),
           Column(
@@ -1215,9 +1230,9 @@ class _BstCloudModalState extends State<BstCloudModal> {
           child: Row(
             children: [
               // 2대 핵심 보관함 전환 탭 (교안/TBP vs 판서 보관함)
-              _buildFolderTabButton(0, '📁 수업 자료 및 교안', const Color(0xFF38BDF8), s),
+              _buildFolderTabButton(0, '📁 수업 자료 및 교안', const Color(0xFF00F5D4), s),
               SizedBox(width: 8 * s),
-              _buildFolderTabButton(1, '📐 판서 보관함', const Color(0xFF00F5D4), s),
+              _buildFolderTabButton(1, '📐 판서 보관함', const Color(0xFF10B981), s),
 
               SizedBox(width: 12 * s),
 
@@ -1383,14 +1398,14 @@ class _BstCloudModalState extends State<BstCloudModal> {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 10 * s, vertical: 5 * s),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF6366F1) : const Color(0xFF1E293B),
+          color: isSelected ? const Color(0xFF00F5D4) : const Color(0xFF1E293B),
           borderRadius: BorderRadius.circular(20 * s),
           border: Border.all(color: isSelected ? Colors.transparent : Colors.white12),
         ),
         child: Text(
           label,
           style: GoogleFonts.notoSansKr(
-            color: isSelected ? Colors.white : Colors.white60,
+            color: isSelected ? const Color(0xFF070B14) : Colors.white60,
             fontSize: 11 * s,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
