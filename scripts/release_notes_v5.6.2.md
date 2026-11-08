@@ -1,10 +1,24 @@
 # 🚀 Boardest v5.6.2 Official Release [Must update]
 
-보데스트(Boardest) 생태계의 교사용 Google OAuth2 인증 완벽 복구, 전 플랫폼 안정성 강화 및 40종 정식 배포 에셋 릴리즈 **v5.6.2 (`5.6.2+5620`, Package `5.6.2.0`)**가 공식 배포되었습니다.
+보데스트(Boardest) 생태계의 패스키(Passkey) 토큰 무중단 갱신 메커니즘, 교사용 Google OAuth2 인증 완벽 복구, Class & Cloud 판서 보관함 UI 일치화, 전 플랫폼 안정성 강화 및 40종 정식 배포 에셋 릴리즈 **v5.6.2 (`5.6.2+5620`, Package `5.6.2.0`)**가 공식 배포되었습니다.
 
 ---
 
-### 1. 🎓 Boardest Teacher 교사용 구글 로그인 창 미오픈 버그 완벽 해결
+### 1. 🔑 패스키(Passkey) 1시간 만료(먹통) 원천 해결 및 영구 무중단 갱신
+- **Google OAuth RefreshToken 영구 연동**:
+  - 패스키 등록/인증 워커(`/api/passkey/auth/verify`) 및 QR 페어링 웹(`boardest-cloud-connect.web.app`)에서 Access Token(1시간 만료) 외에 `refreshToken`을 필수 수신·저장하도록 페이로드 확장.
+  - 전자칠판 앱의 `BstCloudService._resolveRefreshToken()`이 1시간 만료 401 오류 발생 시 로컬 금고(Pro 교사 Vault)에서 리프레시 토큰을 자동 복구하여 영구 무중단 클라우드 세션을 보장.
+  - 웹(`kIsWeb`) 환경에서도 Pro 교사 로컬 금고가 SharedPreferences에 안전하게 보존되도록 개선.
+
+### 2. 📐 Class & Cloud(BCLD) UI 일치화 및 2대 보관함 완전 분리
+- **수업 자료 vs 판서 보관함 완전 격리**:
+  - 교사용(Teacher) 앱과 동일하게 상단 2대 메인 세그먼트(`📁 수업 자료 및 교안` vs `📐 판서 보관함`)를 도입.
+  - `📁 수업 자료 및 교안`: PDF, PPTX, HWPX, DOCX, TBP 스마트교과서만 표시하며, 판서 기록(`.pen`, `.bstpen`, `.iwb`, `.pen.json`, `.pen.save.bst`, `pen_*`)은 100% 완전 격리 제외.
+  - `📐 판서 보관함`: 전자칠판 판서 노트만 교실 태그(`[201]`, `[208]` 등)별로 깔끔하게 분리 정돈.
+  - Boardest Cloud(BCLD) 웹과 전자칠판(Class) 앱의 디자인 시스템(Cyan 테마, 심해색 서피스, 네온 칩)을 완벽 통일.
+  - Firebase Hosting 4대 도메인(`bcld.web.app`, `boardest-class.web.app` 등) 배포 완료.
+
+### 3. 🎓 Boardest Teacher 교사용 구글 로그인 창 미오픈 버그 완벽 해결
 - **Google OAuth2 루프백 서버 및 시스템 브라우저 연동 정상화**:
   - Windows 데스크톱 환경에서 Google OAuth2 인증 시 로컬 루프백 HTTP 서버(`127.0.0.1`) 포트 바인딩 및 IPv6/localhost 주소 해석 충돌 방지.
   - 시스템 기본 웹 브라우저(`url_launcher` / `Process.start`) 프로세스 핸들러를 안전하게 호출하여 인증 창이 열리지 않던 결함을 완벽히 해결.
